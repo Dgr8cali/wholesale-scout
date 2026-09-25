@@ -1,4 +1,5 @@
 import "server-only";
+import { brandKey } from "../brands";
 import { referralCategoryFor } from "../fees/engine";
 import type { RateCard } from "../fees/rateCard";
 import { getKeepa, type KeepaProduct, type KeepaSummary } from "../keepa/client";
@@ -130,9 +131,10 @@ function feesAt(row: Row, cfg: ProfileConfig): ScreenContext["amazonFees"] {
   return price != null && Math.abs(price - f.price) < 0.005 ? { referral: f.referral, fba: f.fba } : null;
 }
 
-function context(row: Row, card: RateCard, rules: CategoryRule[], cfg: ProfileConfig): ScreenContext {
+function context(row: Row, card: RateCard, rules: CategoryRule[], cfg: ProfileConfig, approved: Approved): ScreenContext {
   const p = row.product, o = row.offer, s = row.supplier;
   return {
+    brandApproval: approved.get(brandKey(p.brand ?? o.brand)) ?? null,
     now: new Date(),
     card,
     rules,
@@ -217,6 +219,15 @@ async function finalize(row: Row, run: GateRun, cfg: ProfileConfig, ctx: ScreenC
   }
 }
 
+type Approved = Map<string, { status: "approved"; date: string | null }>;
+
+/** Brands recorded as approved on the Brands page, by normalised brand key. */
+async function approvedBrands(): Promise<Approved> {
+  const rows = must(await db().from("brand_approvals").select("brand_key, status_date").eq("status", "approved"), "brand approvals") as
+    { brand_key: string; status_date: string | null }[];
+  return new Map(rows.map((r) => [r.brand_key, { status: "approved", date: r.status_date }]));
+}
+
 /** Run `fn` for a row; if it throws, mark that result as an error so the run can finish. */
 async function safely(row: Row, fn: () => Promise<void>) {
   try {
@@ -294,7 +305,7 @@ export async function rescreenRun(runId: string, profileId?: string | null): Pro
   const runRow = must(await d.from("runs").select("id, profile_id").eq("id", runId).single(), "run") as { id: string; profile_id: string | null };
   const profile = await loadProfile(profileId || runRow.profile_id);
   const cfg = profile.config;
-  const [card, rules] = await Promise.all([activeRateCard(), loadRules()]);
+  const [card, rules, approved] = await Promise.all([activeRateCard(), loadRules(), approvedBrands()]);
 
   const all: (PendingRow & { status: string })[] = [];
   for (let from = 0; ; from += 1000) {
@@ -317,7 +328,7 @@ export async function rescreenRun(runId: string, profileId?: string | null): Pro
       requeue.push(row.resultId);
       return;
     }
-    const ctx = context(row, card, rules, cfg);
+    const ctx = context(row, card, rules, cfg, approved);
     const pre = runGates(ctx, cfg, ["compliance", "budgetFit"]);
     if (pre.failedGate) return void work.push(() => safely(row, () => finalize(row, pre, cfg, ctx)));
     if (STAGE_RANK[row.stage] < STAGE_RANK.enriched) return void requeue.push(row.resultId);
@@ -364,7 +375,7 @@ export async function processRun(runId: string, limit = 20): Promise<{ done: boo
   if (runRow.status === "pending") must(await d.from("runs").update({ status: "processing" }).eq("id", runId), "run status");
 
   const cfg = withDefaults(runRow.profile_snapshot);
-  const [card, rules] = await Promise.all([activeRateCard(), loadRules()]);
+  const [card, rules, approved] = await Promise.all([activeRateCard(), loadRules(), approvedBrands()]);
   const spapi = getSpApi();
   const keepa = getKeepa();
 
@@ -381,7 +392,7 @@ export async function processRun(runId: string, limit = 20): Promise<{ done: boo
     const survivors: Row[] = [];
     for (const row of rows) {
       await safely(row, async () => {
-        const ctx = context(row, card, rules, cfg);
+        const ctx = context(row, card, rules, cfg, approved);
         const run = runGates(ctx, cfg, pre);
         if (run.failedGate) await finalize(row, run, cfg, ctx);
         else survivors.push(row);
@@ -531,7 +542,7 @@ export async function processRun(runId: string, limit = 20): Promise<{ done: boo
     const stage3: Row[] = [];
     for (const row of rows) {
       await safely(row, async () => {
-        const ctx = context(row, card, rules, cfg);
+        const ctx = context(row, card, rules, cfg, approved);
         const run = runGates(ctx, cfg, middle);
         if (run.failedGate) await finalize(row, run, cfg, ctx);
         else stage3.push(row);
@@ -572,7 +583,7 @@ export async function processRun(runId: string, limit = 20): Promise<{ done: boo
     for (const row of stage3) {
       await safely(row, async () => {
         row.stage = "account";
-        const ctx = context(row, card, rules, cfg);
+        const ctx = context(row, card, rules, cfg, approved);
         await finalize(row, runGates(ctx, cfg), cfg, ctx);
       });
     }

@@ -156,6 +156,15 @@ describe("gates", () => {
     expect(none.links).toBeUndefined();
   });
 
+  it("treats a brand recorded as approved as open, but not for category approval or blocks", () => {
+    const brandMsg = { status: "approval_required" as const, message: "You need approval to list this brand." };
+    const approved = { status: "approved" as const, date: "2026-09-26" };
+    const g = (c: ScreenContext) => runGates(c, DEFAULT_PROFILE).outcomes.find((o) => o.gate === "gating")!;
+    expect(g(ctx({ restriction: brandMsg, brandApproval: approved }))).toMatchObject({ status: "pass", tags: ["BRAND_APPROVED"] });
+    expect(g(ctx({ restriction: { ...brandMsg, message: "You need approval to list in this category." }, brandApproval: approved })).status).toBe("warn");
+    expect(g(ctx({ restriction: { status: "blocked", message: "Not eligible" }, brandApproval: approved })).status).toBe("fail");
+  });
+
   it("names category approval with the listing's category", () => {
     const c = ctx({ amazonCategory: "Grocery", restriction: { status: "approval_required", message: "You need approval to list in this category." } });
     expect(runGates(c, DEFAULT_PROFILE).outcomes.find((o) => o.gate === "gating")!.detail).toMatch(/^Category approval needed \(Grocery\)/);

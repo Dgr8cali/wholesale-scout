@@ -69,7 +69,9 @@ export function paramValues(ctx: ScreenContext, run: GateRun, p: ProfileConfig, 
     margin: e?.margin ?? null,
     complianceFlags: compliance && compliance.status !== "off" ? run.ruleMatches.filter((r) => p.gates.compliance.rules[r.key] !== "off").length : null,
     mirage: mirage?.status === "warn" ? 1 : mirage?.status === "pass" ? 0 : null,
-    gating: ctx.restriction ? ({ open: 0, unknown: 1, approval_required: 2, blocked: 2 } as const)[ctx.restriction.status] : null,
+    gating: !ctx.restriction ? null
+      : outcome("gating")?.tags?.includes("BRAND_APPROVED") ? 0
+      : ({ open: 0, unknown: 1, approval_required: 2, blocked: 2 } as const)[ctx.restriction.status],
     brandLock: m?.topSellerBbSharePct != null ? (m.topSellerBbSharePct >= 90 ? 1 : 0) : null,
     variations: ctx.product.variationCount ?? null,
     warnings,

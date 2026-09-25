@@ -79,6 +79,8 @@ export interface ScreenContext {
     hazmat: string[];
   };
   market: MarketData | null;
+  /** A brand you've recorded as approved on the Brands page, with the date. */
+  brandApproval?: { status: "approved"; date: string | null } | null;
   /** `links` is undefined for restrictions checked before links were kept. */
   restriction: { status: RestrictionStatus; message: string; links?: RestrictionLink[] } | null;
   amazonFees: AmazonFeeOverride | null;
@@ -277,6 +279,11 @@ const EVALUATORS: Record<GateId, Evaluator> = {
     const withLinks = links.length ? { links } : {};
     if (r.status === "blocked") {
       return { status: failAs(g.mode), detail: `Blocked for your account${kind ? ` (${kind}${what ? `: ${what}` : ""})` : ""}${reason}`, tags: ["BLOCKED"], ...withLinks };
+    }
+    // A brand you've been approved for is open, unless Amazon wants category or product approval.
+    if (r.status === "approval_required" && ctx.brandApproval && kind !== "category" && kind !== "product") {
+      const on = ctx.brandApproval.date ? ` on ${ctx.brandApproval.date}` : "";
+      return { status: "pass", detail: `Open: brand approval${ctx.product.brand ? ` for ${ctx.product.brand}` : ""} recorded as approved${on}`, tags: ["BRAND_APPROVED"] };
     }
     if (r.status === "approval_required") {
       const mode: GateMode = g.mode === "off" ? "off" : g.approvalRequired;

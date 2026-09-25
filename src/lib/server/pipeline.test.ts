@@ -182,6 +182,14 @@ describe("ingest → process", () => {
     while (!(await processRun(runId)).done);
     expect(calls.restrictions).toBe(before + 1);
     expect(((byAsin("B0MULTIB01").inputs as { restriction: { links: unknown[] } }).restriction.links)).toEqual([APPLY]);
+
+    // Recording the brand as approved opens gate 11 on the next re-screen, with no calls.
+    fake.tables.brand_approvals = [{ id: "a1", brand_key: "brand", brand: "Brand", status: "approved", status_date: "2026-09-26" }];
+    const callsBefore = { ...calls };
+    await rescreenRun(runId);
+    expect(calls).toEqual(callsBefore);
+    const opened = (byAsin("B0MULTIB01").gate_outcomes as { gate: string; status: string; detail: string }[]).find((g) => g.gate === "gating")!;
+    expect(opened).toMatchObject({ status: "pass", detail: "Open: brand approval for Brand recorded as approved on 2026-09-26" });
   });
 
   it("re-screens from stored data, fetching only what a row never had", async () => {
