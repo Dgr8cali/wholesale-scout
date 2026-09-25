@@ -138,3 +138,7 @@ To apply changed settings, or a different profile, to a run you've already scree
 Every gate and the score run again from the data already fetched. The run switches to that profile. Most rows need no new Amazon or Keepa calls. A row that now needs data it never fetched is looked up again: for example, one that failed an early gate before and now passes it, or one that needs Keepa history. The message says how many, e.g. "Re-screening with Strict as saved now: 812 rows done; 14 need data they never fetched and are being looked up now." Those lookups can spend [Keepa tokens](/help/concepts/keepa-tokens).
 
 See [Runs](/help/pages/runs) and [Change a threshold](/help/howto/change-a-threshold).
+
+## Calibration
+
+A profile also holds a your-share correction learnt from your own sales, 1 until you apply one from the [Tracker](/help/pages/tracker#how-accurate-the-app-has-been-calibration). It multiplies every your-share figure the profile screens with.

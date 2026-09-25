@@ -39,6 +39,8 @@ export interface ShareInputs extends SalesInputs {
   currentBuyBox?: number | null;
   rankNow?: number | null;
   rankDrops12m?: number | null;
+  /** The profile's calibration of your share (from your own sales); 1 = none. */
+  shareFactor?: number | null;
   lastOfferDaysAgo?: number | null;
 }
 
@@ -62,19 +64,21 @@ export function yourShare(m: ShareInputs | null | undefined): ShareFigure {
   if (!m?.hasHistory) return none("Needs Keepa history");
   const amazon = m.amazonLastSeenDays === 0;
   const dormant = m.currentBuyBox == null && m.rankNow == null && !((m.offersNow ?? 0) > 0) && m.lastOfferDaysAgo !== 0;
+  const k = m.shareFactor != null && m.shareFactor > 0 && m.shareFactor !== 1 ? m.shareFactor : 1;
+  const calibrated = k !== 1 ? `, × ${k} (calibrated from your sales)` : "";
   if (dormant) {
     const sales = m.rankDrops12m != null ? Math.round((m.rankDrops12m / 12) * 10) / 10 : 0;
-    return { value: sales, sales, competitors: 0, amazon: false, note: `Dormant: ${sales}/mo over the past year, nobody selling now` };
+    return { value: Math.round(sales * k * 10) / 10, sales, competitors: 0, amazon: false, note: `Dormant: ${sales}/mo over the past year, nobody selling now${calibrated}` };
   }
   const sales = salesPerMonth(m).value ?? 0;
   let competitors: number | null = null;
   if (m.fbaOffers != null) competitors = m.fbaOffers + (amazon ? 3 : 0);
   else if (m.offersNow != null) competitors = m.offersNow + (amazon ? 2 : 0);
   if (competitors == null) return { ...none("No seller count"), sales };
-  const value = Math.round((sales / (competitors + 1)) * 10) / 10;
+  const value = Math.round((sales / (competitors + 1)) * k * 10) / 10;
   return {
     value, sales, competitors, amazon,
-    note: `${sales} sales/mo ÷ (${competitors} other seller${competitors === 1 ? "" : "s"}${amazon ? ", Amazon counted as 3" : ""} + you)`,
+    note: `${sales} sales/mo ÷ (${competitors} other seller${competitors === 1 ? "" : "s"}${amazon ? ", Amazon counted as 3" : ""} + you)${calibrated}`,
   };
 }
 

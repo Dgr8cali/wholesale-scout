@@ -17,6 +17,7 @@ import { api, gbp } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
 import { PackageIcon } from "lucide-react";
 import { SyncStatus } from "@/components/product/SyncStatus";
+import { CalibrationPanel } from "@/components/product/CalibrationPanel";
 
 type Row = Purchase & { actuals?: Actuals | null };
 const label = (s: PurchaseStatus) => PURCHASE_STATUSES.find((x) => x.id === s)?.label ?? s;
@@ -77,6 +78,8 @@ export default function TrackerPage() {
         <Tile label="Profit to date" value={gbp(profitToDate, 0)} hint="from Amazon's reports" />
         <Tile label="Pipeline" value={open.length} hint={PURCHASE_STATUSES.filter((s) => counts.get(s.id)).map((s) => `${counts.get(s.id)} ${s.label.toLowerCase()}`).join(" · ") || "nothing open"} />
       </div>
+
+      <CalibrationPanel nonce={nonce} />
 
       {rows.length === 0 ? (
         <EmptyState icon={<PackageIcon />} title="Nothing bought yet">

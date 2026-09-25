@@ -18,6 +18,8 @@ export interface StoredMarket {
   lastOfferDaysAgo?: number | null;
   lastBuyBox12m?: number | null;
   lastBuyBoxAt?: string | null;
+  /** The profile's your-share calibration when it was screened. */
+  shareFactor?: number | null;
   /** Seller holding the Buy Box now, when known. */
   buyBoxSellerId?: string | null;
 }

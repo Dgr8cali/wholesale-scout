@@ -79,6 +79,8 @@ export interface MarketData {
   amazonNow?: boolean | null;
   /** Seller holding the Buy Box now: SP-API's current offers, else the end of Keepa's history. */
   buyBoxSellerId?: string | null;
+  /** The profile's your-share calibration (Tracker); set when the row is screened. */
+  shareFactor?: number | null;
   // From the Keepa history, for dormant listings (see ./dormant).
   lastBuyBox12m?: number | null;
   lastBuyBoxAt?: string | null;

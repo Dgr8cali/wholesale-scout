@@ -38,6 +38,8 @@ export interface Prediction {
   monthsToSell: number | null;
   profitPerMonth: number | null;
   keepaAt: string | null;
+  /** The your-share calibration in force (1 = none), so later calibration measures the raw estimate. */
+  shareFactor?: number;
 }
 
 export interface PredictionSource {
@@ -88,5 +90,6 @@ export function predictionFor(src: PredictionSource, landed: number, units: numb
     monthsToSell: mine ? Math.round((units / mine) * 10) / 10 : null,
     profitPerMonth: profit != null && mine ? r2(profit * mine) : null,
     keepaAt: src.keepaAt,
+    shareFactor: m?.shareFactor ?? 1,
   };
 }

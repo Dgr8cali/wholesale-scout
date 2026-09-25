@@ -58,6 +58,11 @@ export interface ProfileConfig {
   fees: FeeAssumptions;
   gates: GateConfigs;
   score: ScoreConfig;
+  /**
+   * Corrections learnt from your own sales (the Tracker): your-share estimates are multiplied by
+   * shareFactor. 1 until you apply a suggestion.
+   */
+  calibration: { shareFactor: number; basedOn: number | null; appliedAt: string | null };
 }
 
 export const GATE_ORDER: GateId[] = [
@@ -179,6 +184,7 @@ export const DEFAULT_PROFILE: ProfileConfig = {
     scales: DEFAULT_SCALES,
     bands: { green: 75, amber: 55 },
   },
+  calibration: { shareFactor: 1, basedOn: null, appliedAt: null },
 };
 
 const clone = <T,>(x: T): T => JSON.parse(JSON.stringify(x));
@@ -247,6 +253,7 @@ export function withDefaults(cfg: Partial<ProfileConfig> | null | undefined): Pr
       scales: { ...DEFAULT_SCALES, ...(c.score?.scales ?? {}) },
       bands: { ...DEFAULT_PROFILE.score.bands, ...(c.score?.bands ?? {}) },
     },
+    calibration: { ...DEFAULT_PROFILE.calibration, ...(c.calibration ?? {}) },
   };
 }
 

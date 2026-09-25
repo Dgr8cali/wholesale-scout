@@ -222,6 +222,8 @@ function context(row: Row, card: RateCard, rules: CategoryRule[], cfg: ProfileCo
     offer.unitCostGbp = piece * pack.ratio;
     if (offer.moq != null) offer.moq = Math.max(1, Math.ceil(offer.moq / pack.ratio));
   }
+  // Your-share calibration from the profile travels with the market data (and is stored with it).
+  if (row.market) row.market.shareFactor = cfg.calibration.shareFactor;
   return {
     brandApproval: approved.get(brandKey(p.brand ?? o.brand)) ?? null,
     now: new Date(),

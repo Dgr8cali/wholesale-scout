@@ -50,3 +50,14 @@ The actual fees go through the same fee engine as the prediction (digital servic
 The SP-API app doesn't currently have two permissions, so these aren't shown: your **Buy Box share** (needs the Brand Analytics role) and the **exact fees charged on each order** (needs the Finance and Accounting role; Amazon's fee estimate at your selling price stands in). Add those roles to the app in Seller Central's Developer Central and re-authorise it to get them.
 
 The line at the top of the Tracker says when the figures were last read; hover it for any error from the last sync.
+
+## How accurate the app has been (calibration)
+
+Once a purchase has been live 30 days, or has sold out, it counts towards the accuracy panel on the Tracker. For each figure the panel shows how far actual was from predicted: the median, the range of the middle half, and how many purchases it's based on:
+
+- **Your sales a month vs your-share**: your real pace against the app's [your share](/help/reference/glossary#your-share), measured against the uncorrected estimate even if a correction was in force when you bought.
+- **Sell price**, **Fees per unit** and **Profit per unit**.
+
+Under the figures, notes in plain words: whether you sell more or fewer than predicted, whether that varies a lot between products, whether you sell below the predicted price (and what to change), and whether fees come out higher than predicted (check dimensions and size tiers).
+
+**The suggested correction.** From 5 purchases that count ("early"; "solid" from 10), the panel suggests a your-share factor: the median of your sales a month over the uncorrected estimate, rounded to 0.05 and kept between 0.3 and 2. **Apply × 0.7 to First order** (for example) saves it on the default profile: from the next screening every your-share on that profile is multiplied by it, so the [Demand](/help/gates/demand) gate's share check, months to sell, the [plan](/help/pages/plan) and profit a month all use the corrected figure. A row's your-share note then says "× 0.7 (calibrated from your sales)". Existing runs change when you re-screen them. **Reset to × 1** removes it.
