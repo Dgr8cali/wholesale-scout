@@ -32,6 +32,8 @@ interface Product {
   compliance_flags: unknown;
   catalog_updated_at: string | null;
   keepa_updated_at: string | null;
+  /** Main image URL; '' when looked up and Amazon has none; null when not looked up. */
+  image_url?: string | null;
 }
 
 interface Offer {
@@ -368,6 +370,14 @@ async function attachKeepa(rows: Row[], alreadyFetched: Map<string, KeepaProduct
   if (products.size) {
     for (const c of chunks([...products.keys()])) {
       await db().from("products").update({ keepa_updated_at: new Date().toISOString() }).in("asin", c);
+    }
+    // Keepa's image where the catalog gave none (or the product predates images).
+    for (const r of withAsin) {
+      const k = products.get(r.match!.asin!);
+      if (k?.imageUrl && !r.product.image_url) {
+        await db().from("products").update({ image_url: k.imageUrl }).eq("id", r.product.id);
+        r.product.image_url = k.imageUrl;
+      }
     }
   }
   return { summaries, exhausted: !!exhausted };
@@ -1072,6 +1082,7 @@ async function resolveRow(
       title: c.title ?? p.title, brand: c.brand ?? p.brand, category: c.category ?? p.category,
       dims_cm: c.dimsCm ?? p.dims_cm, weight_g: c.weightG ?? p.weight_g, sales_rank: c.salesRank,
       parent_asin: c.parentAsin, variation_count: c.variationCount, catalog_updated_at: new Date().toISOString(),
+      image_url: c.imageUrl ?? p.image_url ?? "",
     });
     row.hazmat = [...c.hazmat, ...(c.batteries ? ["batteries"] : [])];
   }
@@ -1082,6 +1093,7 @@ async function resolveRow(
       dims_cm: update.dims_cm ?? k.dimsCm ?? p.dims_cm, weight_g: update.weight_g ?? k.weightG ?? p.weight_g,
       parent_asin: update.parent_asin ?? k.parentAsin, variation_count: update.variation_count ?? k.variationCount,
       keepa_updated_at: new Date().toISOString(),
+      image_url: update.image_url || k.imageUrl || p.image_url || "",
     });
   }
   update.referral_category = referralCategoryFor((update.category ?? p.category) as string | null, x.card);

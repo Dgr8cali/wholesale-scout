@@ -88,11 +88,11 @@ body {
   overflow: auto;
   max-height: calc(100dvh - 1rem);
 }
-@container (min-width: 72rem) {
-  .table-scroll[data-min="72"] { overflow: visible; max-height: none; }
+@container (min-width: 75rem) {
+  .table-scroll[data-min="75"] { overflow: visible; max-height: none; }
 }
-@container (min-width: 62rem) {
-  .table-scroll[data-min="62"] { overflow: visible; max-height: none; }
+@container (min-width: 65rem) {
+  .table-scroll[data-min="65"] { overflow: visible; max-height: none; }
 }
 .sticky-th {
   position: sticky;

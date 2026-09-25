@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import * as XLSX from "xlsx";
 import { FavouriteNote, FavouriteStar } from "@/components/FavouriteStar";
 import { FilterBar, type FilterOptions } from "@/components/FilterBar";
+import { ProductThumb } from "@/components/ProductThumb";
 import { EMPTY_FILTERS, matches, normalizeFilters, type FilterRow, type FilterSet } from "@/lib/filters";
 import { GATE_LABELS } from "@/lib/screening/config";
 import { api, gbp, pct, when } from "@/lib/ui/client";
@@ -229,9 +230,10 @@ export default function FavouritesPage() {
           <FilterBar value={filters} onChange={setFilters} options={options} favouritesAvailable={false}
             matching={rows.length} total={all.length} unit="favourites" gateLabels={GATE_LABELS} />
           <div className="table-wrap">
-          <div className="card table-scroll" data-min="62">
-            <table className="w-full min-w-[62rem] table-fixed text-sm">
+          <div className="card table-scroll" data-min="65">
+            <table className="w-full min-w-[65rem] table-fixed text-sm">
               <colgroup>
+                <col className="w-[3.5rem]" />
                 <col className="w-[5.5rem]" />
                 <col className="w-[3.25rem]" />
                 <col className="w-[15.5rem]" />
@@ -244,6 +246,7 @@ export default function FavouritesPage() {
               </colgroup>
               <thead className="text-left text-xs text-muted">
                 <tr>
+                  <th className="sticky-th px-1 py-2"><span className="sr-only">Image</span></th>
                   {th(null, "Verdict")}
                   {th("score", "Score", true)}
                   {th("title", "Product")}
@@ -263,6 +266,9 @@ export default function FavouritesPage() {
                   return [
                     <tr key={i.favourite.id} className="cursor-pointer border-b border-line align-top hover:bg-surface-2"
                       onClick={() => setOpen((x) => { const n = new Set(x); if (n.has(i.favourite.id)) n.delete(i.favourite.id); else n.add(i.favourite.id); return n; })}>
+                      <td className="px-1 py-1.5">
+                        <ProductThumb url={(l?.product as { image_url?: string | null } | null)?.image_url} asin={i.favourite.asin} title={titleOf(i)} brand={l ? brandOf(l) : null} />
+                      </td>
                       <td className="px-2 py-2">
                         <div className="flex items-center gap-1.5">
                         <FavouriteStar starred onToggle={() => unstar(i)} />
@@ -301,7 +307,7 @@ export default function FavouritesPage() {
                     </tr>,
                     isOpen && (
                       <tr key={`${i.favourite.id}-d`} className="border-b border-line bg-surface-2/50">
-                        <td colSpan={9} className="px-4 py-3">
+                        <td colSpan={10} className="px-4 py-3">
                           <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
                             <p className="text-xs leading-snug">{l?.status === "error" ? l.error : l?.why ?? "No result yet: re-screen favourites to screen it."}</p>
                             <FavouriteNote note={i.favourite.note} onSave={(t) => saveNote(i, t)} />
@@ -311,7 +317,7 @@ export default function FavouritesPage() {
                     ),
                   ];
                 })}
-                {!rows.length && <tr><td colSpan={9} className="px-4 py-8 text-center text-sm text-muted">Nothing matches these filters.</td></tr>}
+                {!rows.length && <tr><td colSpan={10} className="px-4 py-8 text-center text-sm text-muted">Nothing matches these filters.</td></tr>}
               </tbody>
             </table>
           </div>

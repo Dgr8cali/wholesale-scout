@@ -78,6 +78,8 @@ interface RawKeepaProduct {
   csv?: (number[] | null)[];
   buyBoxSellerIdHistory?: string[] | null;
   stats?: { offerCountFBA?: number; salesRankDrops30?: number } | null;
+  /** Comma-separated image file names on Amazon's CDN; the first is the main image. */
+  imagesCSV?: string | null;
   /** Keepa's FBA fee estimate; pickAndPackFee in pence. */
   fbaFees?: { pickAndPackFee?: number } | null;
   referralFeePercent?: number | null;
@@ -123,6 +125,7 @@ export function parseKeepaProduct(p: RawKeepaProduct, now = Date.now()): KeepaPr
     weightG,
     parentAsin: p.parentAsin ?? null,
     variationCount,
+    imageUrl: p.imagesCSV?.split(",")[0]?.trim() ? `https://m.media-amazon.com/images/I/${p.imagesCSV.split(",")[0].trim()}` : null,
     series,
     buyBoxSellers,
     summary: {

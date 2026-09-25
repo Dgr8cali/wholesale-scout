@@ -53,6 +53,8 @@ export interface KeepaProduct {
   weightG: number | null;
   parentAsin: string | null;
   variationCount: number | null;
+  /** Main image on Amazon's CDN, from Keepa's imagesCSV. */
+  imageUrl: string | null;
   summary: KeepaSummary;
   /** Buy Box holder changes: [unix ms, seller id]. */
   buyBoxSellers: [number, string][];

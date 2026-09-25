@@ -56,9 +56,13 @@ export function parseCatalogItem(raw: unknown, marketplaceId: string): CatalogMa
   const batteries = arr(attrs.batteries_required).some((x) => obj(x).value === true) ||
     arr(attrs.batteries_included).some((x) => obj(x).value === true);
 
+  const images = arr(forMarketplace(item.images, marketplaceId).images).map(obj);
+  const main = images.filter((i) => i.variant === "MAIN" && str(i.link)).sort((a, b) => (num(b.height) ?? 0) - (num(a.height) ?? 0))[0];
+
   return {
     asin,
     eans,
+    imageUrl: main ? String(main.link) : null,
     title: str(summary.itemName),
     brand: str(summary.brand) ?? str(summary.brandName),
     // Root category, for the referral fee: the rank's display group, else the summary's

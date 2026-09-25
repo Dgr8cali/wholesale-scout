@@ -79,6 +79,7 @@ class Query implements PromiseLike<{ data: unknown; error: { message: string; co
     }));
     return this;
   }
+  not(c: string, op: "is", v: null) { void op; this.filters.push((r) => (r[c] ?? null) !== v); return this; }
   is(c: string, v: null) { this.filters.push((r) => (r[c] ?? null) === v); return this; }
   in(c: string, vs: unknown[]) { this.filters.push((r) => vs.includes(r[c])); return this; }
   gte(c: string, v: string) { this.filters.push((r) => String(r[c]) >= v); return this; }

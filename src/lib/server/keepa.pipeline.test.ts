@@ -24,7 +24,7 @@ const summary = (over: Partial<KeepaSummary> = {}): KeepaSummary => ({
   topSellers: [{ sellerId: "S1", sharePct: 35 }, { sellerId: "S2", sharePct: 30 }, { sellerId: "S3", sharePct: 20 }], ...over,
 });
 const product = (asin: string, s: KeepaSummary): KeepaProduct => ({
-  asin, eans: [], title: null, brand: null, category: null, dimsCm: null, weightG: null, parentAsin: null, variationCount: null,
+  asin, eans: [], title: null, brand: null, category: null, dimsCm: null, weightG: null, parentAsin: null, variationCount: null, imageUrl: null,
   summary: s, buyBoxSellers: [], series: { rank: [[Date.now() - 86_400_000, 5000]], buyBox: [], newPrice: [], offerCount: [], amazon: [], reviewCount: [] },
 });
 
@@ -61,7 +61,7 @@ vi.mock("../keepa/client", async (orig) => {
 
 const cat = (asin: string, ean: string, title: string): CatalogMatch => ({
   asin, eans: [ean], title, brand: "Bioderma", category: "Beauty", dimsCm: { l: 15, w: 8, h: 6 }, weightG: 300,
-  salesRank: 9000, parentAsin: null, variationCount: null, hazmat: [], batteries: false,
+  salesRank: 9000, parentAsin: null, variationCount: null, hazmat: [], batteries: false, imageUrl: `https://m.media-amazon.com/images/I/${asin}.jpg`,
 });
 vi.mock("../spapi/client", async (orig) => {
   const real = await orig<typeof import("../spapi/client")>();

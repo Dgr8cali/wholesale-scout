@@ -63,6 +63,7 @@ export default function Home() {
       )}
 
       {error && <p className="rounded-md bg-fail-soft px-3 py-2 text-sm text-fail">{error}</p>}
+      <ImageBackfill />
 
       {runs && !runs.length && (
         <div className="card px-6 py-10 text-center">
@@ -108,5 +109,36 @@ export default function Home() {
         </div>
       )}
     </div>
+  );
+}
+
+/** Products screened before images were kept get theirs from Amazon's catalog (free), 400 at a time. */
+function ImageBackfill() {
+  const [state, setState] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  async function run() {
+    setBusy(true);
+    setState(null);
+    try {
+      let looked = 0, found = 0;
+      for (;;) {
+        const r = await api<{ looked: number; found: number }>("/api/products/images", { method: "POST" });
+        looked += r.looked;
+        found += r.found;
+        setState(`Checked ${looked} products, found ${found} images…`);
+        if (r.looked < 400) break;
+      }
+      setState(looked ? `Done: ${found} images found for ${looked} products.` : "Every product already has its image (or Amazon has none).");
+    } catch (e) {
+      setState((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <p className="text-xs text-muted">
+      <button className="text-accent hover:underline disabled:opacity-50" disabled={busy} onClick={run}>{busy ? "Fetching images…" : "Fetch missing product images"}</button>
+      {state && <span className="ml-2">{state}</span>}
+    </p>
   );
 }

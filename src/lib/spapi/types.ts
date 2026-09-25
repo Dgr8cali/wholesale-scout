@@ -24,6 +24,8 @@ export interface CatalogMatch {
   /** Declared dangerous-goods regulations, e.g. ["ghs", "transportation"]. */
   hazmat: string[];
   batteries: boolean;
+  /** Largest MAIN image on Amazon's CDN, or null. */
+  imageUrl: string | null;
 }
 
 export interface FeesEstimate {

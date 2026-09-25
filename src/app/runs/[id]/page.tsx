@@ -13,6 +13,7 @@ import { groupRows } from "@/lib/ui/group";
 import { brandOf, favKey, isWaived, toFilterRow } from "@/lib/ui/resultRows";
 import { WaiveControl } from "@/components/WaiveControl";
 import { BulkBar } from "@/components/BulkBar";
+import { ProductThumb } from "@/components/ProductThumb";
 import { FavouriteNote, FavouriteStar } from "@/components/FavouriteStar";
 import { RestrictionLink } from "@/lib/ui/RestrictionLink";
 import { buyBox, estSales, sellers, type Figure, type StoredMarket } from "@/lib/ui/metrics";
@@ -47,7 +48,7 @@ interface Result {
   offer_count: number;
   error: string | null;
   inputs: { market?: StoredMarket | null; sellers?: Seller[] | null; lookup?: { outcome: string; attempts: { identifiersType: string; code: string; items: number; total?: number; error?: string }[]; raw?: string } | null } | null;
-  product: { ean: string; asin: string | null; title: string | null; brand: string | null; category: string | null } | null;
+  product: { ean: string; asin: string | null; title: string | null; brand: string | null; category: string | null; image_url?: string | null } | null;
   offer: { unit_cost: number; currency: string; unit_cost_gbp: number; moq: number | null; pack_units: number; title: string | null; source_ref: string | null; supplier: { name: string } | null } | null;
 }
 
@@ -473,10 +474,11 @@ export default function RunPage() {
       {/* Fixed layout: numeric columns compact, product capped, why takes the rest and wraps.
           Scrolls sideways inside the card only below the table's minimum width. */}
       <div className="table-wrap">
-      <div className="card table-scroll" data-min="72">
-        <table className="w-full min-w-[72rem] table-fixed text-sm">
+      <div className="card table-scroll" data-min="75">
+        <table className="w-full min-w-[75rem] table-fixed text-sm">
           <colgroup>
             <col className="w-[2.25rem]" />{/* select */}
+            <col className="w-[3.5rem]" />{/* image */}
             <col className="w-[5.5rem]" />{/* star + verdict */}
             <col className="w-[3.25rem]" />{/* score */}
             <col className="w-[13rem]" />{/* product */}
@@ -496,6 +498,7 @@ export default function RunPage() {
               <th className="sticky-th px-2 py-2 align-bottom">
                 <SelectAll visible={visibleIds} selected={selected} onChange={setSelected} />
               </th>
+              <th className="sticky-th px-1 py-2 align-bottom"><span className="sr-only">Image</span></th>
               {th("verdict", "Verdict")}
               {th("score", "Score", true)}
               {th("title", "Product")}
@@ -524,6 +527,9 @@ export default function RunPage() {
                     <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
                       <input type="checkbox" className="mt-0.5 cursor-pointer" aria-label={`Select ${titleOf(r)}`} checked={selected.has(r.id)}
                         onChange={() => setSelected((s) => { const n = new Set(s); if (n.has(r.id)) n.delete(r.id); else n.add(r.id); return n; })} />
+                    </td>
+                    <td className="px-1 py-1.5">
+                      <ProductThumb url={r.product?.image_url} asin={r.product?.asin} title={titleOf(r)} brand={brandOf(r)} />
                     </td>
                     <td className="px-2 py-2">
                       <div className="flex items-center gap-1.5">
@@ -571,7 +577,7 @@ export default function RunPage() {
                   </tr>
                   {isOpen && (
                     <tr className="border-b border-line bg-surface-2/50">
-                      <td colSpan={14} className="px-4 py-3">
+                      <td colSpan={15} className="px-4 py-3">
                         <Detail r={r} fav={r.product ? favs.get(favKey(r.product.ean, r.product.asin)) : undefined} onNote={saveNote} onWaive={waive} />
                       </td>
                     </tr>
@@ -580,7 +586,7 @@ export default function RunPage() {
               );
             })}
             {!rows.length && (
-              <tr><td colSpan={14} className="px-4 py-8 text-center text-sm text-muted">{done.length ? "Nothing matches these filters." : "Rows appear here as they're screened."}</td></tr>
+              <tr><td colSpan={15} className="px-4 py-8 text-center text-sm text-muted">{done.length ? "Nothing matches these filters." : "Rows appear here as they're screened."}</td></tr>
             )}
           </tbody>
         </table>

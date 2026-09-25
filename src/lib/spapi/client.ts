@@ -182,7 +182,7 @@ export class SpApiClient {
           identifiers: codes.join(","),
           identifiersType,
           marketplaceIds: this.config.marketplaceId,
-          includedData: "summaries,attributes,dimensions,identifiers,relationships,salesRanks,classifications",
+          includedData: "summaries,attributes,dimensions,identifiers,relationships,salesRanks,classifications,images",
           pageSize: "20",
           ...(pageToken ? { pageToken } : {}),
         },
@@ -274,6 +274,24 @@ export class SpApiClient {
       console.log(`[catalog] ${ean} ${trace.outcome}: ${JSON.stringify(trace.attempts)} raw=${trace.raw}`);
     }
     return { matches, traces };
+  }
+
+  /** Main image per ASIN (catalog search by ASIN, 20 per request). null when Amazon has none. */
+  async imagesByAsins(asins: string[]): Promise<Map<string, string | null>> {
+    const out = new Map<string, string | null>();
+    const unique = [...new Set(asins)];
+    for (let i = 0; i < unique.length; i += 20) {
+      const chunk = unique.slice(i, i + 20);
+      const res = await this.request<{ items?: unknown[] }>("catalog", "GET", "/catalog/2022-04-01/items", {
+        query: { identifiers: chunk.join(","), identifiersType: "ASIN", marketplaceIds: this.config.marketplaceId, includedData: "images", pageSize: "20" },
+      });
+      for (const a of chunk) out.set(a, null);
+      for (const raw of res.items ?? []) {
+        const item = parseCatalogItem(raw, this.config.marketplaceId);
+        if (item.asin) out.set(item.asin, item.imageUrl);
+      }
+    }
+    return out;
   }
 
   /**

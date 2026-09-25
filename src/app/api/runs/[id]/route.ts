@@ -14,7 +14,7 @@ export const GET = handle(async (_req: NextRequest, ctx: { params: Promise<{ id:
   for (let from = 0; ; from += 1000) {
     const page = must(
       await db().from("results")
-        .select("*, product:products(id, ean, asin, title, brand, category, dims_cm, weight_g, sales_rank), offer:offers(id, unit_cost, currency, unit_cost_gbp, moq, pack_units, stock, title, source_ref, supplier:suppliers(name))")
+        .select("*, product:products(*), offer:offers(id, unit_cost, currency, unit_cost_gbp, moq, pack_units, stock, title, source_ref, supplier:suppliers(name))")
         .eq("run_id", id)
         .order("score", { ascending: false, nullsFirst: false })
         .range(from, from + 999),

@@ -195,6 +195,11 @@ describe("catalog lookup by EAN", () => {
     salesRanks: [{ marketplaceId: "A1F83G8C2ARO7P", displayGroupRanks: [{ title: "Home & Kitchen", rank: 4321 }] }],
     relationships: [{ marketplaceId: "A1F83G8C2ARO7P", relationships: [{ type: "VARIATION", parentAsins: ["B0PARENT01"] }] }],
     attributes: { supplier_declared_dg_hz_regulation: [{ value: "ghs" }, { value: "not_applicable" }] },
+    images: [{ marketplaceId: "A1F83G8C2ARO7P", images: [
+      { variant: "PT01", link: "https://m.media-amazon.com/images/I/back.jpg", height: 1500, width: 1500 },
+      { variant: "MAIN", link: "https://m.media-amazon.com/images/I/31Ui5w9QYfL.jpg", height: 500, width: 500 },
+      { variant: "MAIN", link: "https://m.media-amazon.com/images/I/51fxO9b607L.jpg", height: 1500, width: 1500 },
+    ] }],
   };
 
   /** Answers like Amazon: only items whose identifiers were asked for. */
@@ -222,6 +227,7 @@ describe("catalog lookup by EAN", () => {
       salesRank: 4321,
       parentAsin: "B0PARENT01",
       hazmat: ["ghs"],
+      imageUrl: "https://m.media-amazon.com/images/I/51fxO9b607L.jpg", // largest MAIN, not the back-of-pack shot
     });
     expect(out.has("5000000000000")).toBe(false);
   });

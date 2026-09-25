@@ -18,7 +18,7 @@ const calls = { catalog: 0, pricing: 0, restrictions: 0, fees: 0 };
 const cat = (asin: string, ean: string, over: Partial<CatalogMatch> = {}): CatalogMatch => ({
   asin, eans: [ean], title: `Item ${asin}`, brand: "Brand", category: "DIY & Tools",
   dimsCm: { l: 15, w: 12, h: 8 }, weightG: 200, salesRank: 3000, parentAsin: null, variationCount: null,
-  hazmat: [], batteries: false, ...over,
+  hazmat: [], batteries: false, imageUrl: `https://m.media-amazon.com/images/I/${asin}-main.jpg`, ...over,
 });
 
 const CATALOG: Record<string, CatalogMatch[]> = {
@@ -56,6 +56,9 @@ vi.mock("../spapi/client", async (orig) => {
             ? { outcome: "api_error", attempts: [{ identifiersType: "EAN", code: e, items: 0, error: "SP-API catalog 503" }] }
             : { outcome: "search_miss", attempts: [{ identifiersType: "EAN", code: `batch of ${eans.length}`, items: 0 }, { identifiersType: "EAN", code: e, items: 0, total: 0 }], raw: "{}" }]));
         return { matches: new Map(eans.filter((e) => CATALOG[e]).map((e) => [e, CATALOG[e]])), traces };
+      },
+      async imagesByAsins(asins: string[]) {
+        return new Map(asins.map((a) => [a, a === "B0NOIMAGE1" ? null : `https://m.media-amazon.com/images/I/${a}-bf.jpg`]));
       },
       async getCompetitivePricing(asins: string[]) {
         calls.pricing++;
@@ -442,5 +445,29 @@ describe("bulk actions", () => {
     expect(await listFavourites()).toHaveLength(2);
     await bulkFavourites([{ ean: "4006381333931", asin: "B0TAPE0001" }], "unstar");
     expect((await listFavourites()).map((x) => x.ean)).toEqual(["5000000000035"]);
+  });
+});
+
+describe("product images", () => {
+  it("stores the catalog's main image when a product is matched, and backfills older products", async () => {
+    const fake = new FakeDb();
+    __setDbForTests(fake);
+    const f = file("p.xlsx", [["EAN", "Name", "Price", "MOQ"], ["4006381333931", "Walker Tape 25mm", "5.00", 12]],
+      { name: "P", vatBasis: "ex_vat", vatRate: 20, currency: "GBP" });
+    const { runId } = await ingest({ files: [f] });
+    while (!(await processRun(runId)).done);
+    expect(fake.tables.products[0].image_url).toBe("https://m.media-amazon.com/images/I/B0TAPE0001-main.jpg");
+
+    fake.tables.products.push(
+      { id: "old1", ean: "1", asin: "B0OLDPROD1", image_url: null },
+      { id: "old2", ean: "2", asin: "B0NOIMAGE1", image_url: null },
+      { id: "old3", ean: "3", asin: null, image_url: null },
+    );
+    const { backfillImages } = await import("./images");
+    expect(await backfillImages()).toEqual({ looked: 2, found: 1 });
+    const byId = (id: string) => fake.tables.products.find((p) => p.id === id)!;
+    expect(byId("old1").image_url).toBe("https://m.media-amazon.com/images/I/B0OLDPROD1-bf.jpg");
+    expect(byId("old2").image_url).toBe(""); // looked, none: not asked again
+    expect(byId("old3").image_url).toBeNull(); // no ASIN yet
   });
 });

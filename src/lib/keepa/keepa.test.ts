@@ -92,6 +92,8 @@ describe("clients", () => {
     expect(p.weightG).toBe(210);
     expect(p.category).toBe("Health & Personal Care");
     expect(p.summary.monthlySold).toBeNull();
+    expect(p.imageUrl).toBeNull();
+    expect(parseKeepaProduct({ asin: "B4", csv: [], imagesCSV: "41AP6gpeNML.jpg,31x.jpg" }, NOW).imageUrl).toBe("https://m.media-amazon.com/images/I/41AP6gpeNML.jpg");
     const sold = parseKeepaProduct({ asin: "B2", csv: [], monthlySold: 200 }, NOW);
     expect(sold.summary.monthlySold).toBe(200);
     expect(parseKeepaProduct({ asin: "B3", csv: [], monthlySold: -1 }, NOW).summary.monthlySold).toBeNull();
