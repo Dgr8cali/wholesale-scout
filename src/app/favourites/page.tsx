@@ -228,7 +228,8 @@ export default function FavouritesPage() {
         <>
           <FilterBar value={filters} onChange={setFilters} options={options} favouritesAvailable={false}
             matching={rows.length} total={all.length} unit="favourites" gateLabels={GATE_LABELS} />
-          <div className="card table-scroll">
+          <div className="table-wrap">
+          <div className="card table-scroll" data-min="62">
             <table className="w-full min-w-[62rem] table-fixed text-sm">
               <colgroup>
                 <col className="w-[4rem]" />
@@ -313,6 +314,7 @@ export default function FavouritesPage() {
                 {!rows.length && <tr><td colSpan={9} className="px-4 py-8 text-center text-sm text-muted">Nothing matches these filters.</td></tr>}
               </tbody>
             </table>
+          </div>
           </div>
         </>
       )}

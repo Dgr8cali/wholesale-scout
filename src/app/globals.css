@@ -75,7 +75,30 @@ body {
   .h2 { @apply text-base font-semibold; }
 }
 
-/* Results tables scroll sideways inside their card on narrow screens. */
+/*
+ * Results tables with a header row that stays in view.
+ * Narrow: the card is the scroller (both ways, at most a screen tall) and the header sticks
+ * to its top. Wide enough for the table (a container query on the wrapper): the card doesn't
+ * scroll, so the header sticks to the top of the viewport as the page scrolls.
+ */
+.table-wrap {
+  container-type: inline-size;
+}
 .table-scroll {
-  overflow-x: auto;
+  overflow: auto;
+  max-height: calc(100dvh - 1rem);
+}
+@container (min-width: 70rem) {
+  .table-scroll[data-min="70"] { overflow: visible; max-height: none; }
+}
+@container (min-width: 62rem) {
+  .table-scroll[data-min="62"] { overflow: visible; max-height: none; }
+}
+.sticky-th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--surface);
+  /* Borders don't travel with a stuck cell; an inset shadow does. */
+  box-shadow: inset 0 -1px 0 var(--line);
 }

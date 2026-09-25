@@ -327,7 +327,7 @@ export default function RunPage() {
   }
 
   const th = (key: SortKey, label: ReactNode, right = false, hint?: string) => (
-    <th className={`overflow-hidden px-2 py-2 align-bottom leading-tight ${right ? "text-right" : ""}`} title={hint}>
+    <th className={`sticky-th overflow-hidden px-2 py-2 align-bottom leading-tight ${right ? "text-right" : ""}`} title={hint}>
       <button className={`uppercase hover:text-ink ${right ? "text-right tracking-normal" : "text-left tracking-wide"}`}
         onClick={() => setSort((s) => ({ key, dir: s.key === key ? (s.dir === 1 ? -1 : 1) : key === "title" ? 1 : -1 }))}>
         {label}{sort.key === key ? (sort.dir === -1 ? " ↓" : " ↑") : ""}
@@ -404,7 +404,8 @@ export default function RunPage() {
 
       {/* Fixed layout: numeric columns compact, product capped, why takes the rest and wraps.
           Scrolls sideways inside the card only below the table's minimum width. */}
-      <div className="card overflow-x-auto">
+      <div className="table-wrap">
+      <div className="card table-scroll" data-min="70">
         <table className="w-full min-w-[70rem] table-fixed text-sm">
           <colgroup>
             <col className="w-[4rem]" />{/* verdict */}
@@ -421,7 +422,7 @@ export default function RunPage() {
             <col className="w-[4.25rem]" />{/* hurdle */}
             <col />{/* why: the rest */}
           </colgroup>
-          <thead className="border-b border-line text-left text-xs text-muted">
+          <thead className="text-left text-xs text-muted">
             <tr>
               {th("verdict", "Verdict")}
               {th("score", "Score", true)}
@@ -435,7 +436,7 @@ export default function RunPage() {
               {th("roi", "ROI", true)}
               {th("margin", "Margin", true)}
               {th("hurdle_price", "Hurdle", true)}
-              <th className="px-2 py-2 align-bottom uppercase tracking-wide">Why</th>
+              <th className="sticky-th px-2 py-2 align-bottom uppercase tracking-wide">Why</th>
             </tr>
           </thead>
           <tbody>
@@ -504,6 +505,7 @@ export default function RunPage() {
             )}
           </tbody>
         </table>
+      </div>
       </div>
     </div>
   );
