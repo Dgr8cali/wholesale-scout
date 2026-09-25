@@ -20,7 +20,7 @@ export interface ParsedCheck {
   errors: string[];
 }
 
-export const MAX_CHECK_LINES = 500;
+const MAX_CHECK_LINES = 500;
 
 const ASIN = /^(?:B0[0-9A-Z]{8}|\d{9}[\dX])$/i;
 // Amazon product links: /dp/X, /gp/product/X, /gp/aw/d/X, /product/X, ?asin=X

@@ -5,7 +5,7 @@ import { addFavourite } from "./favourites";
 import { setWatch } from "./watchlist";
 
 /** CORS for the extension's calls (the password is the protection, not the origin). */
-export const EXT_CORS = {
+const EXT_CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Access-Control-Allow-Headers": "Authorization, Content-Type",
@@ -19,7 +19,7 @@ export const isAsin = (s: unknown): s is string => typeof s === "string" && /^[A
 type ProductRow = { id: string; ean: string; asin: string; brand: string | null; amazon_dg: Record<string, unknown> | null };
 
 /** The product for an ASIN (the one with the newest result when several EANs share it). */
-export async function productByAsin(asin: string): Promise<ProductRow | null> {
+async function productByAsin(asin: string): Promise<ProductRow | null> {
   const rows = must(await db().from("products").select("id, ean, asin, brand, amazon_dg, updated_at").eq("asin", asin).order("updated_at", { ascending: false }).limit(5), "product") as ProductRow[];
   return rows[0] ?? null;
 }

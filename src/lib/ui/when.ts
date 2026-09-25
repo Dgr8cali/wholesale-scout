@@ -2,7 +2,7 @@
 
 const MIN = 60_000, HOUR = 60 * MIN, DAY = 24 * HOUR;
 /** A stock reading older than this is shown as stale. */
-export const STOCK_STALE_MS = 7 * DAY;
+const STOCK_STALE_MS = 7 * DAY;
 
 export function ago(iso: string | null | undefined, now = Date.now()): string | null {
   if (!iso) return null;
@@ -27,7 +27,7 @@ export function stamp(iso: string, now = Date.now()): string {
 export const isStale = (iso: string, now = Date.now()) => now - new Date(iso).getTime() > STOCK_STALE_MS;
 
 /** "12 Sept 2026": a date without the time. */
-export const day = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "Europe/London" });
+const day = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "Europe/London" });
 
 /**
  * When Amazon last held an offer: Keepa's date, else worked out from the days before the check

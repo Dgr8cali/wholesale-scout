@@ -8,6 +8,7 @@ import { isDormant, lastSeenLabel } from "./dormant";
 import { profitPerMonth, yourShare } from "./sales";
 import { monthsLabel } from "./order";
 import { effectiveMoq, firstOrder, tierDisagreement, type GateRun, type ScreenContext } from "./gates";
+import { money } from "../format";
 
 export interface FitData {
   deliveryDays: number | null;
@@ -135,7 +136,6 @@ export function winScore(ctx: ScreenContext, run: GateRun, p: ProfileConfig, fit
   return { score, band, groups, why };
 }
 
-const money = (n: number) => `${n < 0 ? "-" : ""}£${Math.abs(n).toFixed(2)}`;
 const WORDS = ["no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve"];
 const count = (n: number) => (n >= 0 && n < WORDS.length && Number.isInteger(n) ? WORDS[n] : String(Math.round(n)));
 
@@ -185,7 +185,7 @@ function phrase(g: GroupScore, ctx: ScreenContext, run: GateRun, strong: boolean
 }
 
 /** One sentence from the highest and lowest groups, e.g. "82 — strong demand (140 drops/mo), … Watch: …". */
-export function whyLine(ctx: ScreenContext, run: GateRun, score: number | null, groups: Record<GroupId, GroupScore>): string {
+function whyLine(ctx: ScreenContext, run: GateRun, score: number | null, groups: Record<GroupId, GroupScore>): string {
   if (run.failedGate) {
     const f = run.outcomes.find((o) => o.gate === run.failedGate)!;
     return `Failed ${f.label.toLowerCase()}: ${f.detail}`;

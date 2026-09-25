@@ -2,7 +2,7 @@ import { firstOrderFigures } from "@/lib/ui/metrics";
 import { figure, listingMoq, titleOf, type Result, type SortKey } from "./types";
 
 /** A result's value for a sort column, as the results table sorts it (null sorts last). */
-export function resultSortValue(r: Result, key: SortKey, lineBudget: number): number | string | null {
+function resultSortValue(r: Result, key: SortKey, lineBudget: number): number | string | null {
   if (key === "title") return titleOf(r).toLowerCase();
   if (key === "verdict") return ({ pass: 0, warn: 1, fail: 2 } as const)[r.verdict ?? "fail"];
   if (key === "sales" || key === "sellers" || key === "buybox" || key === "share" || key === "profitMo") return figure(r, key).value;

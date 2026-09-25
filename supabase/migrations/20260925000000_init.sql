@@ -10,7 +10,7 @@ create extension if not exists pgcrypto;
 -- ---------------------------------------------------------------------------
 -- suppliers — the ledger. One row per supplier, applied to every line from them.
 -- ---------------------------------------------------------------------------
-create table suppliers (
+create table if not exists suppliers (
   id                  uuid primary key default gen_random_uuid(),
   name                text not null unique,
   source_type         text not null default 'upload'
@@ -34,7 +34,7 @@ create table suppliers (
 -- ---------------------------------------------------------------------------
 -- supplier_mappings — learned column layouts, keyed by a fingerprint of the headers.
 -- ---------------------------------------------------------------------------
-create table supplier_mappings (
+create table if not exists supplier_mappings (
   id                  uuid primary key default gen_random_uuid(),
   supplier_id         uuid not null references suppliers(id) on delete cascade,
   header_fingerprint  text not null,
@@ -44,12 +44,12 @@ create table supplier_mappings (
   updated_at          timestamptz not null default now(),
   unique (supplier_id, header_fingerprint)
 );
-create index supplier_mappings_fingerprint_idx on supplier_mappings (header_fingerprint);
+create index if not exists supplier_mappings_fingerprint_idx on supplier_mappings (header_fingerprint);
 
 -- ---------------------------------------------------------------------------
 -- products — one row per EAN–ASIN pair. asin is null until the EAN is matched.
 -- ---------------------------------------------------------------------------
-create table products (
+create table if not exists products (
   id                  uuid primary key default gen_random_uuid(),
   ean                 text not null,
   asin                text,
@@ -68,13 +68,13 @@ create table products (
   created_at          timestamptz not null default now(),
   updated_at          timestamptz not null default now()
 );
-create unique index products_ean_asin_key on products (ean, coalesce(asin, ''));
-create index products_asin_idx on products (asin);
+create unique index if not exists products_ean_asin_key on products (ean, coalesce(asin, ''));
+create index if not exists products_asin_idx on products (asin);
 
 -- ---------------------------------------------------------------------------
 -- keepa_snapshots — cached history per ASIN. Reused for 24 hours.
 -- ---------------------------------------------------------------------------
-create table keepa_snapshots (
+create table if not exists keepa_snapshots (
   id                  uuid primary key default gen_random_uuid(),
   asin                text not null,
   fetched_at          timestamptz not null default now(),
@@ -88,12 +88,12 @@ create table keepa_snapshots (
     -- rank_drops_30d, avg_rank_90d, median_12m, current_bb, offers_now, amazon_last_seen,
     -- history_days, top_seller_bb_share, fba_offers, bb_slope_pct_yr, review_jump_pct, ...
 );
-create index keepa_snapshots_asin_fetched_idx on keepa_snapshots (asin, fetched_at desc);
+create index if not exists keepa_snapshots_asin_fetched_idx on keepa_snapshots (asin, fetched_at desc);
 
 -- ---------------------------------------------------------------------------
 -- offers — a supplier's price for a product. FX is applied at ingest and stored.
 -- ---------------------------------------------------------------------------
-create table offers (
+create table if not exists offers (
   id                  uuid primary key default gen_random_uuid(),
   product_id          uuid not null references products(id) on delete cascade,
   supplier_id         uuid not null references suppliers(id) on delete cascade,
@@ -111,13 +111,13 @@ create table offers (
   seen_at             timestamptz not null default now(),
   source_ref          text                      -- file name and row number
 );
-create index offers_product_idx on offers (product_id);
-create index offers_supplier_idx on offers (supplier_id);
+create index if not exists offers_product_idx on offers (product_id);
+create index if not exists offers_supplier_idx on offers (supplier_id);
 
 -- ---------------------------------------------------------------------------
 -- profiles — gate modes and parameters, weights, scales, fee assumptions.
 -- ---------------------------------------------------------------------------
-create table profiles (
+create table if not exists profiles (
   id                  uuid primary key default gen_random_uuid(),
   name                text not null unique,
   config              jsonb not null,
@@ -125,12 +125,12 @@ create table profiles (
   created_at          timestamptz not null default now(),
   updated_at          timestamptz not null default now()
 );
-create unique index profiles_one_default on profiles (is_default) where is_default;
+create unique index if not exists profiles_one_default on profiles (is_default) where is_default;
 
 -- ---------------------------------------------------------------------------
 -- runs — one upload (or API pull) screened with one profile.
 -- ---------------------------------------------------------------------------
-create table runs (
+create table if not exists runs (
   id                  uuid primary key default gen_random_uuid(),
   profile_id          uuid references profiles(id) on delete set null,
   profile_snapshot    jsonb,          -- the profile config as it was when the run started
@@ -148,7 +148,7 @@ create table runs (
 -- ---------------------------------------------------------------------------
 -- results — one scored row per product per run.
 -- ---------------------------------------------------------------------------
-create table results (
+create table if not exists results (
   id                  uuid primary key default gen_random_uuid(),
   run_id              uuid not null references runs(id) on delete cascade,
   product_id          uuid not null references products(id) on delete cascade,
@@ -175,12 +175,12 @@ create table results (
   updated_at          timestamptz not null default now(),
   unique (run_id, product_id)
 );
-create index results_run_idx on results (run_id, status);
+create index if not exists results_run_idx on results (run_id, status);
 
 -- ---------------------------------------------------------------------------
 -- watchlist — near-misses and the condition that would flip them.
 -- ---------------------------------------------------------------------------
-create table watchlist (
+create table if not exists watchlist (
   id                  uuid primary key default gen_random_uuid(),
   product_id          uuid not null references products(id) on delete cascade,
   condition           jsonb not null,
@@ -190,12 +190,12 @@ create table watchlist (
   alert_channel       text not null default 'email',
   created_at          timestamptz not null default now()
 );
-create index watchlist_product_idx on watchlist (product_id);
+create index if not exists watchlist_product_idx on watchlist (product_id);
 
 -- ---------------------------------------------------------------------------
 -- rate_cards — versioned fee tables. The active one is used; the rest are history.
 -- ---------------------------------------------------------------------------
-create table rate_cards (
+create table if not exists rate_cards (
   id                  uuid primary key default gen_random_uuid(),
   name                text not null,
   effective_from      date not null,
@@ -203,12 +203,12 @@ create table rate_cards (
   is_active           boolean not null default false,
   created_at          timestamptz not null default now()
 );
-create unique index rate_cards_one_active on rate_cards (is_active) where is_active;
+create unique index if not exists rate_cards_one_active on rate_cards (is_active) where is_active;
 
 -- ---------------------------------------------------------------------------
 -- category_rules — compliance rule sets shared by every profile.
 -- ---------------------------------------------------------------------------
-create table category_rules (
+create table if not exists category_rules (
   id                  uuid primary key default gen_random_uuid(),
   key                 text not null unique,
   name                text not null,

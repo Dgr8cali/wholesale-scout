@@ -20,6 +20,3 @@ export function memo<T>(key: string, ttlMs: number, compute: () => Promise<T>): 
 export function forget(prefix: string) {
   for (const k of store.keys()) if (k.startsWith(prefix)) store.delete(k);
 }
-
-/** Tests: start empty. */
-export const __clearMemo = () => store.clear();

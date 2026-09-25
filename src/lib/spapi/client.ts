@@ -49,7 +49,7 @@ type Fetch = typeof fetch;
 const FEE_RETRIES = 2;
 
 /** SP-API's documented rate (requests/second) and burst per operation, for the token buckets. */
-export const RATE_LIMITS: Record<string, { rate: number; burst: number }> = {
+const RATE_LIMITS: Record<string, { rate: number; burst: number }> = {
   catalog: { rate: 2, burst: 2 }, // searchCatalogItems
   feesSingle: { rate: 1, burst: 2 }, // getMyFeesEstimateForASIN
   feesBatch: { rate: 0.5, burst: 1 }, // getMyFeesEstimates (20 per request)
@@ -425,7 +425,7 @@ export class SpApiClient {
 }
 
 /** Amazon.co.uk's own seller ID. */
-export const AMAZON_UK_SELLER_ID = "A3P5ROKL5A1OLE";
+const AMAZON_UK_SELLER_ID = "A3P5ROKL5A1OLE";
 
 /** Batch getItemOffers responses into who's selling each ASIN; failed entries are left out. */
 export function parseItemOffers(responses: unknown[]): ListingOffers[] {

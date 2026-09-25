@@ -1,11 +1,11 @@
 import "server-only";
-import { chunks, db, loadProfile, must } from "./db";
+import { chunks, db, loadProfile, must, schemaMissing } from "./db";
 import { createRunFrom } from "./runs";
 import type { WatchCondition } from "../watch";
 
 const DAY = 86_400_000;
 /** A favourite whose latest result is older than this is marked outdated. */
-export const OUTDATED_MS = 7 * DAY;
+const OUTDATED_MS = 7 * DAY;
 
 export interface Favourite {
   id: string;
@@ -23,7 +23,6 @@ type Row = Record<string, unknown>;
 const FAV_COLS = "id, ean, asin, note, created_at, condition, no_supplier";
 
 export const FAVOURITES_MIGRATION = "Run migration 20260926000700_favourites.sql to use favourites";
-export const schemaMissing = (m: string) => /does not exist|schema cache/i.test(m);
 
 export async function listFavourites(): Promise<Favourite[]> {
   const res = await db().from("favourites").select(FAV_COLS).order("created_at", { ascending: false });

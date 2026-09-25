@@ -11,8 +11,6 @@ import { ingest } from "./ingest";
 const DAY = 86_400_000;
 /** A storefront list is reused for this long before Keepa is asked again. */
 export const STOREFRONT_TTL_MS = 7 * DAY;
-/** What Keepa charges for a storefront: 1 for the seller, 9 for its ASIN list. */
-export const STOREFRONT_TOKENS = 10;
 /** Keepa tokens per ASIN: history for every row, and the Buy Box data for rows that pass every other gate. */
 const HISTORY_TOKENS = 1;
 const BUYBOX_TOKENS = 3;
@@ -44,7 +42,7 @@ async function stored(sellerId: string): Promise<SellerRow | null> {
  * The seller's storefront: from the 7-day cache, or (with `lookup`) from Keepa for 10 tokens.
  * Null when it isn't cached and `lookup` wasn't allowed.
  */
-export async function storefront(sellerId: string, lookup: boolean): Promise<{ seller: SellerRow; cached: boolean } | null> {
+async function storefront(sellerId: string, lookup: boolean): Promise<{ seller: SellerRow; cached: boolean } | null> {
   const cur = await stored(sellerId);
   if (fresh(cur)) return { seller: cur!, cached: true };
   if (!lookup) return null;

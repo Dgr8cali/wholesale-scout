@@ -1,5 +1,5 @@
 import "server-only";
-import { finderSelection, finderTokens, huntName, shapeFromProfile, type HuntShape } from "../hunt";
+import { finderSelection, huntName, shapeFromProfile, type HuntShape } from "../hunt";
 import { getKeepa, hasFinder } from "../keepa/client";
 import { db, loadProfile, must } from "./db";
 import { startAsinRun } from "./sellerScan";
@@ -62,5 +62,3 @@ export async function startHunt(shape: HuntShape): Promise<{ runId: string | nul
   });
   return { runId, total: found.total, taken: asins.length, tokensUsed: found.tokensUsed };
 }
-
-export { finderTokens };

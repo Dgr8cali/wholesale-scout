@@ -24,6 +24,7 @@ import { rankCeiling } from "./categories";
 import { amazonRuleMatches, DEFAULT_RULES, DG_RULE_KEYS, matchReason, matchRules, type CategoryRule, type DgFacts, type RuleMatch } from "./rules";
 import { dgLookupText, type DgLookup } from "../dg/report";
 import { ipRiskText, type IpRiskMatch } from "../ipRisk";
+import { money } from "../format";
 
 export type GateStatus = "pass" | "warn" | "fail" | "skipped" | "off";
 
@@ -173,14 +174,13 @@ export interface GateRun {
   ruleMatches: RuleMatch[];
 }
 
-const money = (n: number) => `${n < 0 ? "-" : ""}£${Math.abs(n).toFixed(2)}`;
 const pct = (n: number) => `${Math.round(n)}%`;
 
 /** Status for a failed check under a gate mode. */
 const failAs = (mode: GateMode): GateStatus => (mode === "fail" ? "fail" : "warn");
 
 /** The price the fee gate and score use, per the profile rule. */
-export function scoringPrice(m: MarketData | null, rule: ProfileConfig["scoringPrice"]): { price: number | null; source: string | null } {
+function scoringPrice(m: MarketData | null, rule: ProfileConfig["scoringPrice"]): { price: number | null; source: string | null } {
   if (!m) return { price: null, source: null };
   const cur = m.currentBuyBox, med = m.medianBuyBox12m;
   if (rule === "current") return cur != null ? { price: cur, source: "current Buy Box" } : med != null ? { price: med, source: "12-month median" } : { price: null, source: null };

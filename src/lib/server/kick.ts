@@ -8,7 +8,7 @@ const auth = (): Record<string, string> =>
  * Start (or continue) background processing of a run by calling its process route, without
  * waiting for it to finish. Carries the app password so the proxy lets it through.
  */
-export async function kickRun(origin: string, runId: string, path: "process" | "rescreen" = "process"): Promise<void> {
+async function kickRun(origin: string, runId: string, path: "process" | "rescreen" = "process"): Promise<void> {
   try {
     // Only long enough for the request to be received; the called function carries on by itself.
     await fetch(`${origin}/api/runs/${runId}/${path}`, {

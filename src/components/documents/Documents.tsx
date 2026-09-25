@@ -15,7 +15,7 @@ const size = (n: number | null) => (n == null ? "" : n >= 1_048_576 ? `${(n / 1_
 const day = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 
 /** Upload one file: the details → a signed URL → the file straight to storage → confirmed. */
-export async function uploadDocument(file: File, meta: { kind: DocKind; date: string | null; note: string | null; brands: string[]; supplierId: string | null }) {
+async function uploadDocument(file: File, meta: { kind: DocKind; date: string | null; note: string | null; brands: string[]; supplierId: string | null }) {
   if (file.size > MAX_DOC_BYTES) throw new Error(`${file.name} is over 50 MB`);
   const start = await api<{ id: string; uploadUrl: string }>("/api/documents", {
     method: "POST", json: { ...meta, fileName: file.name, size: file.size, contentType: file.type || null },

@@ -4,7 +4,7 @@ import { db, must } from "./db";
 import { keepaOwner } from "./keepaTurn";
 
 /** A chain that hasn't moved a run on for this long is presumed dead and restarted. */
-export const STALL_MS = 3 * 60_000;
+const STALL_MS = 3 * 60_000;
 
 export interface Stalled { runId: string; path: "process" | "rescreen" }
 

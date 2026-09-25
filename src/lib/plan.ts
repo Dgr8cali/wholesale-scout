@@ -1,3 +1,4 @@
+import { money } from "./format";
 /**
  * Order planner: which products to buy, how many, from whom, to make the most profit a month
  * within the budget. Each line stays within the line cap and sells within the months limit at
@@ -89,7 +90,6 @@ export interface Plan {
 }
 
 const round = (n: number, step: number) => Math.floor(n / step) * step;
-const gbp = (n: number) => `£${n.toFixed(2)}`;
 
 /** The quantity a line would take on its own, or why it can't be bought. */
 export function lineQty(c: PlanCandidate, l: PlanLimits): { qty: number } | { reason: string } {
@@ -100,7 +100,7 @@ export function lineQty(c: PlanCandidate, l: PlanLimits): { qty: number } | { re
   const byMonths = Math.floor(c.shareMonth * l.maxMonths);
   let qty = round(Math.min(byCap, byMonths, c.maxUnits ?? Infinity), step);
   if (qty < floor) {
-    if (floor * c.landedGbp > l.lineCap) return { reason: `MOQ ${floor} × ${gbp(c.landedGbp)} is over the ${gbp(l.lineCap)} line cap` };
+    if (floor * c.landedGbp > l.lineCap) return { reason: `MOQ ${floor} × ${money(c.landedGbp)} is over the ${money(l.lineCap)} line cap` };
     if (floor > byMonths) return { reason: `MOQ ${floor} takes ${(floor / c.shareMonth).toFixed(1)} months to sell, over ${l.maxMonths}` };
     if (c.maxUnits != null && floor > c.maxUnits) return { reason: `only ${c.maxUnits} in stock, under the MOQ ${floor}` };
     qty = floor;
@@ -129,7 +129,7 @@ function makeLine(c: PlanCandidate, l: PlanLimits, ctl: PlanControls): PlanLine 
   }
   const lineTotal = qty * c.landedGbp;
   const months = c.shareMonth ? qty / c.shareMonth : null;
-  if (lineTotal > l.lineCap + 0.005) notes.push(`${gbp(lineTotal)}, over the ${gbp(l.lineCap)} line cap`);
+  if (lineTotal > l.lineCap + 0.005) notes.push(`${money(lineTotal)}, over the ${money(l.lineCap)} line cap`);
   if (months != null && months > l.maxMonths + 1e-9) notes.push(`sells in ${months.toFixed(1)} months, over ${l.maxMonths}`);
   // A month's profit: your share of sales, but never more units than were bought.
   return { c, qty, lineTotal, months, profitMonth: Math.min(c.shareMonth ?? 0, qty) * c.profitUnit, pinned, notes };
@@ -193,7 +193,7 @@ export function planOrder(candidates: PlanCandidate[], l: PlanLimits, ctl: PlanC
     skipped.push({
       c: x.c,
       reason: other ? `bought from ${other.c.supplierName} instead`
-        : blocked.has(x.c.supplierKey) ? `${x.c.supplierName}'s MOV ${gbp(x.c.movGbp ?? 0)} not reachable within the budget`
+        : blocked.has(x.c.supplierKey) ? `${x.c.supplierName}'s MOV ${money(x.c.movGbp ?? 0)} not reachable within the budget`
         : "doesn't fit the budget",
     });
   }

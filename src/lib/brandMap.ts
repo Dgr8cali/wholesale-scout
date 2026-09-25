@@ -4,6 +4,7 @@
  */
 import type { ApprovalStatus, BrandApproval } from "./brands";
 import { matchIpRisk, type IpIndex, type IpRiskMatch } from "./ipRisk";
+import { median } from "./format";
 
 /** One product's row in the brand map (the brand_products table). */
 export interface BrandProduct {
@@ -76,12 +77,6 @@ export interface BrandSummary {
 }
 
 const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
-export function median(xs: number[]): number | null {
-  if (!xs.length) return null;
-  const s = [...xs].sort((a, b) => a - b);
-  const m = Math.floor(s.length / 2);
-  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
-}
 const r1 = (n: number | null) => (n == null ? null : Math.round(n * 10) / 10);
 const r2 = (n: number | null) => (n == null ? null : Math.round(n * 100) / 100);
 

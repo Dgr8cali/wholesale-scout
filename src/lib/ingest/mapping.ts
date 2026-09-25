@@ -173,7 +173,7 @@ export function parseMoney(v: Cell): number | null {
   return isFinite(n) ? n : null;
 }
 
-export function parseCount(v: Cell): number | null {
+function parseCount(v: Cell): number | null {
   const n = parseMoney(v);
   return n == null ? null : Math.round(n);
 }
@@ -205,7 +205,7 @@ export function normalizeEan(v: Cell): string | null {
 }
 
 /** Sheet rows (arrays) → objects keyed by header, starting below the header row. */
-export function rowsToObjects(rows: Cell[][], headerRow: number): { headers: string[]; records: { row: number; values: Record<string, Cell> }[] } {
+function rowsToObjects(rows: Cell[][], headerRow: number): { headers: string[]; records: { row: number; values: Record<string, Cell> }[] } {
   const headers = (rows[headerRow] ?? []).map((h) => String(h ?? "").trim());
   const records: { row: number; values: Record<string, Cell> }[] = [];
   for (let i = headerRow + 1; i < rows.length; i++) {

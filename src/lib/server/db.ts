@@ -24,6 +24,9 @@ export function __setDbForTests(c: unknown) {
   client = c as SupabaseClient;
 }
 
+/** A query failed because a table or column isn't there yet (a migration not run). */
+export const schemaMissing = (msg: string) => /does not exist|could not find the .* (column|table)|could not find|schema cache/i.test(msg);
+
 /** Throw on a Supabase error, return the data otherwise. */
 export function must<T>(res: { data: T; error: { message: string } | null }, what: string): NonNullable<T> {
   if (res.error) throw new Error(`${what}: ${res.error.message}`);

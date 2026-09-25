@@ -35,7 +35,7 @@ export interface Eta {
   resumeAt: string | null;
 }
 
-export const KEEPA_TOKENS_PER_ROW = 3;
+const KEEPA_TOKENS_PER_ROW = 3;
 
 export function estimateEta(
   waiting: { amazon: number; keepa: number },

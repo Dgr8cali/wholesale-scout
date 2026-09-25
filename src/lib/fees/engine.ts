@@ -154,7 +154,7 @@ function oversizeFee(o: OversizeTier, shipG: number): number {
 }
 
 /** The tier a product with no dimensions is billed at, per the fee assumptions. */
-export function assumedTier(card: RateCard, a: FeeAssumptions): TierResult {
+function assumedTier(card: RateCard, a: FeeAssumptions): TierResult {
   const t = card.tiers.find((x) => x.id === a.missingDims.tierId) ?? card.tiers[card.tiers.length - 1];
   const g = Math.min(a.missingDims.weightG, t.maxWeightG);
   return standardResult(t, g, 0);
@@ -177,13 +177,13 @@ export function referralPct(category: string | null | undefined, price: number, 
   return cat.bands[cat.bands.length - 1].pct;
 }
 
-export function lowPriceThreshold(category: string | null | undefined, card: RateCard): number {
+function lowPriceThreshold(category: string | null | undefined, card: RateCard): number {
   return category && card.lowPrice.reducedCategories.includes(category)
     ? card.lowPrice.reducedThreshold
     : card.lowPrice.threshold;
 }
 
-export function isPeak(card: RateCard, a: FeeAssumptions, date: Date): boolean {
+function isPeak(card: RateCard, a: FeeAssumptions, date: Date): boolean {
   if (a.season === "peak") return true;
   if (a.season === "standard") return false;
   return card.storage.peakMonths.includes(date.getUTCMonth() + 1);

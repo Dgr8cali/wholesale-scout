@@ -5,7 +5,7 @@ import { Marked } from "marked";
 import { anchor, headingsOf, parseArticle, plainText, SECTIONS, type Article, type ArticleMeta, type SearchDoc } from "./catalog";
 
 /** Where the articles live (traced into the deployment by next.config's outputFileTracingIncludes). */
-export const HELP_DIR = join(process.cwd(), "content", "help");
+const HELP_DIR = join(process.cwd(), "content", "help");
 
 function files(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((e) =>

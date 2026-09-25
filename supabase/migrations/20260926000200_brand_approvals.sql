@@ -1,6 +1,6 @@
 -- Brand approvals: where each "approval needed" brand stands on your account. Gate 11
 -- treats a brand marked approved as open for approval-needed listings.
-create table brand_approvals (
+create table if not exists brand_approvals (
   id            uuid primary key default gen_random_uuid(),
   brand_key     text not null unique,   -- normalised: accents folded, lower case, letters and digits only
   brand         text not null,          -- as displayed

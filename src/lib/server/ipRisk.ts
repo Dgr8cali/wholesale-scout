@@ -6,7 +6,7 @@ import { chunks, db, loadIpRisk, must } from "./db";
 export { loadIpRisk };
 
 /** Validate and tidy one entry from the page. */
-export function cleanIpBrand(b: Partial<IpRiskBrand>): IpRiskBrand {
+function cleanIpBrand(b: Partial<IpRiskBrand>): IpRiskBrand {
   const brand = b.brand?.trim();
   if (!brand || !brandKey(brand)) throw new Error("brand is required");
   if (!IP_LEVELS.includes(b.level as IpRiskBrand["level"])) throw new Error("level must be low, medium or high");

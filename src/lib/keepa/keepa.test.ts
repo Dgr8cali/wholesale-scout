@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { getKeepa, HttpKeepaClient, parseKeepaProduct, parseSeller, StubKeepaClient } from "./client";
-import { decodeSeries, keepaTimeToMs, median, rankDrops, summarize, trimSeries } from "./summarize";
+import { median } from "../format";
+import { decodeSeries, keepaTimeToMs, rankDrops, summarize, trimSeries } from "./summarize";
 import type { Point } from "./types";
 
 const DAY = 86_400_000;

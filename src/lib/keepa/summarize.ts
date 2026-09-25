@@ -3,6 +3,7 @@
  * Pure — tested on synthetic series.
  */
 import type { KeepaSummary, Point } from "./types";
+import { median } from "../format";
 
 const DAY = 86_400_000;
 
@@ -33,15 +34,9 @@ export function decodeSeries(csv: number[] | null | undefined, opts: { withShipp
 
 const valid = (s: Point[]) => s.filter(([, v]) => Number.isFinite(v));
 
-export function median(xs: number[]): number | null {
-  if (!xs.length) return null;
-  const s = [...xs].sort((a, b) => a - b);
-  const m = s.length >> 1;
-  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
-}
 
 /** Value in force at time t (step function), or null. */
-export function valueAt(series: Point[], t: number): number | null {
+function valueAt(series: Point[], t: number): number | null {
   let v: number | null = null;
   for (const [ts, x] of series) {
     if (ts > t) break;
@@ -51,7 +46,7 @@ export function valueAt(series: Point[], t: number): number | null {
 }
 
 /** Daily samples of a step series between from and to (inclusive), skipping gaps. */
-export function daily(series: Point[], from: number, to: number): number[] {
+function daily(series: Point[], from: number, to: number): number[] {
   const out: number[] = [];
   for (let t = from; t <= to; t += DAY) {
     const v = valueAt(series, t);
@@ -61,7 +56,7 @@ export function daily(series: Point[], from: number, to: number): number[] {
 }
 
 /** Daily samples as [days since `from`, value], skipping days with no value. */
-export function dailyPoints(series: Point[], from: number, to: number): [number, number][] {
+function dailyPoints(series: Point[], from: number, to: number): [number, number][] {
   const out: [number, number][] = [];
   for (let t = from, d = 0; t <= to; t += DAY, d++) {
     const v = valueAt(series, t);

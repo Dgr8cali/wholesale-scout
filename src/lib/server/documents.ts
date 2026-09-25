@@ -4,7 +4,7 @@ import { DOC_KINDS, MAX_DOC_BYTES, type DocKind, type DocumentRow } from "../doc
 import { brandKey } from "../brands";
 import { db, must } from "./db";
 
-export const BUCKET = "documents";
+const BUCKET = "documents";
 
 /** Storage calls go through this (tests swap in a double). */
 type Bucket = Pick<ReturnType<SupabaseClient["storage"]["from"]>, "createSignedUploadUrl" | "createSignedUrl" | "remove" | "list">;

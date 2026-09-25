@@ -12,7 +12,7 @@ export interface TablePrefs {
   density: Density;
 }
 
-export const defaultPrefs = (columns: string[]): TablePrefs => ({ visibility: {}, order: columns, sizing: {}, density: "comfortable" });
+const defaultPrefs = (columns: string[]): TablePrefs => ({ visibility: {}, order: columns, sizing: {}, density: "comfortable" });
 
 /**
  * Saved prefs made safe for the current columns: unknown ids dropped, new columns placed

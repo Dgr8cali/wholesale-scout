@@ -1,3 +1,4 @@
+import { money } from "./format";
 /**
  * Watchlist flip conditions: what would turn a warn or near-miss into a buy, suggested from what
  * blocked it, and checked each week. Pure, for the page, the job and tests.
@@ -22,14 +23,13 @@ export const CONDITION_LABELS: Record<ConditionKind, string> = {
 };
 export const needsValue = (k: ConditionKind) => k === "buyBox" || k === "landed" || k === "sellers";
 
-const gbp = (n: number) => `£${n.toFixed(2)}`;
 
 /** "Buy Box ≥ £24.50", or "Re-check weekly" with no condition. */
 export function conditionLabel(c: WatchCondition | null | undefined): string {
   if (!c) return "Re-check weekly";
   switch (c.kind) {
-    case "buyBox": return `Buy Box ≥ ${c.value != null ? gbp(c.value) : "£?"}`;
-    case "landed": return `Landed ≤ ${c.value != null ? gbp(c.value) : "£?"}`;
+    case "buyBox": return `Buy Box ≥ ${c.value != null ? money(c.value) : "£?"}`;
+    case "landed": return `Landed ≤ ${c.value != null ? money(c.value) : "£?"}`;
     case "sellers": return `Sellers ≤ ${c.value ?? "?"}`;
     default: return CONDITION_LABELS[c.kind];
   }
@@ -113,10 +113,10 @@ export function conditionMet(c: WatchCondition | null | undefined, f: WatchFacts
   switch (c.kind) {
     case "buyBox":
       return f.buyBox == null ? { met: false, detail: "no Buy Box" }
-        : { met: c.value != null && f.buyBox >= c.value, detail: `Buy Box ${gbp(f.buyBox)}` };
+        : { met: c.value != null && f.buyBox >= c.value, detail: `Buy Box ${money(f.buyBox)}` };
     case "landed":
       return f.landed == null ? { met: false, detail: "no costed offer yet" }
-        : { met: c.value != null && f.landed <= c.value, detail: `landed ${gbp(f.landed)}` };
+        : { met: c.value != null && f.landed <= c.value, detail: `landed ${money(f.landed)}` };
     case "sellers":
       return f.sellers == null ? { met: false, detail: "no seller count" }
         : { met: c.value != null && f.sellers <= c.value, detail: `${f.sellers} sellers` };

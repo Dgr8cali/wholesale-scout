@@ -175,7 +175,7 @@ interface KeepaBody {
   error?: { type?: string; message?: string };
 }
 
-export class KeepaError extends Error {
+class KeepaError extends Error {
   constructor(message: string, readonly meta: KeepaResponseMeta) {
     super(message);
   }

@@ -13,7 +13,7 @@
  * `max_estimated_delivery_time_filter`.
  */
 
-export const QOGITA_API = "https://api.qogita.com";
+const QOGITA_API = "https://api.qogita.com";
 
 export interface Money { amount: string; currency: string }
 

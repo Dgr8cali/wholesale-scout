@@ -22,7 +22,7 @@ import { winScore } from "../screening/score";
 import { yourShare } from "../screening/sales";
 import { getSpApi, type CatalogMatch, type CompetitivePrice, type LookupTrace } from "../spapi/client";
 import type { ListingOffers } from "../spapi/types";
-import { activeRateCard, chunks, db, loadIpRisk, loadProfile, loadRules, must } from "./db";
+import { activeRateCard, chunks, db, loadIpRisk, loadProfile, loadRules, must, schemaMissing } from "./db";
 import { productKey, waiversFor } from "./overrides";
 
 const DAY = 86_400_000;
@@ -408,7 +408,6 @@ async function freshSnapshots(asins: string[], maxAge: number = KEEPA_TTL): Prom
 const SNAPSHOT_DAYS = 460;
 
 /** A write refused because the table or column isn't there yet (a migration not yet run). */
-const schemaMissing = (msg: string) => /does not exist|could not find the .* (column|table)|schema cache/i.test(msg);
 
 async function saveSnapshot(k: KeepaProduct): Promise<void> {
   const since = Date.now() - SNAPSHOT_DAYS * DAY;

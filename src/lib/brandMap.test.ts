@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { aggregateBrands, brandGating, brandsToChase, median, wholesaleScore, type BrandProduct } from "./brandMap";
+import { aggregateBrands, brandGating, brandsToChase, wholesaleScore, type BrandProduct } from "./brandMap";
+import { median } from "./format";
 import type { BrandApproval } from "./brands";
 import { ipIndex } from "./ipRisk";
 

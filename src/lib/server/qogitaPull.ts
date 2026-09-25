@@ -1,7 +1,7 @@
 import "server-only";
 import { applyMapping, CURRENCIES, headerFingerprint, MAX_ROWS, type Cell, type ColumnMapping } from "../ingest/mapping";
 import { getQogita, type QogitaCategory, type QogitaClient, type QogitaProduct } from "../qogita/client";
-import { chunks, db, must } from "./db";
+import { chunks, db, must, schemaMissing } from "./db";
 import { finishFromStored } from "./process";
 import { gbpRate } from "./fx";
 import { ingest } from "./ingest";
@@ -25,12 +25,12 @@ export interface QogitaFilters {
   skipScreenedDays?: number | null;
 }
 
-export const DEFAULT_MAX_PRODUCTS = 500;
-export const DEFAULT_SKIP_DAYS = 7;
+const DEFAULT_MAX_PRODUCTS = 500;
+const DEFAULT_SKIP_DAYS = 7;
 
 export const EMPTY_QOGITA_FILTERS: QogitaFilters = { category: null, brands: [], minPrice: null, maxPrice: null, maxDeliveryWeeks: null, movLimit: null, leaves: null, maxProducts: DEFAULT_MAX_PRODUCTS, skipScreenedDays: DEFAULT_SKIP_DAYS };
 
-export function normalizeQogitaFilters(f: Partial<QogitaFilters> | null | undefined): QogitaFilters {
+function normalizeQogitaFilters(f: Partial<QogitaFilters> | null | undefined): QogitaFilters {
   const num = (v: unknown) => (v == null || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
   return {
     category: f?.category?.name ? { name: String(f.category.name), path: (f.category.path ?? []).map(String) } : null,
@@ -43,7 +43,6 @@ export function normalizeQogitaFilters(f: Partial<QogitaFilters> | null | undefi
 }
 
 export const QOGITA_MIGRATION = "Run migration 20260927000000_qogita.sql to save Qogita presets";
-const schemaMissing = (m: string) => /does not exist|schema cache|could not find/i.test(m);
 
 // Categories change rarely; one list per process for 12 hours.
 let categoryCache: { at: number; list: QogitaCategory[] } | null = null;
@@ -122,7 +121,7 @@ const MAPPING: ColumnMapping = {
 };
 
 /** Qogita products as the rows an uploaded sheet would give, through the same column mapper. */
-export function productsToRows(products: QogitaProduct[], currency: string, fx: { rate: number; date: string }) {
+function productsToRows(products: QogitaProduct[], currency: string, fx: { rate: number; date: string }) {
   const sheet: Cell[][] = [HEADERS, ...products.map((p) => [
     p.gtin, p.name, p.brand, p.category, p.price?.amount ?? null, p.unit ?? 1, p.inventory ?? null, p.estimatedDeliveryTime ?? null, p.productUrl,
   ] as Cell[])];

@@ -12,7 +12,7 @@ const STOP = new Set([
 const fold = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
 /** Words of 3+ letters, accents folded, sizes and filler removed. */
-export function words(s: string | null | undefined): string[] {
+function words(s: string | null | undefined): string[] {
   return fold(s ?? "")
     .split(/[^a-z0-9]+/)
     .filter((w) => w.length >= 3 && !/^\d/.test(w) && !STOP.has(w));
@@ -23,7 +23,7 @@ const same = (a: string, b: string) => a === b || (a.length >= 5 && b.length >= 
 
 const squash = (s: string | null | undefined) => fold(s ?? "").replace(/[^a-z0-9]/g, "");
 
-export function brandsAgree(sheetBrand: string, amazonBrand: string): boolean {
+function brandsAgree(sheetBrand: string, amazonBrand: string): boolean {
   const a = squash(sheetBrand), b = squash(amazonBrand);
   return !!a && !!b && (a.includes(b) || b.includes(a));
 }
