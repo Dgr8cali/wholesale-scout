@@ -7,7 +7,10 @@ import { GATE_LABELS, GATE_ORDER, GROUP_LABELS, type GateId, type GroupId } from
 import type { GateOutcome } from "@/lib/screening/gates";
 import { api, gbp, pct, when } from "@/lib/ui/client";
 import { EditableName } from "@/components/EditableName";
+import { FilterBar, type FilterOptions } from "@/components/FilterBar";
+import { EMPTY_FILTERS, matches, normalizeFilters, type FilterSet } from "@/lib/filters";
 import { groupRows } from "@/lib/ui/group";
+import { brandOf, toFilterRow } from "@/lib/ui/resultRows";
 import { RestrictionLink } from "@/lib/ui/RestrictionLink";
 import { buyBox, estSales, sellers, type Figure, type StoredMarket } from "@/lib/ui/metrics";
 
@@ -94,10 +97,26 @@ export default function RunPage() {
   // EANs whose other ASINs are shown.
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "score", dir: -1 });
-  const [verdicts, setVerdicts] = useState<Set<string>>(new Set(["pass", "warn", "fail"]));
-  const [band, setBand] = useState<string>("");
-  const [failedGate, setFailedGate] = useState<string>("");
-  const [q, setQ] = useState("");
+  // Filters, remembered per run in this browser.
+  const storageKey = `ws.filters.run.${id}`;
+  const [filters, setFiltersState] = useState<FilterSet>(() => {
+    if (typeof window === "undefined") return EMPTY_FILTERS;
+    try {
+      const saved = window.localStorage.getItem(storageKey);
+      return saved ? normalizeFilters(JSON.parse(saved)) : EMPTY_FILTERS;
+    } catch {
+      return EMPTY_FILTERS;
+    }
+  });
+  const setFilters = (f: FilterSet) => {
+    setFiltersState(f);
+    try {
+      window.localStorage.setItem(storageKey, JSON.stringify(f));
+    } catch {
+      // Private window or storage blocked: the filters just won't be remembered.
+    }
+  };
+  const favourites = useMemo(() => new Set<string>(), []);
   const [profiles, setProfiles] = useState<{ id: string; name: string }[]>([]);
   const [rescreenProfile, setRescreenProfile] = useState("");
   const [rescreening, setRescreening] = useState(false);
@@ -192,13 +211,7 @@ export default function RunPage() {
   }, [done]);
 
   const rows = useMemo(() => {
-    const needle = q.trim().toLowerCase();
-    const filtered = done.filter((r) =>
-      (r.status === "error" ? verdicts.has("fail") : r.verdict != null && verdicts.has(r.verdict)) &&
-      (!band || r.band === band) &&
-      (!failedGate || r.failed_gate === failedGate) &&
-      (!needle || [titleOf(r), r.product?.brand, r.product?.ean, r.product?.asin, r.offer?.supplier?.name, r.why].some((x) => x?.toLowerCase().includes(needle))),
-    );
+    const filtered = done.filter((r) => matches(toFilterRow(r, favourites), filters));
     const val = (r: Result): number | string | null =>
       sort.key === "title" ? titleOf(r).toLowerCase()
         : sort.key === "verdict" ? ({ pass: 0, warn: 1, fail: 2 }[r.verdict ?? "fail"])
@@ -213,17 +226,25 @@ export default function RunPage() {
     };
     // One line per EAN: its best ASIN leads, the others sit collapsed beneath it.
     return groupRows(filtered, eanOf, order);
-  }, [done, verdicts, band, failedGate, q, sort]);
+  }, [done, filters, favourites, sort]);
   const listingCount = rows.reduce((a, g) => a + 1 + g.others.length, 0);
 
   // Counted per product (EAN), by its best listing.
   const products = useMemo(() => groupRows(done, eanOf, () => 0).map((g) => g.lead), [done]);
-  const counts = {
-    pass: products.filter((r) => r.verdict === "pass").length,
-    warn: products.filter((r) => r.verdict === "warn").length,
-    fail: products.filter((r) => r.verdict === "fail" || r.status === "error").length,
-    green: products.filter((r) => r.band === "green").length,
-  };
+  const filterOptions = useMemo<FilterOptions>(() => {
+    const uniq = (xs: (string | null | undefined)[]) => [...new Set(xs.filter((x): x is string => !!x))].sort((a, b) => a.localeCompare(b));
+    return {
+      brands: uniq(done.map(brandOf)),
+      suppliers: uniq(done.map((r) => r.offer?.supplier?.name)),
+      gates: failedGates.map((f) => ({ id: f.gate, label: GATE_LABELS[f.gate], count: f.n })),
+      verdictCounts: {
+        pass: products.filter((r) => r.verdict === "pass" && r.status !== "error").length,
+        warn: products.filter((r) => r.verdict === "warn" && r.status !== "error").length,
+        fail: products.filter((r) => r.verdict === "fail" && r.status !== "error").length,
+        error: products.filter((r) => r.status === "error").length,
+      },
+    };
+  }, [done, products, failedGates]);
 
   function exportXlsx() {
     const flat = rows.flatMap((g) => [{ r: g.lead, listing: g.others.length ? "best" : "only" }, ...g.others.map((r) => ({ r, listing: "alternative" }))]);
@@ -339,34 +360,8 @@ export default function RunPage() {
       {error && <p className="rounded-md bg-fail-soft px-3 py-2 text-sm text-fail">{error}</p>}
       {notice && <p className="rounded-md bg-accent-soft px-3 py-2 text-sm">{notice}</p>}
 
-      <div className="card flex flex-wrap items-end gap-4 p-3">
-        <div className="flex gap-1">
-          {(["pass", "warn", "fail"] as const).map((v) => (
-            <button key={v} onClick={() => setVerdicts((s) => { const n = new Set(s); if (n.has(v)) n.delete(v); else n.add(v); return n; })}
-              className={`rounded-full px-3 py-1 text-xs font-semibold ${verdicts.has(v) ? VERDICT_STYLE[v] : "bg-surface-2 text-muted line-through"}`}>
-              {v} {counts[v]}
-            </button>
-          ))}
-        </div>
-        <label className="space-y-1">
-          <span className="label">Band</span>
-          <select className="input w-32" value={band} onChange={(e) => setBand(e.target.value)}>
-            <option value="">Any</option><option value="green">Green</option><option value="amber">Amber</option><option value="grey">Grey</option>
-          </select>
-        </label>
-        <label className="space-y-1">
-          <span className="label">Why it failed</span>
-          <select className="input w-56" value={failedGate} onChange={(e) => { setFailedGate(e.target.value); if (e.target.value) setVerdicts(new Set(["fail"])); }}>
-            <option value="">Any</option>
-            {failedGates.map((f) => <option key={f.gate} value={f.gate}>{GATE_LABELS[f.gate]} ({f.n})</option>)}
-          </select>
-        </label>
-        <label className="min-w-48 flex-1 space-y-1">
-          <span className="label">Search</span>
-          <input className="input" placeholder="Name, brand, EAN, ASIN, supplier, why" value={q} onChange={(e) => setQ(e.target.value)} />
-        </label>
-        <span className="text-sm text-muted">{counts.green} green · showing {rows.length} products, {listingCount} listings</span>
-      </div>
+      <FilterBar value={filters} onChange={setFilters} options={filterOptions} favouritesAvailable={favourites.size > 0}
+        matching={rows.length} total={products.length} unit={`products (${listingCount} listings shown)`} gateLabels={GATE_LABELS} />
 
       {/* Fixed layout: numeric columns compact, product capped, why takes the rest and wraps.
           Scrolls sideways inside the card only below the table's minimum width. */}
