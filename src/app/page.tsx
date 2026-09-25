@@ -146,6 +146,39 @@ export default function HomePage() {
         </Card>
 
         <div className="space-y-4 lg:col-span-2">
+          <Section load={dash} skeleton={null}>
+            {(d) => d.qogita.length ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Qogita overnight</CardTitle>
+                  <CardDescription>Saved pulls re-pulled last night; only new or re-priced products were screened.</CardDescription>
+                  <CardAction><Button variant="ghost" size="sm" asChild><Link href="/qogita">Pulls <ArrowRightIcon /></Link></Button></CardAction>
+                </CardHeader>
+                <CardContent>
+                  <ul className="space-y-3">
+                    {d.qogita.map((q) => (
+                      <li key={q.preset} className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium">{q.preset}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {q.error ? <span className="text-fail">{q.error}</span>
+                              : q.screened ? `${q.new} new, ${q.moved} re-priced, ${q.unchanged.toLocaleString("en-GB")} unchanged`
+                              : `Nothing new or re-priced (${q.unchanged.toLocaleString("en-GB")} unchanged)`}
+                            {q.stillScreening && " · screening"}
+                          </p>
+                        </div>
+                        {q.runId && (
+                          <Link href={`/runs/${q.runId}`} className="flex-none">
+                            <Badge variant={q.passes ? "pass" : "muted"}><span className="num">{q.passes}</span> new pass{q.passes === 1 ? "" : "es"}</Badge>
+                          </Link>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </CardContent>
+              </Card>
+            ) : null}
+          </Section>
           <Card>
             <CardHeader>
               <CardTitle>Favourites needing refresh</CardTitle>

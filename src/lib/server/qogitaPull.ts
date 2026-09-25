@@ -140,6 +140,7 @@ export async function runQogitaPull(opts: {
   const filters = normalizeQogitaFilters(opts.filters);
   if (!filters.category && !filters.brands.length) throw new Error("Choose a category or at least one brand");
   const d = db();
+  const startedAt = new Date().toISOString();
 
   // The preset (saved first, so a failed pull still keeps the filters).
   let preset: PresetRow | null = null;
@@ -190,7 +191,7 @@ export async function runQogitaPull(opts: {
     // Remember prices for the next "only changed" pull (a truncated pull keeps what it didn't see).
     const merged = pull.truncated ? { ...last, ...prices } : prices;
     must(await d.from("qogita_presets").update({ last_prices: merged, last_pulled_at: new Date().toISOString() }).eq("id", preset.id), "preset prices");
-    must(await d.from("qogita_pulls").insert({ preset_id: preset.id, run_id: runId, kind: opts.kind ?? "manual", stats, finished_at: new Date().toISOString() }), "pull record");
+    must(await d.from("qogita_pulls").insert({ preset_id: preset.id, run_id: runId, kind: opts.kind ?? "manual", stats, started_at: startedAt, finished_at: new Date().toISOString() }), "pull record");
   }
   return { runId, presetId: preset?.id ?? null, stats, note };
 }

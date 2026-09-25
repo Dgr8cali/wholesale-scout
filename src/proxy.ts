@@ -14,6 +14,9 @@ export function proxy(req: NextRequest) {
     return NextResponse.next();
   }
   const auth = req.headers.get("authorization") ?? "";
+  // Vercel Cron can't send the password; it sends the CRON_SECRET as a bearer token instead.
+  const cron = process.env.CRON_SECRET;
+  if (cron && req.nextUrl.pathname.startsWith("/api/cron/") && auth.length === cron.length + 7 && timingSafeEqual(auth, `Bearer ${cron}`)) return NextResponse.next();
   const [scheme, encoded] = auth.split(" ");
   if (scheme === "Basic" && encoded) {
     const decoded = atob(encoded);

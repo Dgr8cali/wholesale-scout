@@ -3,6 +3,7 @@ import type { Eta } from "../eta";
 import { tokensOnDay, ukDay, type TokensByDay } from "../keepaLedger";
 import { db, must } from "./db";
 import { runProgress } from "./process";
+import { nightlySummaries, type NightlySummary } from "./qogitaNightly";
 
 export interface DashboardRun {
   id: string;
@@ -22,6 +23,8 @@ export interface DashboardRun {
 export interface Dashboard {
   runs: DashboardRun[];
   keepa: { spentToday: number; day: string };
+  /** Last night's Qogita re-pulls: what was new or re-priced, and how much of it passed. */
+  qogita: NightlySummary[];
 }
 
 /** Recent runs with verdict counts (and time left if running), and Keepa tokens spent today. */
@@ -51,5 +54,6 @@ export async function dashboard(recent = 6): Promise<Dashboard> {
     };
   }));
   const day = ukDay();
-  return { runs: out, keepa: { spentToday: tokensOnDay(runs.map((r) => r.stats?.keepaByDay), day), day } };
+  const qogita = await nightlySummaries().catch(() => []);
+  return { runs: out, keepa: { spentToday: tokensOnDay(runs.map((r) => r.stats?.keepaByDay), day), day }, qogita };
 }
