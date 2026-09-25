@@ -41,6 +41,12 @@ export interface KeepaSummary {
   packageWeightG?: number | null;
   /** Size of the variation family. */
   variationCount?: number | null;
+  // History for dormant listings (no offer now); see summarize.dormancy.
+  lastBuyBox12m?: number | null;
+  lastBuyBoxAt?: string | null;
+  rankDrops12m?: number | null;
+  avgRank12m?: number | null;
+  lastOfferDaysAgo?: number | null;
 }
 
 export interface KeepaProduct {

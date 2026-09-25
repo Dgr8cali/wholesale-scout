@@ -19,7 +19,7 @@ import type { Sparks } from "@/lib/sparkline";
 import { RestrictionLink } from "@/lib/ui/RestrictionLink";
 import { gbp, pct } from "@/lib/ui/client";
 import type { Figure } from "@/lib/ui/metrics";
-import { brandOf, favKey, isWaived } from "@/lib/ui/resultRows";
+import { brandOf, dormantOf, favKey, isWaived } from "@/lib/ui/resultRows";
 import { cn } from "@/lib/utils";
 import { Sparkline } from "./Sparkline";
 import { loadPrefs, normalizePrefs, savePrefs, type Density, type TablePrefs } from "./tablePrefs";
@@ -341,6 +341,7 @@ function Cell({ id, d, props, compact, isOpen }: { id: string; d: DisplayRow; pr
               : <span className="w-4 flex-none" />}
             <VerdictBadge verdict={r.verdict} error={r.status === "error"} />
           </div>
+          {dormantOf(r) && <Badge variant="muted" className="mt-1 ml-[22px]" title="Nobody sells this listing now; judged on its Keepa history">dormant</Badge>}
           {isWaived(r) && <Badge variant="brand" className="mt-1 ml-[22px]" title="A gate on this row is waived by you">waived</Badge>}
         </div>
       );

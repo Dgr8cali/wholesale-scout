@@ -4,6 +4,7 @@
  */
 import { landedCost } from "../fees/engine";
 import { GROUP_LABELS, SCALE_DEFS, type GroupId, type ProfileConfig, type Scale } from "./config";
+import { isDormant, lastSeenLabel } from "./dormant";
 import { tierDisagreement, type GateRun, type ScreenContext } from "./gates";
 
 export interface FitData {
@@ -53,9 +54,11 @@ export function paramValues(ctx: ScreenContext, run: GateRun, p: ProfileConfig, 
   const compliance = outcome("compliance");
   const warnings = run.outcomes.filter((o) => o.status === "warn" && !["compliance", "mirage", "gating", "matchQuality"].includes(o.gate)).length;
 
+  // Dormant (nobody selling now): demand from the past year, as a monthly rate.
+  const dormant = isDormant(m);
   return {
-    rankDrops: m?.rankDrops30d ?? null,
-    avgRank: m?.avgRank90d ?? m?.rankNow ?? null,
+    rankDrops: dormant ? (m!.rankDrops12m != null ? m!.rankDrops12m / 12 : null) : m?.rankDrops30d ?? null,
+    avgRank: dormant ? m!.avgRank12m ?? null : m?.avgRank90d ?? m?.rankNow ?? null,
     rankTrend: m?.rankTrendPct12m ?? null,
     sellers: m?.fbaOffers ?? m?.offersNow ?? null,
     amazonAbsence: !m?.hasHistory ? null : m.amazonLastSeenDays ?? 10_000,
@@ -117,6 +120,12 @@ export function winScore(ctx: ScreenContext, run: GateRun, p: ProfileConfig, fit
   if (capped) band = "amber";
   let why = whyLine(ctx, run, score, groups);
   if (capped) why = why.replace(/\.$/, "; held at amber until there's history.");
+  const m = ctx.market;
+  if (isDormant(m) && !run.failedGate) {
+    const idle = m!.lastOfferDaysAgo != null ? `no seller for ${m!.lastOfferDaysAgo} days` : "no seller now";
+    const priced = m!.lastBuyBox12m != null ? `; priced on the ${lastSeenLabel(m!.lastBuyBox12m, m!.lastBuyBoxAt)}` : "";
+    why = `Dormant: ${idle}${priced}. ${why}`;
+  }
   return { score, band, groups, why };
 }
 

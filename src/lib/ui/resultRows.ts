@@ -1,5 +1,6 @@
 /** Turning a stored result (with its product, offer and inputs) into what filters read. */
 import type { Approval, FilterRow, Verdict } from "../filters";
+import { isDormant } from "../screening/dormant";
 import { estSales, sellers, type StoredMarket } from "./metrics";
 
 export interface ResultLike {
@@ -41,6 +42,12 @@ function approvalOf(r: ResultLike): Approval | null {
   return s === "open" || s === "approval_required" || s === "blocked" ? s : null;
 }
 
+/** Nobody sells the listing now: Keepa has its history but there's no Buy Box and no rank. */
+export function dormantOf(r: { inputs: { market?: StoredMarket | null } | null } | null | undefined): boolean {
+  const m = r?.inputs?.market;
+  return isDormant(m ? { ...m, currentBuyBox: m.currentBuyBox ?? null, rankNow: m.rankNow ?? null } : null);
+}
+
 export function toFilterRow(r: ResultLike, favourites: Set<string>): FilterRow {
   const m = r.inputs?.market;
   return {
@@ -53,6 +60,7 @@ export function toFilterRow(r: ResultLike, favourites: Set<string>): FilterRow {
     approval: approvalOf(r),
     favourite: !!r.product && favourites.has(favKey(r.product.ean, r.product.asin)),
     waived: isWaived(r),
+    dormant: dormantOf(r),
     values: {
       sales: estSales(m).value,
       sellers: sellers(m).value,

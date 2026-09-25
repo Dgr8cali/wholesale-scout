@@ -24,7 +24,7 @@ import { EMPTY_FILTERS, matches, normalizeFilters, type FilterSet } from "@/lib/
 import { GATE_LABELS, GATE_ORDER, type GateId } from "@/lib/screening/config";
 import { api, when } from "@/lib/ui/client";
 import { groupRows } from "@/lib/ui/group";
-import { brandOf, favKey, toFilterRow } from "@/lib/ui/resultRows";
+import { brandOf, dormantOf, favKey, toFilterRow } from "@/lib/ui/resultRows";
 import { cn } from "@/lib/utils";
 
 export default function RunPage() {
@@ -288,6 +288,7 @@ export default function RunPage() {
         warn: products.filter((r) => r.verdict === "warn" && r.status !== "error").length,
         fail: products.filter((r) => r.verdict === "fail" && r.status !== "error").length,
         error: products.filter((r) => r.status === "error").length,
+        dormant: products.filter((r) => dormantOf(r)).length,
       },
     };
   }, [done, products, failedGates]);

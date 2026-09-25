@@ -5,7 +5,9 @@ import type { RateCard } from "../fees/rateCard";
 import { estimateEta, type Eta, type RunStats } from "../eta";
 import { addDailyTokens } from "../keepaLedger";
 import { getKeepa, type KeepaProduct, type KeepaResponseMeta, type KeepaSummary, type KeepaTokens, type OnKeepaResponse, type SellerProfile } from "../keepa/client";
-import { trimSeries } from "../keepa/summarize";
+import { dormancy, trimSeries, type Dormancy } from "../keepa/summarize";
+import type { Point } from "../keepa/types";
+import { isDormant } from "../screening/dormant";
 import { GATE_ORDER, withDefaults, type GateId, type ProfileConfig } from "../screening/config";
 import { resolveScoringPrice, runGates, verdictOf, type GateRun, type MarketData, type ScreenContext, type SellerView } from "../screening/gates";
 import type { CategoryRule } from "../screening/rules";
@@ -513,7 +515,7 @@ async function loadRows(results: PendingRow[]): Promise<Row[]> {
   const keepaFresh = await freshSnapshots(products.map((p) => p.asin).filter((a): a is string => !!a));
   const waivers = await waiversFor(products.map((p) => p.ean));
 
-  return results.map((r) => {
+  const rows = results.map((r) => {
     const offer = O.get(r.offer_id)!;
     const product = P.get(r.product_id)!;
     const i = r.inputs?.v === 1 ? r.inputs : null;
@@ -536,7 +538,41 @@ async function loadRows(results: PendingRow[]): Promise<Row[]> {
       notes: [],
     };
   });
+  await backfillDormancy(rows);
+  return rows;
 }
+
+/**
+ * Dormant rows screened before the history figures they need were kept (last Buy Box,
+ * 12-month rank drops, days without a seller): work them out from the latest stored
+ * snapshot's series. No Keepa calls.
+ */
+async function backfillDormancy(rows: { match: { asin: string | null } | null; market: MarketData | null }[]): Promise<void> {
+  const need = rows.filter((r) => r.match?.asin && isDormant(r.market) && r.market!.lastOfferDaysAgo === undefined);
+  if (!need.length) return;
+  const series = new Map<string, Dormancy>();
+  const now = Date.now();
+  for (const c of chunks([...new Set(need.map((r) => r.match!.asin!))], 50)) {
+    const snaps = must(
+      await db().from("keepa_snapshots").select("asin, fetched_at, rank_series, buybox_series, offer_count_series").in("asin", c).order("fetched_at", { ascending: false }),
+      "snapshot series",
+    ) as { asin: string; fetched_at: string; rank_series: Point[] | null; buybox_series: Point[] | null; offer_count_series: Point[] | null }[];
+    for (const x of snaps) {
+      if (series.has(x.asin)) continue;
+      // As of when it was fetched, so "days without a seller" doesn't count the time since as unknown.
+      const d = dormancy({ rank: nums(x.rank_series), buyBox: nums(x.buybox_series), offerCount: nums(x.offer_count_series) }, Math.min(now, Date.parse(x.fetched_at)));
+      const since = Math.floor((now - Date.parse(x.fetched_at)) / DAY);
+      series.set(x.asin, { ...d, lastOfferDaysAgo: d.lastOfferDaysAgo == null ? null : d.lastOfferDaysAgo + Math.max(0, since) });
+    }
+  }
+  for (const r of need) {
+    const d = series.get(r.match!.asin!);
+    if (d) r.market = { ...r.market!, ...d };
+  }
+}
+
+/** Stored series come back from JSON with nulls where Keepa had no value. */
+const nums = (s: Point[] | null): Point[] => (s ?? []).map(([t, v]) => [t, v == null ? NaN : v]);
 
 /**
  * Re-run gates and score for every row of a run with the current profile, from the data

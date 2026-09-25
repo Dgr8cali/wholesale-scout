@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import type { Sparks } from "@/lib/sparkline";
 import { RestrictionLink } from "@/lib/ui/RestrictionLink";
 import { gbp, pct } from "@/lib/ui/client";
-import { brandOf } from "@/lib/ui/resultRows";
+import { brandOf, dormantOf } from "@/lib/ui/resultRows";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { Sparkline } from "./Sparkline";
 import { titleOf, type Result } from "./types";
@@ -73,6 +74,7 @@ export function DetailDrawer({ r, index, count, sparks, onStep, onClose, childre
             {r.offer?.supplier && <p className="text-xs text-muted-foreground">{r.offer.supplier.name}</p>}
             <div className="mt-1.5 flex items-center gap-2">
               <VerdictBadge verdict={r.verdict} error={r.status === "error"} />
+              {dormantOf(r) && <Badge variant="muted">dormant</Badge>}
               {r.score != null && <span className="num text-xs text-muted-foreground">score {Math.round(r.score)}{r.band ? ` · ${r.band}` : ""}</span>}
             </div>
           </div>

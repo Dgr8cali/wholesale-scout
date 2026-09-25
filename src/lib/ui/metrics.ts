@@ -10,6 +10,10 @@ export interface StoredMarket {
   fbaOffers?: number | null;
   offersNow?: number | null;
   currentBuyBox?: number | null;
+  rankNow?: number | null;
+  lastOfferDaysAgo?: number | null;
+  lastBuyBox12m?: number | null;
+  lastBuyBoxAt?: string | null;
 }
 
 export interface Figure {

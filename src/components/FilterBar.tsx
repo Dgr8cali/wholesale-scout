@@ -33,6 +33,7 @@ const PRESSED: Record<Verdict | "brand" | "fav", string> = {
   warn: "data-[state=on]:bg-warn-soft data-[state=on]:text-warn data-[state=on]:ring-1 data-[state=on]:ring-warn",
   fail: "data-[state=on]:bg-fail-soft data-[state=on]:text-fail data-[state=on]:ring-1 data-[state=on]:ring-fail",
   error: "data-[state=on]:bg-fail-soft data-[state=on]:text-fail data-[state=on]:ring-1 data-[state=on]:ring-fail",
+  dormant: "data-[state=on]:bg-foreground/10 data-[state=on]:text-foreground data-[state=on]:ring-1 data-[state=on]:ring-foreground/40",
   brand: "data-[state=on]:bg-brand-soft data-[state=on]:text-brand data-[state=on]:ring-1 data-[state=on]:ring-brand",
   fav: "data-[state=on]:bg-warn-soft data-[state=on]:text-warn data-[state=on]:ring-1 data-[state=on]:ring-warn",
 };
@@ -143,7 +144,7 @@ export function FilterBar({ value, onChange, options, favouritesAvailable, match
     <div className="panel space-y-3 p-3">
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex gap-1" role="group" aria-label="Verdict">
-          {(["pass", "warn", "fail", "error"] as Verdict[]).filter((v) => v !== "error" || options.verdictCounts.error).map((v) => (
+          {(["pass", "warn", "fail", "error", "dormant"] as Verdict[]).filter((v) => v !== "error" || options.verdictCounts.error).map((v) => (
             <Toggle key={v} size="sm" pressed={value.verdicts.includes(v)} onPressedChange={() => set({ verdicts: toggle(value.verdicts, v) })}
               className={cn(PILL, "font-semibold", PRESSED[v])}>
               {v} <span className="num">{options.verdictCounts[v] ?? 0}</span>

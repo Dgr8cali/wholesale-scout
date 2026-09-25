@@ -4,9 +4,27 @@ import { favKey, toFilterRow, type ResultLike } from "./ui/resultRows";
 
 const row = (over: Partial<FilterRow> = {}): FilterRow => ({
   verdict: "warn", band: "amber", failedGate: null, brand: "Bioderma", supplier: "Pharmazon", amazon: "no", approval: "open",
-  favourite: false, waived: false, values: { sales: 200, sellers: 5, profit: 6.4, roi: 84, margin: 30, sell: 22.9 }, text: "Bioderma Sebium gel 3401399277092", ...over,
+  favourite: false, waived: false, dormant: false, values: { sales: 200, sellers: 5, profit: 6.4, roi: 84, margin: 30, sell: 22.9 }, text: "Bioderma Sebium gel 3401399277092", ...over,
 });
 const f = (over: Partial<FilterSet>): FilterSet => ({ ...EMPTY_FILTERS, ...over });
+
+describe("dormant in the verdict filter", () => {
+  it("picks dormant listings, alone or alongside verdicts", () => {
+    expect(matches(row({ verdict: "fail", dormant: true }), f({ verdicts: ["dormant"] }))).toBe(true);
+    expect(matches(row({ verdict: "pass", dormant: false }), f({ verdicts: ["dormant"] }))).toBe(false);
+    expect(matches(row({ verdict: "pass", dormant: false }), f({ verdicts: ["pass", "dormant"] }))).toBe(true);
+  });
+
+  it("marks a stored row dormant when it has history but no Buy Box and no rank now", () => {
+    const base: ResultLike = { status: "done", verdict: "fail", band: null, failed_gate: "demand", sell_price: null, profit: null, roi: null, margin: null, why: null, gate_outcomes: [], product: { ean: "1", asin: "B000000001", title: "x", brand: null }, offer: null, inputs: { market: { hasHistory: true, currentBuyBox: null, rankNow: null } } };
+    expect(toFilterRow(base, new Set()).dormant).toBe(true);
+    expect(toFilterRow({ ...base, inputs: { market: { hasHistory: true, currentBuyBox: 9.99, rankNow: null } } }, new Set()).dormant).toBe(false);
+    expect(toFilterRow({ ...base, inputs: { market: { hasHistory: false, currentBuyBox: null, rankNow: null } } }, new Set()).dormant).toBe(false);
+    // Offers live now (Amazon selling, say) even with no Buy Box or rank in the summary: not dormant.
+    expect(toFilterRow({ ...base, inputs: { market: { hasHistory: true, currentBuyBox: null, rankNow: null, offersNow: 2 } } }, new Set()).dormant).toBe(false);
+    expect(toFilterRow({ ...base, inputs: { market: { hasHistory: true, currentBuyBox: null, rankNow: null, lastOfferDaysAgo: 0 } } }, new Set()).dormant).toBe(false);
+  });
+});
 
 describe("filters combine with AND", () => {
   it("matches everything when empty", () => {

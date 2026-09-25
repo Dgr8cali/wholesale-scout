@@ -15,7 +15,8 @@ export const RANGE_LABELS: Record<RangeKey, { label: string; unit: string }> = {
   sell: { label: "Sell price", unit: "£" },
 };
 
-export type Verdict = "pass" | "warn" | "fail" | "error";
+/** "dormant" isn't a gate verdict: it picks listings nobody sells now, whatever their verdict. */
+export type Verdict = "pass" | "warn" | "fail" | "error" | "dormant";
 export type Approval = "open" | "approval_required" | "blocked";
 export const APPROVAL_LABELS: Record<Approval, string> = { open: "Open", approval_required: "Approval needed", blocked: "Blocked" };
 
@@ -56,6 +57,8 @@ export interface FilterRow {
   favourite: boolean;
   /** A gate on this row is waived. */
   waived: boolean;
+  /** Nobody sells the listing now (see screening/dormant). */
+  dormant: boolean;
   values: Record<RangeKey, number | null>;
   /** Searchable text: name, brand, EAN, ASIN, supplier, why. */
   text: string;
@@ -65,7 +68,7 @@ const inRange = (v: number | null, r: Range | undefined) =>
   !r || (r.min == null && r.max == null) || (v != null && (r.min == null || v >= r.min) && (r.max == null || v <= r.max));
 
 export function matches(row: FilterRow, f: FilterSet): boolean {
-  if (f.verdicts.length && (!row.verdict || !f.verdicts.includes(row.verdict))) return false;
+  if (f.verdicts.length && !f.verdicts.some((v) => (v === "dormant" ? row.dormant : v === row.verdict))) return false;
   if (f.bands.length && (!row.band || !f.bands.includes(row.band))) return false;
   if (f.gates.length && (!row.failedGate || !f.gates.includes(row.failedGate))) return false;
   if (f.brands.length && (!row.brand || !f.brands.includes(row.brand))) return false;

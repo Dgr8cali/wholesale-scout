@@ -17,7 +17,7 @@ import { EMPTY_FILTERS, matches, normalizeFilters, type FilterRow, type FilterSe
 import { GATE_LABELS } from "@/lib/screening/config";
 import { api, gbp, pct, when } from "@/lib/ui/client";
 import { estSales } from "@/lib/ui/metrics";
-import { brandOf, toFilterRow, type ResultLike } from "@/lib/ui/resultRows";
+import { brandOf, toFilterRow, type ResultLike, dormantOf } from "@/lib/ui/resultRows";
 
 import { Button } from "@/components/ui/button";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
@@ -47,7 +47,7 @@ const titleOf = (i: Item) => i.latest?.product?.title ?? i.latest?.offer?.title 
 function filterRow(i: Item): FilterRow {
   if (i.latest) return toFilterRow(i.latest, new Set());
   return {
-    verdict: null, band: null, failedGate: null, brand: null, supplier: null, amazon: null, approval: null, favourite: true, waived: false,
+    verdict: null, band: null, failedGate: null, brand: null, supplier: null, amazon: null, approval: null, favourite: true, waived: false, dormant: false,
     values: { sales: null, sellers: null, profit: null, roi: null, margin: null, sell: null },
     text: [i.favourite.ean, i.favourite.asin, i.favourite.note].filter(Boolean).join(" "),
   };
@@ -127,6 +127,7 @@ export default function FavouritesPage() {
         pass: latest.filter((l) => l.verdict === "pass").length,
         warn: latest.filter((l) => l.verdict === "warn").length,
         fail: latest.filter((l) => l.verdict === "fail").length,
+        dormant: latest.filter((l) => dormantOf(l)).length,
       },
     };
   }, [all]);

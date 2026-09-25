@@ -111,6 +111,55 @@ function slopePctPerYear(points: [number, number][], base: number | null): numbe
   return den ? ((num / den) * 365 / base) * 100 : null;
 }
 
+/** What a listing's history says when nobody is selling it now (see screening/dormant). */
+export interface Dormancy {
+  /** The last Buy Box price in the past 12 months, and when it was last in force. */
+  lastBuyBox12m: number | null;
+  lastBuyBoxAt: string | null;
+  /** Rank drops (sales, roughly) over the past 12 months. */
+  rankDrops12m: number | null;
+  /** Mean daily rank over the past 12 months, on days it had one. */
+  avgRank12m: number | null;
+  /** Days since the listing last had an offer (0 = has one now); null = never seen with one. */
+  lastOfferDaysAgo: number | null;
+}
+
+const has = (v: number | null | undefined): v is number => v != null && Number.isFinite(v) && v >= 0;
+
+export function dormancy(s: { rank: Point[]; buyBox: Point[]; offerCount: Point[] }, now: number): Dormancy {
+  const yearAgo = now - 365 * DAY;
+  // Last Buy Box: the latest priced point still in force within the year.
+  let lastBuyBox12m: number | null = null, lastBuyBoxAt: string | null = null;
+  for (let k = s.buyBox.length - 1; k >= 0; k--) {
+    const v = s.buyBox[k][1];
+    if (!has(v) || v === 0) continue;
+    const until = k + 1 < s.buyBox.length ? s.buyBox[k + 1][0] : now;
+    if (until < yearAgo) break;
+    lastBuyBox12m = v;
+    lastBuyBoxAt = new Date(Math.min(until, now)).toISOString();
+    break;
+  }
+  const ranks = daily(s.rank, yearAgo, now).filter((v) => v > 0);
+  // An offer exists while the offer count is above 0 or a Buy Box price is in force.
+  const offerEnds: number[] = [];
+  for (const series of [s.offerCount, s.buyBox]) {
+    for (let k = series.length - 1; k >= 0; k--) {
+      if (has(series[k][1]) && series[k][1] > 0) {
+        offerEnds.push(k + 1 < series.length ? series[k + 1][0] : now);
+        break;
+      }
+    }
+  }
+  const lastOffer = offerEnds.length ? Math.max(...offerEnds) : null;
+  return {
+    lastBuyBox12m,
+    lastBuyBoxAt,
+    rankDrops12m: valid(s.rank).length ? rankDrops(s.rank, yearAgo, now) : null,
+    avgRank12m: ranks.length ? Math.round(ranks.reduce((a, b) => a + b, 0) / ranks.length) : null,
+    lastOfferDaysAgo: lastOffer == null ? null : Math.max(0, Math.floor((now - lastOffer) / DAY)),
+  };
+}
+
 export interface SummaryInput {
   now: number;
   rank: Point[];
@@ -201,5 +250,6 @@ export function summarize(i: SummaryInput): KeepaSummary {
     topSellers,
     reviewJumpPct,
     youngerThanParent: i.parentFirstSeen == null || !Number.isFinite(firstPoint) ? null : firstPoint > i.parentFirstSeen + 30 * DAY,
+    ...dormancy(i, now),
   };
 }

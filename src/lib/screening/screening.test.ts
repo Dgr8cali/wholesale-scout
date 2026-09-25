@@ -222,6 +222,45 @@ describe("gates", () => {
     });
   });
 
+  describe("dormant listings", () => {
+    const dormant = (over: Partial<MarketData> = {}) => market({
+      rankNow: null, currentBuyBox: null, avgRank90d: null, rankDrops30d: 0, keepaRankDrops30: 0, offersNow: 0, fbaOffers: null,
+      medianBuyBox12m: null, lastBuyBox12m: 18.5, lastBuyBoxAt: "2026-03-03T10:00:00Z", rankDrops12m: 600, avgRank12m: 9000, lastOfferDaysAgo: 206,
+      ...over,
+    });
+
+    it("scores on the last Buy Box seen in 12 months and 12 months of rank drops", () => {
+      const c = ctx({ market: dormant() });
+      expect(resolveScoringPrice(c.market, DEFAULT_PROFILE)).toEqual({ price: 18.5, source: "last seen £18.50 on 3 Mar 2026" });
+      const run = runGates(c, DEFAULT_PROFILE);
+      const demand = run.outcomes.find((o) => o.gate === "demand")!;
+      expect(demand.status).toBe("pass");
+      expect(demand.detail).toBe("dormant: 600 rank drops in 12 months (50/mo), 12-month average rank 9,000");
+      expect(demand.tags).toContain("DORMANT");
+      expect(run.outcomes.find((o) => o.gate === "competition")!.detail).toBe("dormant: no sellers now, none for 206 days");
+      const w = winScore(c, run, DEFAULT_PROFILE, fit);
+      expect(w.score).not.toBeNull();
+      expect(w.why).toMatch(/^Dormant: no seller for 206 days; priced on the last seen £18\.50 on 3 Mar 2026\. \d+ — /);
+      expect(w.why).not.toMatch(/Not scored/);
+    });
+
+    it("fails a dormant listing with no sales in 12 months", () => {
+      const run = runGates(ctx({ market: dormant({ rankDrops12m: 0 }) }), DEFAULT_PROFILE);
+      expect(run.failedGate).toBe("demand");
+      expect(run.outcomes.at(-1)!.detail).toMatch(/^dormant: no sales history/);
+    });
+
+    it("fails a dormant listing selling too slowly over the year", () => {
+      const d = runGates(ctx({ market: dormant({ rankDrops12m: 60 }) }), DEFAULT_PROFILE).outcomes.find((o) => o.gate === "demand")!;
+      expect(d.status).toBe("fail");
+      expect(d.detail).toMatch(/60 rank drops in 12 months \(5\/mo\), under 30\/mo/);
+    });
+
+    it("isn't scored on a price when no Buy Box was seen in the year", () => {
+      expect(resolveScoringPrice(dormant({ lastBuyBox12m: null, lastBuyBoxAt: null }), DEFAULT_PROFILE).price).toBeNull();
+    });
+  });
+
   it("runs only the cheap row gates in the pre-screen", () => {
     const run = runGates(ctx({ market: null, match: null }), DEFAULT_PROFILE, ["compliance", "budgetFit"]);
     expect(run.outcomes.map((o) => o.gate)).toEqual(["compliance", "budgetFit"]);

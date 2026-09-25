@@ -2,6 +2,7 @@
  * The twelve screening gates. Pure: each reads a ScreenContext and returns an outcome.
  * A gate whose data isn't available (no Keepa yet, no price) is "skipped", never failed.
  */
+import { isDormant, lastSeenLabel } from "./dormant";
 import { salesPerMonth } from "./sales";
 import {
   economics,
@@ -61,6 +62,12 @@ export interface MarketData {
   packageDims?: Dims | null;
   packageWeightG?: number | null;
   variationCount?: number | null;
+  // From the Keepa history, for dormant listings (see ./dormant).
+  lastBuyBox12m?: number | null;
+  lastBuyBoxAt?: string | null;
+  rankDrops12m?: number | null;
+  avgRank12m?: number | null;
+  lastOfferDaysAgo?: number | null;
 }
 
 /** A top Buy Box seller with its Keepa profile. */
@@ -153,6 +160,8 @@ export function scoringPrice(m: MarketData | null, rule: ProfileConfig["scoringP
  * tolerance over its median with offers falling, score on the median whatever the rule.
  */
 export function resolveScoringPrice(m: MarketData | null, p: ProfileConfig): { price: number | null; source: string | null } {
+  // Nobody selling now: the last Buy Box of the past year is the best price evidence there is.
+  if (isDormant(m)) return m!.lastBuyBox12m != null ? { price: m!.lastBuyBox12m, source: lastSeenLabel(m!.lastBuyBox12m, m!.lastBuyBoxAt) } : { price: null, source: null };
   const base = scoringPrice(m, p.scoringPrice);
   if (
     m?.hasHistory && m.currentBuyBox != null && m.medianBuyBox12m != null && p.gates.priceRegime.mode !== "off" &&
@@ -265,6 +274,7 @@ const EVALUATORS: Record<GateId, Evaluator> = {
   competition(ctx, p) {
     const g = p.gates.competition;
     const m = ctx.market;
+    if (isDormant(m)) return skipped(`dormant: no sellers now${m!.lastOfferDaysAgo != null ? `, none for ${m!.lastOfferDaysAgo} days` : ""}`);
     const sellers = m?.fbaOffers ?? m?.offersNow ?? null;
     if (sellers == null) return skipped("No offer count");
     const reasons: string[] = [];
@@ -288,6 +298,20 @@ const EVALUATORS: Record<GateId, Evaluator> = {
     // come from the Keepa history (the same figure as the Sales / mo column), so without
     // history there's nothing to count: skip rather than pass on the current rank alone.
     if (!m?.hasHistory) return skipped(m?.rankNow != null ? `Needs Keepa history to count sales (current rank ${m.rankNow.toLocaleString("en-GB")})` : "Needs Keepa history");
+    if (isDormant(m)) {
+      // No rank now: judge the past year instead, as a monthly rate.
+      const drops = m.rankDrops12m ?? 0;
+      if (drops === 0) {
+        const why = m.rankDrops12m == null && m.avgRank12m == null ? "Keepa has no sales rank for it in 12 months" : "no rank drops in 12 months";
+        return { status: failAs(g.mode), detail: `dormant: no sales history (${why})`, tags: ["DORMANT"] };
+      }
+      const perMonth = Math.round((drops / 12) * 10) / 10;
+      const reasons: string[] = [];
+      if (perMonth < g.minRankDrops30d) reasons.push(`${drops} rank drops in 12 months (${perMonth}/mo), under ${g.minRankDrops30d}/mo`);
+      if (m.avgRank12m != null && m.avgRank12m > g.maxAvgRank90d) reasons.push(`12-month average rank ${m.avgRank12m.toLocaleString("en-GB")}, over ${g.maxAvgRank90d.toLocaleString("en-GB")}`);
+      if (reasons.length) return { status: failAs(g.mode), detail: `dormant: ${reasons.join("; ")}`, tags: ["DORMANT"] };
+      return { status: "pass", detail: `dormant: ${drops} rank drops in 12 months (${perMonth}/mo)${m.avgRank12m != null ? `, 12-month average rank ${m.avgRank12m.toLocaleString("en-GB")}` : ""}`, tags: ["DORMANT"] };
+    }
     const sales = salesPerMonth(m).value ?? 0;
     const rank = m.avgRank90d ?? m.rankNow ?? null;
     const rankLabel = m.avgRank90d != null ? "90-day average rank" : "current rank";

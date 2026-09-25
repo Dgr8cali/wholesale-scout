@@ -6,6 +6,8 @@ import { GATE_LABELS, GROUP_LABELS, type GateId, type GroupId } from "@/lib/scre
 import { RestrictionLink } from "@/lib/ui/RestrictionLink";
 import { gbp } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
+import { lastSeenLabel } from "@/lib/screening/dormant";
+import { dormantOf } from "@/lib/ui/resultRows";
 import type { Fav, Result, Seller } from "./types";
 
 const STATUS_ICON: Record<string, string> = { pass: "✓", warn: "!", fail: "✕", skipped: "–", off: "·" };
@@ -105,6 +107,7 @@ export function Detail({ r, fav, onNote, onWaive, stacked = false }: {
         )}
       </div>
       <div>
+        <SellerGap r={r} />
         <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Per unit at {gbp(r.sell_price)}</p>
         {r.fees ? (
           <dl className="num grid grid-cols-[1fr_auto] gap-x-3 gap-y-0.5 text-xs">
@@ -157,5 +160,23 @@ export function Detail({ r, fav, onNote, onWaive, stacked = false }: {
         )}
       </div>
     </div>
+  );
+}
+
+/** How long the listing has gone without anyone selling it, from the Keepa history. */
+function SellerGap({ r }: { r: Result }) {
+  const m = r.inputs?.market;
+  if (!m?.hasHistory) return null;
+  const now = m.currentBuyBox != null || (m.offersNow ?? 0) > 0;
+  const days = m.lastOfferDaysAgo ?? (now ? 0 : null);
+  const dormant = dormantOf(r);
+  return (
+    <dl className={cn("mb-3 grid grid-cols-[max-content_1fr] gap-x-4 gap-y-0.5 rounded-md px-2.5 py-1.5 text-xs", dormant ? "bg-warn-soft" : "bg-muted/60")}>
+      <dt>Days without a seller</dt>
+      <dd className="num text-right font-semibold">{days == null ? (dormant ? "no offer in the history" : "—") : days === 0 ? "0 (selling now)" : days.toLocaleString("en-GB")}</dd>
+      {dormant && m.lastBuyBox12m != null && (
+        <><dt className="text-muted-foreground">Last Buy Box</dt><dd className="num text-right text-muted-foreground">{lastSeenLabel(m.lastBuyBox12m, m.lastBuyBoxAt)}</dd></>
+      )}
+    </dl>
   );
 }
