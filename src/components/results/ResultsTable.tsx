@@ -70,6 +70,7 @@ const IDS = COLS.map((c) => c.id);
 const BOUNDS = Object.fromEntries(COLS.filter((c) => !c.fixed).map((c) => [c.id, { min: c.min ?? 40, max: c.max ?? 1000 }]));
 /** Columns that stay in view when scrolling sideways. */
 const PINNED = { start: ["select", "product"], end: [] as string[] };
+const NO_PINS = { start: [] as string[], end: [] as string[] };
 
 const features = tableFeatures({ columnVisibilityFeature, columnOrderingFeature, columnPinningFeature, columnSizingFeature, columnResizingFeature });
 const helper = createColumnHelper<typeof features, DisplayRow>();
@@ -123,6 +124,12 @@ export function ResultsTable(props: ResultsTableProps) {
   const [prefs, setPrefs] = useState<TablePrefs>(() => loadPrefs(storageKey, IDS, BOUNDS));
   useEffect(() => savePrefs(storageKey, prefs), [storageKey, prefs]);
 
+  // The card's width (measured below). On a phone, pinning the product column would leave no
+  // room to scroll the rest, so nothing is pinned under 640px.
+  const [boxW, setBoxW] = useState(0);
+  const narrow = boxW > 0 && boxW < 640;
+  const pinning = narrow ? NO_PINS : PINNED;
+
   const table = useTable({
     features,
     columns,
@@ -133,7 +140,7 @@ export function ResultsTable(props: ResultsTableProps) {
       columnVisibility: prefs.visibility,
       columnOrder: prefs.order,
       columnSizing: prefs.sizing,
-      columnPinning: PINNED,
+      columnPinning: pinning,
     },
     onColumnVisibilityChange: (u) => setPrefs((p) => ({ ...p, visibility: typeof u === "function" ? (u as (s: ColumnVisibilityState) => ColumnVisibilityState)(p.visibility) : u })),
     onColumnOrderChange: (u) => setPrefs((p) => ({ ...p, order: typeof u === "function" ? (u as (s: ColumnOrderState) => ColumnOrderState)(p.order) : u })),
@@ -142,7 +149,6 @@ export function ResultsTable(props: ResultsTableProps) {
 
   // The card's width, so the flexible column (Why, else the last) can take up any slack.
   const scroller = useRef<HTMLDivElement>(null);
-  const [boxW, setBoxW] = useState(0);
   useEffect(() => {
     const el = scroller.current;
     if (!el) return;
@@ -157,7 +163,7 @@ export function ResultsTable(props: ResultsTableProps) {
   const total = headers.reduce((s, h) => s + h.getSize(), 0);
   const slack = Math.max(0, boxW - total);
   const widthOf = (c: Column<typeof features, DisplayRow, unknown>) => c.getSize() + (c.id === flexId ? slack : 0);
-  const lastPinned = PINNED.start.filter((id) => visibleIds.includes(id)).at(-1);
+  const lastPinned = pinning.start.filter((id) => visibleIds.includes(id)).at(-1);
 
   const pinStyle = (c: Column<typeof features, DisplayRow, unknown>): CSSProperties | undefined =>
     c.getIsPinned() === "start" ? { position: "sticky", insetInlineStart: c.getStart("start") } : undefined;

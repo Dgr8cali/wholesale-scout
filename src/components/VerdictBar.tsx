@@ -11,7 +11,7 @@ const SEGMENTS = [
 ] as const;
 
 /** A run's rows as one stacked bar (pass / warn / fail / error / still to screen), with counts under it. */
-export function VerdictBar({ counts, legend = true, className }: { counts: VerdictCounts; legend?: boolean; className?: string }) {
+export function VerdictBar({ counts, legend = true, legendClassName, className }: { counts: VerdictCounts; legend?: boolean; legendClassName?: string; className?: string }) {
   const total = SEGMENTS.reduce((s, x) => s + counts[x.key], 0);
   const summary = SEGMENTS.filter((s) => counts[s.key]).map((s) => `${counts[s.key]} ${s.label}`).join(", ") || "no rows";
   return (
@@ -22,7 +22,7 @@ export function VerdictBar({ counts, legend = true, className }: { counts: Verdi
         ))}
       </div>
       {legend && (
-        <div className="flex flex-wrap gap-x-3 text-2xs text-muted-foreground" aria-hidden="true">
+        <div className={cn("flex flex-wrap gap-x-3 text-2xs text-muted-foreground", legendClassName)} aria-hidden="true">
           {SEGMENTS.filter((s) => counts[s.key] > 0 || s.key !== "error" && s.key !== "pending").map((s) => (
             <span key={s.key} className="flex items-center gap-1">
               <span className={cn("size-1.5 rounded-full", s.className)} />

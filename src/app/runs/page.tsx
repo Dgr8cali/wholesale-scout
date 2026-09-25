@@ -221,6 +221,20 @@ export default function RunsPage() {
                   await api(`/api/runs/${r.id}`, { method: "PATCH", json: { name } });
                   setRuns((rs) => rs && rs.map((x) => (x.id === r.id ? { ...x, name } : x)));
                 }} />
+              {/* On a phone, what the hidden columns say. */}
+              <div className="space-y-1 md:hidden">
+                <p className="text-xs text-muted-foreground">
+                  {when(r.started_at)} · {r.row_count.toLocaleString("en-GB")} row{r.row_count === 1 ? "" : "s"}{s?.pass || s?.warn ? ` · ${s.pass} pass, ${s.warn} warn` : ""}{s?.suppliers.length ? ` · ${s.suppliers.join(", ")}` : ""}
+                </p>
+                {s && <VerdictBar counts={s} legend={false} className="max-w-56" />}
+                {!done && (
+                  <p className="text-xs">
+                    {r.status === "error" ? <Badge variant="fail">Error</Badge>
+                      : r.paused_at ? <Badge variant="muted">Paused at {(r.row_count - pending).toLocaleString("en-GB")} of {r.row_count.toLocaleString("en-GB")}</Badge>
+                      : <Badge variant="brand">Screening · {Math.round(pctDone)}%</Badge>}
+                  </p>
+                )}
+              </div>
               <div className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
                 {r.name && r.name !== r.source && <span className="truncate">{r.source}</span>}
                 {r.archived_at && <Badge variant="muted">archived</Badge>}
@@ -236,14 +250,14 @@ export default function RunsPage() {
             </div>
           </div>
         </TableCell>
-        <TableCell className="text-sm">{s?.suppliers.length ? s.suppliers.join(", ") : <span className="text-muted-foreground">—</span>}</TableCell>
-        <TableCell className="text-sm text-muted-foreground">{when(r.started_at)}</TableCell>
-        <TableCell className="num text-right">{r.row_count.toLocaleString("en-GB")}</TableCell>
-        <TableCell className="w-52 min-w-44">
+        <TableCell className="hidden text-sm md:table-cell">{s?.suppliers.length ? s.suppliers.join(", ") : <span className="text-muted-foreground">—</span>}</TableCell>
+        <TableCell className="hidden text-sm text-muted-foreground md:table-cell">{when(r.started_at)}</TableCell>
+        <TableCell className="num hidden text-right md:table-cell">{r.row_count.toLocaleString("en-GB")}</TableCell>
+        <TableCell className="hidden w-52 min-w-36 md:table-cell">
           {/* The same bar as Home: pass / warn / fail (and errors, rows still to screen), with counts. */}
           {s ? <VerdictBar counts={s} /> : <Skeleton className="h-2" />}
         </TableCell>
-        <TableCell className="w-44">
+        <TableCell className="hidden w-44 md:table-cell">
           {done ? <Badge variant="pass">Done</Badge> : r.status === "error" ? <Badge variant="fail">Error</Badge> : r.paused_at ? (
             <div className="space-y-1">
               <Badge variant="muted">Paused</Badge>
@@ -328,11 +342,11 @@ export default function RunsPage() {
                     onCheckedChange={() => setSelected(allChecked ? new Set() : new Set(visibleIds))} />
                 </TableHead>
                 <TableHead>{header("name", "Run")}</TableHead>
-                <TableHead>Supplier</TableHead>
-                <TableHead>{header("started", "Started")}</TableHead>
-                <TableHead className="text-right">{header("rows", "Rows")}</TableHead>
-                <TableHead>Results</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead className="hidden md:table-cell">Supplier</TableHead>
+                <TableHead className="hidden md:table-cell">{header("started", "Started")}</TableHead>
+                <TableHead className="hidden text-right md:table-cell">{header("rows", "Rows")}</TableHead>
+                <TableHead className="hidden md:table-cell">Results</TableHead>
+                <TableHead className="hidden md:table-cell">Status</TableHead>
                 <TableHead className="pr-3"><span className="sr-only">Actions</span></TableHead>
               </TableRow>
             </TableHeader>

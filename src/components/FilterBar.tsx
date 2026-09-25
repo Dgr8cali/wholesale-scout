@@ -110,6 +110,8 @@ export function FilterBar({ value, onChange, options, favouritesAvailable, match
   const set = (patch: Partial<FilterSet>) => onChange({ ...value, ...patch });
   const chips = activeChips(value, gateLabels);
   const rangeCount = RANGE_KEYS.filter((k) => value.ranges[k] && (value.ranges[k]!.min != null || value.ranges[k]!.max != null)).length;
+  // On a phone the controls fold away behind "Filters"; the count and active chips stay in view.
+  const [shown, setShown] = useState(false);
 
   useEffect(() => {
     api<{ sets: SavedSet[]; unavailable?: string }>("/api/filter-sets")
@@ -142,7 +144,10 @@ export function FilterBar({ value, onChange, options, favouritesAvailable, match
 
   return (
     <div className="panel space-y-3 p-3">
-      <div className="flex flex-wrap items-center gap-2">
+      <Button variant="outline" size="sm" className="sm:hidden" aria-expanded={shown} onClick={() => setShown((v) => !v)}>
+        {shown ? "Hide filters" : `Filters${chips.length ? ` (${chips.length} on)` : ""}`}
+      </Button>
+      <div className={cn("flex-wrap items-center gap-2", shown ? "flex" : "hidden sm:flex")}>
         <div className="flex gap-1" role="group" aria-label="Verdict">
           {(["pass", "warn", "fail", "error", "dormant"] as Verdict[]).filter((v) => v !== "error" || options.verdictCounts.error).map((v) => (
             <Toggle key={v} size="sm" pressed={value.verdicts.includes(v)} onPressedChange={() => set({ verdicts: toggle(value.verdicts, v) })}
@@ -206,7 +211,7 @@ export function FilterBar({ value, onChange, options, favouritesAvailable, match
             })}
           </div>
         </Popover>
-        <Input className="h-7 text-xs w-56" placeholder="Search name, brand, EAN, ASIN, why" value={value.q} onChange={(e) => set({ q: e.target.value })} aria-label="Search" />
+        <Input className="h-7 w-full text-xs sm:w-56" placeholder="Search name, brand, EAN, ASIN, why" value={value.q} onChange={(e) => set({ q: e.target.value })} aria-label="Search" />
         <Popover label="Saved filters" active={false}>
           <div className="space-y-1">
             {sets.map((s) => (
