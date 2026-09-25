@@ -25,6 +25,7 @@ The password is kept in `chrome.storage.local` on this computer only and sent to
 ## Settings
 
 - **Check product pages automatically** (on): the panel checks each product page as it opens. A new ASIN becomes a check run in the app (Runs) and can spend a few Keepa tokens; a repeat within 12 hours reuses the last check. Off: the panel shows a **Check** button instead.
+- **Show debug** (off): the stock reader's Debug section; see below.
 - **Seller Central DG page**: the page "Look up" opens, with `{asin}` replaced. The default is Seller Central's product search; if another Seller Central page shows you the dangerous-goods classification, paste its address here.
 
 ## Competitors' stock: read this first
@@ -33,7 +34,7 @@ The password is kept in `chrome.storage.local` on this computer only and sent to
 
 - It uses your own Amazon session. Amazon's Conditions of Use prohibit automated data gathering, so use it sparingly and at your own risk to that account.
 - How it reads: Amazon's all-offers (AOD) address answers 404 to a direct request, so the reader first fetches the product page with `?aod=1` (in case it arrives with the offers), then opens Amazon's own "See all buying options" panel on the page, waits for it to load (asking for more offers where it offers to), reads every `#aod-offer` (seller from "Sold by", `aod-offer-shipsFrom` = Amazon, offer listing ID) and closes it. Without a panel, it uses the Buy Box and "Other sellers on Amazon" rows. Each FBA offer is added by its listing ID with quantity 999; the number is read from **this ASIN's basket line only** (the basket lists every item's "Only N left"): a "limited to N per customer" or "only N left" message if there is one, else the quantity Amazon set, marked "allowed (stock or a per-customer limit: Amazon didn't say)". The line is removed and the removal checked.
-- Amazon changes these pages without notice. When a step fails the panel says so for that seller rather than guessing, and a collapsed **Debug** section under the stock list holds what Amazon sent back at each step (first 1,500 characters): **Copy** it and paste it to have the reader fixed (`offersFromAod`, `offersOnPage`, `stockOf`, `removeLine` in `product.js`).
+- Amazon changes these pages without notice. When a step fails the panel says so for that seller rather than guessing, and with **Show debug** on (popup, off by default) a collapsed **Debug** section under the stock list holds a summary of what Amazon sent back at each step: **Copy** it and paste it to have the reader fixed (`allOffers`, `offersIn`, `offersOnPage`, `stockOf`, `removeLine` in `product.js`). Steps are recorded either way, so turning it on after a failed reading shows that reading.
 
 Readings are saved to the product and shown in the app under "From the extension" in the row's details.
 

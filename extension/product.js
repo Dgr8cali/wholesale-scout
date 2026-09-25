@@ -186,7 +186,7 @@
         s.error ? ws.h("span", { class: "err", text: ` ${s.error}` }) : "",
       ]))));
     }
-    if (debug.length) {
+    if (debug.length && settings.showDebug) {
       const dump = debug.map((d) => JSON.stringify(d)).join("\n\n");
       sec.append(ws.h("details", { style: "margin-top:6px" }, [
         ws.h("summary", { class: "muted", style: "cursor:pointer", text: `Debug (${debug.length} steps)` }),
@@ -245,7 +245,7 @@
         offers = [...offers, ...onPage.filter((o) => !have.has(o.oid))];
       }
       offers = offers.filter((o) => o.fba && !o.isAmazon && o.oid).slice(0, MAX_SELLERS);
-      if (!offers.length) throw new Error("No FBA seller offers with an offer listing ID found. Open Debug below and paste it to fix the reader.");
+      if (!offers.length) throw new Error("No FBA seller offers with an offer listing ID found. Turn on Show debug in the extension's settings and paste the Debug section to fix the reader.");
       stockRows = offers.map((o) => ({ sellerId: o.sellerId, name: o.name, fba: true, stock: null, limited: false }));
       render();
       for (let i = 0; i < offers.length; i++) {
@@ -494,8 +494,8 @@
     });
     try {
       const got = (line && readQuantity(line, "basket line")) || fromAdd;
-      if (!line && !fromAdd) throw new Error("not in the cart after adding (see Debug)");
-      if (!got) throw new Error("the cart didn't show a quantity (see Debug)");
+      if (!line && !fromAdd) throw new Error("not in the cart after adding (Show debug in the settings shows why)");
+      if (!got) throw new Error("the cart didn't show a quantity (Show debug in the settings shows why)");
       return got;
     } finally {
       await removeLine(cart.doc).catch((e) => note("Remove failed", { error: e.message }));
@@ -533,5 +533,11 @@
     settings = s;
     render();
     if (s.configured && s.autoCheck) load(false);
+  });
+  // Show debug takes effect on an open panel as soon as it's saved.
+  chrome.storage.onChanged.addListener((ch, area) => {
+    if (area !== "local" || !ch.showDebug) return;
+    settings = { ...settings, showDebug: !!ch.showDebug.newValue };
+    render();
   });
 })();

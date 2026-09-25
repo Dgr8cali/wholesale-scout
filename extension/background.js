@@ -8,6 +8,8 @@ const DEFAULTS = {
   dgUrl: "https://sellercentral.amazon.co.uk/product-search/search?q={asin}",
   // Check a product page as soon as it opens (a new ASIN is a check run: a few Keepa tokens).
   autoCheck: true,
+  // The stock reader's Debug section (what Amazon sent back at each step), for fixing the reader.
+  showDebug: false,
 };
 
 async function settings() {
@@ -37,7 +39,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
     if (msg.type === "api") return reply(await api(msg.method || "GET", msg.path, msg.body));
     if (msg.type === "settings") {
       const s = await settings();
-      return reply({ appUrl: s.appUrl, dgUrl: s.dgUrl, configured: !!s.password, autoCheck: s.autoCheck !== false });
+      return reply({ appUrl: s.appUrl, dgUrl: s.dgUrl, configured: !!s.password, autoCheck: s.autoCheck !== false, showDebug: !!s.showDebug });
     }
     if (msg.type === "open") {
       await chrome.tabs.create({ url: msg.url });

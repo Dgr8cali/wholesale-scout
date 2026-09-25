@@ -1,6 +1,6 @@
 // Settings: the app's URL and password (kept in chrome.storage.local on this computer only),
 // the Seller Central DG page, and a connection test.
-const DEFAULTS = { appUrl: "https://wholesale-scout.vercel.app", password: "", dgUrl: "https://sellercentral.amazon.co.uk/product-search/search?q={asin}", autoCheck: true };
+const DEFAULTS = { appUrl: "https://wholesale-scout.vercel.app", password: "", dgUrl: "https://sellercentral.amazon.co.uk/product-search/search?q={asin}", autoCheck: true, showDebug: false };
 const $ = (id) => document.getElementById(id);
 const msg = (text, ok) => { $("msg").textContent = text; $("msg").className = ok ? "ok" : "err"; };
 
@@ -9,6 +9,7 @@ chrome.storage.local.get(DEFAULTS, (s) => {
   $("password").value = s.password;
   $("dgUrl").value = s.dgUrl;
   $("autoCheck").checked = s.autoCheck !== false;
+  $("showDebug").checked = !!s.showDebug;
 });
 
 async function save() {
@@ -19,7 +20,7 @@ async function save() {
   // Calls go from the extension's background, so it needs permission for the app's address.
   const granted = await chrome.permissions.request({ origins: [`${origin}/*`] });
   if (!granted) { msg("Allow access to the app's address to connect."); return false; }
-  await chrome.storage.local.set({ appUrl, password: $("password").value, dgUrl: $("dgUrl").value.trim() || DEFAULTS.dgUrl, autoCheck: $("autoCheck").checked });
+  await chrome.storage.local.set({ appUrl, password: $("password").value, dgUrl: $("dgUrl").value.trim() || DEFAULTS.dgUrl, autoCheck: $("autoCheck").checked, showDebug: $("showDebug").checked });
   $("appUrl").value = appUrl;
   return true;
 }
