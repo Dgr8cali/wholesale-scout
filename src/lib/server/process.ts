@@ -62,6 +62,8 @@ interface Offer {
   category: string | null;
   /** Qogita: the product link (the variant FID is in it). */
   external_ref?: string | null;
+  /** False for an ASIN check with no cost (unit_cost_gbp is 0). */
+  cost_known?: boolean;
   [k: string]: unknown;
 }
 
@@ -96,6 +98,8 @@ export interface StoredInputs {
   sellers?: SellerView[] | null;
   /** Qogita supplier offers for a row that passed every gate (see qogita/offers). */
   qogita?: QogitaOffers | null;
+  /** No cost given (ASIN check): the most it can cost landed and clear the floors. */
+  maxLandedGbp?: number | null;
   /** The listing's pack against the supplier row's, when they differ (cost and MOQ scaled). */
   pack?: { listing: number; supplier: number; ratio: number } | null;
   notes: string[];
@@ -195,6 +199,7 @@ function context(row: Row, card: RateCard, rules: CategoryRule[], cfg: ProfileCo
     supplierMovGbp: q.baseMov * row.qogita!.fxRate,
   } : {
     unitCostGbp: Number(o.unit_cost_gbp),
+    costKnown: o.cost_known !== false,
     moq: o.moq,
     goodsVatRatePct: Number(s.vat_rate),
     supplierMovGbp: s.mov == null ? null : Number(s.mov) * Number(o.fx_rate),
@@ -273,6 +278,7 @@ function resultFields(row: Row, run: GateRun, cfg: ProfileConfig, ctx: ScreenCon
     v: 1, stage: row.stage, match: row.match, market: row.market, hazmat: row.hazmat,
     restriction: row.restriction, amazonFees: row.amazonFees, lookup: row.lookup, sellers: row.sellers, notes: row.dataNotes,
     qogita: row.qogita ? { ...row.qogita, ...pick(row.qogita, cfg) } : null,
+    maxLandedGbp: ctx.offer.costKnown === false ? run.maxLandedGbp ?? null : undefined,
     pack: ctx.pack && ctx.pack.ratio !== 1 ? { listing: ctx.pack.listing, supplier: ctx.pack.supplier, ratio: ctx.pack.ratio } : null,
   };
   return {
@@ -298,7 +304,7 @@ function resultFields(row: Row, run: GateRun, cfg: ProfileConfig, ctx: ScreenCon
       } : null,
       sell_price: r2(run.scoringPrice),
       price_source: run.priceSource,
-      landed_cost: e ? Math.round(e.landed.total * 10000) / 10000 : null,
+      landed_cost: e && ctx.offer.costKnown !== false ? Math.round(e.landed.total * 10000) / 10000 : null,
       profit: e?.profit ?? null,
       roi: e?.roi ?? null,
       margin: e?.margin ?? null,

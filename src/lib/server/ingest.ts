@@ -11,6 +11,8 @@ export interface IngestFile {
   mapping: ColumnMapping;
   fx: Fx;
   rows: NormalizedRow[];
+  /** Use a supplier of this name as it is (an ASIN check naming one): don't overwrite its VAT and currency. */
+  keepSupplier?: boolean;
 }
 
 export interface IngestPayload {
@@ -18,6 +20,8 @@ export interface IngestPayload {
   /** Run name; defaults to the file names. */
   name?: string | null;
   files: IngestFile[];
+  /** Extra run stats (an ASIN check keeps its input here for re-running). */
+  stats?: Record<string, unknown>;
 }
 
 function validate(p: IngestPayload) {
@@ -32,8 +36,8 @@ function validate(p: IngestPayload) {
     if (f.supplier.currency === "GBP" && f.fx.rate !== 1) throw new Error(`${f.fileName}: GBP must use an FX rate of 1`);
     if (!Array.isArray(f.rows)) throw new Error(`${f.fileName}: rows missing`);
     for (const r of f.rows) {
-      if (typeof r.ean !== "string" || !/^\d{8,14}$/.test(r.ean)) throw new Error(`${f.fileName} row ${r.sourceRow}: bad EAN`);
-      if (!(r.unitCostGbp > 0)) throw new Error(`${f.fileName} row ${r.sourceRow}: bad price`);
+      if (!r.productId && (typeof r.ean !== "string" || !/^\d{8,14}$/.test(r.ean))) throw new Error(`${f.fileName} row ${r.sourceRow}: bad EAN`);
+      if (!(r.unitCostGbp > 0) && !(r.costKnown === false && r.unitCostGbp === 0)) throw new Error(`${f.fileName} row ${r.sourceRow}: bad price`);
     }
   }
 }
@@ -51,7 +55,12 @@ export async function ingest(payload: IngestPayload): Promise<{ runId: string; r
   const supplierIds = new Map<string, { id: string; vatRate: number }>();
   for (const f of payload.files) {
     const s = f.supplier;
-    const row = must(
+    // A pasted list has no sheet layout to learn.
+    const learn = !!f.fingerprint;
+    const existing = f.keepSupplier
+      ? must(await d.from("suppliers").select("id, vat_rate").eq("name", s.name.trim()).maybeSingle(), "supplier") as { id: string; vat_rate: number } | null
+      : null;
+    const row = existing ?? must(
       await d.from("suppliers")
         .upsert({ name: s.name.trim(), vat_basis: s.vatBasis, vat_rate: s.vatRate, currency: s.currency, updated_at: new Date().toISOString() }, { onConflict: "name" })
         .select("id, vat_rate")
@@ -59,7 +68,7 @@ export async function ingest(payload: IngestPayload): Promise<{ runId: string; r
       "supplier",
     ) as { id: string; vat_rate: number };
     supplierIds.set(f.fileName, { id: row.id, vatRate: Number(row.vat_rate) });
-    must(
+    if (learn) must(
       await d.from("supplier_mappings").upsert(
         { supplier_id: row.id, header_fingerprint: f.fingerprint, headers: f.headers, mapping: f.mapping, updated_at: new Date().toISOString() },
         { onConflict: "supplier_id,header_fingerprint" },
@@ -69,7 +78,7 @@ export async function ingest(payload: IngestPayload): Promise<{ runId: string; r
   }
 
   // Products: one per EAN until matched; an EAN already matched to several ASINs gets an offer on each.
-  const eans = [...new Set(payload.files.flatMap((f) => f.rows.map((r) => r.ean)))];
+  const eans = [...new Set(payload.files.flatMap((f) => f.rows.filter((r) => !r.productId).map((r) => r.ean)))];
   const productsByEan = new Map<string, { id: string }[]>();
   for (const c of chunks(eans)) {
     const rows = must(await d.from("products").select("id, ean").in("ean", c), "products") as { id: string; ean: string }[];
@@ -77,7 +86,7 @@ export async function ingest(payload: IngestPayload): Promise<{ runId: string; r
   }
   const missing = eans.filter((e) => !productsByEan.has(e));
   const firstRowByEan = new Map<string, NormalizedRow>();
-  for (const f of payload.files) for (const r of f.rows) if (!firstRowByEan.has(r.ean)) firstRowByEan.set(r.ean, r);
+  for (const f of payload.files) for (const r of f.rows) if (!r.productId && !firstRowByEan.has(r.ean)) firstRowByEan.set(r.ean, r);
   for (const c of chunks(missing, 500)) {
     const inserted = must(
       await d.from("products").insert(c.map((ean) => ({ ean, title: firstRowByEan.get(ean)?.title, brand: firstRowByEan.get(ean)?.brand }))).select("id, ean"),
@@ -90,7 +99,7 @@ export async function ingest(payload: IngestPayload): Promise<{ runId: string; r
   const offerRows = payload.files.flatMap((f) => {
     const sup = supplierIds.get(f.fileName)!;
     return f.rows.flatMap((r) =>
-      (productsByEan.get(r.ean) ?? []).map((p) => ({
+      (r.productId ? [{ id: r.productId }] : productsByEan.get(r.ean) ?? []).map((p) => ({
         product_id: p.id,
         supplier_id: sup.id,
         unit_cost: r.unitCost,
@@ -106,6 +115,8 @@ export async function ingest(payload: IngestPayload): Promise<{ runId: string; r
         category: r.category,
         source_ref: `${f.fileName} row ${r.sourceRow}`,
         ...(r.externalRef ? { external_ref: r.externalRef } : {}),
+        // A check sets it on every row: in a bulk insert a missing column is sent as null, not its default.
+        ...(r.costKnown !== undefined ? { cost_known: r.costKnown } : {}),
         _vatRate: sup.vatRate,
       })),
     );
@@ -135,7 +146,7 @@ export async function ingest(payload: IngestPayload): Promise<{ runId: string; r
   const runFields = {
     profile_id: profile.id, profile_snapshot: profile.config, source, status: "pending", row_count: best.size,
     // Which version of the profile this run was screened with, for the run header.
-    stats: { profile: { id: profile.id, name: profile.name, savedAt: profile.updated_at ?? null, appliedAt: new Date().toISOString() } },
+    stats: { ...(payload.stats ?? {}), profile: { id: profile.id, name: profile.name, savedAt: profile.updated_at ?? null, appliedAt: new Date().toISOString() } },
   };
   let inserted = await d.from("runs").insert({ ...runFields, name: payload.name?.trim() || source }).select("id").single();
   // Before the run-names migration there's no name column: the file names still show.

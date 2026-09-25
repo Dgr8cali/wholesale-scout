@@ -3,6 +3,8 @@
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronsUpIcon, PauseIcon, PlayIcon } from "lucide-react";
+import { VerdictCard } from "@/components/check/VerdictCard";
+import type { VerdictCard as VerdictCardData } from "@/lib/server/check";
 import { toast } from "sonner";
 import { BulkBar } from "@/components/BulkBar";
 import { usePageCrumbs } from "@/components/Crumbs";
@@ -34,6 +36,8 @@ export default function RunPage() {
   const router = useRouter();
   const { confirm } = useDialogs();
   const [run, setRun] = useState<Run | null>(null);
+  // An ASIN check of one item: its verdict card, above the row.
+  const [card, setCard] = useState<VerdictCardData | null>(null);
   usePageCrumbs([{ label: "Runs", href: "/runs" }, { label: run ? run.name || run.source : "…" }]);
   const [results, setResults] = useState<Result[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -232,6 +236,12 @@ export default function RunPage() {
     api<{ profiles: { id: string; name: string }[] }>("/api/profiles").then((r) => setProfiles(r.profiles)).catch(() => {});
   }, []);
 
+  const isCheck = !!(run?.stats as { check?: unknown } | null | undefined)?.check && run?.row_count === 1;
+  useEffect(() => {
+    if (!isCheck) return;
+    api<{ card: VerdictCardData }>(`/api/runs/${id}/card`).then((r) => setCard(r.card)).catch(() => {});
+  }, [isCheck, id, results, progress?.done]);
+
   async function control(action: "pause" | "resume" | "keepaFirst") {
     try {
       await api(`/api/runs/${id}/control`, { method: "POST", json: { action } });
@@ -389,6 +399,8 @@ export default function RunPage() {
           }}>Delete</Button>
         </div>
       </div>
+
+      {card && <VerdictCard card={card} />}
 
       {progress && !progress.done && (
         <div className="panel space-y-2 p-4">

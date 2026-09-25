@@ -389,6 +389,35 @@ export function meetsFloors(e: Economics, f: Floors): boolean {
 }
 
 /**
+ * The most a unit can cost landed (goods, VAT and duty as they apply, inbound, prep) and
+ * still clear every floor at `price`; null if not even a free unit would. Profit only
+ * falls as cost rises, so a bisection on the ex-VAT unit cost finds it.
+ */
+export function maxLandedCost(price: number, item: FeeItem, card: RateCard, a: FeeAssumptions, floors: Floors, opts: FeeOptions = {}): number | null {
+  const passes = (c: number) => meetsFloors(economics(price, c, item, card, a, opts), floors);
+  if (!passes(0)) return null;
+  let lo = 0, hi = price;
+  while (hi - lo > 0.001) {
+    const mid = (lo + hi) / 2;
+    if (passes(mid)) lo = mid;
+    else hi = mid;
+  }
+  return Math.floor(landedCost(lo, item, a).total * 100) / 100;
+}
+
+/**
+ * The ex-VAT unit cost behind a landed cost: the inverse of landedCost. Null when the landed
+ * cost doesn't even cover inbound and prep.
+ */
+export function unitCostFromLanded(landedGbp: number, item: FeeItem, a: FeeAssumptions): number | null {
+  const goodsVatRate = item.goodsVatRatePct ?? a.vatRatePct;
+  const goods = landedGbp - a.inboundPerUnit - a.prepPerUnit;
+  if (!(goods > 0)) return null;
+  const perUnit = (1 + a.dutyPct / 100) * (a.vatRegistered ? 1 : 1 + goodsVatRate / 100);
+  return Math.round((goods / perUnit) * 10000) / 10000;
+}
+
+/**
  * The lowest sale price that clears every floor. Fees jump at referral and low-price
  * thresholds, so profit isn't monotonic in price: scan coarse, then refine to the penny.
  * Returns null if nothing up to `maxPrice` clears.

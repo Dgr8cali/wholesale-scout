@@ -8,6 +8,7 @@ import { salesPerMonth, yourShare } from "./sales";
 import {
   economics,
   hurdlePrice,
+  maxLandedCost,
   landedCost,
   sizeTier,
   type AmazonFeeOverride,
@@ -106,6 +107,11 @@ export interface ScreenContext {
   offer: {
     /** Per Amazon listing (a supplier single scaled to the listing's pack). */
     unitCostGbp: number;
+    /**
+     * False for an ASIN check with no cost: unitCostGbp is 0, the fee and budget gates are
+     * skipped, and the hurdle is the most it can cost landed (GateRun.maxLandedGbp).
+     */
+    costKnown?: boolean;
     moq: number | null;
     goodsVatRatePct: number;
     supplierMovGbp: number | null;
@@ -148,6 +154,8 @@ export interface GateRun {
   priceSource: string | null;
   economics: Economics | null;
   hurdlePrice: number | null;
+  /** No cost given: the most a unit can cost landed and clear the floors at the scoring price. */
+  maxLandedGbp?: number | null;
   ruleMatches: RuleMatch[];
 }
 
@@ -195,7 +203,7 @@ export function resolveScoringPrice(m: MarketData | null, p: ProfileConfig): { p
  */
 export function packNote(ctx: ScreenContext, p: ProfileConfig): string | null {
   const k = ctx.pack;
-  if (!k || k.ratio === 1) return null;
+  if (!k || k.ratio === 1 || ctx.offer.costKnown === false) return null;
   const l = landedCost(ctx.offer.unitCostGbp, { goodsVatRatePct: ctx.offer.goodsVatRatePct }, p.fees);
   const extras = [l.goodsVat > 0 && "VAT", l.duty > 0 && "duty", l.prep > 0 && "prep", l.inbound > 0 && "inbound"].filter(Boolean) as string[];
   const plus = extras.length ? ` (plus ${extras.length > 1 ? `${extras.slice(0, -1).join(", ")} and ${extras.at(-1)}` : extras[0]})` : "";
@@ -217,6 +225,7 @@ const skipped = (detail: string) => ({ status: "skipped" as const, detail });
 
 /** The first order for this row under the profile's line cap (see ./order). */
 export function firstOrder(ctx: ScreenContext, p: ProfileConfig, share: number | null): OrderPlan | null {
+  if (ctx.offer.costKnown === false) return null;
   const landed = landedCost(ctx.offer.unitCostGbp, { goodsVatRatePct: ctx.offer.goodsVatRatePct }, p.fees).total;
   return orderPlan({ lineCapGbp: (p.budget * p.gates.budgetFit.maxLineSharePct) / 100, landedGbp: landed, moq: ctx.offer.moq, sharePerMonth: share });
 }
@@ -259,6 +268,7 @@ const EVALUATORS: Record<GateId, Evaluator> = {
 
   budgetFit(ctx, p) {
     const g = p.gates.budgetFit;
+    if (ctx.offer.costKnown === false) return skipped("No cost given");
     const landed = landedCost(ctx.offer.unitCostGbp, { goodsVatRatePct: ctx.offer.goodsVatRatePct }, p.fees).total;
     const moq = Math.max(1, ctx.offer.moq ?? 1);
     const order = moq * landed;
@@ -442,6 +452,12 @@ const EVALUATORS: Record<GateId, Evaluator> = {
 
   fees(ctx, p, run) {
     const g = p.gates.fees;
+    if (ctx.offer.costKnown === false) {
+      if (run.scoringPrice == null) return skipped("No cost given, and no sell price yet");
+      return skipped(run.maxLandedGbp != null
+        ? `No cost given: clears the floors at ${money(run.maxLandedGbp)} landed or less (sells at ${money(run.scoringPrice)})`
+        : `No cost given: at ${money(run.scoringPrice)} not even a free unit clears the floors`);
+    }
     if (run.scoringPrice == null) return skipped("No sell price: see hurdle price");
     const e = run.economics!;
     if (e.profit == null) return { status: failAs(g.mode), detail: `No FBA fee: ${e.fees.tier?.name ?? "unknown size"}` };
@@ -486,7 +502,17 @@ export function runGates(ctx: ScreenContext, p: ProfileConfig, only?: GateId[]):
     goodsVatRatePct: ctx.offer.goodsVatRatePct,
   };
   const g = p.gates.fees;
-  if (!only || only.includes("fees")) {
+  if (ctx.offer.costKnown === false) {
+    if (!only || only.includes("fees")) {
+      const floors = { minProfit: g.minProfit, minRoiPct: g.minRoiPct, minMarginPct: g.minMarginPct };
+      if (price != null) {
+        // Fees don't depend on the cost; profit, ROI and margin do, so they stay unknown.
+        const e = economics(price, 0, item, ctx.card, p.fees, { date: ctx.now, amazon: ctx.amazonFees });
+        run.economics = { ...e, profit: null, roi: null, margin: null };
+        run.maxLandedGbp = maxLandedCost(price, item, ctx.card, p.fees, floors, { date: ctx.now, amazon: ctx.amazonFees });
+      }
+    }
+  } else if (!only || only.includes("fees")) {
     run.hurdlePrice = hurdlePrice(ctx.offer.unitCostGbp, item, ctx.card, p.fees, { minProfit: g.minProfit, minRoiPct: g.minRoiPct, minMarginPct: g.minMarginPct }, { date: ctx.now });
     if (price != null) run.economics = economics(price, ctx.offer.unitCostGbp, item, ctx.card, p.fees, { date: ctx.now, amazon: ctx.amazonFees });
   }

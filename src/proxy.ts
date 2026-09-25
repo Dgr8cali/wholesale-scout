@@ -21,7 +21,11 @@ export function proxy(req: NextRequest) {
       if (secret && auth.length === secret.length + 7 && timingSafeEqual(auth, `Bearer ${secret}`)) return NextResponse.next();
     }
   }
+  // The extension's CORS preflight carries no credentials; the request that follows does.
+  if (req.method === "OPTIONS" && req.nextUrl.pathname.startsWith("/api/extension/")) return NextResponse.next();
   const [scheme, encoded] = auth.split(" ");
+  // Scripts and the extension may send the password as a bearer token.
+  if (scheme === "Bearer" && encoded && encoded.length === password.length && timingSafeEqual(encoded, password)) return NextResponse.next();
   if (scheme === "Basic" && encoded) {
     const decoded = atob(encoded);
     const given = decoded.slice(decoded.indexOf(":") + 1);

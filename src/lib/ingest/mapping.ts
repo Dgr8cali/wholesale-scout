@@ -60,6 +60,10 @@ export interface NormalizedRow {
   eanValid: boolean;
   /** Where the row came from outside a sheet (Qogita: the product link). */
   externalRef?: string | null;
+  /** ASIN check: the product (already matched to its ASIN) this row is for, instead of by EAN. */
+  productId?: string;
+  /** ASIN check with no cost given: unitCost is 0 and the fee gates are skipped. */
+  costKnown?: boolean;
 }
 
 export interface RejectedRow {

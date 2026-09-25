@@ -1,8 +1,7 @@
 "use client";
 
 import {
-  ArchiveIcon, ArchiveRestoreIcon, ArrowDownIcon, ArrowUpIcon, ChevronRightIcon, ChevronsUpIcon, PauseIcon, PlayIcon, DownloadCloudIcon, DownloadIcon, ExternalLinkIcon,
-  FileSpreadsheetIcon, ImageIcon, ListChecksIcon, MoonIcon, MoreHorizontalIcon, PencilIcon, RefreshCwIcon, SearchIcon, StarIcon, Trash2Icon, UploadIcon,
+  ArchiveIcon, ArchiveRestoreIcon, ArrowDownIcon, ArrowUpIcon, ChevronRightIcon, ChevronsUpIcon, DownloadCloudIcon, DownloadIcon, ExternalLinkIcon, FileSpreadsheetIcon, ImageIcon, ListChecksIcon, MoonIcon, MoreHorizontalIcon, PauseIcon, PencilIcon, PlayIcon, RefreshCwIcon, ScanSearchIcon, SearchIcon, StarIcon, Trash2Icon, UploadIcon,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -57,6 +56,7 @@ function sourceKind(r: Run): { icon: typeof FileSpreadsheetIcon; label: string }
   if (/^Qogita ·/.test(r.source)) return { icon: DownloadCloudIcon, label: "Pulled from Qogita" };
   if (/^Favourites/.test(r.source) || /^Favourites/.test(r.name ?? "")) return { icon: StarIcon, label: "Re-screen of favourites" };
   if (/^Re-screen|selection/i.test(r.source)) return { icon: RefreshCwIcon, label: "Re-screen of selected rows" };
+  if (/^ASIN check/.test(r.source)) return { icon: ScanSearchIcon, label: "ASIN check" };
   return { icon: FileSpreadsheetIcon, label: "Uploaded file" };
 }
 

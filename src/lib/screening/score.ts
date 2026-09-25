@@ -82,7 +82,7 @@ export function paramValues(ctx: ScreenContext, run: GateRun, p: ProfileConfig, 
       : m?.topSellerBbSharePct != null ? (m.topSellerBbSharePct >= 90 ? 1 : 0) : null,
     variations: ctx.product.variationCount ?? null,
     warnings,
-    budgetShare: p.budget > 0 ? ((moq * landed) / p.budget) * 100 : null,
+    budgetShare: p.budget > 0 && ctx.offer.costKnown !== false ? ((moq * landed) / p.budget) * 100 : null,
     moq,
     deliveryDays: fit.deliveryDays,
     supplierRating: fit.supplierRating,
@@ -208,9 +208,11 @@ export function whyLine(ctx: ScreenContext, run: GateRun, score: number | null, 
   const clash = run.outcomes.some((o) => o.tags?.includes("TIER_MISMATCH")) ? tierDisagreement(ctx) : null;
 
   if (score == null) {
-    const need = [groups.margin.score == null ? "a sell price" : null, groups.demand.score == null ? "rank data" : null].filter(Boolean);
+    const noCost = ctx.offer.costKnown === false;
+    const need = [groups.margin.score == null ? (noCost ? "a cost" : "a sell price") : null, groups.demand.score == null ? "rank data" : null].filter(Boolean);
     let t = `Not scored: needs ${need.join(" and ") || "more data"}`;
     if (run.hurdlePrice != null) t += `. Clears the profit floors at ${money(run.hurdlePrice)} or more`;
+    if (noCost && run.maxLandedGbp != null) t += `. Clears the floors at ${money(run.maxLandedGbp)} landed or less`;
     const w = run.outcomes.filter((o) => o.status === "warn").map((o) => o.detail);
     if (w.length) t += `. Watch: ${w.join("; ")}`;
     return t + ".";

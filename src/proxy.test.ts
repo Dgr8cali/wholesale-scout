@@ -28,4 +28,13 @@ describe("password gate", () => {
     process.env.APP_PASSWORD = "pw";
     expect(proxy(req("/api/cron/qogita", "Bearer ")).status).toBe(401);
   });
+
+  it("takes the password as a bearer token, and lets the extension's preflight through", () => {
+    process.env.APP_PASSWORD = "pw";
+    expect(proxy(req("/api/extension/check?asin=B000000001", "Bearer pw")).status).toBe(200);
+    expect(proxy(req("/api/extension/check?asin=B000000001", "Bearer nope")).status).toBe(401);
+    expect(proxy(req("/api/extension/check")).status).toBe(401);
+    expect(proxy(new NextRequest("https://app.test/api/extension/check", { method: "OPTIONS" })).status).toBe(200);
+    expect(proxy(new NextRequest("https://app.test/api/runs", { method: "OPTIONS" })).status).toBe(401);
+  });
 });

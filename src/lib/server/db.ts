@@ -19,8 +19,8 @@ export function db(): SupabaseClient {
 
 /** Tests swap in an in-memory double. */
 export function __setDbForTests(c: unknown) {
+  seeding = null;
   client = c as SupabaseClient;
-  seeded = false;
 }
 
 /** Throw on a Supabase error, return the data otherwise. */
@@ -29,10 +29,20 @@ export function must<T>(res: { data: T; error: { message: string } | null }, wha
   return res.data as NonNullable<T>;
 }
 
-let seeded = false;
-/** First-run defaults: the three profiles, the compliance rules and the July 2026 rate card. */
-export async function ensureSeed(): Promise<void> {
-  if (seeded) return;
+let seeding: Promise<void> | null = null;
+/**
+ * First-run defaults: the three profiles, the compliance rules and the July 2026 rate card.
+ * Concurrent callers share one pass, so the defaults are never inserted twice.
+ */
+export function ensureSeed(): Promise<void> {
+  seeding ??= seed().catch((e) => {
+    seeding = null;
+    throw e;
+  });
+  return seeding;
+}
+
+async function seed(): Promise<void> {
   const d = db();
   const [profiles, rules, cards] = await Promise.all([
     d.from("profiles").select("id", { count: "exact", head: true }),
@@ -52,7 +62,6 @@ export async function ensureSeed(): Promise<void> {
       "seed rate card",
     );
   }
-  seeded = true;
 }
 
 export async function activeRateCard(): Promise<RateCard> {
