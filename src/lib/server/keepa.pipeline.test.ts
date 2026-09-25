@@ -171,8 +171,8 @@ describe("Keepa path", () => {
     await until(runId);
 
     // Stage 1 (history, 1 token each) for both; both pass everything else, so stage 2 (Buy Box, 3 each).
-    expect(k.asinCalls).toEqual([["B0060OMXUA", "B002XZLAWM"]]);
-    expect(k.bbCalls).toEqual([["B0060OMXUA", "B002XZLAWM"]]);
+    expect(k.asinCalls).toEqual([["B002XZLAWM", "B0060OMXUA"]]);
+    expect(k.bbCalls).toEqual([["B002XZLAWM", "B0060OMXUA"]]);
     expect(k.codeCalls).toEqual([]); // the catalog resolved both EANs
     expect(fake.tables.keepa_snapshots.map((x) => x.asin).sort()).toEqual(["B002XZLAWM", "B002XZLAWM", "B0060OMXUA", "B0060OMXUA"]);
     expect(fake.tables.keepa_snapshots[0]).toMatchObject({ monthly_sold: 300, keepa_rank_drops_30d: 70, fba_fee: 3.09, referral_fee_pct: 15, variation_count: null });
@@ -287,7 +287,7 @@ describe("Keepa path", () => {
     const r1 = await rescreenRun(runId);
     expect(r1.requeued).toBe(2);
     await until(runId);
-    expect(k.asinCalls).toEqual([["B0060OMXUA", "B002XZLAWM"]]);
+    expect(k.asinCalls).toEqual([["B002XZLAWM", "B0060OMXUA"]]);
     expect(tokens(runId)).toBe(11);
     expect(results(runId).every((r) => gate(r, "mirage")?.status === "pass")).toBe(true);
 
@@ -312,8 +312,8 @@ describe("Keepa path", () => {
     k.tokens = { tokensLeft: 4, refillInMs: 60_000, refillRate: 21 };
     const { runId } = await ingest({ files: [upload()] });
     const p1 = await processRun(runId, { budgetMs: 1_000 });
-    expect(k.asinCalls).toEqual([["B0060OMXUA", "B002XZLAWM"]]);
-    expect(k.bbCalls).toEqual([["B0060OMXUA"]]);
+    expect(k.asinCalls).toEqual([["B002XZLAWM", "B0060OMXUA"]]);
+    expect(k.bbCalls).toEqual([["B002XZLAWM"]]);
     expect(p1.done).toBe(false);
     expect(p1.waiting).toEqual({ amazon: 0, keepa: 1 });
     expect(Date.parse(p1.keepaResumeAt!)).toBeGreaterThan(Date.now() + 50_000);
@@ -329,7 +329,7 @@ describe("Keepa path", () => {
     k.tokens = { tokensLeft: 300, refillInMs: 60_000, refillRate: 21 };
     const p2 = await processRun(runId, { budgetMs: 1_000 });
     expect(p2.done).toBe(true);
-    expect(k.bbCalls).toEqual([["B0060OMXUA"], ["B002XZLAWM"]]);
+    expect(k.bbCalls).toEqual([["B002XZLAWM"], ["B0060OMXUA"]]);
     expect(results(runId).every((r) => (r.inputs as { market: { hasHistory: boolean } }).market.hasHistory)).toBe(true);
   });
 
@@ -389,9 +389,17 @@ describe("Keepa path", () => {
     const { runId } = await ingest({ files: [upload()] });
     await until(runId);
     expect(results(runId).every((r) => r.failed_gate === "demand")).toBe(true);
-    expect(k.asinCalls).toEqual([["B0060OMXUA", "B002XZLAWM"]]);
+    expect(k.asinCalls).toEqual([["B002XZLAWM", "B0060OMXUA"]]);
     expect(k.bbCalls).toEqual([]);
     expect(tokens(runId)).toBe(2);
+  });
+
+  it("spends scarce Keepa tokens best-first: the higher rate-card profit at today's price goes first", async () => {
+    // Same Buy Box (£23.55) for both; B002XZLAWM costs £5.50 against £6.00, so it's the more profitable.
+    k.tokens = { tokensLeft: 1, refillInMs: 60_000, refillRate: 21 };
+    const { runId } = await ingest({ files: [upload()] });
+    await processRun(runId, { budgetMs: 1_000 });
+    expect(k.asinCalls).toEqual([["B002XZLAWM"]]);
   });
 
   it("lets one worker hold a run at a time", async () => {

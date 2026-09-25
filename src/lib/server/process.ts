@@ -1,6 +1,6 @@
 import "server-only";
 import { brandKey } from "../brands";
-import { computeFees, referralCategoryFor } from "../fees/engine";
+import { computeFees, economics, referralCategoryFor } from "../fees/engine";
 import type { RateCard } from "../fees/rateCard";
 import { estimateEta, type Eta, type RunStats } from "../eta";
 import { addDailyTokens } from "../keepaLedger";
@@ -776,6 +776,18 @@ const BATCH = { lookup: 100, keepa: 100, account: 60 };
 const KEEPA_HISTORY_TOKENS = 1;
 const KEEPA_BUYBOX_TOKENS = 3;
 
+/**
+ * The Keepa queue's order: rate-card profit at the current price, best first, so scarce tokens
+ * go to the likeliest winners. Rows without a price go last.
+ */
+function keepaPriority(row: Row, card: RateCard, rules: CategoryRule[], cfg: ProfileConfig, approved: Approved): number {
+  const price = row.market?.currentBuyBox;
+  if (price == null || !(price > 0)) return -Infinity;
+  const ctx = context(row, card, rules, cfg, approved);
+  const item = { referralCategory: ctx.product.referralCategory, dimsCm: ctx.product.dimsCm, weightG: ctx.product.weightG, goodsVatRatePct: ctx.offer.goodsVatRatePct };
+  return economics(price, ctx.offer.unitCostGbp, item, card, cfg.fees, { date: ctx.now }).profit ?? -Infinity;
+}
+
 /** Rows that passed every other gate on stage-1 history and now need the Buy Box data. */
 const wantsBuyBox = (row: Row, keepaLive: boolean) => keepaLive && !!row.match?.asin && !!row.market?.hasHistory && row.market.buyBoxFetched === false;
 
@@ -920,6 +932,10 @@ export async function processRun(runId: string, opts: { budgetMs?: number } = {}
       const a = q.lookup.splice(0, BATCH.lookup);
       const c = q.account.splice(0, BATCH.account);
       const keepaReady: boolean = keepa.available && (keepaWaitUntil == null || Date.now() >= keepaWaitUntil);
+      if (keepaReady && q.keepa.length > 1) {
+        const score = new Map(q.keepa.map((r) => [r, keepaPriority(r, card, rules, cfg, approved)]));
+        q.keepa.sort((x, y) => score.get(y)! - score.get(x)!);
+      }
       const b: Row[] = keepaReady ? q.keepa.splice(0, BATCH.keepa) : [];
       if (!a.length && !b.length && !c.length) {
         // Only rows waiting on Keepa tokens: wait for the refill inside the budget.
