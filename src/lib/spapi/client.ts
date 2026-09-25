@@ -13,6 +13,7 @@ import type {
   CompetitivePrice,
   FeesEstimate,
   LookupAttempt,
+  ListingOffers,
   LookupTrace,
   Restriction,
   SpApiConfig,
@@ -54,6 +55,7 @@ export const RATE_LIMITS: Record<string, { rate: number; burst: number }> = {
   feesBatch: { rate: 0.5, burst: 1 }, // getMyFeesEstimates (20 per request)
   restrictions: { rate: 5, burst: 10 }, // getListingsRestrictions
   pricing: { rate: 0.5, burst: 1 }, // getCompetitivePricing (20 per request)
+  offersBatch: { rate: 0.1, burst: 1 }, // getItemOffersBatch (20 per request)
 };
 
 interface Bucket {
@@ -367,6 +369,28 @@ export class SpApiClient {
   }
 
   /** getCompetitivePricing — current Buy Box and offer count, up to 20 ASINs per call. */
+  /**
+   * Who sells each listing now (new condition), 20 ASINs a request: whether Amazon holds an
+   * offer, how many offers are FBA, and the Buy Box. Free, and enough to rule rows out
+   * before any Keepa token.
+   */
+  async getItemOffersBatch(asins: string[]): Promise<Map<string, ListingOffers>> {
+    const out = new Map<string, ListingOffers>();
+    for (let i = 0; i < asins.length; i += 20) {
+      const chunk = asins.slice(i, i + 20);
+      const res = await this.request<{ responses?: unknown[] }>("offersBatch", "POST", "/batches/products/pricing/v0/itemOffers", {
+        body: {
+          requests: chunk.map((asin) => ({
+            uri: `/products/pricing/v0/items/${asin}/offers`, method: "GET",
+            MarketplaceId: this.config.marketplaceId, ItemCondition: "New", CustomerType: "Consumer",
+          })),
+        },
+      });
+      for (const o of parseItemOffers(res.responses ?? [])) out.set(o.asin, o);
+    }
+    return out;
+  }
+
   async getCompetitivePricing(asins: string[]): Promise<Map<string, CompetitivePrice>> {
     const out = new Map<string, CompetitivePrice>();
     for (let i = 0; i < asins.length; i += 20) {
@@ -378,6 +402,34 @@ export class SpApiClient {
     }
     return out;
   }
+}
+
+/** Amazon.co.uk's own seller ID. */
+export const AMAZON_UK_SELLER_ID = "A3P5ROKL5A1OLE";
+
+/** Batch getItemOffers responses into who's selling each ASIN; failed entries are left out. */
+export function parseItemOffers(responses: unknown[]): ListingOffers[] {
+  const out: ListingOffers[] = [];
+  for (const r of responses as { status?: { statusCode?: number }; body?: { payload?: Record<string, unknown> } }[]) {
+    const p = r.body?.payload as {
+      ASIN?: string;
+      Summary?: { TotalOfferCount?: number; NumberOfOffers?: { condition?: string; fulfillmentChannel?: string; OfferCount?: number }[]; BuyBoxPrices?: { condition?: string; LandedPrice?: { Amount?: number } }[] };
+      Offers?: { SellerId?: string }[];
+    } | undefined;
+    if (!p?.ASIN || (r.status?.statusCode && r.status.statusCode >= 300)) continue;
+    const s = p.Summary ?? {};
+    const isNew = (c?: string) => !c || c.toLowerCase() === "new";
+    const fba = (s.NumberOfOffers ?? []).filter((n) => isNew(n.condition) && n.fulfillmentChannel === "Amazon").reduce((a, n) => a + (n.OfferCount ?? 0), 0);
+    const bb = (s.BuyBoxPrices ?? []).find((b) => isNew(b.condition))?.LandedPrice?.Amount;
+    out.push({
+      asin: p.ASIN,
+      amazon: (p.Offers ?? []).some((o) => o.SellerId === AMAZON_UK_SELLER_ID),
+      fbaOffers: s.NumberOfOffers ? fba : null,
+      totalOffers: s.TotalOfferCount ?? null,
+      buyBox: bb != null ? Number(bb) : null,
+    });
+  }
+  return out;
 }
 
 /** Identifier variants to try, one at a time, for an EAN a batch didn't resolve. */

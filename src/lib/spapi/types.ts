@@ -65,6 +65,18 @@ export interface CompetitivePrice {
   salesRank: number | null;
 }
 
+/** Who's selling a listing now, from getItemOffers (new condition). */
+export interface ListingOffers {
+  asin: string;
+  /** Amazon itself holds an offer. */
+  amazon: boolean;
+  /** Offers fulfilled by Amazon (FBA sellers, Amazon's own offer included when it has one). */
+  fbaOffers: number | null;
+  totalOffers: number | null;
+  /** Landed Buy Box price, GBP. */
+  buyBox: number | null;
+}
+
 /** One catalog query made while resolving an EAN. */
 export interface LookupAttempt {
   identifiersType: "EAN" | "UPC" | "GTIN";

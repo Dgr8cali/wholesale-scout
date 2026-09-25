@@ -11,8 +11,10 @@ import { FakeDb } from "./fakeDb";
 import { ingest } from "./ingest";
 import { processRun, rescreenRun } from "./process";
 import { ukDay } from "../keepaLedger";
+import { withDefaults } from "../screening/config";
 
 const k = vi.hoisted(() => ({
+  offers: {} as Record<string, { amazon: boolean; fbaOffers: number | null; totalOffers: number | null; buyBox: number | null }>,
   live: true, asinCalls: [] as string[][], codeCalls: [] as string[][], sellerCalls: [] as string[][],
   tokens: { tokensLeft: 1000, refillInMs: 60_000, refillRate: 21 },
 }));
@@ -100,6 +102,9 @@ vi.mock("../spapi/client", async (orig) => {
           traces: new Map(eans.map((e) => [e, { outcome: "matched", attempts: [] }])),
         };
       },
+      async getItemOffersBatch(asins: string[]) {
+        return new Map(asins.filter((a) => k.offers[a]).map((a) => [a, { asin: a, ...k.offers[a] }]));
+      },
       async getCompetitivePricing(asins: string[]) {
         return new Map(asins.map((a) => [a, { asin: a, buyBox: 23.55, newOffers: 7, salesRank: 9000 }]));
       },
@@ -152,6 +157,7 @@ describe("Keepa path", () => {
     k.asinCalls.length = 0;
     k.codeCalls.length = 0;
     k.sellerCalls.length = 0;
+    k.offers = {};
     k.tokens = { tokensLeft: 1000, refillInMs: 60_000, refillRate: 21 };
     vi.spyOn(console, "error").mockImplementation(() => {});
   });
@@ -331,6 +337,22 @@ describe("Keepa path", () => {
     const r2 = results(second.runId)[0];
     expect(r2.failed_gate).toBe("budgetFit");
     expect(gate(r2, "budgetFit")!.detail).toMatch(/Supplier minimum order £12,900\.00 is over the £1,000\.00 budget|Supplier minimum order £12900\.00 is over the £1000\.00 budget/);
+  });
+
+  it("rules rows out from current offers before spending any Keepa token", async () => {
+    // Profile with Amazon presence and competition set to fail.
+    const cfg = withDefaults(null);
+    fake.tables.profiles = [{ id: "p-fail", name: "Fail on presence", is_default: true, config: { ...cfg, gates: { ...cfg.gates, amazonPresence: { mode: "fail", days: 180 }, competition: { mode: "fail", minSellers: 2, maxSellers: 8, maxBbSharePct: 60 } } } }];
+    k.offers = { B0060OMXUA: { amazon: true, fbaOffers: 3, totalOffers: 5, buyBox: 23.55 }, B002XZLAWM: { amazon: false, fbaOffers: 12, totalOffers: 14, buyBox: 20 } };
+    const { runId } = await ingest({ files: [upload()] });
+    await until(runId);
+    const byAsin = (a: string) => results(runId).find((r) => (r.inputs as { match: { asin: string } }).match.asin === a)!;
+    expect(byAsin("B0060OMXUA").failed_gate).toBe("amazonPresence");
+    expect(gate(byAsin("B0060OMXUA"), "amazonPresence")!.detail).toBe("Amazon is selling now (current offers)");
+    expect(byAsin("B002XZLAWM").failed_gate).toBe("competition");
+    expect(gate(byAsin("B002XZLAWM"), "competition")!.detail).toMatch(/12 sellers, over 8/);
+    expect(k.asinCalls).toEqual([]);
+    expect(tokens(runId)).toBe(0);
   });
 
   it("lets one worker hold a run at a time", async () => {

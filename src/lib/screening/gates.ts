@@ -63,6 +63,8 @@ export interface MarketData {
   packageDims?: Dims | null;
   packageWeightG?: number | null;
   variationCount?: number | null;
+  /** From SP-API's current offers before any Keepa history: Amazon holds an offer now. */
+  amazonNow?: boolean | null;
   // From the Keepa history, for dormant listings (see ./dormant).
   lastBuyBox12m?: number | null;
   lastBuyBoxAt?: string | null;
@@ -279,7 +281,8 @@ const EVALUATORS: Record<GateId, Evaluator> = {
   amazonPresence(ctx, p) {
     const g = p.gates.amazonPresence;
     const m = ctx.market;
-    if (!m?.hasHistory) return skipped("Needs Keepa history");
+    // Before Keepa: SP-API's current offers already show Amazon selling, whatever the history says.
+    if (!m?.hasHistory) return m?.amazonNow ? { status: failAs(g.mode), detail: "Amazon is selling now (current offers)", tags: ["AMAZON"] } : skipped("Needs Keepa history");
     if (m.amazonLastSeenDays != null && m.amazonLastSeenDays <= g.days) {
       const when = m.amazonLastSeenDays === 0 ? "is selling now" : `sold ${m.amazonLastSeenDays} days ago`;
       return { status: failAs(g.mode), detail: `Amazon ${when}`, tags: ["AMAZON"] };

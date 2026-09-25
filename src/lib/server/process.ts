@@ -15,6 +15,7 @@ import { resolveScoringPrice, runGates, verdictOf, type GateRun, type MarketData
 import type { CategoryRule } from "../screening/rules";
 import { winScore } from "../screening/score";
 import { getSpApi, type CatalogMatch, type CompetitivePrice, type LookupTrace } from "../spapi/client";
+import type { ListingOffers } from "../spapi/types";
 import { activeRateCard, chunks, db, loadProfile, loadRules, must } from "./db";
 import { productKey, waiversFor } from "./overrides";
 
@@ -992,6 +993,22 @@ async function finishAll(items: { row: Row; run: GateRun; ctx: ScreenContext }[]
  * under the "lower of current and median" rule the price can't rise above today's Buy Box,
  * so a Buy Box under the floor fails whatever the median; under "current" either end is final.
  */
+/**
+ * Gates that current offers (SP-API, free) already settle, so the row needn't wait for Keepa:
+ * Amazon selling now, and an FBA seller count outside the range, each only when its gate is
+ * set to fail; and a Buy Box that fails the price band whatever the history says.
+ */
+function certainBeforeKeepa(row: Row, cfg: ProfileConfig): GateId[] {
+  const m = row.market;
+  if (!m || m.hasHistory) return [];
+  const out: GateId[] = [];
+  if (earlyPriceFail(row, cfg)) out.push("priceBand");
+  if (cfg.gates.amazonPresence.mode === "fail" && m.amazonNow) out.push("amazonPresence");
+  const c = cfg.gates.competition;
+  if (c.mode === "fail" && m.fbaOffers != null && (m.fbaOffers < c.minSellers || m.fbaOffers > c.maxSellers)) out.push("competition");
+  return out;
+}
+
 function earlyPriceFail(row: Row, cfg: ProfileConfig): boolean {
   const g = cfg.gates.priceBand;
   const bb = row.market?.currentBuyBox;
@@ -1070,17 +1087,40 @@ async function stageLookup(rows: Row[], env: StageEnv): Promise<StageOut & { add
       for (const r of noHistory) r.dataNotes.push(`Pricing lookup failed: ${(e as Error).message}.`);
     }
   }
+  // Rows headed for Keepa: who's selling now (free) settles some gates first.
+  let offers = new Map<string, ListingOffers>();
+  const bound = keepa.available ? noHistory.filter((r) => r.match?.asin) : [];
+  if (spapi && bound.length) {
+    try {
+      offers = await spapi.getItemOffersBatch([...new Set(bound.map((r) => r.match!.asin!))]);
+    } catch (e) {
+      console.error(`[spapi] item offers failed: ${(e as Error).message}`);
+    }
+  }
   const next: Row[] = [];
   for (const row of live) {
     const asin = row.match?.asin;
     if (asin) {
       const snap = cached.get(asin);
       row.market = snap ? marketFromKeepa(snap) : marketFromSpApi(pricing.get(asin), row.product.sales_rank);
+      const o = offers.get(asin);
+      if (o && row.market && !row.market.hasHistory) {
+        row.market = {
+          ...row.market,
+          amazonNow: o.amazon,
+          // SP-API counts Amazon's own offer as FBA; the competition range is about other sellers.
+          fbaOffers: o.fbaOffers != null ? Math.max(0, o.fbaOffers - (o.amazon ? 1 : 0)) : row.market.fbaOffers,
+          offersNow: o.totalOffers ?? row.market.offersNow,
+          currentBuyBox: o.buyBox ?? row.market.currentBuyBox,
+        };
+      }
     }
     row.stage = "enriched";
     const ctx = context(row, card, rules, cfg, approved);
-    // No listing, or a price that fails whatever Keepa says: done before any Keepa token.
-    const early = runGates(ctx, cfg, earlyPriceFail(row, cfg) ? [...pre, "matchQuality", "priceBand"] : [...pre, "matchQuality"]);
+    // No listing, or what current offers already settle: done before any Keepa token.
+    const certain = certainBeforeKeepa(row, cfg);
+    const early = runGates(ctx, cfg, GATE_ORDER.filter((g) => [...pre, "matchQuality", ...certain].includes(g)));
+    if (early.failedGate && certain.includes(early.failedGate)) row.notes.push("Ruled out from current offers before any Keepa token.");
     if (early.failedGate) {
       done.push({ row, run: early, ctx });
       continue;
