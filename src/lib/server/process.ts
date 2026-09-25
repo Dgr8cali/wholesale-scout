@@ -3,6 +3,7 @@ import { brandKey } from "../brands";
 import { computeFees, referralCategoryFor } from "../fees/engine";
 import type { RateCard } from "../fees/rateCard";
 import { estimateEta, type Eta, type RunStats } from "../eta";
+import { addDailyTokens } from "../keepaLedger";
 import { getKeepa, type KeepaProduct, type KeepaResponseMeta, type KeepaSummary, type KeepaTokens, type OnKeepaResponse, type SellerProfile } from "../keepa/client";
 import { trimSeries } from "../keepa/summarize";
 import { GATE_ORDER, withDefaults, type GateId, type ProfileConfig } from "../screening/config";
@@ -733,7 +734,11 @@ export async function processRun(runId: string, opts: { budgetMs?: number } = {}
     const [card, rules, approved] = await Promise.all([activeRateCard(), loadRules(), approvedBrands()]);
     const spapi = getSpApi();
     const keepa = getKeepa();
-    const recordTokens = (meta: KeepaResponseMeta) => addRunTokens(runId, meta.tokensConsumed);
+    const recordTokens = (meta: KeepaResponseMeta) => {
+      // Saved with the run's stats after each batch; the dashboard sums today's across runs.
+      stats.keepaByDay = addDailyTokens(stats.keepaByDay, meta.tokensConsumed);
+      return addRunTokens(runId, meta.tokensConsumed);
+    };
     const env: StageEnv = { runId, cfg, card, rules, approved, spapi, keepa, recordTokens };
 
     const pending: PendingRow[] = [];

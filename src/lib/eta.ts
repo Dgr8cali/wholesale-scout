@@ -8,6 +8,8 @@ export interface RunStats {
   amazonPerMin?: number | null;
   /** Keepa's own figures, as last read by the Keepa stage. */
   keepa?: { tokensLeft: number; refillRate: number; refillInMs: number; at: string } | null;
+  /** Keepa tokens this run spent per UK day (see keepaLedger). */
+  keepaByDay?: Record<string, number> | null;
 }
 
 export interface Eta {

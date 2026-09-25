@@ -10,6 +10,7 @@ import { __setDbForTests } from "./db";
 import { FakeDb } from "./fakeDb";
 import { ingest } from "./ingest";
 import { processRun, rescreenRun } from "./process";
+import { ukDay } from "../keepaLedger";
 
 const k = vi.hoisted(() => ({
   live: true, asinCalls: [] as string[][], codeCalls: [] as string[][], sellerCalls: [] as string[][],
@@ -233,6 +234,14 @@ describe("Keepa path", () => {
     expect(p2.done).toBe(true);
     expect(k.asinCalls).toEqual([["B0060OMXUA"], ["B002XZLAWM"]]);
     expect(results(runId).every((r) => (r.inputs as { market: { hasHistory: boolean } }).market.hasHistory)).toBe(true);
+  });
+
+  it("records the run's Keepa tokens against today for the dashboard", async () => {
+    const { runId } = await ingest({ files: [upload()] });
+    await until(runId);
+    const stats = fake.tables.runs.find((r) => r.id === runId)!.stats as { keepaByDay: Record<string, number> };
+    expect(tokens(runId)).toBeGreaterThan(0);
+    expect(stats.keepaByDay).toEqual({ [ukDay()]: tokens(runId) });
   });
 
   it("lets one worker hold a run at a time", async () => {
