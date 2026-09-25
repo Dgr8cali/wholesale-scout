@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   applyMapping,
+  currencyFromHeader,
   detectHeaderRow,
   guessMapping,
   headerFingerprint,
@@ -82,5 +83,27 @@ describe("applyMapping", () => {
     const r = applyMapping(sheet, { ...mapping, pricePer: "pack" }, { vatBasis: "ex_vat", vatRate: 20, currency: "GBP" }, { rate: 1, date: "2026-09-25" });
     expect(r.rows[0].unitCost).toBe(3);
     expect(r.rows[0].unitCostGbp).toBe(3);
+  });
+});
+
+describe("currency from the price header", () => {
+  it("reads codes and symbols", () => {
+    expect(currencyFromHeader("Price (€)")).toBe("EUR");
+    expect(currencyFromHeader("Prijs EUR")).toBe("EUR");
+    expect(currencyFromHeader("eur_price")).toBe("EUR");
+    expect(currencyFromHeader("Price in euros")).toBe("EUR");
+    expect(currencyFromHeader("Unit cost USD")).toBe("USD");
+    expect(currencyFromHeader("US$ each")).toBe("USD");
+    expect(currencyFromHeader("Price $")).toBe("USD");
+    expect(currencyFromHeader("CA$ price")).toBe("CAD");
+    expect(currencyFromHeader("Trade £")).toBe("GBP");
+    expect(currencyFromHeader("Cena zł")).toBe("PLN");
+  });
+
+  it("returns null when no currency is named, without false hits inside words", () => {
+    expect(currencyFromHeader("Trade price")).toBeNull();
+    expect(currencyFromHeader("Unit cost")).toBeNull();
+    expect(currencyFromHeader("Europa range")).toBeNull();
+    expect(currencyFromHeader("")).toBeNull();
   });
 });

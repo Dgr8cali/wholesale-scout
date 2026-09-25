@@ -231,3 +231,25 @@ export function applyMapping(
 const round4 = (n: number) => Math.round(n * 10000) / 10000;
 
 export const CURRENCIES = ["GBP", "EUR", "USD", "PLN", "CHF", "SEK", "DKK", "CZK", "HUF", "CNY", "HKD", "JPY", "CAD", "AUD", "TRY", "AED"] as const;
+
+/**
+ * Currency named in a price column's header: "Price (€)", "Unit cost USD", "Prijs EUR",
+ * "US$ each". Codes win over symbols; a bare "$" is read as USD. null when none is named.
+ */
+export function currencyFromHeader(header: string | null | undefined): (typeof CURRENCIES)[number] | null {
+  const h = (header ?? "").trim();
+  if (!h) return null;
+  for (const code of CURRENCIES) if (new RegExp(`(^|[^A-Za-z])${code}([^A-Za-z]|$)`, "i").test(h)) return code;
+  if (/\beuros?\b/i.test(h)) return "EUR";
+  const symbols: [RegExp, (typeof CURRENCIES)[number]][] = [
+    [/€/, "EUR"],
+    [/£/, "GBP"],
+    [/zł/i, "PLN"],
+    [/HK\$/i, "HKD"],
+    [/(CA|C)\$/, "CAD"],
+    [/(AU|A)\$/, "AUD"],
+    [/\$/, "USD"],
+  ];
+  for (const [re, code] of symbols) if (re.test(h)) return code;
+  return null;
+}

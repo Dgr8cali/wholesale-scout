@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import {
   applyMapping,
+  currencyFromHeader,
   CURRENCIES,
   detectHeaderRow,
   guessMapping,
@@ -32,6 +33,8 @@ interface FileState {
   supplier: { name: string; vatBasis: "ex_vat" | "inc_vat"; vatRate: number; currency: string };
   fx: { rate: number; date: string; source: string };
   fxError: string | null;
+  /** Set when the currency was read from the price column's header. */
+  currencyHint: string | null;
 }
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -89,7 +92,23 @@ export default function UploadPage() {
     } catch {
       // No saved layout, or not connected: fall back to guessing.
     }
-    return { ...f, mapping: { headerRow, columns: guessMapping(headers), pricePer: "unit" }, remembered: null };
+    const columns = guessMapping(headers);
+    const fresh: FileState = { ...f, mapping: { headerRow, columns, pricePer: "unit" }, remembered: null };
+    return withHeaderCurrency(fresh, columns.unitPrice);
+  }
+
+  /** Pre-select the currency (and its ECB rate) named in the price column's header. */
+  async function withHeaderCurrency(f: FileState, priceHeader: string | undefined): Promise<FileState> {
+    const code = currencyFromHeader(priceHeader);
+    if (!code) return { ...f, currencyHint: null };
+    const hint = `Currency from the \u201c${priceHeader}\u201d column header`;
+    if (code === "GBP") return { ...f, supplier: { ...f.supplier, currency: "GBP" }, fx: { rate: 1, date: today(), source: "fixed" }, fxError: null, currencyHint: hint };
+    try {
+      const fx = await fetchFx(code);
+      return { ...f, supplier: { ...f.supplier, currency: code }, fx, fxError: null, currencyHint: hint };
+    } catch (e) {
+      return { ...f, supplier: { ...f.supplier, currency: code }, fx: { rate: 0, date: today(), source: "" }, fxError: (e as Error).message, currencyHint: hint };
+    }
   }
 
   async function addFiles(list: FileList | null) {
@@ -113,6 +132,7 @@ export default function UploadPage() {
           supplier: { name: file.name.replace(/\.[^.]+$/, ""), vatBasis: "ex_vat", vatRate: 20, currency: "GBP" },
           fx: { rate: 1, date: today(), source: "fixed" },
           fxError: null,
+          currencyHint: null,
         };
         const ready = await loadLayout(base);
         setFiles((fs) => [...fs.filter((f) => f.key !== ready.key), ready]);
@@ -123,7 +143,7 @@ export default function UploadPage() {
   }
 
   async function setCurrency(key: string, currency: string) {
-    update(key, (f) => ({ ...f, supplier: { ...f.supplier, currency }, fx: { rate: currency === "GBP" ? 1 : f.fx.rate, date: today(), source: currency === "GBP" ? "fixed" : "…" }, fxError: null }));
+    update(key, (f) => ({ ...f, supplier: { ...f.supplier, currency }, fx: { rate: currency === "GBP" ? 1 : f.fx.rate, date: today(), source: currency === "GBP" ? "fixed" : "…" }, fxError: null, currencyHint: null }));
     if (currency === "GBP") return;
     try {
       const fx = await fetchFx(currency);
@@ -249,6 +269,7 @@ export default function UploadPage() {
                     <input className="input num" type="number" step="any" disabled={f.supplier.currency === "GBP"} value={f.fx.rate}
                       onChange={(e) => update(f.key, (x) => ({ ...x, fx: { rate: Number(e.target.value), date: today(), source: "entered by hand" } }))} />
                     {f.fxError && <span className="text-xs text-fail">{f.fxError}</span>}
+                    {f.currencyHint && !f.fxError && <span className="text-xs text-accent">{f.currencyHint}</span>}
                   </label>
                 </div>
                 <p className="text-xs text-muted">VAT basis and currency are saved with the supplier and applied to every future file from them. Costs are stored in GBP ex-VAT at this rate.</p>
@@ -266,7 +287,14 @@ export default function UploadPage() {
                     <label key={fd.key} className="space-y-1">
                       <span className="label">{fd.label}{fd.required ? " *" : ""}</span>
                       <select className="input" value={f.mapping.columns[fd.key] ?? ""}
-                        onChange={(e) => update(f.key, (x) => ({ ...x, mapping: { ...x.mapping, columns: { ...x.mapping.columns, [fd.key as FieldKey]: e.target.value || undefined } } }))}>
+                        onChange={async (e) => {
+                          const value = e.target.value || undefined;
+                          update(f.key, (x) => ({ ...x, mapping: { ...x.mapping, columns: { ...x.mapping.columns, [fd.key as FieldKey]: value } } }));
+                          if (fd.key === "unitPrice" && currencyFromHeader(value)) {
+                            const next = await withHeaderCurrency(f, value);
+                            update(f.key, (x) => ({ ...x, supplier: { ...x.supplier, currency: next.supplier.currency }, fx: next.fx, fxError: next.fxError, currencyHint: next.currencyHint }));
+                          }
+                        }}>
                         <option value="">—</option>
                         {headers.map((h) => <option key={h}>{h}</option>)}
                       </select>
