@@ -201,9 +201,27 @@ export function defaultProfiles(): { name: string; is_default: boolean; config: 
     rules: { ...allRules("warn"), fragrance: "fail", liquid: "fail", aerosol: "fail", cosmetic: "fail", supplement: "fail", chemical: "fail" },
   };
 
+  // The default: the settings of the "First order" profile in use. Lines of at most 25% of the
+  // budget, sell price £12–35, 2–8 sellers with no one over 60% of the Buy Box, Amazon absent
+  // 180 days, 10+ rank drops and 8+ a month for you; fragrance, aerosol, supplement, food and
+  // under-3s toy fail compliance, liquids only above 500 ml; floors £2.50, 25% ROI, 12% margin.
+  const first = clone(DEFAULT_PROFILE);
+  first.gates.priceBand = { ...first.gates.priceBand, max: 35 };
+  first.gates.compliance = {
+    mode: "fail",
+    rules: { ...allRules("warn"), fragrance: "fail", aerosol: "fail", supplement: "fail", food: "fail", under3sToy: "fail" },
+    liquidAboveMl: 500,
+  };
+  first.gates.budgetFit = { ...first.gates.budgetFit, maxLineSharePct: 25 };
+  first.gates.amazonPresence = { ...first.gates.amazonPresence, days: 180 };
+  first.gates.competition = { ...first.gates.competition, minSellers: 2, maxSellers: 8, maxBbSharePct: 60 };
+  first.gates.demand = { ...first.gates.demand, minRankDrops30d: 10, maxAvgRank90d: 100_000, minSharePerMonth: 8 };
+  first.gates.fees = { ...first.gates.fees, minProfit: 2.5, minRoiPct: 25, minMarginPct: 12 };
+
   return [
+    { name: "First order", is_default: true, config: first },
     { name: "Strict", is_default: false, config: strict },
-    { name: "Test order", is_default: true, config: test },
+    { name: "Test order", is_default: false, config: test },
     { name: "Dry goods only", is_default: false, config: dry },
   ];
 }

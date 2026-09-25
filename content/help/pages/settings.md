@@ -32,7 +32,7 @@ If a number field is left empty, saving fails with "These settings need a number
 
 "Run in this order. Fail drops the row and records why; warn keeps it and lowers the Risk group; off skips the gate."
 
-Each of the twelve gates has a card with its number, name, what data it **Needs** (Row, Keepa, SP-API and so on), a mode selector (**off**, **warn**, **fail**) and its numeric settings. The defaults below are the app's base defaults; the three shipped profiles differ in a few places (see [Profiles](/help/concepts/profiles)).
+Each of the twelve gates has a card with its number, name, what data it **Needs** (Row, Keepa, SP-API and so on), a mode selector (**off**, **warn**, **fail**) and its numeric settings. The defaults below are the app's base defaults; the four shipped profiles differ in a few places (see [Profiles](/help/concepts/profiles)).
 
 | # | Gate | Settings (default) |
 |---|---|---|
@@ -107,7 +107,7 @@ Shared by every profile. It holds Amazon's size tiers, FBA fees, storage and ref
 
 ## Profiles tab
 
-- **Profiles** table: each profile's name, **Budget**, and **Rename**, **Duplicate**, **Make default** and delete. The default profile can't be deleted ("Set another profile as default first"). Deleting asks first; past runs keep their own copy of its settings. The app ships with **Strict**, **Test order** (the default) and **Dry goods only**.
+- **Profiles** table: each profile's name, **Budget**, and **Rename**, **Duplicate**, **Make default** and delete. The default profile can't be deleted ("Set another profile as default first"). Deleting asks first; past runs keep their own copy of its settings. The app ships with **First order** (the default), **Strict**, **Test order** and **Dry goods only**.
 - **Budget (£)**: the first order across a run; default £1,000. The budget-fit gate keeps any one line within its share.
 - **Keepa history max age (days)**: default 7. A Keepa snapshot fetched by any run within this many days is reused instead of fetching again, so it costs no [tokens](/help/concepts/keepa-tokens).
 - **Seller profiles**: **Look up seller profiles** (on by default) looks up the top Buy Box sellers on Keepa for rows that pass every gate (1 token each, reused for 7 days). **Sellers per row** (3) and **Distributor when brand is at least (% of storefront)** (50) flag a likely brand distributor.

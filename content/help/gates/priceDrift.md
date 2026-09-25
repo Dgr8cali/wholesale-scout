@@ -28,8 +28,9 @@ Settings, **Gates** tab, card **10 Price drift** (Needs: Keepa).
 
 | Profile | Mode | Max decline |
 |---|---|---|
+| First order (default) | warn | 20% a year |
 | Strict | warn | 20% a year |
-| Test order (default) | warn | 20% a year |
+| Test order | warn | 20% a year |
 | Dry goods only | warn | 20% a year |
 
 ## Reading the why-line

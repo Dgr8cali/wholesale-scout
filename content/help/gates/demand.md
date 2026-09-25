@@ -42,11 +42,12 @@ The first-order size depends on **Budget** (Profiles tab) and **Max first order 
 
 | Profile | Mode | Min sales | Min your share | Max avg rank | Max months |
 |---|---|---|---|---|---|
+| First order (default) | fail | 10 | 8 | 100,000 | 3 |
 | Strict | fail | 30 | 5 | 50,000 | 3 |
-| Test order (default) | fail | 30 | 5 | 50,000 | 3 |
+| Test order | fail | 30 | 5 | 50,000 | 3 |
 | Dry goods only | fail | 30 | 5 | 50,000 | 3 |
 
-Test order's line cap is 30% of the budget, so its first orders are smaller and sell through sooner than in the other two.
+First order asks for fewer sales (10 a month) but a bigger share for you (8 a month), and accepts a 90-day average rank up to 100,000. Its line cap is 25% of the budget and Test order's is 30%, so their first orders are smaller and sell through sooner than in Strict and Dry goods only, which allow 100%.
 
 ## Reading the why-line
 

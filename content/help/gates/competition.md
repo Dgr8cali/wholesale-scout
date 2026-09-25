@@ -44,8 +44,9 @@ The distributor flag is set on the **Profiles** tab, **Seller profiles** section
 
 | Profile | Mode | Min | Max | Max top share |
 |---|---|---|---|---|
+| First order (default) | warn | 2 | 8 | 60% |
 | Strict | warn | 3 | 12 | 70% |
-| Test order (default) | warn | 3 | 12 | 70% |
+| Test order | warn | 3 | 12 | 70% |
 | Dry goods only | warn | 3 | 12 | 70% |
 
 Because every shipped profile has this gate on **warn**, it never rules a row out before Keepa unless you set it to **fail**.

@@ -37,8 +37,9 @@ The line cap also sets the first-order quantity that [Demand](/help/gates/demand
 
 | Profile | Mode | Max first order per line | Line cap at £1,000 budget |
 |---|---|---|---|
+| First order (default) | fail | 25% | £250 |
 | Strict | fail | 100% | £1,000 |
-| Test order (default) | fail | 30% | £300 |
+| Test order | fail | 30% | £300 |
 | Dry goods only | fail | 100% | £1,000 |
 
 ## Reading the why-line

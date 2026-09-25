@@ -16,7 +16,7 @@ You have three ways in:
 - **A Qogita pull.** On [Qogita](/help/pages/qogita), choose a category or brands, set price and delivery limits and press **Pull and screen**. The pull is saved by name so you can run it again or have it re-pulled every night.
 - **One-off items.** On [Check ASINs](/help/pages/check), paste ASINs, EANs or Amazon links, each with a landed cost if you have one. On Amazon itself, the [Chrome extension](/help/pages/extension) shows the same verdict on product and search pages (see [Set up the extension](/help/howto/set-up-the-extension)).
 
-Every one of these becomes a **run**: one row per product, screened with the profile you chose. Profiles hold every threshold; the default one is **Test order** (see [Profiles](/help/concepts/profiles)).
+Every one of these becomes a **run**: one row per product, screened with the profile you chose. Profiles hold every threshold; the default one is **First order** (see [Profiles](/help/concepts/profiles)).
 
 ### 2. Let the run screen
 

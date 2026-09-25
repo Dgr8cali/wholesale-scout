@@ -37,8 +37,9 @@ Settings, **Gates** tab, card **11 Gating and blocks** (Needs: SP-API).
 
 | Profile | Blocked (gate mode) | Approval needed |
 |---|---|---|
+| First order (default) | fail | warn |
 | Strict | fail | warn |
-| Test order (default) | fail | warn |
+| Test order | fail | warn |
 | Dry goods only | fail | warn |
 
 ## Reading the why-line

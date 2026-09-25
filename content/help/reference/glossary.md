@@ -8,11 +8,11 @@ The app's own words, defined exactly as the code works them out. Defaults are th
 
 ## Hurdle price
 
-The lowest sell price at which a row clears all three profit floors of the [Fee engine gate](/help/gates/fees): min profit per unit (£2), min ROI (20%) and min margin (15%), at this row's landed cost.
+The lowest sell price at which a row clears all three profit floors of the [Fee engine gate](/help/gates/fees): min profit per unit, min ROI and min margin (£2.50, 25% and 12% in First order, the default profile; the settings' defaults are £2, 20% and 15%), at this row's landed cost.
 
 Fees jump at referral bands and at the low-price FBA threshold (£20, or £10 in some categories), so profit doesn't rise smoothly with price. The app checks prices every £0.25 up to £500 (or 20 × the unit cost, if that's more), then finds the exact penny within the first step that passes. It uses the rate card, not Amazon's fee estimate, because Amazon's estimate is only good at the price it was quoted for. No price in that range passing means no hurdle price.
 
-It shows in the **Hurdle** column, in the Fee engine gate ("…; passes at £21.51"), and in the why-line of a row with no sell price ("Clears the profit floors at £21.51 or more"). See [Fee engine](/help/concepts/fees#hurdle-price).
+It shows in the **Hurdle** column, in the Fee engine gate ("…; passes at £20.61"), and in the why-line of a row with no sell price ("Clears the profit floors at £20.61 or more"). See [Fee engine](/help/concepts/fees#hurdle-price).
 
 ## Max landed
 
@@ -20,7 +20,7 @@ The reverse of the hurdle price, for a row with no cost (a seller scan, or a che
 
 Profit only falls as cost rises, so the app narrows down the highest ex-VAT unit cost that still passes. It then turns that into a landed cost and rounds it down to the penny. If even a free unit fails the floors, there's no max landed: "No cost given: at £24.99 not even a free unit clears the floors".
 
-Otherwise the Fee engine gate shows "No cost given: clears the floors at £12.30 landed or less (sells at £24.99)". See [Fee engine](/help/concepts/fees#max-landed).
+Otherwise the Fee engine gate shows "No cost given: clears the floors at £12.84 landed or less (sells at £24.99)". See [Fee engine](/help/concepts/fees#max-landed).
 
 ## Your share
 
@@ -34,7 +34,7 @@ The sales a month you can expect once you're one of the sellers:
 
 Example: 60 sales a month, 4 FBA sellers and Amazon selling: 60 ÷ (4 + 3 + 1) = 7.5 a month.
 
-The [Demand gate](/help/gates/demand) needs at least 5 a month (**Min your share**). The column is **Your share / mo**. **Your profit / mo** is your share × profit per unit.
+The [Demand gate](/help/gates/demand) needs at least **Min your share** a month: 5 by default, 8 in First order. The column is **Your share / mo**. **Your profit / mo** is your share × profit per unit.
 
 ## Months to sell
 
@@ -42,7 +42,7 @@ How long your first order would take to sell at [your share](#your-share):
 
 **months to sell = order quantity ÷ your share a month**
 
-- **Order quantity** (the **Order qty** column) is what the line cap buys: the line cap ÷ the landed cost, rounded down, and at least 1. The line cap is the profile's budget × **Max first order per line** (£1,000 × 30% = £300 in Test order). If the MOQ is more than that, the order is the MOQ and it's flagged "(MOQ)". With no MOQ on the line, the supplier's minimum order value sets it: a £150 minimum with £5 items means 30 units.
+- **Order quantity** (the **Order qty** column) is what the line cap buys: the line cap ÷ the landed cost, rounded down, and at least 1. The line cap is the profile's budget × **Max first order per line** (£1,000 × 25% = £250 in First order, the default profile). If the MOQ is more than that, the order is the MOQ and it's flagged "(MOQ)". With no MOQ on the line, the supplier's minimum order value sets it: a £150 minimum with £5 items means 30 units.
 - It's shown as, e.g., "2.5 months", "under a week" (below a quarter of a month) or "never at your share" (a share of 0).
 
 The [Demand gate](/help/gates/demand) fails a row over **Max months to sell the order** (default 3), e.g. "40 units at 5/mo = 8 months, over 3". The why-line of a scored row ends "First order 30 units sells in 2.5 months."
@@ -114,4 +114,4 @@ What one unit costs you once it's at Amazon: the supplier's price ex-VAT in £, 
 
 ## Line cap
 
-The most a first order for one product may cost: the profile's budget × **Max first order per line**. It's £300 in Test order (30% of £1,000) and £1,000 in the other shipped profiles. The [Budget fit](/help/gates/budgetFit) gate fails a line whose MOQ costs more.
+The most a first order for one product may cost: the profile's budget × **Max first order per line**. It's £250 in First order (25% of £1,000), £300 in Test order (30%) and £1,000 in Strict and Dry goods only. The [Budget fit](/help/gates/budgetFit) gate fails a line whose MOQ costs more.

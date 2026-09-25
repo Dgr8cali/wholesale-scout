@@ -1,7 +1,7 @@
 ---
 title: Profiles
-summary: What a screening profile holds, the three profiles the app ships with, and how to copy, switch and re-screen with one.
-synonyms: [screening profile, test order, strict, dry goods only, default profile, settings, preset]
+summary: What a screening profile holds, the four profiles the app ships with, and how to copy, switch and re-screen with one.
+synonyms: [screening profile, first order, test order, strict, dry goods only, default profile, settings, preset]
 order: 3
 ---
 A profile is one complete set of screening settings. It decides which gates run and how strictly, how rows are scored, and how fees and landed cost are worked out. You pick a profile each time you start a run, so you can screen the same list more strictly or more loosely without changing your settings back and forth.
@@ -22,16 +22,42 @@ Some things are shared by every profile, not kept in one: the rate card (**Fees*
 
 ## The profiles the app ships with
 
-When there are no profiles yet, the app creates three. Each starts from the same defaults and changes a few things.
+When there are no profiles yet, the app creates four: **First order** (the default), **Strict**, **Test order** and **Dry goods only**. Each starts from the same defaults (listed at the end of this section) and changes a few things. Profiles you already have aren't changed or added to.
 
-There is no profile called "First order". The profile built for a first test order is **Test order**, which is also the default. "First order" in the app means the quantity a row's line budget buys; see [months to sell](/help/reference/glossary#months-to-sell).
+Don't confuse the **First order** profile with a row's first order: the quantity one line's share of the budget buys, shown as **Order qty** and used for [months to sell](/help/reference/glossary#months-to-sell).
 
-### Test order (default)
+### First order (default)
 
-For a first, small test order spread over several products:
+Compared with the defaults, First order takes smaller lines, a lower price ceiling and fewer sellers, has a lower demand bar but wants a bigger share for you, and has higher profit and ROI floors with a lower margin floor:
 
-- **Budget fit**: **Max first order per line** is 30% of the budget, so no line can take more than £300 of the £1,000 budget. The first order is spread over at least four products, and a line whose MOQ costs more than that fails. The other profiles allow 100%.
-- **Compliance**: every rule warns, so fragrances, liquids, batteries and so on stay in the list, flagged, rather than dropped.
+| Gate | Setting | First order | Default |
+|---|---|---|---|
+| [Price band](/help/gates/priceBand) | **Max sell price (£)** | £35 | £40 |
+| [Compliance category](/help/gates/compliance) | Gate mode | fail | warn |
+| | Rules on fail | Hazmat: flammable liquid, Aerosol, Supplement, Food, Under-3s toy | none |
+| | Other rules (Liquid included) | warn | warn |
+| | **Flag liquids only above** (ml) | 500 | empty (every liquid) |
+| [Budget fit](/help/gates/budgetFit) | **Max first order per line (% of budget)** | 25% (£250 of £1,000) | 100% |
+| [Amazon presence](/help/gates/amazonPresence) | **Amazon held an offer in the last (days)** | 180 | 365 |
+| [Competition shape](/help/gates/competition) | **Min FBA sellers** / **Max FBA sellers** | 2 / 8 | 3 / 12 |
+| | **Max top-seller Buy Box share (%)** | 60 | 70 |
+| [Demand](/help/gates/demand) | **Min sales / month (total)** | 10 | 30 |
+| | **Min your share (sales / month)** | 8 | 5 |
+| | **Max 90-day average rank** | 100,000 | 50,000 |
+| [Fee engine](/help/gates/fees) | **Min profit / unit (£)** | £2.50 | £2.00 |
+| | **Min ROI (%)** | 25 | 20 |
+| | **Min margin (%)** | 12 | 15 |
+
+Everything else is the default: the modes of every gate except Compliance, **Min sell price (£)** £12, **Max months to sell the order** 3, the other gates' thresholds, the £1,000 budget, the score and the fees.
+
+With **Flag liquids only above** at 500 ml, the Liquid rule only flags a liquid whose largest volume in the text is over 500 ml, e.g. "Liquid (750 ml, over 500 ml)". A liquid with no volume in its text isn't flagged by that rule. Since Liquid only warns here, a large liquid stays in the list, flagged.
+
+### Test order
+
+For a small test order spread over several products:
+
+- **Budget fit**: **Max first order per line** is 30% of the budget, so no line can take more than £300 of the £1,000 budget. A line whose MOQ costs more than that fails. Strict and Dry goods only allow 100%.
+- **Compliance**: the gate and every rule warn, so fragrances, liquids, batteries and so on stay in the list, flagged, rather than dropped.
 - **Fee engine floors**: £2 profit, 20% ROI, 15% margin (the defaults).
 
 The seeded profiles carry no notes of their own beyond these settings.
@@ -52,7 +78,7 @@ For avoiding hazmat and liquids:
 - **Compliance**: the gate fails. Fragrance, liquid, aerosol, cosmetic, supplement and chemical fail. The other rules (food, electrical, battery, under-3s toy, meltable and IP risk) only warn.
 - Everything else is the default, with 100% per line.
 
-### The defaults all three start from
+### The defaults all four start from
 
 | Gate | Mode | Thresholds |
 |---|---|---|
@@ -91,7 +117,7 @@ The **Profiles** tab lists every profile with its budget:
 |---|---|
 | Click the name | Edit that profile |
 | **Rename** | Give it a new name. Names must be unique |
-| **Duplicate** | Copy it under a new name (suggested: "Test order copy"). Use this to try a change without touching the original |
+| **Duplicate** | Copy it under a new name (suggested: "First order copy" for First order). Use this to try a change without touching the original |
 | **Make default** | The default is preselected on [Upload](/help/pages/upload), [Qogita](/help/pages/qogita) and [Check](/help/pages/check) |
 | Delete (bin icon) | Removes the profile. "Past runs keep their own copy of its settings." You can't delete the default |
 
@@ -99,7 +125,7 @@ Profiles saved by an older version of the app are filled in with the defaults fo
 
 ## A run's profile
 
-When you start a run, the **Profile** you choose on Upload, Qogita or Check is copied into the run. The run keeps that copy. Changing the profile later doesn't change runs already made. The run page's header shows which profile it used and when, e.g. "Test order (version saved 12 Sept, 09:30; applied 14 Sept, 16:05)".
+When you start a run, the **Profile** you choose on Upload, Qogita or Check is copied into the run. The run keeps that copy. Changing the profile later doesn't change runs already made. The run page's header shows which profile it used and when, e.g. "First order (version saved 12 Sept, 09:30; applied 14 Sept, 16:05)".
 
 ## Re-screening with another profile
 

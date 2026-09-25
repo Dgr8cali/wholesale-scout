@@ -32,8 +32,9 @@ Settings, **Gates** tab, card **6 Amazon presence** (Needs: Keepa).
 
 | Profile | Mode | Days |
 |---|---|---|
+| First order (default) | fail | 180 |
 | Strict | fail | 365 |
-| Test order (default) | fail | 365 |
+| Test order | fail | 365 |
 | Dry goods only | fail | 365 |
 
 ## Reading the why-line

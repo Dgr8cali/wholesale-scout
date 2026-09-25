@@ -20,8 +20,8 @@ Each supplier's price is turned into a landed cost with your default profile's f
 
 These come from your default profile and are shown in the **Limits** box:
 
-- **Budget**: the most the whole order can cost, landed. The "Test order" profile uses £1,000.
-- **Line cap**: the most one line can cost, landed. It's the budget × the [budget gate](/help/gates/budgetFit)'s line share. On "Test order" that's 30%, so £300.
+- **Budget**: the most the whole order can cost, landed. The shipped profiles all use £1,000.
+- **Line cap**: the most one line can cost, landed. It's the budget × the [budget gate](/help/gates/budgetFit)'s line share. On "First order", the shipped default, that's 25%, so £250.
 - **Months limit**: each line must sell within this many months at your share. That's the [demand gate](/help/gates/demand)'s months to sell, 3 by default.
 
 To change them, edit the profile. See [Change a threshold](/help/howto/change-a-threshold).

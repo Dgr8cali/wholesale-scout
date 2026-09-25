@@ -40,12 +40,13 @@ See [change a threshold](/help/howto/change-a-threshold).
 
 ## Mode in each profile
 
-The shipped [profiles](/help/concepts/profiles) all use the defaults for this gate.
+First order lowers the ceiling to £35.00; the other shipped [profiles](/help/concepts/profiles) use the defaults.
 
 | Profile | Mode | Min | Max |
 |---|---|---|---|
+| First order (default) | fail | £12.00 | £35.00 |
 | Strict | fail | £12.00 | £40.00 |
-| Test order (default) | fail | £12.00 | £40.00 |
+| Test order | fail | £12.00 | £40.00 |
 | Dry goods only | fail | £12.00 | £40.00 |
 
 ## Reading the why-line

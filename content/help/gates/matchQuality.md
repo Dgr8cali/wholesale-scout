@@ -32,8 +32,9 @@ Settings, **Gates** tab, card **4 Match quality** (Needs: Keepa / catalog). It h
 
 | Profile | Mode |
 |---|---|
+| First order (default) | fail |
 | Strict | fail |
-| Test order (default) | fail |
+| Test order | fail |
 | Dry goods only | fail |
 
 ## Reading the why-line

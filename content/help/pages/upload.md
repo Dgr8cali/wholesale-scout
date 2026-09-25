@@ -75,7 +75,7 @@ A preview of the first 8 rows shows row number, EAN, name, the cost quoted per u
 
 Shows how many rows from how many files. The same EAN in several files becomes one product, and the cheapest offer is the one scored.
 
-**Profile** chooses the thresholds to screen with; the default profile is picked for you (Test order unless you've changed it). See [Profiles](/help/concepts/profiles).
+**Profile** chooses the thresholds to screen with; the default profile is picked for you (First order unless you've changed it). See [Profiles](/help/concepts/profiles).
 
 **Screen N rows** creates the run and opens it on [Runs](/help/pages/runs). Screening runs in the background: you can leave the page.
 

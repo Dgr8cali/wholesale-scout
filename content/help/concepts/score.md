@@ -109,8 +109,8 @@ The total averages only the groups that have a score, so the weights of the miss
 
 Two groups are required. With no **Margin** score (no sell price, or no cost) or no **Demand** score (no rank data), the row isn't scored. Otherwise the other groups on their own could rank an unknown product highly. The why-line then says what's missing, for example:
 
-- "Not scored: needs a sell price. Clears the profit floors at £21.51 or more."
-- "Not scored: needs a cost and rank data. Clears the floors at £12.30 landed or less."
+- "Not scored: needs a sell price. Clears the profit floors at £20.61 or more."
+- "Not scored: needs a cost and rank data. Clears the floors at £12.84 landed or less."
 
 The price in the first example is the [hurdle price](/help/reference/glossary#hurdle-price). The one in the second is the [max landed](/help/reference/glossary#max-landed) cost.
 

@@ -9,7 +9,7 @@ Every gate limit (the price band, minimum profit, maximum sellers and so on) liv
 ## Change the number
 
 1. Open **Settings**. The **Gates** tab opens first.
-2. In the bar at the top, pick the profile under **Editing**. The default is marked "(default)"; the app ships with **Test order** as the default.
+2. In the bar at the top, pick the profile under **Editing**. The default is marked "(default)"; the app ships with **First order** as the default.
 3. Find the gate's card. Gates are listed in the order they run, numbered 1 to 12.
 4. Type the new value. For example, on **Fee engine** change **Min ROI (%)** from 20 to 25, or on **Price band** change **Min sell price (£)** from £12 to £10.
 5. The bar now shows **Unsaved changes**. Click **Save**.
@@ -41,7 +41,7 @@ Some gates have extra modes:
 | Profiles tab | **Budget (£)** | £1,000 |
 | Profiles tab | **Keepa history max age (days)** | 7 |
 
-The Budget works with **Max first order per line (% of budget)** on the [Budget fit](/help/gates/budgetFit) gate: with £1,000 and 30%, no single line may cost more than £300 for its first order.
+The Budget works with **Max first order per line (% of budget)** on the [Budget fit](/help/gates/budgetFit) gate: with £1,000 and 25% (First order's setting), no single line may cost more than £250 for its first order.
 
 ## Apply it to a run
 

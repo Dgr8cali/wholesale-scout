@@ -33,8 +33,9 @@ Settings, **Gates** tab, card **9 Price regime** (Needs: Keepa).
 
 | Profile | Mode | Spike tolerance |
 |---|---|---|
+| First order (default) | warn | 15% |
 | Strict | warn | 15% |
-| Test order (default) | warn | 15% |
+| Test order | warn | 15% |
 | Dry goods only | warn | 15% |
 
 ## Reading the why-line

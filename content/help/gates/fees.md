@@ -42,8 +42,9 @@ Changing these also moves the hurdle price and max landed. Fee assumptions (VAT,
 
 | Profile | Mode | Min profit | Min ROI | Min margin |
 |---|---|---|---|---|
+| First order (default) | fail | £2.50 | 25% | 12% |
 | Strict | fail | £2.00 | 25% | 18% |
-| Test order (default) | fail | £2.00 | 20% | 15% |
+| Test order | fail | £2.00 | 20% | 15% |
 | Dry goods only | fail | £2.00 | 20% | 15% |
 
 ## Reading the why-line

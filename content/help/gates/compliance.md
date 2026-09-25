@@ -49,11 +49,12 @@ The rules themselves (names, keywords, Amazon categories, notes and checklists) 
 
 | Profile | Gate mode | Rule modes |
 |---|---|---|
+| First order (default) | fail | Hazmat: flammable liquid, Aerosol, Supplement, Food and Under-3s toy **fail**; the rest **warn** (Liquid only above 500 ml) |
 | Strict | fail | every rule **fail** |
-| Test order (default) | warn | every rule **warn** |
+| Test order | warn | every rule **warn** |
 | Dry goods only | fail | Hazmat: flammable liquid, Liquid, Aerosol, Cosmetic, Supplement and Chemical **fail**; the rest **warn** |
 
-None of the shipped profiles sets **Flag liquids only above**.
+First order sets **Flag liquids only above** to 500 ml, so the Liquid rule only flags a liquid whose largest volume in the text is over 500 ml (why-line e.g. "Liquid (750 ml, over 500 ml)"); a liquid with no volume found isn't flagged. Liquid only warns there. None of the other shipped profiles sets it.
 
 ## Reading the why-line
 

@@ -8,7 +8,7 @@ The fee engine turns a sell price and a supplier cost into profit per unit. It i
 
 ## The per-unit block
 
-Here is an example at a £24.99 sell price, using the default profile and the rate card. The item is "Everything else", 20 × 15 × 8 cm and 300 g, with an £8.00 ex-VAT cost and 20% VAT on the goods. You are not VAT registered, and it's September:
+Here is an example at a £24.99 sell price, using the default profile (**First order**) and the rate card. The item is "Everything else", 20 × 15 × 8 cm and 300 g, with an £8.00 ex-VAT cost and 20% VAT on the goods. You are not VAT registered, and it's September:
 
 | Line | Example | How it's worked out |
 |---|---|---|
@@ -116,7 +116,7 @@ These are in [Settings](/help/pages/settings) → **Fees** → **Fees and landed
 | **No dimensions: assume tier** | Small parcel | Tier for items with no size |
 | **No dimensions: assume weight** | 400 g | Weight for items with no size |
 
-The floors (**Min profit / unit** £2, **Min ROI** 20%, **Min margin** 15%) are on the **Gates** tab under the Fee engine gate.
+The floors (**Min profit / unit**, **Min ROI**, **Min margin**) are on the **Gates** tab under the Fee engine gate. Their defaults are £2, 20% and 15%; First order, the default profile, uses £2.50, 25% and 12%.
 
 ## Landed cost
 
@@ -128,10 +128,10 @@ The unit cost is the supplier's price converted to £. For a [multipack](/help/r
 
 The hurdle price is the lowest sell price that clears all three floors (min profit, min ROI and min margin) at this row's cost. Fees jump at referral bands and at the low-price threshold, so profit doesn't rise smoothly with price. The engine checks every £0.25 up to £500 (or 20 × the cost, if that's more), then finds the exact penny in the step where it first passes. The hurdle price always uses the rate card, because Amazon's estimate only holds at the one price it was quoted for.
 
-In the example, the hurdle is £21.51. It shows in the **Hurdle** column, in the Fee engine gate ("…; passes at £21.51") and in the why-line of an unpriced row. See [hurdle price](/help/reference/glossary#hurdle-price).
+In the example, with First order's floors (£2.50, 25%, 12%), the hurdle is £20.61. With the default floors (£2, 20%, 15%, as in Test order) it would be £21.51. It shows in the **Hurdle** column, in the Fee engine gate ("…; passes at £20.61") and in the why-line of an unpriced row. See [hurdle price](/help/reference/glossary#hurdle-price).
 
 ## Max landed
 
 When a row has no cost (a seller scan, or a check by ASIN alone), there's no profit to work out. Instead the engine finds the most a unit can cost landed and still clear every floor at the scoring price. Profit only falls as cost rises, so it narrows down the ex-VAT unit cost that just passes. It then turns that into a landed cost (VAT, duty, inbound and prep included) and rounds it down to the penny. It uses Amazon's estimate when there's one at that price.
 
-In the example, at £24.99 the max landed is £12.30. The Fee engine gate shows "No cost given: clears the floors at £12.30 landed or less (sells at £24.99)". If even a free unit fails, it says "No cost given: at £24.99 not even a free unit clears the floors". See [max landed](/help/reference/glossary#max-landed).
+In the example, at £24.99 the max landed is £12.84 with First order's floors (£12.30 with the default floors). The Fee engine gate shows "No cost given: clears the floors at £12.84 landed or less (sells at £24.99)". If even a free unit fails, it says "No cost given: at £24.99 not even a free unit clears the floors". See [max landed](/help/reference/glossary#max-landed).

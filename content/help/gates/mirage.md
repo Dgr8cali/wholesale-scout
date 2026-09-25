@@ -33,8 +33,9 @@ Settings, **Gates** tab, card **5 Borrowed rank (mirage)** (Needs: Keepa).
 
 | Profile | Mode | Min history | Max review jump |
 |---|---|---|---|
+| First order (default) | warn | 90 days | 50% |
 | Strict | warn | 90 days | 50% |
-| Test order (default) | warn | 90 days | 50% |
+| Test order | warn | 90 days | 50% |
 | Dry goods only | warn | 90 days | 50% |
 
 ## Reading the why-line

@@ -55,7 +55,7 @@ Tick one or more runs and a bar appears: **Archive**, **Delete…** (with the sa
 
 ### Header
 
-The name at the top can be edited in place (click it). Under it: the source, then the profile and which version of it the rows reflect, for example "Test order (version saved 25 Sept, 12:31; applied 25 Sept, 13:05)", when it started, how many products and listings, and Keepa tokens spent, split by stage ("history 412 · Buy Box 36 · sellers 9"). A seller scan also names the storefront, how many of its ASINs were screened, and how many it holds the Buy Box on now.
+The name at the top can be edited in place (click it). Under it: the source, then the profile and which version of it the rows reflect, for example "First order (version saved 25 Sept, 12:31; applied 25 Sept, 13:05)", when it started, how many products and listings, and Keepa tokens spent, split by stage ("history 412 · Buy Box 36 · sellers 9"). A seller scan also names the storefront, how many of its ASINs were screened, and how many it holds the Buy Box on now.
 
 | Control | What it does |
 | --- | --- |
@@ -85,7 +85,7 @@ Only one run spends Keepa tokens at a time. If another run has Keepa, you'll see
 
 ### Re-screen
 
-**Re-screen** re-runs every gate and the score with the chosen profile as it's saved now, using the data already fetched: no re-upload, and no new Amazon or Keepa calls except for rows that now need data they never fetched (those are looked up, which can spend Keepa tokens). Use it after you change a threshold in [Settings](/help/pages/settings) (see [Change a threshold](/help/howto/change-a-threshold)). You'll see "Re-screening with Test order as saved now: N rows done", with how many carry on in the background. Rows that never fetched data a gate now needs (for example they failed early, before Keepa) go back in the queue to fetch just that, and the message says how many.
+**Re-screen** re-runs every gate and the score with the chosen profile as it's saved now, using the data already fetched: no re-upload, and no new Amazon or Keepa calls except for rows that now need data they never fetched (those are looked up, which can spend Keepa tokens). Use it after you change a threshold in [Settings](/help/pages/settings) (see [Change a threshold](/help/howto/change-a-threshold)). You'll see "Re-screening with First order as saved now: N rows done", with how many carry on in the background. Rows that never fetched data a gate now needs (for example they failed early, before Keepa) go back in the queue to fetch just that, and the message says how many.
 
 ### The ASIN check card
 
@@ -132,7 +132,7 @@ One line per EAN. Where an EAN matched several ASINs, the best one leads and "�
 | **Score** | 0–100 in its band colour. |
 | **Sales / mo** | Estimated sales a month. Hover for the source. |
 | **Your share / mo** | Sales / mo ÷ (FBA sellers + you), Amazon counted as 3 sellers. See [your share](/help/reference/glossary#your-share). |
-| **Order qty** | First order: the line cap ÷ landed cost, or the MOQ if that's more (flagged **MOQ**). The line cap is your budget × max line share; on Test order that's £1,000 × 30% = £300. |
+| **Order qty** | First order: the line cap ÷ landed cost, or the MOQ if that's more (flagged **MOQ**). The line cap is your budget × max line share; on First order, the shipped default, that's £1,000 × 25% = £250. |
 | **Months to sell** | Order qty ÷ your share / mo; red when over the profile's limit (3 by default). See [months to sell](/help/reference/glossary#months-to-sell). |
 | **Sellers** | FBA sellers from Keepa, else all new offers from Amazon. |
 | **Buy Box** | The current Buy Box price. |
