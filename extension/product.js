@@ -161,7 +161,7 @@
       sec.append(ws.h("ul", {}, stockRows.map((s) => ws.h("li", {}, [
         `${s.name ?? s.sellerId}: `,
         ws.h("b", { text: s.error ? "?" : s.stock == null ? "…" : ws.num(s.stock) }),
-        s.limited ? " (per-customer limit, not stock)" : "",
+        s.limited ? " (per-customer limit, not stock)" : s.ambiguous ? " allowed (stock or a per-customer limit: Amazon didn't say)" : "",
         s.source ? ws.h("div", { class: "muted", style: "font-size:11px", text: `from ${s.source}` }) : "",
         s.error ? ws.h("span", { class: "err", text: ` ${s.error}` }) : "",
       ]))));
@@ -219,9 +219,11 @@
     status("Reading the offers…");
     try {
       if (await cartHas(asin)) throw new Error("This product is already in your cart: remove it first so the reading is only the seller's.");
-      let offers = await offersFromAod(asin).catch((e) => { note("AOD failed", { error: e.message }); return []; });
-      if (!offers.length) {
-        offers = offersOnPage();
+      let offers = await allOffers(asin).catch((e) => { note("Offers panel failed", { error: e.message }); return []; });
+      if (!offers.some((o) => o.fba && !o.isAmazon && o.oid)) {
+        const onPage = offersOnPage();
+        const have = new Set(offers.map((o) => o.oid));
+        offers = [...offers, ...onPage.filter((o) => !have.has(o.oid))];
       }
       offers = offers.filter((o) => o.fba && !o.isAmazon && o.oid).slice(0, MAX_SELLERS);
       if (!offers.length) throw new Error("No FBA seller offers with an offer listing ID found. Open Debug below and paste it to fix the reader.");
@@ -287,33 +289,18 @@
     return withOid?.getAttribute("data-oid") || withOid?.getAttribute("data-offer-listing-id") || null;
   }
 
-  /** Amazon's all-offers (AOD) list: every offer, its seller, whether Amazon ships it, and its listing ID. */
-  async function offersFromAod(a) {
-    const filters = encodeURIComponent(JSON.stringify({ all: true, new: true }));
-    // The AOD panel has lived at several addresses; each is tried until one lists offers.
-    const urls = [
-      `/gp/aod/ajax/ref=auto_load_aod?asin=${a}&pc=dp`,
-      `/gp/aod/ajax/ref=dp_aod_NEW_mbc?asin=${a}&pc=dp&filters=${filters}`,
-      `/gp/product/ajax/ref=dp_aod_NEW_mbc?asin=${a}&pc=dp&experienceId=aodAjaxMain&filters=${filters}`,
-    ];
-    let doc = null;
-    for (const url of urls) {
-      const res = await fetch(url, { credentials: "include", headers: { accept: "text/html,*/*", "x-requested-with": "XMLHttpRequest" } });
-      const body = await res.text();
-      const d = parse(body);
-      const blocks = d.querySelectorAll("#aod-pinned-offer, #aod-offer").length;
-      note("AOD", { url, ...summarize(res, body), offerBlocks: blocks, ...(blocks ? { firstOffer: snippet(d.querySelector("#aod-offer, #aod-pinned-offer")?.outerHTML) } : {}) });
-      if (res.ok && blocks) { doc = d; break; }
-    }
-    if (!doc) throw new Error("Amazon's offers panel didn't list offers at any known address");
-    const blocks = [...new Set(doc.querySelectorAll("#aod-pinned-offer, #aod-offer, div[id^='aod-offer']"))]
+  /** The offers in an all-offers (AOD) panel: seller, whether Amazon ships it, and its listing ID. */
+  function offersIn(root) {
+    const blocks = [...new Set(root.querySelectorAll("#aod-pinned-offer, #aod-offer, [id^='aod-offer-list'] > div, #aod-offer-list .aod-information-block"))]
       .filter((b) => b.querySelector("#aod-offer-soldBy, [id*='soldBy'], #aod-offer-shipsFrom, [id*='shipsFrom']"));
-    const offers = blocks.map((b) => {
+    const seen = new Set();
+    const offers = [];
+    for (const b of blocks) {
       const soldBy = b.querySelector("#aod-offer-soldBy, [id*='soldBy']");
       const link = soldBy?.querySelector("a[href*='seller=']") ?? b.querySelector("a[href*='seller=']");
       const shipsFrom = text(b.querySelector("#aod-offer-shipsFrom, [id*='shipsFrom']"));
       const n = sellerName(soldBy ?? b);
-      return {
+      const o = {
         sellerId: sellerIdFrom(link) ?? (/amazon/i.test(text(soldBy)) ? "AMAZON" : "unknown"),
         name: n.name, nameFrom: n.from,
         isAmazon: !link && /amazon/i.test(text(soldBy)),
@@ -321,9 +308,62 @@
         oid: offerListingId(b),
         form: b.querySelector("form"),
       };
-    });
-    note("AOD offers", { offers: offers.map((o) => ({ sellerId: o.sellerId, name: o.name, nameFrom: o.nameFrom, fba: o.fba, amazon: o.isAmazon, listingId: o.oid ? `${o.oid.slice(0, 12)}…` : null })) });
+      const key = `${o.sellerId}|${o.oid}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      offers.push(o);
+    }
     return offers;
+  }
+
+  const logOffers = (step, offers) => note(step, { offers: offers.map((o) => ({ sellerId: o.sellerId, name: o.name, nameFrom: o.nameFrom, fba: o.fba, amazon: o.isAmazon, listingId: o.oid ? `${o.oid.slice(0, 12)}…` : null })) });
+
+  /**
+   * Every offer. Amazon's AOD address answers 404 to a direct request, so: the product page with
+   * ?aod=1 (it may come with the panel rendered), else open Amazon's own "other sellers" panel on
+   * this page and read it once it's loaded (showing more offers where it offers to), then close it.
+   */
+  async function allOffers(a) {
+    const res = await fetch(`/dp/${a}?aod=1&th=1&psc=1`, { credentials: "include" });
+    const body = await res.text();
+    const withPanel = offersIn(parse(body));
+    note("Page with ?aod=1", { ...summarize(res, body), offers: withPanel.length });
+    if (withPanel.length > 1) { logOffers("Offers (?aod=1)", withPanel); return withPanel; }
+
+    const trigger = document.querySelector("#aod-ingress-link, #buybox-see-all-buying-choices a, #olpLinkWidget_feature_div a, a[href*='aod=1'], [data-action='show-all-offers-display'] a, #mbc-action-panel a");
+    note("Open the offers panel", { trigger: trigger ? `${trigger.tagName.toLowerCase()}#${trigger.id || ""} “${text(trigger).slice(0, 60)}”` : null });
+    if (!trigger) return withPanel;
+    const before = performance.getEntriesByType("resource").length;
+    trigger.click();
+    const loaded = await waitFor(() => document.querySelectorAll("#aod-offer").length > 0 || document.querySelector("#aod-no-offer-msg, #aod-offer-list .a-alert"), 12000);
+    // Show more offers where the panel offers to (it lists ten at a time).
+    for (let i = 0; i < 3; i++) {
+      const more = document.querySelector("#aod-show-more-offers, [id*='aod-show-more'] a, #aod-pagination a");
+      if (!more) break;
+      const n = document.querySelectorAll("#aod-offer").length;
+      more.click();
+      await waitFor(() => document.querySelectorAll("#aod-offer").length > n, 6000);
+    }
+    const panel = document.querySelector("#aod-container, #all-offers-display, #aod-offer-list")?.closest("#all-offers-display, #aod-container") ?? document;
+    const offers = loaded ? offersIn(panel) : [];
+    // Where the panel really loads from, for next time.
+    const requests = performance.getEntriesByType("resource").slice(before).map((e) => e.name).filter((u) => /aod|offer/i.test(u)).slice(0, 5);
+    note("Offers panel", { loaded: !!loaded, offerBlocks: document.querySelectorAll("#aod-offer, #aod-pinned-offer").length, requests });
+    logOffers("Offers (panel)", offers);
+    (document.querySelector("#aod-close, .aod-close-button, #aod-container [data-action='a-popover-close'], .a-popover-header .a-button-close") ?? null)?.click();
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    return offers.length ? offers : withPanel;
+  }
+
+  /** Resolves with the condition's value once it's truthy, or null after `ms`. */
+  function waitFor(cond, ms) {
+    return new Promise((resolve) => {
+      const hit = cond();
+      if (hit) return resolve(hit);
+      const obs = new MutationObserver(() => { const v = cond(); if (v) { obs.disconnect(); clearTimeout(t); resolve(v); } });
+      obs.observe(document.body, { childList: true, subtree: true });
+      const t = setTimeout(() => { obs.disconnect(); resolve(null); }, ms);
+    });
   }
 
   /** Fallback: the Buy Box offer and the "Other sellers on Amazon" rows shown on this page. */
@@ -379,7 +419,8 @@
     const picked = scope.querySelector?.("select[name='quantity'] option[selected], [data-a-selector='value']");
     const field = attr ?? input?.value ?? (picked ? text(picked) : null);
     const how = attr != null ? "the line's data-quantity" : input ? `the quantity box (${input.name})` : "the quantity picker";
-    return field != null && n(field) != null ? { stock: n(field), limited: false, source: `${where}: ${how} = ${field} after asking for 999` } : null;
+    // Amazon set the quantity without saying why: its stock, or a per-customer cap.
+    return field != null && n(field) != null ? { stock: n(field), limited: false, ambiguous: true, source: `${where}: ${how} = ${field} after asking for 999, no message saying whether that's stock or a per-customer limit` } : null;
   }
 
   /** Add 999 of one offer by its listing ID, read what Amazon allows, then take it out again. */
@@ -419,14 +460,18 @@
     if (!added.res.ok) throw new Error(`adding to the cart failed (${added.res.status})`);
 
     // The add response often carries the message itself; otherwise the cart line does.
-    const addDoc = parse(added.body);
-    addDoc.querySelectorAll("script, style").forEach((n) => n.remove());
-    const fromAdd = readQuantity(addDoc.body, "add response");
+    // Only this ASIN's line counts: the basket page lists every item's "Only N left".
+    const addLine = parse(added.body).querySelector(`[data-asin="${asin}"]`);
+    const fromAdd = addLine ? readQuantity(addLine, "add response's line") : null;
     const cart = await cartDoc();
     const line = cart.doc.querySelector(`[data-asin="${asin}"]`);
     note(`Basket for ${offer.name ?? offer.sellerId}`, {
       status: cart.status, lineFound: !!line, basketCount: text(cart.doc.querySelector("#nav-cart-count")) || null,
-      line: line ? snippet(line.outerHTML.replace(/<script[\s\S]*?<\/script>/gi, "")) : null,
+      quantity: line?.getAttribute("data-quantity") ?? null, outOfStock: line?.getAttribute("data-outofstock") ?? null,
+      lineText: line ? text(line).slice(0, 600) : null,
+      // A notice at the top of the basket about this item ("This seller has a limit of …").
+      notices: [...cart.doc.querySelectorAll("#sc-important-message-alert, .sc-list-item-content .a-alert-content, [data-name='Active Items'] .a-alert-content")]
+        .map((n) => text(n)).filter((t) => t && /limit|only|available|quantity/i.test(t)).slice(0, 3),
     });
     try {
       const got = (line && readQuantity(line, "basket line")) || fromAdd;
@@ -435,6 +480,10 @@
       return got;
     } finally {
       await removeLine(cart.doc).catch((e) => note("Remove failed", { error: e.message }));
+      const after = await cartDoc();
+      const still = !!after.doc.querySelector(`[data-asin="${asin}"]`);
+      note("Removed from basket", { removed: !still });
+      if (still) throw new Error("added, but couldn't remove it from your basket: please remove it by hand");
     }
   }
 
