@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRightIcon, BuildingIcon, CoinsIcon, RefreshCwIcon, StarIcon, UploadIcon } from "lucide-react";
+import { AlertTriangleIcon, ArrowRightIcon, BuildingIcon, CoinsIcon, RefreshCwIcon, StarIcon, UploadIcon } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 import { VerdictBar } from "@/components/VerdictBar";
@@ -45,7 +45,7 @@ function useLoad<T>(url: string, pollMs?: (d: T) => number | null): Load<T> {
 
 function Section<T>({ load, skeleton, children }: { load: Load<T>; skeleton: ReactNode; children: (d: T) => ReactNode }) {
   if (!load) return <>{skeleton}</>;
-  if ("error" in load) return <p className="rounded-md bg-fail-soft px-3 py-2 text-sm text-fail">Couldn&apos;t load: {load.error}</p>;
+  if ("error" in load) return <p role="alert" className="flex items-center gap-2 rounded-lg bg-fail-soft px-3 py-2 text-sm text-fail"><AlertTriangleIcon className="size-4 flex-none" /> Couldn&apos;t load: {load.error}</p>;
   return <>{children(load.data)}</>;
 }
 

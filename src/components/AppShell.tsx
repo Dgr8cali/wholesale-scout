@@ -89,15 +89,17 @@ function StatusDot({ ok, label, hint }: { ok: boolean; label: string; hint: stri
 /** The four integration dots and the live Keepa balance, refreshed every minute and on focus. */
 function StatusBar() {
   const [status, setStatus] = useState<Status | null>(null);
+  const [down, setDown] = useState(false);
   const [keepa, setKeepa] = useState<KeepaBalance | null>(null);
   useEffect(() => {
-    api<Status>("/api/status").then(setStatus).catch(() => {});
+    api<Status>("/api/status").then(setStatus).catch(() => setDown(true));
     const load = () => api<KeepaBalance>("/api/keepa").then(setKeepa).catch(() => {});
     load();
     const t = setInterval(load, 60_000);
     window.addEventListener("focus", load);
     return () => { clearInterval(t); window.removeEventListener("focus", load); };
   }, []);
+  if (down) return <StatusDot ok={false} label="Can't reach the server" hint="The app's API didn't answer; check your connection or the deployment" />;
   if (!status) return null;
   const t = keepa?.tokens;
   return (

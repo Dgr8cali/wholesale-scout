@@ -1,5 +1,6 @@
 "use client";
 
+import { EmptyState, ErrorState } from "@/components/States";
 import { BuildingIcon, CheckIcon, ChevronRightIcon, ExternalLinkIcon, SearchIcon } from "lucide-react";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -74,7 +75,7 @@ export default function BrandsPage() {
       </p>
     </div>
   );
-  if (error) return <div className="space-y-5">{header}<p className="rounded-md bg-fail-soft px-3 py-2 text-sm text-fail">Couldn&apos;t load brands: {error}</p></div>;
+  if (error) return <div className="space-y-5">{header}<ErrorState title="Couldn't load brands" message={error} onRetry={() => window.location.reload()} /></div>;
   if (!brands) return <div className="space-y-5">{header}<div className="panel space-y-3 p-4">{Array.from({ length: 8 }, (_, i) => <Skeleton key={i} className="h-10" />)}</div></div>;
 
   const worth = brands.filter((b) => b.passFees > 0).length;
@@ -84,13 +85,9 @@ export default function BrandsPage() {
       {header}
 
       {!brands.length && (
-        <div className="panel flex flex-col items-center gap-3 px-6 py-14 text-center">
-          <span className="flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground"><BuildingIcon className="size-5" /></span>
-          <div>
-            <p className="section-title">No approval-needed products</p>
-            <p className="mt-1 text-sm text-muted-foreground">Brands appear here once gating finds a listing you need approval for.</p>
-          </div>
-        </div>
+        <EmptyState icon={<BuildingIcon />} title="No approval-needed products">
+          Brands appear here once gating finds a listing you need approval for.
+        </EmptyState>
       )}
 
       {brands.length > 0 && (

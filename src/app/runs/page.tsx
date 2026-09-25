@@ -1,5 +1,6 @@
 "use client";
 
+import { EmptyState, ErrorState } from "@/components/States";
 import { ImageIcon, ListChecksIcon, UploadIcon } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -43,18 +44,13 @@ export default function RunsPage() {
       </div>
 
       {error ? (
-        <p className="rounded-md bg-fail-soft px-3 py-2 text-sm text-fail">Couldn&apos;t load runs: {error}</p>
+        <ErrorState title="Couldn't load runs" message={error} onRetry={() => { setError(null); api<{ runs: Run[] }>("/api/runs").then((r) => setRuns(r.runs)).catch((e) => setError(e.message)); }} />
       ) : !runs ? (
         <div className="panel space-y-3 p-4">{Array.from({ length: 6 }, (_, i) => <Skeleton key={i} className="h-10" />)}</div>
       ) : !runs.length ? (
-        <div className="panel flex flex-col items-center gap-3 px-6 py-14 text-center">
-          <span className="flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground"><ListChecksIcon className="size-5" /></span>
-          <div>
-            <p className="section-title">No runs yet</p>
-            <p className="mt-1 text-sm text-muted-foreground">Upload a supplier price list to screen it against Amazon UK.</p>
-          </div>
-          <Button asChild><Link href="/upload"><UploadIcon /> Upload price list</Link></Button>
-        </div>
+        <EmptyState icon={<ListChecksIcon />} title="No runs yet" action={<Button asChild><Link href="/upload"><UploadIcon /> Upload price list</Link></Button>}>
+          Upload a supplier price list to screen it against Amazon UK.
+        </EmptyState>
       ) : (
         <div className="panel overflow-hidden">
           <Table>

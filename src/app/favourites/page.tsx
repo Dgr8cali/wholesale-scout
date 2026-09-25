@@ -1,5 +1,6 @@
 "use client";
 
+import { EmptyState, ErrorState } from "@/components/States";
 import { VerdictBadge } from "@/components/VerdictBadge";
 import { StarIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -197,7 +198,7 @@ export default function FavouritesPage() {
     </th>
   );
 
-  if (error && !items) return <div className="space-y-4"><h1 className="page-title">Favourites</h1><p className="rounded-md bg-fail-soft px-3 py-2 text-sm text-fail">Couldn&apos;t load favourites: {error}</p></div>;
+  if (error && !items) return <div className="space-y-4"><h1 className="page-title">Favourites</h1><ErrorState title="Couldn't load favourites" message={error} onRetry={() => window.location.reload()} /></div>;
   if (!items) return (
     <div className="space-y-4">
       <h1 className="page-title">Favourites</h1>
@@ -233,14 +234,9 @@ export default function FavouritesPage() {
       {error && <p className="rounded-md bg-fail-soft px-3 py-2 text-sm text-fail">{error}</p>}
 
       {!all.length ? (
-        <div className="panel flex flex-col items-center gap-3 px-6 py-14 text-center">
-          <span className="flex size-12 items-center justify-center rounded-full bg-warn-soft text-warn"><StarIcon className="size-5" /></span>
-          <div>
-            <p className="section-title">No favourites yet</p>
-            <p className="mt-1 text-sm text-muted-foreground">Star a product on any run&apos;s results to keep it here, with its latest result and your notes.</p>
-          </div>
-          <Button variant="outline" asChild><Link href="/runs">Go to runs</Link></Button>
-        </div>
+        <EmptyState icon={<StarIcon />} title="No favourites yet" action={<Button variant="outline" asChild><Link href="/runs">Go to runs</Link></Button>}>
+          Star a product on any run&apos;s results to keep it here, with its latest result and your notes.
+        </EmptyState>
       ) : (
         <>
           <FilterBar value={filters} onChange={setFilters} options={options} favouritesAvailable={false}

@@ -28,6 +28,7 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useDialogs } from "@/components/Dialogs";
+import { EmptyState, ErrorState } from "@/components/States";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -103,7 +104,7 @@ function Section({ title, note, actions, children, className }: { title: ReactNo
 }
 
 const LoadingBlocks = () => <div className="space-y-4"><Skeleton className="h-16 rounded-xl" /><Skeleton className="h-64 rounded-xl" /><Skeleton className="h-40 rounded-xl" /></div>;
-const LoadError = ({ message }: { message: string }) => <p className="rounded-md bg-fail-soft px-3 py-2 text-sm text-fail">Couldn&apos;t load: {message}</p>;
+const LoadError = ({ message }: { message: string }) => <ErrorState title="Couldn't load settings" message={message} onRetry={() => window.location.reload()} />;
 
 export default function SettingsPage() {
   const [tab, setTab] = useState<string>("gates");
@@ -495,10 +496,9 @@ function FilterSets() {
     <Section title="Filter sets" note="Saved from a run's filter bar with “Save current filters…”, and applied from Saved filters on any run or on Favourites.">
       {note && <p className="rounded-md bg-warn-soft px-3 py-2 text-sm text-warn">{note}</p>}
       {!sets.length ? (
-        <div className="rounded-lg border border-dashed px-6 py-10 text-center">
-          <p className="font-medium">No saved filter sets</p>
-          <p className="mt-1 text-sm text-muted-foreground">Set some filters on a run, then choose Saved filters → Save current filters.</p>
-        </div>
+        <EmptyState icon={<FilterIcon />} title="No saved filter sets" className="border-dashed shadow-none">
+          Set some filters on a run, then choose Saved filters → Save current filters.
+        </EmptyState>
       ) : (
         <div className="overflow-hidden rounded-lg border">
           <Table>
@@ -660,10 +660,9 @@ function Waived() {
     <Section title="Waived gates" note={<>A waived gate turns that product&apos;s fail into a warning in every run, so later gates, fees and the score still run. Waive or un-waive from a result&apos;s details; removing one here applies the next time a run is screened or re-screened.</>}>
       {msg && <p className="rounded-md bg-warn-soft px-3 py-2 text-sm text-warn">{msg}</p>}
       {!items.length ? (
-        <div className="rounded-lg border border-dashed px-6 py-10 text-center">
-          <p className="font-medium">No gates waived</p>
-          <p className="mt-1 text-sm text-muted-foreground">Open a result, find a failed gate, and choose Waive to accept it for that product.</p>
-        </div>
+        <EmptyState icon={<UndoIcon />} title="No gates waived" className="border-dashed shadow-none">
+          Open a result, find a failed gate, and choose Waive to accept it for that product.
+        </EmptyState>
       ) : (
         <div className="overflow-hidden rounded-lg border">
           <Table>

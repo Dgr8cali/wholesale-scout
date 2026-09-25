@@ -14,7 +14,10 @@ import { DetailDrawer } from "@/components/results/DetailDrawer";
 import { ResultsTable, type DisplayRow } from "@/components/results/ResultsTable";
 import { eanOf, figure, titleOf, type Fav, type Progress, type Result, type Run, type SortKey } from "@/components/results/types";
 import { useSparks } from "@/components/results/useSparks";
+import { ErrorState } from "@/components/States";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import Link from "next/link";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { etaLabel } from "@/lib/eta";
 import { EMPTY_FILTERS, matches, normalizeFilters, type FilterSet } from "@/lib/filters";
@@ -332,8 +335,16 @@ export default function RunPage() {
     XLSX.writeFile(wb, `wholesale-scout-${(run?.name || run?.source || "run").replace(/[^\w-]+/g, "_").slice(0, 40)}.xlsx`);
   }
 
-  if (error && !run) return <p className="rounded-md bg-fail-soft px-3 py-2 text-sm text-fail">{error}</p>;
-  if (!run) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (error && !run) {
+    const missing = /not found|invalid input syntax/i.test(error);
+    return (
+      <ErrorState title={missing ? "Run not found" : "Couldn't load this run"}
+        message={missing ? "It may have been deleted." : error}
+        onRetry={missing ? undefined : () => { setError(null); setNonce((n) => n + 1); }}
+        action={<Button variant="ghost" asChild><Link href="/runs">All runs</Link></Button>} />
+    );
+  }
+  if (!run) return <RunSkeleton />;
 
   const total = Math.max(run.row_count, results.length);
 
@@ -424,6 +435,27 @@ export default function RunPage() {
           <Detail r={active} fav={favOf(active)} onNote={saveNote} onWaive={waive} stacked />
         </DetailDrawer>
       )}
+    </div>
+  );
+}
+
+/** The run page's shape while it loads. */
+function RunSkeleton() {
+  return (
+    <div className="space-y-4" aria-busy="true" aria-label="Loading run">
+      <div className="space-y-2"><Skeleton className="h-7 w-2/3" /><Skeleton className="h-4 w-1/3" /></div>
+      <div className="flex gap-2">{[240, 100, 200, 80].map((w, i) => <Skeleton key={i} className="h-9" style={{ width: w }} />)}</div>
+      <Skeleton className="h-28 rounded-xl" />
+      <div className="panel space-y-0 overflow-hidden">
+        <Skeleton className="h-10 rounded-none" />
+        {Array.from({ length: 8 }, (_, i) => (
+          <div key={i} className="flex items-center gap-3 border-t px-3 py-3">
+            <Skeleton className="size-4" /><Skeleton className="size-10" />
+            <div className="flex-1 space-y-1.5"><Skeleton className="h-4 w-1/2" /><Skeleton className="h-3 w-1/3" /></div>
+            <Skeleton className="h-4 w-16" /><Skeleton className="h-4 w-16" /><Skeleton className="h-4 w-24" />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
