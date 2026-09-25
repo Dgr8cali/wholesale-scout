@@ -226,6 +226,25 @@
   box-shadow: inset 0 -1px 0 var(--border);
 }
 
+/*
+ * The results table (components/results/ResultsTable): the card scrolls both ways, at most a
+ * screen tall, so the header row and the product column stay in view. Row backgrounds are a
+ * variable so pinned cells (which must be opaque) follow hover, selection and the open row.
+ */
+.results-scroll {
+  overflow: auto;
+  max-height: calc(100dvh - var(--app-header) - 1.5rem);
+  overscroll-behavior-x: contain;
+}
+.rt-row { --row-bg: var(--card); }
+.rt-row[data-alt] { --row-bg: color-mix(in oklab, var(--muted) 45%, var(--card)); }
+.rt-row[data-selected] { --row-bg: color-mix(in oklab, var(--brand-soft) 60%, var(--card)); }
+.rt-row:hover { --row-bg: var(--muted); }
+.rt-row[data-active] { --row-bg: var(--brand-soft); }
+.rt-row > td { background: var(--row-bg); }
+/* The last pinned column's edge, drawn as a shadow because borders don't travel with sticky cells. */
+.rt-edge { box-shadow: inset -1px 0 0 var(--border), 6px 0 8px -6px oklch(0 0 0 / 0.12); }
+
 /* Framed content areas (filter bar, tables, forms). */
 @utility panel {
   @apply rounded-xl border bg-card text-card-foreground;

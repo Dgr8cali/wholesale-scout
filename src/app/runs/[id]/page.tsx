@@ -1,109 +1,28 @@
 "use client";
 
-import { VerdictBadge } from "@/components/VerdictBadge";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Badge } from "@/components/ui/badge";
-import { toast } from "sonner";
-import { useDialogs } from "@/components/Dialogs";
-import { usePageCrumbs } from "@/components/Crumbs";
 import { useParams, useRouter } from "next/navigation";
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 import * as XLSX from "xlsx";
-import { GATE_LABELS, GATE_ORDER, GROUP_LABELS, type GateId, type GroupId } from "@/lib/screening/config";
-import type { GateOutcome } from "@/lib/screening/gates";
-import { api, gbp, pct, when } from "@/lib/ui/client";
+import { BulkBar } from "@/components/BulkBar";
+import { usePageCrumbs } from "@/components/Crumbs";
+import { useDialogs } from "@/components/Dialogs";
 import { EditableName } from "@/components/EditableName";
 import { FilterBar, type FilterOptions } from "@/components/FilterBar";
-import { EMPTY_FILTERS, matches, normalizeFilters, type FilterSet } from "@/lib/filters";
-import { etaLabel, type Eta } from "@/lib/eta";
-import { groupRows } from "@/lib/ui/group";
-import { brandOf, favKey, isWaived, toFilterRow } from "@/lib/ui/resultRows";
-import { WaiveControl } from "@/components/WaiveControl";
-import { BulkBar } from "@/components/BulkBar";
-import { ProductThumb } from "@/components/ProductThumb";
-import { FavouriteNote, FavouriteStar } from "@/components/FavouriteStar";
-import { RestrictionLink } from "@/lib/ui/RestrictionLink";
-import { buyBox, estSales, sellers, type Figure, type StoredMarket } from "@/lib/ui/metrics";
-
+import { Detail } from "@/components/results/Detail";
+import { DetailDrawer } from "@/components/results/DetailDrawer";
+import { ResultsTable, type DisplayRow } from "@/components/results/ResultsTable";
+import { eanOf, figure, titleOf, type Fav, type Progress, type Result, type Run, type SortKey } from "@/components/results/types";
+import { useSparks } from "@/components/results/useSparks";
 import { Button } from "@/components/ui/button";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
-interface Result {
-  id: string;
-  status: "pending" | "done" | "error";
-  verdict: "pass" | "warn" | "fail" | null;
-  failed_gate: GateId | null;
-  gate_outcomes: GateOutcome[];
-  fees: {
-    source: string; referralCategory: string; referralPct: number; referral: number | null; fba: number | null;
-    storage: number | null; returns: number | null; total: number | null; tier: string | null; fbaSource: string;
-    dimsEstimated: boolean; outputVat: number | null; dimsSource?: "catalog" | "keepa" | null;
-    compare?: {
-      amazon: { referral: number | null; fba: number | null } | null;
-      keepa: { referral: number | null; fba: number | null } | null;
-      rateCard: { referral: number | null; fba: number | null; tier: string | null };
-    };
-  } | null;
-  sell_price: number | null;
-  price_source: string | null;
-  landed_cost: number | null;
-  profit: number | null;
-  roi: number | null;
-  margin: number | null;
-  hurdle_price: number | null;
-  score: number | null;
-  group_scores: Record<GroupId, number | null> | null;
-  why: string | null;
-  band: "green" | "amber" | "grey" | null;
-  offer_count: number;
-  error: string | null;
-  inputs: { market?: StoredMarket | null; sellers?: Seller[] | null; lookup?: { outcome: string; attempts: { identifiersType: string; code: string; items: number; total?: number; error?: string }[]; raw?: string } | null } | null;
-  product: { ean: string; asin: string | null; title: string | null; brand: string | null; category: string | null; image_url?: string | null } | null;
-  offer: { unit_cost: number; currency: string; unit_cost_gbp: number; moq: number | null; pack_units: number; title: string | null; source_ref: string | null; supplier: { name: string } | null } | null;
-}
-
-interface Run {
-  id: string; name?: string | null; source: string; status: string; started_at: string; finished_at: string | null;
-  row_count: number; processed_count: number; token_cost: number; profile: { name: string } | null; error: string | null;
-}
-
-interface Seller {
-  sellerId: string; sharePct: number; name: string | null; ratingPct: number | null; ratingCount: number | null;
-  storefrontSize: number | null; brandSharePct: number | null;
-}
-
-interface Fav {
-  id: string;
-  ean: string;
-  asin: string | null;
-  note: string | null;
-}
-
-interface Progress {
-  done: boolean;
-  processed: number;
-  total: number;
-  waiting: { amazon: number; keepa: number };
-  keepaResumeAt: string | null;
-  eta?: Eta;
-  working: boolean;
-  tokenCost: number;
-}
-
-type SortKey = "score" | "profit" | "roi" | "margin" | "sell_price" | "landed_cost" | "hurdle_price" | "title" | "verdict" | "sales" | "sellers" | "buybox";
-
-/** Figures computed from the stored market data, for display and sorting. */
-const FIGURES = { sales: estSales, sellers, buybox: buyBox } as const;
-const figure = (r: Result, k: keyof typeof FIGURES): Figure => FIGURES[k](r.inputs?.market);
-
-const BAND_STYLE = { green: "bg-pass text-white", amber: "bg-warn text-white", grey: "bg-muted text-muted-foreground" } as const;
-const STATUS_ICON: Record<string, string> = { pass: "✓", warn: "!", fail: "✕", skipped: "–", off: "·" };
-const STATUS_STYLE: Record<string, string> = { pass: "bg-pass", warn: "bg-warn", fail: "bg-fail", skipped: "bg-muted", off: "bg-border" };
-
-/** Compact numeric cell: tabular figures, never wrapped, clipped rather than widening the table. */
-const NUM = "num overflow-hidden px-2 py-2 text-right text-xs whitespace-nowrap text-ellipsis";
-
-const titleOf = (r: Result) => r.product?.title ?? r.offer?.title ?? r.product?.ean ?? "";
-const eanOf = (r: Result) => r.product?.ean ?? r.id;
+import { etaLabel } from "@/lib/eta";
+import { EMPTY_FILTERS, matches, normalizeFilters, type FilterSet } from "@/lib/filters";
+import { GATE_LABELS, GATE_ORDER, type GateId } from "@/lib/screening/config";
+import { api, when } from "@/lib/ui/client";
+import { groupRows } from "@/lib/ui/group";
+import { brandOf, favKey, toFilterRow } from "@/lib/ui/resultRows";
+import { cn } from "@/lib/utils";
 
 export default function RunPage() {
   const { id } = useParams<{ id: string }>();
@@ -116,6 +35,8 @@ export default function RunPage() {
   const [progress, setProgress] = useState<Progress | null>(null);
   const processing = !!progress && !progress.done;
   const [open, setOpen] = useState<Set<string>>(new Set());
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const { sparks, observe: observeSparks } = useSparks();
   // EANs whose other ASINs are shown.
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "score", dir: -1 });
@@ -147,6 +68,7 @@ export default function RunPage() {
   };
   // Favourites are per product (EAN + ASIN), not per run.
   const [favs, setFavs] = useState<Map<string, Fav>>(new Map());
+  const favOf = (r: Result) => (r.product ? favs.get(favKey(r.product.ean, r.product.asin)) : undefined);
   const favourites = useMemo(() => new Set(favs.keys()), [favs]);
   useEffect(() => {
     api<{ favourites: Fav[] }>("/api/favourites?light=1")
@@ -334,6 +256,19 @@ export default function RunPage() {
     return groupRows(filtered, eanOf, order);
   }, [done, filters, favourites, sort]);
   const listingCount = rows.reduce((a, g) => a + 1 + g.others.length, 0);
+  // What the table shows: each EAN's lead, plus its other ASINs when expanded.
+  const displayRows = useMemo<DisplayRow[]>(() => rows.flatMap((g) => [
+    { r: g.lead, alt: false, groupKey: g.key, others: g.others.length },
+    ...(expanded.has(g.key) ? g.others.map((r) => ({ r, alt: true, groupKey: g.key, others: 0 })) : []),
+  ]), [rows, expanded]);
+  // The row open in the drawer; it closes if the filters hide it.
+  const activeIndex = activeId ? displayRows.findIndex((d) => d.r.id === activeId) : -1;
+  const active = activeIndex >= 0 ? displayRows[activeIndex].r : null;
+  const step = useCallback((by: -1 | 1) => {
+    const i = activeIndex + by;
+    if (i >= 0 && i < displayRows.length) setActiveId(displayRows[i].r.id);
+  }, [activeIndex, displayRows]);
+  const closeDrawer = useCallback(() => setActiveId(null), []);
   // The current filtered set, every listing (collapsed alternatives included), for select-all.
   const visibleIds = useMemo(() => rows.flatMap((g) => [g.lead.id, ...g.others.map((r) => r.id)]), [rows]);
 
@@ -397,22 +332,13 @@ export default function RunPage() {
     XLSX.writeFile(wb, `wholesale-scout-${(run?.name || run?.source || "run").replace(/[^\w-]+/g, "_").slice(0, 40)}.xlsx`);
   }
 
-  const th = (key: SortKey, label: ReactNode, right = false, hint?: string) => (
-    <th className={`sticky-th overflow-hidden px-2 py-2 align-bottom leading-tight ${right ? "text-right" : ""}`} title={hint}>
-      <button className={`uppercase hover:text-foreground ${right ? "text-right tracking-normal" : "text-left tracking-wide"}`}
-        onClick={() => setSort((s) => ({ key, dir: s.key === key ? (s.dir === 1 ? -1 : 1) : key === "title" ? 1 : -1 }))}>
-        {label}{sort.key === key ? (sort.dir === -1 ? " ↓" : " ↑") : ""}
-      </button>
-    </th>
-  );
-
   if (error && !run) return <p className="rounded-md bg-fail-soft px-3 py-2 text-sm text-fail">{error}</p>;
   if (!run) return <p className="text-sm text-muted-foreground">Loading…</p>;
 
   const total = Math.max(run.row_count, results.length);
 
   return (
-    <div className="space-y-4">
+    <div className={cn("space-y-4 transition-[margin]", active && "xl:mr-[27rem]")}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="page-title">
@@ -480,298 +406,24 @@ export default function RunPage() {
       <FilterBar value={filters} onChange={setFilters} options={filterOptions} favouritesAvailable={favourites.size > 0}
         matching={rows.length} total={products.length} unit={`products (${listingCount} listings shown)`} gateLabels={GATE_LABELS} />
 
-      {/* Fixed layout: numeric columns compact, product capped, why takes the rest and wraps.
-          Scrolls sideways inside the card only below the table's minimum width. */}
-      <div className="table-wrap">
-      <div className="panel table-scroll" data-min="75">
-        <table className="w-full min-w-[75rem] table-fixed text-sm">
-          <colgroup>
-            <col className="w-[2.25rem]" />{/* select */}
-            <col className="w-[3.5rem]" />{/* image */}
-            <col className="w-[5.5rem]" />{/* star + verdict */}
-            <col className="w-[3.25rem]" />{/* score */}
-            <col className="w-[13rem]" />{/* product */}
-            <col className="w-[4rem]" />{/* sales */}
-            <col className="w-[4.25rem]" />{/* sellers */}
-            <col className="w-[4.25rem]" />{/* buy box */}
-            <col className="w-[4.25rem]" />{/* landed */}
-            <col className="w-[4.25rem]" />{/* sell */}
-            <col className="w-[4.25rem]" />{/* profit */}
-            <col className="w-[3.5rem]" />{/* roi */}
-            <col className="w-[3.75rem]" />{/* margin */}
-            <col className="w-[4.25rem]" />{/* hurdle */}
-            <col />{/* why: the rest */}
-          </colgroup>
-          <thead className="text-left text-xs text-muted-foreground">
-            <tr>
-              <th className="sticky-th px-2 py-2 align-bottom">
-                <SelectAll visible={visibleIds} selected={selected} onChange={setSelected} />
-              </th>
-              <th className="sticky-th px-1 py-2 align-bottom"><span className="sr-only">Image</span></th>
-              {th("verdict", "Verdict")}
-              {th("score", "Score", true)}
-              {th("title", "Product")}
-              {th("sales", <>Sales<br />/ mo</>, true, "Est. sales / month")}
-              {th("sellers", "Sellers", true)}
-              {th("buybox", "Buy Box", true)}
-              {th("landed_cost", "Landed", true)}
-              {th("sell_price", "Sell", true)}
-              {th("profit", "Profit", true)}
-              {th("roi", "ROI", true)}
-              {th("margin", "Margin", true)}
-              {th("hurdle_price", "Hurdle", true)}
-              <th className="sticky-th px-2 py-2 align-bottom uppercase tracking-wide">Why</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.flatMap((g) => {
-              const showOthers = expanded.has(g.key);
-              return [g.lead, ...(showOthers ? g.others : [])].map((r, i) => ({ r, g, alt: i > 0 }));
-            }).map(({ r, g, alt }) => {
-              const isOpen = open.has(r.id);
-              return (
-                <Fragment key={r.id}>
-                  <tr className={`cursor-pointer border-b border-border align-top hover:bg-muted ${alt ? "bg-muted/40 text-muted-foreground" : ""}`}
-                    onClick={() => setOpen((s) => { const n = new Set(s); if (n.has(r.id)) n.delete(r.id); else n.add(r.id); return n; })}>
-                    <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
-                      <Checkbox className="mt-0.5" aria-label={`Select ${titleOf(r)}`} checked={selected.has(r.id)}
-                        onCheckedChange={() => setSelected((s) => { const n = new Set(s); if (n.has(r.id)) n.delete(r.id); else n.add(r.id); return n; })} />
-                    </td>
-                    <td className="px-1 py-1.5">
-                      <ProductThumb url={r.product?.image_url} asin={r.product?.asin} title={titleOf(r)} brand={brandOf(r)} />
-                    </td>
-                    <td className="px-2 py-2">
-                      <div className="flex items-center gap-1.5">
-                        {r.product
-                          ? <FavouriteStar starred={favourites.has(favKey(r.product.ean, r.product.asin))} onToggle={() => toggleFavourite(r)} />
-                          : <span className="w-4 flex-none" />}
-                        <VerdictBadge verdict={r.verdict} error={r.status === "error"} />
-                      </div>
-                      {isWaived(r) && <Badge variant="brand" className="mt-1 ml-[22px]" title="A gate on this row is waived by you">waived</Badge>}
-                    </td>
-                    <td className="px-2 py-2 text-right">
-                      {r.score != null && r.band
-                        ? <span className={`num inline-block min-w-9 rounded px-1.5 py-0.5 text-center text-xs font-semibold ${BAND_STYLE[r.band]}`}>{Math.round(r.score)}</span>
-                        : <span className="text-muted-foreground">—</span>}
-                    </td>
-                    <td className={`px-2 py-2 ${alt ? "pl-6" : ""}`}>
-                      <div className="line-clamp-2 min-w-0 font-medium leading-snug break-words" title={titleOf(r)}>{alt ? "↳ " : ""}{titleOf(r)}</div>
-                      <div className="num truncate text-xs text-muted-foreground">
-                        {r.product?.ean}
-                        {r.product?.asin && <> · <a className="text-brand hover:underline" href={`https://www.amazon.co.uk/dp/${r.product.asin}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>{r.product.asin}</a></>}
-                        {r.offer?.supplier && <> · {r.offer.supplier.name}{r.offer_count > 1 ? ` (+${r.offer_count - 1})` : ""}</>}
-                      </div>
-                      {!alt && g.others.length > 0 && (
-                        <button className="mt-1 text-xs font-medium text-brand hover:underline"
-                          onClick={(e) => { e.stopPropagation(); setExpanded((s) => { const n = new Set(s); if (n.has(g.key)) n.delete(g.key); else n.add(g.key); return n; }); }}>
-                          {expanded.has(g.key) ? "▾ Hide" : "▸"} {g.others.length} other ASIN{g.others.length > 1 ? "s" : ""} for this EAN
-                        </button>
-                      )}
-                    </td>
-                    <FigureCell f={figure(r, "sales")} />
-                    <FigureCell f={figure(r, "sellers")} />
-                    <FigureCell f={figure(r, "buybox")} money />
-                    <td className={NUM}>{gbp(r.landed_cost)}</td>
-                    <td className={NUM}>{gbp(r.sell_price)}</td>
-                    <td className={`${NUM} ${r.profit != null && r.profit < 0 ? "text-fail" : ""}`}>{gbp(r.profit)}</td>
-                    <td className={NUM}>{pct(r.roi)}</td>
-                    <td className={NUM}>{pct(r.margin)}</td>
-                    <td className={NUM}>{gbp(r.hurdle_price)}</td>
-                    <td className="px-2 py-2 text-xs leading-snug [overflow-wrap:anywhere]">
-                      {r.status === "error" ? r.error : r.why}
-                      <RestrictionLink outcomes={r.gate_outcomes} asin={r.product?.asin} />
-                    </td>
-                  </tr>
-                  {isOpen && (
-                    <tr className="border-b border-border bg-muted/50">
-                      <td colSpan={15} className="px-4 py-3">
-                        <Detail r={r} fav={r.product ? favs.get(favKey(r.product.ean, r.product.asin)) : undefined} onNote={saveNote} onWaive={waive} />
-                      </td>
-                    </tr>
-                  )}
-                </Fragment>
-              );
-            })}
-            {!rows.length && (
-              <tr><td colSpan={15} className="px-4 py-8 text-center text-sm text-muted-foreground">{done.length ? "Nothing matches these filters." : "Rows appear here as they're screened."}</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-      </div>
-    </div>
-  );
-}
+      <ResultsTable rows={displayRows} storageKey="ws.table.results.v1"
+        selected={selected} onToggleSelect={(rid) => setSelected((s) => { const n = new Set(s); if (n.has(rid)) n.delete(rid); else n.add(rid); return n; })}
+        visibleIds={visibleIds} onSelectAll={setSelected}
+        expandedGroups={expanded} onToggleGroup={(k) => setExpanded((s) => { const n = new Set(s); if (n.has(k)) n.delete(k); else n.add(k); return n; })}
+        open={open} onToggleOpen={(rid) => setOpen((s) => { const n = new Set(s); if (n.has(rid)) n.delete(rid); else n.add(rid); return n; })}
+        activeId={active?.id ?? null} onActivate={(rid) => setActiveId((cur) => (cur === rid ? null : rid))}
+        favourites={favourites} onStar={toggleFavourite}
+        sort={sort} onSort={(key) => setSort((s) => ({ key, dir: s.key === key ? (s.dir === 1 ? -1 : 1) : key === "title" ? 1 : -1 }))}
+        sparks={sparks} observeSparks={observeSparks}
+        renderDetail={(r) => <Detail r={r} fav={favOf(r)} onNote={saveNote} onWaive={waive} />}
+        empty={done.length ? "Nothing matches these filters." : "Rows appear here as they're screened."} />
 
-/** Referral and FBA fee from each source, ex-VAT and ex-DSF, at the scoring price. */
-function FeeCompare({ c, dimsSource }: { c: NonNullable<NonNullable<Result["fees"]>["compare"]>; dimsSource?: string | null }) {
-  const rows: [string, { referral: number | null; fba: number | null } | null][] = [
-    ["Amazon (SP-API)", c.amazon],
-    ["Keepa", c.keepa],
-    [`Rate card${c.rateCard.tier ? ` (${c.rateCard.tier})` : ""}`, c.rateCard],
-  ];
-  return (
-    <div className="mt-3">
-      <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Fees by source (ex-VAT)</p>
-      <table className="num w-full text-xs">
-        <thead className="text-muted-foreground"><tr><th className="text-left font-normal">Source</th><th className="text-right font-normal">Referral</th><th className="text-right font-normal">FBA</th></tr></thead>
-        <tbody>
-          {rows.map(([label, v]) => (
-            <tr key={label}>
-              <td className="pr-2">{label}</td>
-              <td className="text-right">{v?.referral != null ? gbp(v.referral) : <span className="text-muted-foreground">—</span>}</td>
-              <td className="text-right">{v?.fba != null ? gbp(v.fba) : <span className="text-muted-foreground">—</span>}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {dimsSource === "keepa" && <p className="mt-1 text-xs text-muted-foreground">Size from Keepa (no catalog dimensions).</p>}
-    </div>
-  );
-}
-
-/** Top Buy Box sellers over 365 days, with their Keepa profiles. */
-function Sellers({ sellers, flaggedText }: { sellers: Seller[]; flaggedText: string }) {
-  const flagged = (s: Seller) => flaggedText.includes(`likely brand distributor: ${s.name ?? s.sellerId} `);
-  return (
-    <div className="mt-3">
-      <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Top Buy Box sellers (365 days)</p>
-      <ul className="space-y-1 text-xs">
-        {sellers.map((s) => (
-          <li key={s.sellerId}>
-            <a className="font-medium text-brand hover:underline" href={`https://www.amazon.co.uk/sp?seller=${s.sellerId}`} target="_blank" rel="noreferrer">{s.name ?? s.sellerId}</a>
-            <span className="text-muted-foreground"> · {s.sharePct}% of Buy Box</span>
-            {s.ratingPct != null && <span className="text-muted-foreground"> · {s.ratingPct}% of {s.ratingCount?.toLocaleString("en-GB")} ratings</span>}
-            {s.storefrontSize != null && <span className="text-muted-foreground"> · {s.storefrontSize.toLocaleString("en-GB")} listings</span>}
-            {s.brandSharePct != null && (
-              <span className={flagged(s) ? "font-semibold text-warn" : "text-muted-foreground"}> · {s.brandSharePct}% this brand{flagged(s) ? " (likely distributor)" : ""}</span>
-            )}
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-/** Select-all for the filtered set: checked when all are selected, dash when some are. */
-function SelectAll({ visible, selected, onChange }: { visible: string[]; selected: Set<string>; onChange: (s: Set<string>) => void }) {
-  const n = visible.filter((x) => selected.has(x)).length;
-  const all = n > 0 && n === visible.length;
-  return (
-    <Checkbox aria-label={all ? "Clear selection" : `Select all ${visible.length} shown`}
-      title={all ? "Clear selection" : `Select all ${visible.length} rows matching the filters`}
-      checked={all ? true : n > 0 ? "indeterminate" : false}
-      onCheckedChange={() => {
-        const next = new Set(selected);
-        if (all) for (const x of visible) next.delete(x);
-        else for (const x of visible) next.add(x);
-        onChange(next);
-      }} />
-  );
-}
-
-/** A number with its source as a tooltip; "—" when there's nothing to show. */
-function FigureCell({ f, money }: { f: Figure; money?: boolean }) {
-  return (
-    <td className={NUM} title={f.note}>
-      {f.value == null ? <span className="text-muted-foreground">—</span> : money ? gbp(f.value) : Math.round(f.value).toLocaleString("en-GB")}
-    </td>
-  );
-}
-
-function Detail({ r, fav, onNote, onWaive }: {
-  r: Result;
-  fav?: Fav;
-  onNote: (r: Result, f: Fav | undefined, note: string) => void;
-  onWaive: (r: Result, gate: GateId, action: "waive" | "unwaive", reason?: string) => Promise<void>;
-}) {
-  return (
-    <div className="grid gap-4 lg:grid-cols-[2fr_1fr_1fr]">
-      <div>
-        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Gates</p>
-        <ul className="space-y-1">
-          {r.gate_outcomes.map((g) => (
-            <li key={g.gate} className="flex gap-2 text-xs">
-              <span className={`flex h-4 w-4 flex-none items-center justify-center rounded-full text-2xs font-bold text-white ${STATUS_STYLE[g.status]}`}>{STATUS_ICON[g.status]}</span>
-              <span className="w-40 flex-none font-medium">{g.label}</span>
-              <span className="min-w-0 text-muted-foreground">
-                {g.detail}{g.gate === "gating" && <RestrictionLink outcomes={r.gate_outcomes} asin={r.product?.asin} />}
-                {r.product && (g.status === "fail" || g.tags?.includes("WAIVED")) && (
-                  <WaiveControl waived={!!g.tags?.includes("WAIVED")}
-                    onWaive={(reason) => onWaive(r, g.gate as GateId, "waive", reason)}
-                    onUnwaive={() => onWaive(r, g.gate as GateId, "unwaive")} />
-                )}
-              </span>
-            </li>
-          ))}
-          {r.failed_gate && <li className="text-xs text-muted-foreground">Stopped at {GATE_LABELS[r.failed_gate]}; later gates didn&apos;t run.</li>}
-        </ul>
-        {r.inputs?.lookup && r.inputs.lookup.outcome !== "matched" && (
-          <details className="mt-2 text-xs">
-            <summary className="cursor-pointer text-muted-foreground">
-              Catalog lookup: {r.inputs.lookup.outcome === "search_miss" ? "search miss (Amazon answered, no items)" : "API error"}
-            </summary>
-            <ul className="num mt-1 space-y-0.5">
-              {r.inputs.lookup.attempts.map((a, i) => (
-                <li key={i}>{a.identifiersType} {a.code}: {a.error ? <span className="text-fail">{a.error}</span> : `${a.items} item${a.items === 1 ? "" : "s"}${a.total != null ? ` of ${a.total} results` : ""}`}</li>
-              ))}
-            </ul>
-            {r.inputs.lookup.raw && <pre className="num mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-all rounded bg-card p-2">{r.inputs.lookup.raw}</pre>}
-          </details>
-        )}
-      </div>
-      <div>
-        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Per unit at {gbp(r.sell_price)}</p>
-        {r.fees ? (
-          <dl className="num grid grid-cols-[1fr_auto] gap-x-3 gap-y-0.5 text-xs">
-            <dt>Referral ({r.fees.referralPct}%, {r.fees.referralCategory})</dt><dd className="text-right">{gbp(r.fees.referral)}</dd>
-            <dt>FBA ({r.fees.tier ?? "?"}, {r.fees.fbaSource})</dt><dd className="text-right">{gbp(r.fees.fba)}</dd>
-            <dt>Storage</dt><dd className="text-right">{gbp(r.fees.storage)}</dd>
-            <dt>Returns allowance</dt><dd className="text-right">{gbp(r.fees.returns)}</dd>
-            {r.fees.outputVat ? <><dt>Output VAT</dt><dd className="text-right">{gbp(r.fees.outputVat)}</dd></> : null}
-            <dt>Landed cost</dt><dd className="text-right">{gbp(r.landed_cost)}</dd>
-            <dt className="font-semibold">Profit</dt><dd className="text-right font-semibold">{gbp(r.profit)}</dd>
-            <dt className="col-span-2 mt-1 text-muted-foreground">
-              {r.fees.source === "amazon" ? "Referral and FBA from Amazon's fee estimate" : "Fees from the rate card"}; DSF and VAT on fees included{r.fees.dimsEstimated ? "; size assumed (no dimensions)" : ""}. Price: {r.price_source}.
-            </dt>
-          </dl>
-        ) : (
-          <p className="text-xs text-muted-foreground">No sell price yet.{r.hurdle_price != null ? ` Clears the floors at ${gbp(r.hurdle_price)}.` : ""}</p>
-        )}
-        {r.fees?.compare && <FeeCompare c={r.fees.compare} dimsSource={r.fees.dimsSource} />}
-        {r.offer && (
-          <p className="mt-2 text-xs text-muted-foreground">
-            Quoted {r.offer.unit_cost} {r.offer.currency}/unit → {gbp(r.offer.unit_cost_gbp)} ex-VAT · MOQ {r.offer.moq ?? "—"} · {r.offer.source_ref}
-          </p>
-        )}
-      </div>
-      <div>
-        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Score groups</p>
-        {r.group_scores ? (
-          <ul className="space-y-1">
-            {(Object.keys(GROUP_LABELS) as GroupId[]).map((g) => {
-              const v = r.group_scores![g];
-              return (
-                <li key={g} className="flex items-center gap-2 text-xs">
-                  <span className="w-20">{GROUP_LABELS[g]}</span>
-                  <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-card">
-                    {v != null && <span className="block h-full rounded-full bg-brand" style={{ width: `${v}%` }} />}
-                  </span>
-                  <span className="num w-7 text-right">{v ?? "—"}</span>
-                </li>
-              );
-            })}
-          </ul>
-        ) : <p className="text-xs text-muted-foreground">Not scored.</p>}
-        {r.product && (
-          <div className="mt-3">
-            <FavouriteNote note={fav?.note ?? null} starred={!!fav} onSave={(note) => onNote(r, fav, note)} />
-          </div>
-        )}
-        {r.inputs?.sellers && r.inputs.sellers.length > 0 && (
-          <Sellers sellers={r.inputs.sellers} flaggedText={r.gate_outcomes.find((g) => g.tags?.includes("BRAND_DISTRIBUTOR"))?.detail ?? ""} />
-        )}
-      </div>
+      {active && (
+        <DetailDrawer r={active} index={activeIndex} count={displayRows.length} sparks={active.product?.asin ? sparks[active.product.asin] : null}
+          onStep={step} onClose={closeDrawer}>
+          <Detail r={active} fav={favOf(active)} onNote={saveNote} onWaive={waive} stacked />
+        </DetailDrawer>
+      )}
     </div>
   );
 }

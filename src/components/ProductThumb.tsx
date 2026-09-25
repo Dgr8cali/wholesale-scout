@@ -23,10 +23,10 @@ function Placeholder({ size }: { size: number }) {
 }
 
 /**
- * A 40px product thumbnail, loaded lazily. Hover (or focus) shows a ~300px preview with the
+ * A product thumbnail (40px by default), loaded lazily. Hover (or focus) shows a ~300px preview with the
  * title, brand and ASIN; click opens the Amazon UK listing in a new tab. No image: a placeholder.
  */
-export function ProductThumb({ url, asin, title, brand }: { url: string | null | undefined; asin: string | null | undefined; title: string | null; brand: string | null }) {
+export function ProductThumb({ url, asin, title, brand, size = 40 }: { url: string | null | undefined; asin: string | null | undefined; title: string | null; brand: string | null; size?: number }) {
   const [failed, setFailed] = useState(false);
   const [preview, setPreview] = useState<{ x: number; y: number } | null>(null);
   const hasImage = !!url && !failed;
@@ -43,9 +43,9 @@ export function ProductThumb({ url, asin, title, brand }: { url: string | null |
   const thumb = hasImage ? (
     // Plain <img>: Amazon's CDN serves the sizes; no need to route thumbnails through image optimisation.
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={amazonImage(url!, 80)} alt="" width={40} height={40} loading="lazy" decoding="async"
-      onError={() => setFailed(true)} className="h-10 w-10 rounded border border-border bg-white object-contain" />
-  ) : <Placeholder size={40} />;
+    <img src={amazonImage(url!, size * 2)} alt="" width={size} height={size} loading="lazy" decoding="async"
+      onError={() => setFailed(true)} className="rounded border border-border bg-white object-contain" style={{ width: size, height: size }} />
+  ) : <Placeholder size={size} />;
 
   const card = preview && typeof document !== "undefined" && createPortal(
     <div role="tooltip" className="pointer-events-none fixed z-50 w-[316px] rounded-lg border border-border bg-card p-2 shadow-xl" style={{ left: preview.x, top: preview.y }}>
@@ -64,7 +64,8 @@ export function ProductThumb({ url, asin, title, brand }: { url: string | null |
     onMouseLeave: () => setPreview(null),
     onFocus: (e: React.FocusEvent<HTMLElement>) => show(e.currentTarget),
     onBlur: () => setPreview(null),
-    className: "block h-10 w-10 flex-none",
+    className: "block flex-none",
+    style: { width: size, height: size },
   };
   return (
     <>

@@ -135,7 +135,7 @@ function Crumbs() {
         {crumbs.map((c, i) => (
           <Fragment key={i}>
             {i > 0 && <BreadcrumbSeparator />}
-            <BreadcrumbItem className="min-w-0">
+            <BreadcrumbItem className={i === crumbs.length - 1 ? "min-w-0" : "flex-none"}>
               {c.href && i < crumbs.length - 1
                 ? <BreadcrumbLink asChild><Link href={c.href}>{c.label}</Link></BreadcrumbLink>
                 : <BreadcrumbPage className="truncate">{c.label}</BreadcrumbPage>}
