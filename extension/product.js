@@ -193,7 +193,6 @@
   // What Amazon sent back at each step (first 1,500 characters), for the collapsed Debug section.
   let debug = [];
   const note = (step, info) => { debug.push({ step, ...info }); };
-  const snippet = (text) => String(text ?? "").replace(/\s+/g, " ").slice(0, 1500);
   // Phrases that say how many Amazon allows, in its UK ("basket") and US ("cart") wording.
   const STOCK_WORDS = /(only \d[\d,]* (?:left|of these|are available|available)[^<.]{0,60}|limit(?:ed)?(?: of| to)? \d[\d,]* per customer[^<.]{0,40}|quantity (?:is )?limited to \d[\d,]*|added to (?:your )?(?:basket|cart)|(?:basket|cart) (?:subtotal|count)[^<]{0,40}|maximum quantity[^<.]{0,60})/gi;
   /** A page Amazon returned, reduced to what the stock reading depends on. */
