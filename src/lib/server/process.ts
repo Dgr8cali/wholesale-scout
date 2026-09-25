@@ -276,14 +276,26 @@ async function loadRows(results: PendingRow[]): Promise<Row[]> {
     suppliers.push(...(must(await d.from("suppliers").select("*").in("id", c), "suppliers") as Supplier[]));
   }
   const P = byId(products), O = byId(offers), S = byId(suppliers);
+
+  // How many ASINs each EAN has, from the products table. A row whose catalog data is fresh
+  // skips the lookup, so without this it would count only its own ASIN and never reach the
+  // multi-ASIN checks (doubtful match) — on a second upload, or on Re-screen of stored rows.
+  const siblings = new Map<string, number>();
+  for (const c of chunks([...new Set(products.map((p) => p.ean))])) {
+    const rows = must(await d.from("products").select("ean, asin").in("ean", c), "sibling ASINs") as { ean: string; asin: string | null }[];
+    for (const x of rows) if (x.asin) siblings.set(x.ean, (siblings.get(x.ean) ?? 0) + 1);
+  }
+
   return results.map((r) => {
     const offer = O.get(r.offer_id)!;
     const product = P.get(r.product_id)!;
     const i = r.inputs?.v === 1 ? r.inputs : null;
+    const stored = i?.match ?? (product.asin ? { asin: product.asin, asinCount: 1, looked: true } : null);
+    const match = stored?.asin ? { ...stored, asinCount: Math.max(stored.asinCount, siblings.get(product.ean) ?? 0) } : stored;
     return {
       resultId: r.id, product, offer, supplier: S.get(offer.supplier_id)!,
       stage: i?.stage ?? "row",
-      match: i?.match ?? (product.asin ? { asin: product.asin, asinCount: 1, looked: true } : null),
+      match,
       market: i?.market ?? null,
       hazmat: i?.hazmat ?? [],
       restriction: i?.restriction ?? null,
@@ -465,7 +477,7 @@ export async function processRun(runId: string, limit = 20): Promise<{ done: boo
       const primary = p.asin ?? asins[0] ?? null;
       const trace = traces.get(p.ean);
       if (trace) row.lookup = trace;
-      row.match = { asin: primary, asinCount: Math.max(1, asins.length), looked: true };
+      row.match = { asin: primary, asinCount: Math.max(1, asins.length, row.match?.asinCount ?? 0), looked: true };
       if (!primary && trace?.outcome === "api_error") {
         // Amazon didn't answer, so this isn't a verdict on the product: leave it retryable.
         const err = trace.attempts.find((a) => a.error)?.error ?? "no response";

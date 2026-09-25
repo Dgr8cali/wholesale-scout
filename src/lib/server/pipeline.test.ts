@@ -22,6 +22,10 @@ const cat = (asin: string, ean: string, over: Partial<CatalogMatch> = {}): Catal
 });
 
 const CATALOG: Record<string, CatalogMatch[]> = {
+  "3401399277092": [
+    cat("B0060OMXUA", "3401399277092", { brand: "Bioderma", title: "Bioderma Sebium Purifying Cleansing Foaming Gel 500ml" }),
+    cat("B076HZHD2X", "3401399277092", { brand: "Bioderma", title: "Onagrine CC Cream Extreme Perfection Complexion Perfecting Care 40ml - Dark" }),
+  ],
   "4006381333931": [cat("B0TAPE0001", "4006381333931")],
   "5000000000011": [cat("B0FRAG0001", "5000000000011")],
   "5000000000035": [cat("B0CHEAP001", "5000000000035")],
@@ -34,6 +38,8 @@ const PRICES: Record<string, { buyBox: number; offers: number }> = {
   B0CHEAP001: { buyBox: 12.5, offers: 6 },
   B0MULTIA01: { buyBox: 22, offers: 4 },
   B0MULTIB01: { buyBox: 22, offers: 4 },
+  B0060OMXUA: { buyBox: 21.5, offers: 5 },
+  B076HZHD2X: { buyBox: 23, offers: 3 },
 };
 
 vi.mock("../spapi/client", async (orig) => {
@@ -231,6 +237,44 @@ describe("ingest → process", () => {
     expect(frag.status).toBe("done");
     expect(frag.failed_gate).not.toBe("compliance");
     expect(fake.tables.runs.find((r) => r.id === runId)!.profile_id).toBe(testOrder.id);
+  });
+
+  it("keeps an EAN's sibling ASINs on a second upload and on Re-screen (Onagrine doubtful match)", async () => {
+    const sebium = () => file("pharmazon.xlsx", [
+      ["EAN", "Name", "Price", "MOQ"],
+      ["3401399277092", "Bioderma Sébium Purifying and Foaming Cleansing Gel 500 ml", "6.00", 6],
+    ], { name: "Pharmazon", vatBasis: "ex_vat", vatRate: 20, currency: "GBP" });
+    // Brand column mapped too, as on the live sheet.
+    const withBrand = () => {
+      const f = sebium();
+      f.mapping.columns = { ...f.mapping.columns };
+      f.rows = f.rows.map((r) => ({ ...r, brand: "Bioderma" }));
+      return f;
+    };
+    const onagrine = (runId: string) => fake.tables.results.find((r) => r.run_id === runId &&
+      fake.tables.products.find((p) => p.id === r.product_id)!.asin === "B076HZHD2X")!;
+
+    const first = await ingest({ files: [withBrand()] });
+    while (!(await processRun(first.runId)).done);
+    expect(onagrine(first.runId)).toMatchObject({ failed_gate: "matchQuality", score: null });
+
+    // Second upload within 7 days: the catalog is fresh, so no lookup. The sibling must still count.
+    const second = await ingest({ files: [withBrand()] });
+    while (!(await processRun(second.runId)).done);
+    const r2 = onagrine(second.runId);
+    expect(r2).toMatchObject({ failed_gate: "matchQuality", score: null });
+    expect(r2.why).toMatch(/^Failed match quality: Doubtful match: Amazon's title "Onagrine CC Cream/);
+
+    // A row stored with the wrong count (as on the live run) is corrected on Re-screen, no calls.
+    const stored = r2.inputs as { match: { asinCount: number } };
+    stored.match.asinCount = 1;
+    r2.gate_outcomes = [];
+    r2.failed_gate = null;
+    const before = { ...calls };
+    await rescreenRun(second.runId);
+    expect(calls).toEqual(before);
+    expect(onagrine(second.runId)).toMatchObject({ failed_gate: "matchQuality", score: null });
+    expect((onagrine(second.runId).inputs as { match: { asinCount: number } }).match.asinCount).toBe(2);
   });
 
   it("recognises a re-uploaded layout by its fingerprint", async () => {
