@@ -123,6 +123,32 @@ export function detectHeaderRow(rows: Cell[][]): number {
   return best;
 }
 
+/** Non-empty header texts of a row. */
+export function headersOf(rows: Cell[][], headerRow: number): string[] {
+  return (rows[headerRow] ?? []).map((h) => String(h ?? "").trim()).filter(Boolean);
+}
+
+/**
+ * Apply a remembered layout to this file. The layout is recognised by its headers, so the
+ * header row is wherever those headers are in *this* file: a new export can carry one more or
+ * one fewer banner line than the one the layout was saved from. Columns this file lacks are
+ * dropped rather than mapped to nothing.
+ */
+export function rememberedMapping(rows: Cell[][], saved: ColumnMapping, fingerprint: string): ColumnMapping {
+  let headerRow = -1;
+  for (let i = 0; i < Math.min(rows.length, 30); i++) {
+    const hs = headersOf(rows, i);
+    if (hs.length >= 2 && headerFingerprint(hs) === fingerprint) {
+      headerRow = i;
+      break;
+    }
+  }
+  if (headerRow === -1) headerRow = detectHeaderRow(rows);
+  const present = new Set(headersOf(rows, headerRow));
+  const columns = Object.fromEntries(Object.entries(saved.columns).filter(([, h]) => h && present.has(h))) as ColumnMapping["columns"];
+  return { ...saved, headerRow, columns };
+}
+
 /** "£1,234.50", "1.234,50 €", "12,5", 12.5 → number. */
 export function parseMoney(v: Cell): number | null {
   if (typeof v === "number") return isFinite(v) ? v : null;

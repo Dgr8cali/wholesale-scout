@@ -1,3 +1,4 @@
+import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   applyMapping,
@@ -5,8 +6,10 @@ import {
   detectHeaderRow,
   guessMapping,
   headerFingerprint,
+  headersOf,
   normalizeEan,
   parseMoney,
+  rememberedMapping,
   validGtin,
   type Cell,
 } from "./mapping";
@@ -105,5 +108,76 @@ describe("currency from the price header", () => {
     expect(currencyFromHeader("Unit cost")).toBeNull();
     expect(currencyFromHeader("Europa range")).toBeNull();
     expect(currencyFromHeader("")).toBeNull();
+  });
+});
+
+describe("remembered layouts (Qogita catalog exports)", () => {
+  const HEADERS = ["GTIN", "Name", "Category", "Brand", "€ Lowest Price inc. shipping", "Unit", "Lowest Priced Offer Inventory", "Is a pre-order?", "Estimated Delivery Time (weeks)", "Number of Offers", "Total Inventory of All Offers", "Product Link"];
+  const banner: Cell[][] = [
+    ["Qogita Catalog", null, null],
+    ["Catalog As Of 2026-09-24T13-28-40", null, null],
+    ["For Illustrative Purposes Only. Prices May Differ Per Cart Subject To Optimization.", null, null],
+  ];
+  const data: Cell[][] = [
+    ["3337875863377", "La Roche-Posay Effaclar Duo+M 40ml", "Face Creams", "La Roche-Posay", 9.48, 3, 120, "No", "", 1, 120, null],
+    ["3401399277092", "Bioderma Sebium Gel Moussant 500ml", "Cleansers", "Bioderma", 8.9, 2, 40, "No", "", 2, 55, null],
+  ];
+  const saved = {
+    headerRow: 3,
+    columns: { ean: "GTIN", title: "Name", brand: "Brand", category: "Category", unitPrice: "€ Lowest Price inc. shipping", stock: "Lowest Priced Offer Inventory" },
+    pricePer: "unit" as const,
+  };
+  const eur = { vatBasis: "ex_vat" as const, vatRate: 20, currency: "EUR" };
+  const fx = { rate: 0.86, date: "2026-09-25" };
+
+  it("detects the header row and guesses GTIN and the € price column on a fresh layout", () => {
+    const rows = [...banner, HEADERS, ...data];
+    expect(detectHeaderRow(rows)).toBe(3);
+    expect(guessMapping(HEADERS)).toMatchObject({ ean: "GTIN", unitPrice: "€ Lowest Price inc. shipping", title: "Name", brand: "Brand" });
+  });
+
+  it("finds the remembered layout's headers wherever they sit in this file", () => {
+    // One more banner line than the file the layout was saved from: headers on row 5, not 4.
+    const shifted = [...banner, ["Filters: max delivery 1w, MOV limit 500.00"], HEADERS, ...data];
+    const fp = headerFingerprint(HEADERS);
+    const m = rememberedMapping(shifted, saved, fp);
+    expect(m.headerRow).toBe(4);
+    const r = applyMapping(shifted, m, eur, fx);
+    expect(r.rejected).toEqual([]);
+    expect(r.rows.map((x) => x.ean)).toEqual(["3337875863377", "3401399277092"]);
+    // The old behaviour — the saved row number — reads the banner as headers and sets everything aside.
+    expect(applyMapping(shifted, saved, eur, fx).rejected.every((x) => x.reason === "No usable EAN")).toBe(true);
+  });
+
+  it("drops a saved column this file doesn't have", () => {
+    const without = HEADERS.filter((h) => h !== "Lowest Priced Offer Inventory");
+    const rows = [...banner, without, ...data.map((d) => d.filter((_, i) => i !== 6))];
+    const m = rememberedMapping(rows, saved, headerFingerprint(without));
+    expect(m.columns.stock).toBeUndefined();
+    expect(m.columns.ean).toBe("GTIN");
+  });
+});
+
+// The real 91-row Qogita export, when it's on this machine. Not committed: it's supplier data.
+const REAL_91 = `${process.env.HOME}/Downloads/Filtered_Catalog_Download-X2Y688-collection-dermocosmetics-24-09-2026T13-28-40.xlsx`;
+describe.skipIf(!existsSync(REAL_91))("the real 91-row Qogita file", () => {
+  it("maps to GTIN and € Lowest Price inc. shipping and keeps all 91 lines, fresh or remembered", async () => {
+    const XLSX = await import("xlsx");
+    const buf = readFileSync(REAL_91);
+    // Exactly as the upload page reads it.
+    const wb = XLSX.read(new Uint8Array(buf).buffer, { type: "array", raw: false, dense: true });
+    const rows = XLSX.utils.sheet_to_json<Cell[]>(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: null, blankrows: false });
+    const hr = detectHeaderRow(rows);
+    const headers = headersOf(rows, hr);
+    const fresh = guessMapping(headers);
+    expect(fresh.ean).toBe("GTIN");
+    expect(fresh.unitPrice).toBe("€ Lowest Price inc. shipping");
+    const basis = { vatBasis: "ex_vat" as const, vatRate: 20, currency: "EUR" };
+    const r1 = applyMapping(rows, { headerRow: hr, columns: fresh, pricePer: "unit" }, basis, { rate: 0.86, date: "2026-09-25" });
+    expect(r1.rows).toHaveLength(91);
+    // Remembered with a wrong stored row number (as a layout saved from another export could be).
+    const remembered = rememberedMapping(rows, { headerRow: 0, columns: { ean: "GTIN", unitPrice: "€ Lowest Price inc. shipping" }, pricePer: "unit" }, headerFingerprint(headers));
+    expect(remembered.headerRow).toBe(hr);
+    expect(applyMapping(rows, remembered, basis, { rate: 0.86, date: "2026-09-25" }).rows).toHaveLength(91);
   });
 });

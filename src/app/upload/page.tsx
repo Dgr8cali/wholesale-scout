@@ -12,7 +12,9 @@ import {
   MAX_ROWS,
   guessMapping,
   headerFingerprint,
+  headersOf,
   MAPPABLE_FIELDS,
+  rememberedMapping,
   type Cell,
   type ColumnMapping,
   type FieldKey,
@@ -43,10 +45,6 @@ const today = () => new Date().toISOString().slice(0, 10);
 
 function sheetRows(wb: XLSX.WorkBook, name: string): Cell[][] {
   return XLSX.utils.sheet_to_json<Cell[]>(wb.Sheets[name], { header: 1, raw: true, defval: null, blankrows: false });
-}
-
-function headersOf(rows: Cell[][], headerRow: number): string[] {
-  return (rows[headerRow] ?? []).map((h) => String(h ?? "").trim()).filter(Boolean);
 }
 
 async function fetchFx(currency: string) {
@@ -84,7 +82,8 @@ export default function UploadPage() {
         const fx = s.currency === "GBP" ? { rate: 1, date: today(), source: "fixed" } : await fetchFx(s.currency).catch(() => ({ rate: 0, date: today(), source: "" }));
         return {
           ...f,
-          mapping: saved.mapping,
+          // The saved layout's columns, on this file's own header row.
+          mapping: rememberedMapping(f.rows, saved.mapping, fp),
           remembered: s.name,
           supplier: { name: s.name, vatBasis: s.vat_basis, vatRate: Number(s.vat_rate), currency: s.currency },
           fx,
