@@ -412,7 +412,8 @@ async function attachKeepa(
     }
   }
 
-  for (const [asin, k] of products) {
+  // Several at a time: one by one, a batch of 100 snapshots took long enough to overrun the call.
+  await mapLimit([...products], 8, async ([asin, k]) => {
     try {
       await saveSnapshot(k);
     } catch (e) {
@@ -420,7 +421,7 @@ async function attachKeepa(
       for (const r of withAsin) if (r.match!.asin === asin) r.dataNotes.push(`Keepa snapshot not stored: ${(e as Error).message}.`);
     }
     summaries.set(asin, k.summary);
-  }
+  });
   if (products.size) {
     for (const c of chunks([...products.keys()])) {
       await db().from("products").update({ keepa_updated_at: new Date().toISOString() }).in("asin", c);
@@ -930,7 +931,12 @@ export async function processRun(runId: string, opts: { budgetMs?: number } = {}
     const q: Queues = { lookup: [], keepa: [], account: [] };
     for (const row of await loadRows(pending, maxAgeMs(cfg))) route(row, q, env);
 
-    while (Date.now() < deadline - margin) {
+    // Start a batch only if it can finish before the deadline: a batch can take 15–20 s (a Keepa
+    // call plus saving its snapshots), and a call killed at the platform limit never saves its
+    // progress or schedules the next one.
+    let lastBatchMs = 0;
+    const headroom = () => Math.max(Math.min(5_000, budget * 0.1), lastBatchMs * 1.5);
+    while (Date.now() + headroom() < deadline - margin) {
       const a = q.lookup.splice(0, BATCH.lookup);
       const c = q.account.splice(0, BATCH.account);
       const keepaReady: boolean = keepa.available && (keepaWaitUntil == null || Date.now() >= keepaWaitUntil);
@@ -941,13 +947,14 @@ export async function processRun(runId: string, opts: { budgetMs?: number } = {}
       const b: Row[] = keepaReady ? q.keepa.splice(0, BATCH.keepa) : [];
       if (!a.length && !b.length && !c.length) {
         // Only rows waiting on Keepa tokens: wait for the refill inside the budget.
-        if (q.keepa.length && keepaWaitUntil != null && keepaWaitUntil < deadline - margin) {
+        if (q.keepa.length && keepaWaitUntil != null && keepaWaitUntil + headroom() < deadline - margin) {
           await sleepMs(keepaWaitUntil - Date.now());
           continue;
         }
         break;
       }
       const started = performance.now();
+      const batchStart = Date.now();
       const [la, kb, ac]: [Awaited<ReturnType<typeof stageLookup>>, Awaited<ReturnType<typeof stageKeepa>>, StageOut] =
         await Promise.all([stageLookup(a, env), stageKeepa(b, env), stageAccount(c, env)]);
       progressed += la.finished + kb.finished + ac.finished + la.next.length + kb.next.length;
@@ -965,6 +972,7 @@ export async function processRun(runId: string, opts: { budgetMs?: number } = {}
       await saveOwnStats(runId, stats);
       q.lookup.push(...la.added);
       q.keepa.unshift(...kb.deferred);
+      lastBatchMs = Math.max(lastBatchMs * 0.5, Date.now() - batchStart);
       if (kb.waitUntil != null) keepaWaitUntil = kb.waitUntil;
       else if (kb.next.length) keepaWaitUntil = null;
     }

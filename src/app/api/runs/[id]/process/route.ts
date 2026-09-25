@@ -16,7 +16,8 @@ const GIVE_UP_MS = 60 * 60_000;
  */
 export const POST = handle(async (req: NextRequest, ctx: { params: Promise<{ id: string }> }) => {
   const { id } = await ctx.params;
-  const progress = await processRun(id, { budgetMs: 45_000 });
+  // 40 s of work inside the 60 s limit; processRun won't start a batch it can't finish.
+  const progress = await processRun(id, { budgetMs: 40_000 });
   // Hand on only under a lease; without one, two workers could take the same rows.
   if (!progress.done && !progress.busy && progress.leased && !progress.paused) {
     const run = await db().from("runs").select("last_progress_at, resume_after").eq("id", id).single();
