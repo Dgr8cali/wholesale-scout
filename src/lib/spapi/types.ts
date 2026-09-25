@@ -35,6 +35,8 @@ export interface FeesEstimate {
   fba: number | null;
   total: number | null;
   error?: string;
+  /** Amazon's side failed (Status "ServerError"); worth asking again. */
+  retryable?: boolean;
 }
 
 export type RestrictionStatus = "open" | "approval_required" | "blocked" | "unknown";

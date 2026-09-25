@@ -86,7 +86,7 @@ export interface GateRun {
   ruleMatches: RuleMatch[];
 }
 
-const money = (n: number) => `£${n.toFixed(2)}`;
+const money = (n: number) => `${n < 0 ? "-" : ""}£${Math.abs(n).toFixed(2)}`;
 const pct = (n: number) => `${Math.round(n)}%`;
 
 /** Status for a failed check under a gate mode. */

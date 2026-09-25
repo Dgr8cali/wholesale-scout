@@ -129,7 +129,9 @@ describe("gates", () => {
       expect(run.outcomes.find((o) => o.gate === g)?.status).toBe("skipped");
     }
     expect(run.failedGate).toBeNull();
-    expect(winScore(ctx({ market: m }), run, DEFAULT_PROFILE, fit).why).toMatch(/No Keepa history/);
+    const w = winScore(ctx({ market: m }), run, DEFAULT_PROFILE, fit);
+    expect(w.why).toMatch(/No Keepa history/);
+    expect(w.band).not.toBe("green");
   });
 
   it("runs only the cheap row gates in the pre-screen", () => {

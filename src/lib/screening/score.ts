@@ -108,11 +108,16 @@ export function winScore(ctx: ScreenContext, run: GateRun, p: ProfileConfig, fit
   // groups alone would rank an unknown product highly.
   const missing = (["margin", "demand"] as GroupId[]).filter((g) => groups[g].score == null);
   const score = run.failedGate || totalW === 0 || missing.length ? null : Math.round((sum / totalW) * 10) / 10;
-  const band = score == null ? null : score >= p.score.bands.green ? "green" : score >= p.score.bands.amber ? "amber" : "grey";
-  return { score, band, groups, why: whyLine(ctx, run, score, groups) };
+  let band: WinScore["band"] = score == null ? null : score >= p.score.bands.green ? "green" : score >= p.score.bands.amber ? "amber" : "grey";
+  // One snapshot of rank and price isn't enough to order stock on: green needs history.
+  const capped = band === "green" && !ctx.market?.hasHistory;
+  if (capped) band = "amber";
+  let why = whyLine(ctx, run, score, groups);
+  if (capped) why = why.replace(/\.$/, "; held at amber until there's history.");
+  return { score, band, groups, why };
 }
 
-const money = (n: number) => `£${n.toFixed(2)}`;
+const money = (n: number) => `${n < 0 ? "-" : ""}£${Math.abs(n).toFixed(2)}`;
 const WORDS = ["no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve"];
 const count = (n: number) => (n >= 0 && n < WORDS.length && Number.isInteger(n) ? WORDS[n] : String(Math.round(n)));
 

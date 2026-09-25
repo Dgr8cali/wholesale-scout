@@ -17,6 +17,12 @@ export function db(): SupabaseClient {
   return client;
 }
 
+/** Tests swap in an in-memory double. */
+export function __setDbForTests(c: unknown) {
+  client = c as SupabaseClient;
+  seeded = false;
+}
+
 /** Throw on a Supabase error, return the data otherwise. */
 export function must<T>(res: { data: T; error: { message: string } | null }, what: string): NonNullable<T> {
   if (res.error) throw new Error(`${what}: ${res.error.message}`);

@@ -122,7 +122,7 @@ function keywordRegex(k: string): RegExp | null {
 export interface RuleMatch {
   key: string;
   name: string;
-  /** The keyword or category that matched. */
+  /** The text that matched (as written in the row), or the matching category. */
   hit: string;
 }
 
@@ -131,9 +131,16 @@ export function matchRules(rules: CategoryRule[], text: string, amazonCategory?:
   const out: RuleMatch[] = [];
   const cat = (amazonCategory ?? "").toLowerCase();
   for (const r of [...rules].sort((a, b) => a.sort - b.sort)) {
-    const kw = r.keywords.find((k) => keywordRegex(k)?.test(text));
-    if (kw) {
-      out.push({ key: r.key, name: r.name, hit: kw });
+    let hit: string | null = null;
+    for (const k of r.keywords) {
+      const m = keywordRegex(k)?.exec(text);
+      if (m) {
+        hit = m[0].replace(/^[^\p{L}\p{N}]+/u, "").trim() || k;
+        break;
+      }
+    }
+    if (hit) {
+      out.push({ key: r.key, name: r.name, hit });
       continue;
     }
     const ac = cat ? r.amazon_categories.find((c) => cat === c.toLowerCase()) : undefined;

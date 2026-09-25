@@ -137,6 +137,28 @@ describe("getMyFeesEstimate", () => {
     expect(f).toMatchObject({ ok: false, error: "ASIN not found" });
   });
 
+  it("asks again when Amazon returns a ServerError result", async () => {
+    let n = 0;
+    const flaky = { Status: "ServerError", Error: { Type: "Receiver", Code: "InternalError", Message: "There is an internal service failure." } };
+    const { fn, calls } = mockFetch([
+      (url, init) => url.endsWith("/products/fees/v0/feesEstimate")
+        ? json(JSON.parse(String(init.body)).map((x: { IdValue: string }) => (x.IdValue === "B2" && n++ === 0 ? flaky : feesResult)))
+        : undefined,
+    ]);
+    const out = await new SpApiClient(CFG, fn, noSleep).getMyFeesEstimates([{ asin: "B1", price: 20 }, { asin: "B2", price: 25 }]);
+    expect(out.map((x) => x.ok)).toEqual([true, true]);
+    expect(out[1].asin).toBe("B2");
+    expect(calls.filter((x) => x.url.endsWith("/feesEstimate"))).toHaveLength(2);
+  });
+
+  it("gives up on a ServerError after two retries", async () => {
+    const flaky = { Status: "ServerError", Error: { Message: "There is an internal service failure." } };
+    const { fn, calls } = mockFetch([(url) => (url.includes("/feesEstimate") ? json({ payload: { FeesEstimateResult: flaky } }) : undefined)]);
+    const f = await new SpApiClient(CFG, fn, noSleep).getMyFeesEstimate("B1", 25);
+    expect(f).toMatchObject({ ok: false, retryable: true });
+    expect(calls.filter((x) => x.url.includes("/feesEstimate"))).toHaveLength(3);
+  });
+
   it("batches up to 20 per call", async () => {
     const { fn, calls } = mockFetch([
       (url, init) =>
@@ -187,6 +209,13 @@ describe("catalog lookup by EAN", () => {
       hazmat: ["ghs"],
     });
     expect(out.has("5000000000000")).toBe(false);
+  });
+
+  it("falls back to the summary's display group when there's no rank", async () => {
+    const noRank = { ...item, salesRanks: [], summaries: [{ ...item.summaries[0], websiteDisplayGroupName: "Grocery" }] };
+    const { fn } = mockFetch([(url) => (url.includes("/catalog/2022-04-01/items") ? json({ items: [noRank] }) : undefined)]);
+    const out = await new SpApiClient(CFG, fn, noSleep).catalogByEans(["8002910012345"]);
+    expect(out.get("8002910012345")![0].category).toBe("Grocery");
   });
 
   it("treats GTINs that differ by leading zeros as the same", () => {

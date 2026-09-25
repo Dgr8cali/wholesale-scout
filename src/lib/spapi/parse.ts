@@ -61,7 +61,9 @@ export function parseCatalogItem(raw: unknown, marketplaceId: string): CatalogMa
     eans,
     title: str(summary.itemName),
     brand: str(summary.brand) ?? str(summary.brandName),
-    category: str(displayRank.title) ?? str(browse.displayName),
+    // Root category, for the referral fee: the rank's display group, else the summary's
+    // display group, else the leaf browse node as a last resort.
+    category: str(displayRank.title) ?? str(summary.websiteDisplayGroupName) ?? str(browse.displayName),
     dimsCm: l != null && w != null && h != null ? { l: r1(l), w: r1(w), h: r1(h) } : null,
     weightG: weightG == null ? null : Math.round(weightG),
     salesRank: num(displayRank.rank) ?? num(classRank.rank),
@@ -86,7 +88,7 @@ export function parseFeesEstimate(raw: unknown, asin: string): FeesEstimate {
   const r = obj(raw);
   if (r.Status !== "Success") {
     const err = obj(r.Error);
-    return { asin, ok: false, referral: null, fba: null, total: null, error: str(err.Message) ?? str(err.Code) ?? "No estimate" };
+    return { asin, ok: false, referral: null, fba: null, total: null, error: str(err.Message) ?? str(err.Code) ?? "No estimate", retryable: r.Status === "ServerError" };
   }
   const details = arr(obj(r.FeesEstimate).FeeDetailList).map(obj);
   let referral = 0;

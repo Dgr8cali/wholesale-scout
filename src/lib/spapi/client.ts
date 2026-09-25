@@ -42,6 +42,9 @@ export function spApiConfigFromEnv(env: NodeJS.ProcessEnv = process.env): SpApiC
 
 type Fetch = typeof fetch;
 
+/** Extra attempts for fee estimates that come back as Amazon-side ServerErrors. */
+const FEE_RETRIES = 2;
+
 /** Per-operation minimum spacing between calls, from SP-API's documented rate limits. */
 const MIN_INTERVAL_MS: Record<string, number> = {
   catalog: 500, // searchCatalogItems: 2 rps
@@ -146,30 +149,48 @@ export class SpApiClient {
     return out;
   }
 
-  /** getMyFeesEstimateForASIN — Amazon's fee for one ASIN at a price, FBA. */
+  /**
+   * getMyFeesEstimateForASIN — Amazon's fee for one ASIN at a price, FBA. Amazon returns
+   * intermittent "ServerError" results with HTTP 200, so those are asked again.
+   */
   async getMyFeesEstimate(asin: string, price: number): Promise<FeesEstimate> {
-    const res = await this.request<{ payload?: { FeesEstimateResult?: unknown } }>(
-      "feesSingle",
-      "POST",
-      `/products/fees/v0/items/${encodeURIComponent(asin)}/feesEstimate`,
-      { body: { FeesEstimateRequest: this.feesRequest(asin, price) } },
-    );
-    return parseFeesEstimate(res.payload?.FeesEstimateResult, asin);
+    let result: FeesEstimate;
+    for (let attempt = 0; ; attempt++) {
+      const res = await this.request<{ payload?: { FeesEstimateResult?: unknown } }>(
+        "feesSingle",
+        "POST",
+        `/products/fees/v0/items/${encodeURIComponent(asin)}/feesEstimate`,
+        { body: { FeesEstimateRequest: this.feesRequest(asin, price) } },
+      );
+      result = parseFeesEstimate(res.payload?.FeesEstimateResult, asin);
+      if (!result.retryable || attempt >= FEE_RETRIES) return result;
+      await this.sleep(1000 * (attempt + 1));
+    }
   }
 
-  /** getMyFeesEstimates — up to 20 ASIN/price pairs per call. */
+  /** getMyFeesEstimates — up to 20 ASIN/price pairs per call; ServerError items are asked again. */
   async getMyFeesEstimates(items: { asin: string; price: number }[]): Promise<FeesEstimate[]> {
-    const out: FeesEstimate[] = [];
-    for (let i = 0; i < items.length; i += 20) {
-      const chunk = items.slice(i, i + 20);
-      const res = await this.request<unknown[]>("feesBatch", "POST", "/products/fees/v0/feesEstimate", {
-        body: chunk.map(({ asin, price }) => ({
-          FeesEstimateRequest: this.feesRequest(asin, price),
-          IdType: "ASIN",
-          IdValue: asin,
-        })),
-      });
-      chunk.forEach(({ asin }, j) => out.push(parseFeesEstimate(res?.[j], asin)));
+    const out: FeesEstimate[] = new Array(items.length);
+    let todo = items.map((item, index) => ({ ...item, index }));
+    for (let attempt = 0; todo.length; attempt++) {
+      const retry: typeof todo = [];
+      for (let i = 0; i < todo.length; i += 20) {
+        const chunk = todo.slice(i, i + 20);
+        const res = await this.request<unknown[]>("feesBatch", "POST", "/products/fees/v0/feesEstimate", {
+          body: chunk.map(({ asin, price }) => ({
+            FeesEstimateRequest: this.feesRequest(asin, price),
+            IdType: "ASIN",
+            IdValue: asin,
+          })),
+        });
+        chunk.forEach((item, j) => {
+          const r = parseFeesEstimate(res?.[j], item.asin);
+          out[item.index] = r;
+          if (r.retryable && attempt < FEE_RETRIES) retry.push(item);
+        });
+      }
+      todo = retry;
+      if (todo.length) await this.sleep(1000 * (attempt + 1));
     }
     return out;
   }
