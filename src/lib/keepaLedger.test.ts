@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addDailyTokens, tokensOnDay, ukDay } from "./keepaLedger";
+import { addDailyTokens, dailySpend, tokensOnDay, ukDay } from "./keepaLedger";
 
 describe("Keepa daily ledger", () => {
   it("uses the UK calendar day, including across midnight in summer time", () => {
@@ -18,5 +18,23 @@ describe("Keepa daily ledger", () => {
 
   it("sums a day across runs", () => {
     expect(tokensOnDay([{ "2026-09-25": 9, "2026-09-24": 100 }, null, { "2026-09-25": 30 }], "2026-09-25")).toBe(39);
+  });
+
+  it("counts each run's recorded total on its start day, moving later days' ledger spend to those days", () => {
+    const now = new Date("2026-09-25T15:00:00Z");
+    const days = dailySpend([
+      // Today, before the ledger existed: its whole total counts today.
+      { startedAt: "2026-09-25T08:24:00Z", tokenCost: 3927 },
+      // Today, with a ledger (it matches the total): no double counting.
+      { startedAt: "2026-09-25T10:34:00Z", tokenCost: 1038, keepaByDay: { "2026-09-25": 42 } },
+      // Two days ago, re-screened today for 345 tokens.
+      { startedAt: "2026-09-23T11:00:00Z", tokenCost: 1259, keepaByDay: { "2026-09-25": 345 } },
+      // Out of the window.
+      { startedAt: "2026-09-10T11:00:00Z", tokenCost: 999 },
+    ], 7, now);
+    expect(days.map((d) => d.day)).toEqual(["2026-09-19", "2026-09-20", "2026-09-21", "2026-09-22", "2026-09-23", "2026-09-24", "2026-09-25"]);
+    expect(days.at(-1)!.tokens).toBe(3927 + 1038 + 345);
+    expect(days.find((d) => d.day === "2026-09-23")!.tokens).toBe(1259 - 345);
+    expect(days.reduce((a, d) => a + d.tokens, 0)).toBe(3927 + 1038 + 1259);
   });
 });

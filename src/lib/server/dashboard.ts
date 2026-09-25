@@ -1,6 +1,6 @@
 import "server-only";
 import type { Eta } from "../eta";
-import { tokensOnDay, ukDay, type TokensByDay } from "../keepaLedger";
+import { dailySpend, ukDay, type TokensByDay } from "../keepaLedger";
 import { db, must } from "./db";
 import { runProgress } from "./process";
 import { nightlySummaries, type NightlySummary } from "./qogitaNightly";
@@ -22,7 +22,8 @@ export interface DashboardRun {
 
 export interface Dashboard {
   runs: DashboardRun[];
-  keepa: { spentToday: number; day: string };
+  /** Keepa spend from the token totals recorded on runs (see keepaLedger.dailySpend). */
+  keepa: { spentToday: number; day: string; last7: { day: string; tokens: number }[] };
   /** Last night's Qogita re-pulls: what was new or re-priced, and how much of it passed. */
   qogita: NightlySummary[];
 }
@@ -54,6 +55,18 @@ export async function dashboard(recent = 6): Promise<Dashboard> {
     };
   }));
   const day = ukDay();
+  // Every run that can have spent tokens in the last week: started in it, or with ledger days in it.
+  const week = new Date(Date.now() - 8 * 86_400_000).toISOString();
+  const spendRuns = must(
+    await d.from("runs").select("started_at, token_cost, stats").order("started_at", { ascending: false }).limit(500),
+    "run spend",
+  ) as { started_at: string; token_cost: number; stats?: { keepaByDay?: TokensByDay | null } | null }[];
+  const last7 = dailySpend(
+    spendRuns
+      .filter((r) => r.started_at >= week || Object.keys(r.stats?.keepaByDay ?? {}).some((k) => k >= ukDay(new Date(week))))
+      .map((r) => ({ startedAt: r.started_at, tokenCost: Number(r.token_cost) || 0, keepaByDay: r.stats?.keepaByDay })),
+    7,
+  );
   const qogita = await nightlySummaries().catch(() => []);
-  return { runs: out, keepa: { spentToday: tokensOnDay(runs.map((r) => r.stats?.keepaByDay), day), day }, qogita };
+  return { runs: out, keepa: { spentToday: last7.at(-1)?.tokens ?? 0, day, last7 }, qogita };
 }

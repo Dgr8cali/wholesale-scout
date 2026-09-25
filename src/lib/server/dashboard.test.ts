@@ -15,7 +15,7 @@ describe("dashboard", () => {
     const today = ukDay();
     fake.tables.runs = [
       { id: "old", source: "a.xlsx", status: "done", started_at: "2026-09-20T10:00:00Z", row_count: 3, token_cost: 90, stats: { keepaByDay: { "2026-09-20": 90 } } },
-      { id: "new", source: "b.xlsx", status: "processing", started_at: "2026-09-25T10:00:00Z", row_count: 5, token_cost: 12,
+      { id: "new", source: "b.xlsx", status: "processing", started_at: new Date().toISOString(), row_count: 5, token_cost: 12,
         stats: { amazonPerMin: 60, keepaByDay: { [today]: 12 } } },
     ];
     const res = (run_id: string, status: string, verdict: string | null) => ({ id: crypto.randomUUID(), run_id, status, verdict, inputs: {} });
@@ -29,6 +29,8 @@ describe("dashboard", () => {
     expect(d.runs[0].eta?.minutes).toBeGreaterThan(0);
     expect(d.runs[1].counts).toEqual({ pass: 1, warn: 0, fail: 2, error: 0, pending: 0 });
     expect(d.runs[1].eta).toBeNull();
-    expect(d.keepa).toEqual({ spentToday: 12, day: today });
+    expect(d.keepa).toMatchObject({ spentToday: 12, day: today });
+    expect(d.keepa.last7).toHaveLength(7);
+    expect(d.keepa.last7.at(-1)).toEqual({ day: today, tokens: 12 });
   });
 });

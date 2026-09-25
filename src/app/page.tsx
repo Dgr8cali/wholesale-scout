@@ -12,6 +12,7 @@ import { STATUS_LABELS, type BrandRow } from "@/lib/brands";
 import { etaLabel } from "@/lib/eta";
 import type { Dashboard } from "@/lib/server/dashboard";
 import { api, when } from "@/lib/ui/client";
+import { cn } from "@/lib/utils";
 
 interface FavItem {
   favourite: { id: string; ean: string; asin: string | null };
@@ -98,7 +99,13 @@ export default function HomePage() {
           )}
         </Section>
         <Section load={dash} skeleton={<StatSkeleton />}>
-          {(d) => <Stat icon={<CoinsIcon />} label="Keepa tokens spent today" value={d.keepa.spentToday.toLocaleString("en-GB")} hint={`≈ ${Math.round(d.keepa.spentToday / 3).toLocaleString("en-GB")} products`} />}
+          {(d) => (
+            <Stat icon={<CoinsIcon />} label="Keepa tokens spent today" value={d.keepa.spentToday.toLocaleString("en-GB")}
+              hint={<>
+                ≈ {Math.round(d.keepa.spentToday / 3).toLocaleString("en-GB")} products at 3 tokens each
+                <SpendBars days={d.keepa.last7} />
+              </>} />
+          )}
         </Section>
         <Section load={favs} skeleton={<StatSkeleton />}>
           {(f) => <Stat icon={<StarIcon />} label="Favourites needing refresh" href="/favourites"
@@ -243,5 +250,20 @@ export default function HomePage() {
         </div>
       </div>
     </div>
+  );
+}
+
+/** The last 7 days' Keepa spend as small bars, today last and highlighted. */
+function SpendBars({ days }: { days: { day: string; tokens: number }[] }) {
+  const max = Math.max(1, ...days.map((d) => d.tokens));
+  const label = (day: string) => new Date(`${day}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+  return (
+    <span className="mt-2 flex h-8 items-end gap-1" role="img" aria-label={`Keepa spend, last 7 days: ${days.map((d) => `${label(d.day)} ${d.tokens.toLocaleString("en-GB")}`).join(", ")}`}>
+      {days.map((d, i) => (
+        <span key={d.day} title={`${label(d.day)}: ${d.tokens.toLocaleString("en-GB")} tokens`}
+          className={cn("w-3 rounded-sm", i === days.length - 1 ? "bg-brand" : "bg-muted-foreground/30")}
+          style={{ height: `${Math.max(d.tokens ? 8 : 3, (d.tokens / max) * 100)}%` }} />
+      ))}
+    </span>
   );
 }
