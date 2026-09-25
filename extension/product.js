@@ -162,6 +162,7 @@
         `${s.name ?? s.sellerId}: `,
         ws.h("b", { text: s.error ? "?" : s.stock == null ? "…" : ws.num(s.stock) }),
         s.limited ? " (per-customer limit, not stock)" : "",
+        s.source ? ws.h("div", { class: "muted", style: "font-size:11px", text: `from ${s.source}` }) : "",
         s.error ? ws.h("span", { class: "err", text: ` ${s.error}` }) : "",
       ]))));
     }
@@ -193,6 +194,22 @@
   let debug = [];
   const note = (step, info) => { debug.push({ step, ...info }); };
   const snippet = (text) => String(text ?? "").replace(/\s+/g, " ").slice(0, 1500);
+  // Phrases that say how many Amazon allows, in its UK ("basket") and US ("cart") wording.
+  const STOCK_WORDS = /(only \d[\d,]* (?:left|of these|are available|available)[^<.]{0,60}|limit(?:ed)?(?: of| to)? \d[\d,]* per customer[^<.]{0,40}|quantity (?:is )?limited to \d[\d,]*|added to (?:your )?(?:basket|cart)|(?:basket|cart) (?:subtotal|count)[^<]{0,40}|maximum quantity[^<.]{0,60})/gi;
+  /** A page Amazon returned, reduced to what the stock reading depends on. */
+  function summarize(res, body) {
+    const doc = parse(body);
+    doc.querySelectorAll("script, style, noscript").forEach((n) => n.remove());
+    const visible = (doc.body?.textContent ?? "").replace(/\s+/g, " ").trim();
+    return {
+      status: res.status,
+      finalUrl: res.url,
+      title: text(doc.querySelector("title")),
+      basketCount: text(doc.querySelector("#nav-cart-count")) || null,
+      stockPhrases: [...new Set((visible.match(STOCK_WORDS) ?? []).map((m) => m.trim()))].slice(0, 8),
+      visibleStart: visible.slice(0, 600),
+    };
+  }
 
   async function readStock() {
     if (stockBusy) return;
@@ -205,7 +222,6 @@
       let offers = await offersFromAod(asin).catch((e) => { note("AOD failed", { error: e.message }); return []; });
       if (!offers.length) {
         offers = offersOnPage();
-        note("Fallback: offers on this page", { found: offers.length });
       }
       offers = offers.filter((o) => o.fba && !o.isAmazon && o.oid).slice(0, MAX_SELLERS);
       if (!offers.length) throw new Error("No FBA seller offers with an offer listing ID found. Open Debug below and paste it to fix the reader.");
@@ -221,7 +237,7 @@
         }
         render();
       }
-      const saved = await ws.api("POST", "/api/extension/stock", { asin, sellers: stockRows.map((x) => ({ sellerId: x.sellerId, name: x.name, fba: x.fba, stock: x.stock, limited: x.limited })) });
+      const saved = await ws.api("POST", "/api/extension/stock", { asin, sellers: stockRows.map((x) => ({ sellerId: x.sellerId, name: x.name, fba: x.fba, stock: x.stock, limited: x.limited, source: x.source ?? x.error ?? null })) });
       status(saved.ok ? "Stock saved to the app." : saved.error, !saved.ok);
     } catch (e) {
       status(e.message, true);
@@ -237,6 +253,25 @@
     if (!a) return null;
     try { return new URL(a.getAttribute("href"), location.origin).searchParams.get("seller"); } catch { return null; }
   };
+
+  const NOT_A_NAME = /learn more|see more|about the seller|seller profile|visit the|details|ratings?|%|stars?/i;
+  /**
+   * The seller's name in an offer block: the element after "Sold by", else a seller link whose
+   * text is a name (not "Learn more about the seller"), else its title / aria-label.
+   */
+  function sellerName(block) {
+    const label = [...block.querySelectorAll("span, div, td")].find((el) => /^sold by:?$/i.test(text(el)));
+    const next = label?.nextElementSibling ?? label?.parentElement?.nextElementSibling;
+    const byLabel = next ? text(next.querySelector("a") ?? next) : "";
+    if (byLabel && !NOT_A_NAME.test(byLabel)) return { name: byLabel, from: "Sold by" };
+    for (const a of block.querySelectorAll("#sellerProfileTriggerId, #aod-offer-soldBy a, a[href*='seller=']")) {
+      const t = text(a);
+      if (t && !NOT_A_NAME.test(t) && t.length < 80) return { name: t, from: a.id ? `#${a.id}` : "seller link" };
+      const alt = a.getAttribute("title") || a.getAttribute("aria-label");
+      if (alt && !NOT_A_NAME.test(alt)) return { name: alt.trim(), from: "link title" };
+    }
+    return { name: null, from: "none" };
+  }
 
   /** An offer's listing ID, wherever Amazon put it in this block. */
   function offerListingId(el) {
@@ -255,28 +290,39 @@
   /** Amazon's all-offers (AOD) list: every offer, its seller, whether Amazon ships it, and its listing ID. */
   async function offersFromAod(a) {
     const filters = encodeURIComponent(JSON.stringify({ all: true, new: true }));
-    const url = `/gp/product/ajax/ref=dp_aod_NEW_mbc?asin=${a}&pc=dp&experienceId=aodAjaxMain&filters=${filters}`;
-    const res = await fetch(url, { credentials: "include", headers: { accept: "text/html,*/*" } });
-    const body = await res.text();
-    note("AOD", { url, status: res.status, body: snippet(body) });
-    if (!res.ok) throw new Error(`Amazon's offers panel answered ${res.status}`);
-    const doc = parse(body);
+    // The AOD panel has lived at several addresses; each is tried until one lists offers.
+    const urls = [
+      `/gp/aod/ajax/ref=auto_load_aod?asin=${a}&pc=dp`,
+      `/gp/aod/ajax/ref=dp_aod_NEW_mbc?asin=${a}&pc=dp&filters=${filters}`,
+      `/gp/product/ajax/ref=dp_aod_NEW_mbc?asin=${a}&pc=dp&experienceId=aodAjaxMain&filters=${filters}`,
+    ];
+    let doc = null;
+    for (const url of urls) {
+      const res = await fetch(url, { credentials: "include", headers: { accept: "text/html,*/*", "x-requested-with": "XMLHttpRequest" } });
+      const body = await res.text();
+      const d = parse(body);
+      const blocks = d.querySelectorAll("#aod-pinned-offer, #aod-offer").length;
+      note("AOD", { url, ...summarize(res, body), offerBlocks: blocks, ...(blocks ? { firstOffer: snippet(d.querySelector("#aod-offer, #aod-pinned-offer")?.outerHTML) } : {}) });
+      if (res.ok && blocks) { doc = d; break; }
+    }
+    if (!doc) throw new Error("Amazon's offers panel didn't list offers at any known address");
     const blocks = [...new Set(doc.querySelectorAll("#aod-pinned-offer, #aod-offer, div[id^='aod-offer']"))]
       .filter((b) => b.querySelector("#aod-offer-soldBy, [id*='soldBy'], #aod-offer-shipsFrom, [id*='shipsFrom']"));
     const offers = blocks.map((b) => {
       const soldBy = b.querySelector("#aod-offer-soldBy, [id*='soldBy']");
       const link = soldBy?.querySelector("a[href*='seller=']") ?? b.querySelector("a[href*='seller=']");
       const shipsFrom = text(b.querySelector("#aod-offer-shipsFrom, [id*='shipsFrom']"));
+      const n = sellerName(soldBy ?? b);
       return {
         sellerId: sellerIdFrom(link) ?? (/amazon/i.test(text(soldBy)) ? "AMAZON" : "unknown"),
-        name: link ? text(link) : text(soldBy).replace(/^Sold by\s*/i, "") || null,
+        name: n.name, nameFrom: n.from,
         isAmazon: !link && /amazon/i.test(text(soldBy)),
         fba: /amazon/i.test(shipsFrom),
         oid: offerListingId(b),
         form: b.querySelector("form"),
       };
     });
-    note("AOD offers", { found: offers.length, fba: offers.filter((o) => o.fba && !o.isAmazon).length, withListingId: offers.filter((o) => o.oid).length });
+    note("AOD offers", { offers: offers.map((o) => ({ sellerId: o.sellerId, name: o.name, nameFrom: o.nameFrom, fba: o.fba, amazon: o.isAmazon, listingId: o.oid ? `${o.oid.slice(0, 12)}…` : null })) });
     return offers;
   }
 
@@ -287,14 +333,17 @@
     const bbSeller = document.querySelector("#merchantID, input[name='merchantID']")?.value;
     const bbShips = text(document.querySelector("#fulfillerInfoFeature_feature_div, #tabular-buybox, #shipsFromSoldBy_feature_div"));
     if (bbOid && bbSeller) {
-      out.push({ sellerId: bbSeller, name: text(document.querySelector("#sellerProfileTriggerId")) || null, isAmazon: bbSeller === "A3P5ROKL5A1OLE", fba: /amazon/i.test(bbShips), oid: bbOid, form: null });
+      const n = sellerName(document.querySelector("#merchantInfoFeature_feature_div, #tabular-buybox, #buybox, #desktop_buybox") ?? document.body);
+      out.push({ sellerId: bbSeller, name: n.name, nameFrom: `Buy Box ${n.from}`, isAmazon: bbSeller === "A3P5ROKL5A1OLE", fba: /amazon/i.test(bbShips), oid: bbOid, form: null });
     }
     for (const row of document.querySelectorAll("#mbc .mbc-offer-row, #mbc-action-panel .a-box, #olpLinkWidget_feature_div [data-csa-c-content-id], .mbc-offer-row")) {
       const link = row.querySelector("a[href*='seller=']");
       const oid = offerListingId(row);
       if (!link || !oid) continue;
-      out.push({ sellerId: sellerIdFrom(link), name: text(link), isAmazon: false, fba: /amazon/i.test(text(row)), oid, form: row.querySelector("form") });
+      const n = sellerName(row);
+      out.push({ sellerId: sellerIdFrom(link), name: n.name, nameFrom: `Other sellers ${n.from}`, isAmazon: false, fba: /amazon/i.test(text(row)), oid, form: row.querySelector("form") });
     }
+    note("Page offers", { offers: out.map((o) => ({ sellerId: o.sellerId, name: o.name, nameFrom: o.nameFrom, fba: o.fba, amazon: o.isAmazon, listingId: `${o.oid.slice(0, 12)}…` })) });
     return out;
   }
 
@@ -317,16 +366,20 @@
   }
 
   /** "only 12 left", "only 12 of these available", "limited to 3 per customer", or a quantity field. */
-  function readQuantity(scope) {
+  function readQuantity(scope, where) {
     const t = text(scope);
     const n = (x) => (x == null ? null : Number(String(x).replace(/[^\d]/g, "")) || null);
     const limit = t.match(/limit(?:ed)?(?: of| to)? (\d[\d,]*) per customer/i) || t.match(/quantity (?:is )?limited to (\d[\d,]*)/i);
-    if (limit) return { stock: n(limit[1]), limited: true };
+    if (limit) return { stock: n(limit[1]), limited: true, source: `${where}: “${limit[0]}”` };
     const only = t.match(/only (\d[\d,]*) (?:left|of these|are available|available)/i);
-    if (only) return { stock: n(only[1]), limited: false };
-    const field = scope.getAttribute?.("data-quantity") || scope.querySelector?.("input[name^='quantityBox'], input[name='quantity']")?.value
-      || text(scope.querySelector?.("select[name='quantity'] option[selected], [data-a-selector='value']"));
-    return field && n(field) != null ? { stock: n(field), limited: false } : null;
+    if (only) return { stock: n(only[1]), limited: false, source: `${where}: “${only[0]}”` };
+    // No message: after asking for 999, the quantity Amazon set is what it would sell.
+    const attr = scope.getAttribute?.("data-quantity");
+    const input = scope.querySelector?.("input[name^='quantityBox'], input[name='quantity']");
+    const picked = scope.querySelector?.("select[name='quantity'] option[selected], [data-a-selector='value']");
+    const field = attr ?? input?.value ?? (picked ? text(picked) : null);
+    const how = attr != null ? "the line's data-quantity" : input ? `the quantity box (${input.name})` : "the quantity picker";
+    return field != null && n(field) != null ? { stock: n(field), limited: false, source: `${where}: ${how} = ${field} after asking for 999` } : null;
   }
 
   /** Add 999 of one offer by its listing ID, read what Amazon allows, then take it out again. */
@@ -340,7 +393,7 @@
       for (const k of [...body.keys()]) if (/quantity/i.test(k)) body.set(k, "999");
       if (![...body.keys()].some((k) => /quantity/i.test(k))) body.set("quantity", "999");
       added = await post(offer.form.getAttribute("action") || "/gp/add-to-cart/html", body);
-      if (first) note("Add (offer form)", { status: added.res.status, body: snippet(added.body) });
+      if (first) note("Add (offer form)", summarize(added.res, added.body));
     }
     // 2. Amazon's add-to-cart call with the offer listing ID.
     if (!added || !added.res.ok) {
@@ -350,7 +403,7 @@
       });
       const token = csrf();
       added = await post("/cart/add-to-cart/ref=dp_start-bbf_1_glance", body, token ? { "anti-csrftoken-a2z": token } : {});
-      if (first) note("Add (add-to-cart)", { status: added.res.status, body: snippet(added.body) });
+      if (first) note("Add (add-to-cart)", summarize(added.res, added.body));
     }
     // 3. The classic cart form (it may ask to confirm; the confirmation is submitted).
     if (!added.res.ok) {
@@ -361,17 +414,22 @@
         const body = new URLSearchParams([...confirm.querySelectorAll("input[name]")].map((i) => [i.name, i.value]));
         added = await post(confirm.getAttribute("action"), body);
       }
-      if (first) note("Add (cart form)", { status: added.res.status, body: snippet(added.body) });
+      if (first) note("Add (cart form)", summarize(added.res, added.body));
     }
     if (!added.res.ok) throw new Error(`adding to the cart failed (${added.res.status})`);
 
     // The add response often carries the message itself; otherwise the cart line does.
-    const fromAdd = readQuantity(parse(added.body).body);
+    const addDoc = parse(added.body);
+    addDoc.querySelectorAll("script, style").forEach((n) => n.remove());
+    const fromAdd = readQuantity(addDoc.body, "add response");
     const cart = await cartDoc();
-    if (first) note("Cart", { status: cart.status, body: snippet(cart.body) });
     const line = cart.doc.querySelector(`[data-asin="${asin}"]`);
+    note(`Basket for ${offer.name ?? offer.sellerId}`, {
+      status: cart.status, lineFound: !!line, basketCount: text(cart.doc.querySelector("#nav-cart-count")) || null,
+      line: line ? snippet(line.outerHTML.replace(/<script[\s\S]*?<\/script>/gi, "")) : null,
+    });
     try {
-      const got = (line && readQuantity(line)) || fromAdd;
+      const got = (line && readQuantity(line, "basket line")) || fromAdd;
       if (!line && !fromAdd) throw new Error("not in the cart after adding (see Debug)");
       if (!got) throw new Error("the cart didn't show a quantity (see Debug)");
       return got;

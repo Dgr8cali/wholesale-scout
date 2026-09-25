@@ -100,6 +100,7 @@ function FromExtension({ r }: { r: Result }) {
               <li key={s.sellerId}>
                 {s.name ?? s.sellerId}{s.fba ? " (FBA)" : ""}: <span className="num font-medium">{s.stock == null ? "?" : s.stock.toLocaleString("en-GB")}</span>
                 {s.limited && <span className="text-muted-foreground"> (a per-customer limit, not stock)</span>}
+                {s.source && <span className="text-muted-foreground"> · from {s.source}</span>}
               </li>
             ))}
           </ul>
