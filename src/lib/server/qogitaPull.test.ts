@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { QogitaCategory, QogitaClient, QogitaProduct } from "../qogita/client";
 import { __setDbForTests } from "./db";
 import { FakeDb } from "./fakeDb";
-import { leavesUnder, pullProducts, runQogitaPull, EMPTY_QOGITA_FILTERS } from "./qogitaPull";
+import { estimatePull, leavesUnder, pullProducts, runQogitaPull, EMPTY_QOGITA_FILTERS } from "./qogitaPull";
 
 vi.mock("./fx", () => ({ gbpRate: async (c: string) => (c === "GBP" ? { rate: 1, date: "2026-09-25", source: "fixed" } : { rate: 0.86, date: "2026-09-25", source: "test" }) }));
 
@@ -101,5 +101,41 @@ describe("Qogita pull", () => {
   it("refuses a pull with neither category nor brand", async () => {
     const { client } = fakeClient([]);
     await expect(runQogitaPull({ name: "All", filters: EMPTY_QOGITA_FILTERS, client })).rejects.toThrow(/category or at least one brand/);
+  });
+
+  it("pulls only the leaves you tick, and stops at Max products", async () => {
+    const { client, asked } = fakeClient([[product("1", "5"), product("2", "5"), product("3", "5")]]);
+    const skin = { name: "Skin Care", path: ["Health & Beauty", "Face", "Skin Care"] };
+    const r = await pullProducts(client, { ...EMPTY_QOGITA_FILTERS, category: skin, leaves: ["Sheet Mask"], maxProducts: 2 });
+    expect(asked[0].categoryNames).toEqual(["Sheet Mask"]);
+    expect(r.products).toHaveLength(2);
+    expect(r.truncated).toBe(true);
+  });
+
+  it("reuses results screened in the last N days instead of screening them again", async () => {
+    const first = fakeClient([[product("8809937361657", "8.53"), product("3337875597197", "12.00")]]);
+    const one = await runQogitaPull({ name: "Masks", filters: { ...EMPTY_QOGITA_FILTERS, brands: ["Biodance"], skipScreenedDays: 0 }, client: first.client });
+    // Pretend the first run screened one of them.
+    const done = fake.tables.results.find((x) => x.run_id === one.runId && fake.tables.products.find((p) => p.id === x.product_id)!.ean === "8809937361657")!;
+    Object.assign(done, { status: "done", updated_at: new Date().toISOString(), inputs: { v: 1, stage: "account", match: { asin: "B0MASK0001", asinCount: 1, looked: true }, market: null, hazmat: [], restriction: { status: "open", message: "" }, amazonFees: null, notes: [] } });
+    const second = fakeClient([[product("8809937361657", "8.10"), product("3337875597197", "12.00")]]);
+    const two = await runQogitaPull({ name: "Masks 2", filters: { ...EMPTY_QOGITA_FILTERS, brands: ["Biodance"] }, client: second.client });
+    expect(two.stats.reused).toBe(1);
+    const rows = fake.tables.results.filter((x) => x.run_id === two.runId);
+    const reused = rows.find((x) => fake.tables.products.find((p) => p.id === x.product_id)!.ean === "8809937361657")!;
+    expect(reused.status).toBe("done");               // re-gated at once from the stored data
+    expect(reused.inputs).toMatchObject({ match: { asin: "B0MASK0001" } });
+    expect(rows.find((x) => x !== reused)!.status).toBe("pending"); // the other goes through the pipeline
+  });
+
+  it("estimates a pull from the first page: products, reuse, minutes and tokens", async () => {
+    const { client } = fakeClient([[product("1", "5"), product("2", "5"), product("3", "50"), product("4", "5", { availability: "out_of_stock" })], [product("5", "5")]]);
+    const e = await estimatePull({ ...EMPTY_QOGITA_FILTERS, brands: ["Biodance"], maxPrice: 20, maxProducts: 500 }, client);
+    // Qogita counts 5; half the first page is in stock and in range.
+    expect(e).toMatchObject({ matching: 5, products: 3, reused: 0 });
+    expect(e.amazonMinutes).toBeGreaterThanOrEqual(1);
+    expect(e.keepaTokens).toBeGreaterThan(0);
+    const capped = await estimatePull({ ...EMPTY_QOGITA_FILTERS, brands: ["Biodance"], maxProducts: 2 }, client);
+    expect(capped.products).toBe(2);
   });
 });

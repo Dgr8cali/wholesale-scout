@@ -599,6 +599,33 @@ interface PendingRow {
   inputs: StoredInputs | null;
 }
 
+/**
+ * Results given stored inputs (copied from a recent screening of the same product): re-gate
+ * them on the run's profile and save them now, with no API calls. The rest of the run is
+ * screened as usual.
+ */
+export async function finishFromStored(runId: string, resultIds: string[]): Promise<number> {
+  if (!resultIds.length) return 0;
+  const d = db();
+  const run = must(await d.from("runs").select("profile_snapshot").eq("id", runId).single(), "run") as { profile_snapshot: ProfileConfig };
+  const cfg = withDefaults(run.profile_snapshot);
+  const [card, rules, approved] = await Promise.all([activeRateCard(), loadRules(), approvedBrands()]);
+  let done = 0;
+  for (const c of chunks(resultIds, 250)) {
+    const results = must(await d.from("results").select("id, product_id, offer_id, inputs").in("id", c), "results") as PendingRow[];
+    const rows = await loadRows(results.filter((r) => r.inputs), maxAgeMs(cfg));
+    const work = rows.map((row) => {
+      const ctx = context(row, card, rules, cfg, approved);
+      return { row, ctx, run: runGates(ctx, cfg) };
+    });
+    await saveResults(runId, work, cfg);
+    done += work.length;
+  }
+  const p = await runProgress(runId);
+  await updateRun(runId, { processed_count: p.processed, row_count: p.total, ...(p.done ? { status: "done", finished_at: new Date().toISOString() } : {}) });
+  return done;
+}
+
 /** A stored result re-gated on a profile, without saving anything (the brand map). */
 export interface StoredEvaluation {
   resultId: string;

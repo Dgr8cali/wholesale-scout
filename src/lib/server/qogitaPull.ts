@@ -1,7 +1,8 @@
 import "server-only";
 import { applyMapping, CURRENCIES, headerFingerprint, MAX_ROWS, type Cell, type ColumnMapping } from "../ingest/mapping";
 import { getQogita, type QogitaCategory, type QogitaClient, type QogitaProduct } from "../qogita/client";
-import { db, must } from "./db";
+import { chunks, db, must } from "./db";
+import { finishFromStored } from "./process";
 import { gbpRate } from "./fx";
 import { ingest } from "./ingest";
 
@@ -16,9 +17,18 @@ export interface QogitaFilters {
   maxDeliveryWeeks: number | null;
   /** Max supplier MOV: applied to each passing row's offers (the product search can't filter on it). */
   movLimit: number | null;
+  /** Leaf categories to pull under the chosen one; null for all of them. */
+  leaves?: string[] | null;
+  /** Most products to pull (default 500). */
+  maxProducts?: number | null;
+  /** EANs screened in the last this-many days reuse that result instead of being screened again (default 7; 0 off). */
+  skipScreenedDays?: number | null;
 }
 
-export const EMPTY_QOGITA_FILTERS: QogitaFilters = { category: null, brands: [], minPrice: null, maxPrice: null, maxDeliveryWeeks: null, movLimit: null };
+export const DEFAULT_MAX_PRODUCTS = 500;
+export const DEFAULT_SKIP_DAYS = 7;
+
+export const EMPTY_QOGITA_FILTERS: QogitaFilters = { category: null, brands: [], minPrice: null, maxPrice: null, maxDeliveryWeeks: null, movLimit: null, leaves: null, maxProducts: DEFAULT_MAX_PRODUCTS, skipScreenedDays: DEFAULT_SKIP_DAYS };
 
 export function normalizeQogitaFilters(f: Partial<QogitaFilters> | null | undefined): QogitaFilters {
   const num = (v: unknown) => (v == null || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
@@ -26,6 +36,9 @@ export function normalizeQogitaFilters(f: Partial<QogitaFilters> | null | undefi
     category: f?.category?.name ? { name: String(f.category.name), path: (f.category.path ?? []).map(String) } : null,
     brands: [...new Set((f?.brands ?? []).map((b) => String(b).trim()).filter(Boolean))],
     minPrice: num(f?.minPrice), maxPrice: num(f?.maxPrice), maxDeliveryWeeks: num(f?.maxDeliveryWeeks), movLimit: num(f?.movLimit),
+    leaves: Array.isArray(f?.leaves) && f.leaves.length ? [...new Set(f.leaves.map(String))] : null,
+    maxProducts: Math.min(MAX_ROWS, Math.max(1, Math.floor(num(f?.maxProducts) ?? DEFAULT_MAX_PRODUCTS))),
+    skipScreenedDays: Math.max(0, Math.floor(num(f?.skipScreenedDays) ?? DEFAULT_SKIP_DAYS)),
   };
 }
 
@@ -63,9 +76,17 @@ const LEAVES_PER_REQUEST = 30;
  * Page through the product search for the filters, dropping what's outside the price range or
  * slower than the delivery limit, until `maxRows` are kept or `deadline` passes.
  */
+/** The leaf names a pull asks for: the chosen ones under its category, else every one. */
+async function pullLeaves(client: QogitaClient, f: QogitaFilters): Promise<string[]> {
+  if (!f.category) return [];
+  const all = leavesUnder(f.category, await qogitaCategories(client));
+  const chosen = f.leaves?.length ? all.filter((l) => f.leaves!.includes(l)) : all;
+  return chosen.length ? chosen : all;
+}
+
 export async function pullProducts(client: QogitaClient, f: QogitaFilters, opts: { maxRows?: number; deadline?: number } = {}): Promise<PulledProducts> {
-  const maxRows = opts.maxRows ?? MAX_ROWS;
-  const leaves = f.category ? leavesUnder(f.category, await qogitaCategories(client)) : [];
+  const maxRows = opts.maxRows ?? f.maxProducts ?? MAX_ROWS;
+  const leaves = await pullLeaves(client, f);
   const batches: string[][] = [];
   for (let i = 0; i < leaves.length; i += LEAVES_PER_REQUEST) batches.push(leaves.slice(i, i + LEAVES_PER_REQUEST));
   if (!batches.length) batches.push([]);
@@ -110,10 +131,114 @@ export function productsToRows(products: QogitaProduct[], currency: string, fx: 
   return { rows: rows.map((r) => ({ ...r, externalRef: links.get(r.ean) ?? null })), rejected };
 }
 
+/**
+ * Products in a new run that were screened in the last `days` days (any other run): copy the
+ * latest result's stored data onto the new row and re-gate it now, so only the rest go to
+ * Amazon and Keepa. Returns how many were reused.
+ */
+async function reuseRecent(runId: string, days: number): Promise<number> {
+  const d = db();
+  const since = new Date(Date.now() - days * 86_400_000).toISOString();
+  const mine = must(await d.from("results").select("id, product_id").eq("run_id", runId), "results") as { id: string; product_id: string }[];
+  const prior = new Map<string, { inputs: unknown; updated_at: string }>();
+  for (const c of chunks(mine.map((r) => r.product_id), 200)) {
+    const rows = must(
+      await d.from("results").select("product_id, inputs, updated_at").in("product_id", c).eq("status", "done").neq("run_id", runId).gte("updated_at", since),
+      "recent results",
+    ) as { product_id: string; inputs: { v?: number } | null; updated_at: string }[];
+    for (const r of rows) {
+      if (r.inputs?.v !== 1) continue;
+      const cur = prior.get(r.product_id);
+      if (!cur || r.updated_at > cur.updated_at) prior.set(r.product_id, r);
+    }
+  }
+  const reuse = mine.filter((r) => prior.has(r.product_id));
+  await Promise.all(reuse.map((r) => d.from("results").update({ inputs: prior.get(r.product_id)!.inputs }).eq("id", r.id)));
+  return finishFromStored(runId, reuse.map((r) => r.id));
+}
+
+export interface QogitaEstimate {
+  /** Products Qogita lists for the filters (before stock, price and delivery). */
+  matching: number;
+  /** About how many a pull keeps (the cap, and the first page's share in stock and in range). */
+  products: number;
+  /** Of those, about how many were screened recently and are reused. */
+  reused: number;
+  amazonMinutes: number;
+  keepaTokens: number;
+}
+
+/**
+ * What a pull would bring in, from the first results page of each category batch (one request
+ * each): Qogita's count, the sample's share that's in stock and in range, and how much of the
+ * sample was screened recently; minutes and tokens from recent runs' rates.
+ */
+export async function estimatePull(input: QogitaFilters, client = getQogita()): Promise<QogitaEstimate> {
+  if (!client) throw new Error("Qogita isn't configured: set QOGITA_EMAIL and QOGITA_PASSWORD");
+  const f = normalizeQogitaFilters(input);
+  if (!f.category && !f.brands.length) throw new Error("Choose a category or at least one brand");
+  const leaves = await pullLeaves(client, f);
+  const batches: string[][] = [];
+  for (let i = 0; i < leaves.length; i += LEAVES_PER_REQUEST) batches.push(leaves.slice(i, i + LEAVES_PER_REQUEST));
+  if (!batches.length) batches.push([]);
+  let matching = 0;
+  const sample: QogitaProduct[] = [];
+  for (const categoryNames of batches.slice(0, 10)) {
+    for await (const page of client.products({ categoryNames, brandNames: f.brands })) {
+      matching += page.count;
+      sample.push(...page.results);
+      break;
+    }
+  }
+  if (batches.length > 10) matching = Math.round((matching / 10) * batches.length);
+  const keep = (p: QogitaProduct) => {
+    if (p.availability !== "in_stock" || !p.gtin || !p.price) return false;
+    const price = Number(p.price.amount);
+    if ((f.minPrice != null && price < f.minPrice) || (f.maxPrice != null && price > f.maxPrice)) return false;
+    return !(f.maxDeliveryWeeks != null && p.estimatedDeliveryTime != null && p.estimatedDeliveryTime > f.maxDeliveryWeeks);
+  };
+  const kept = sample.filter(keep);
+  const products = Math.min(f.maxProducts ?? DEFAULT_MAX_PRODUCTS, Math.round(matching * (sample.length ? kept.length / sample.length : 1)));
+  // The sample's share screened recently.
+  let recentShare = 0;
+  if (f.skipScreenedDays && kept.length) {
+    const d = db();
+    const since = new Date(Date.now() - f.skipScreenedDays * 86_400_000).toISOString();
+    // In chunks: hundreds of ids in one request make too long a URL.
+    const ps: { id: string; ean: string }[] = [];
+    for (const c of chunks(kept.map((p) => p.gtin!), 150)) ps.push(...(must(await d.from("products").select("id, ean").in("ean", c), "products") as typeof ps));
+    const recent: { product_id: string }[] = [];
+    for (const c of chunks(ps.map((p) => p.id), 150)) {
+      recent.push(...(must(await d.from("results").select("product_id").in("product_id", c).eq("status", "done").gte("updated_at", since), "recent") as typeof recent));
+    }
+    const recentEans = new Set(recent.map((r) => ps.find((p) => p.id === r.product_id)?.ean));
+    recentShare = kept.filter((p) => recentEans.has(p.gtin!)).length / kept.length;
+  }
+  const reused = Math.round(products * recentShare);
+  const rates = await recentRates();
+  const toScreen = products - reused;
+  return {
+    matching, products, reused,
+    amazonMinutes: Math.max(1, Math.round(toScreen / rates.perMinute)),
+    keepaTokens: Math.round(toScreen * rates.tokensPerRow),
+  };
+}
+
+/** Rows a minute on Amazon and Keepa tokens a row, from recent Qogita runs (sensible defaults without). */
+async function recentRates(): Promise<{ perMinute: number; tokensPerRow: number }> {
+  const runs = must(await db().from("runs").select("row_count, token_cost, stats, source").like("source", "Qogita%").eq("status", "done").order("started_at", { ascending: false }).limit(10), "runs") as
+    { row_count: number; token_cost: number; stats: { amazonPerMin?: number | null } | null }[];
+  const median = (xs: number[]) => { const s = xs.filter((x) => Number.isFinite(x) && x > 0).sort((a, b) => a - b); return s.length ? s[Math.floor(s.length / 2)] : null; };
+  return {
+    perMinute: median(runs.map((r) => Number(r.stats?.amazonPerMin))) ?? 40,
+    tokensPerRow: median(runs.filter((r) => r.row_count > 20).map((r) => Number(r.token_cost) / r.row_count)) ?? 1.5,
+  };
+}
+
 export interface PullResult {
   runId: string | null;
   presetId: string | null;
-  stats: { fetched: number; kept: number; screened: number; outsidePrice: number; tooSlow: number; unknownDelivery: number; truncated: boolean; currency: string; unchanged?: number; new?: number; moved?: number };
+  stats: { fetched: number; kept: number; screened: number; outsidePrice: number; tooSlow: number; unknownDelivery: number; truncated: boolean; currency: string; unchanged?: number; new?: number; moved?: number; reused?: number };
   note?: string;
 }
 
@@ -186,6 +311,8 @@ export async function runQogitaPull(opts: {
       }],
     });
     runId = res.runId;
+    // EANs screened in the last N days: reuse that result (re-gated at this price) instead of screening again.
+    if (filters.skipScreenedDays) stats.reused = await reuseRecent(runId, filters.skipScreenedDays);
   }
 
   if (preset) {

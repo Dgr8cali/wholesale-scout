@@ -9,6 +9,7 @@ import { useDialogs } from "@/components/Dialogs";
 import { EmptyState } from "@/components/States";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
@@ -26,7 +27,12 @@ interface Filters {
   maxPrice: number | null;
   maxDeliveryWeeks: number | null;
   movLimit: number | null;
+  /** Leaf categories ticked under the chosen one; null for all. */
+  leaves?: string[] | null;
+  maxProducts?: number | null;
+  skipScreenedDays?: number | null;
 }
+interface Estimate { matching: number; products: number; reused: number; amazonMinutes: number; keepaTokens: number }
 interface PullStats { fetched: number; kept: number; screened: number; outsidePrice: number; tooSlow: number; unknownDelivery: number; truncated: boolean; currency: string; new?: number; moved?: number; unchanged?: number }
 interface Preset {
   id: string; name: string; filters: Filters; profile_id: string | null; nightly: boolean; last_pulled_at: string | null;
@@ -34,7 +40,7 @@ interface Preset {
 }
 interface Profile { id: string; name: string; is_default: boolean }
 
-const EMPTY: Filters = { category: null, brands: [], minPrice: null, maxPrice: null, maxDeliveryWeeks: null, movLimit: null };
+const EMPTY: Filters = { category: null, brands: [], minPrice: null, maxPrice: null, maxDeliveryWeeks: null, movLimit: null, leaves: null, maxProducts: 500, skipScreenedDays: 7 };
 
 /** Every node of the category tree (the API lists leaves with their paths). */
 function treeNodes(cats: Category[]) {
@@ -92,6 +98,36 @@ export default function QogitaPage() {
   const set = (patch: Partial<Filters>) => setFilters((f) => ({ ...f, ...patch }));
   const canPull = !!name.trim() && (!!filters.category || filters.brands.length > 0);
 
+  // An estimate before pulling, from a count-only first page, a moment after the filters settle.
+  const [estimate, setEstimate] = useState<{ key: string; value: Estimate | null; error?: string } | null>(null);
+  const estimateKey = JSON.stringify(filters);
+  const canEstimate = !!filters.category || filters.brands.length > 0;
+  useEffect(() => {
+    if (!canEstimate) return;
+    let stale = false;
+    const t = setTimeout(() => {
+      api<Estimate>("/api/qogita/estimate", { method: "POST", json: { filters } })
+        .then((value) => { if (!stale) setEstimate({ key: estimateKey, value }); })
+        .catch((e) => { if (!stale) setEstimate({ key: estimateKey, value: null, error: (e as Error).message }); });
+    }, 900);
+    return () => { stale = true; clearTimeout(t); };
+  }, [estimateKey, canEstimate, filters]);
+  const est = canEstimate && estimate?.key === estimateKey ? estimate : null;
+
+  // The leaves under the chosen category, to tick.
+  const leaves = useMemo(() => {
+    const c = filters.category;
+    if (!c || !cats) return [];
+    const path = c.path.length ? c.path : [c.name];
+    return [...new Set(cats.filter((x) => path.every((p, i) => x.path[i] === p)).map((x) => x.name))].sort((a, b) => a.localeCompare(b));
+  }, [filters.category, cats]);
+  const ticked = (leaf: string) => !filters.leaves || filters.leaves.includes(leaf);
+  const tick = (leaf: string, on: boolean) => {
+    const cur = filters.leaves ?? leaves;
+    const next = on ? [...new Set([...cur, leaf])] : cur.filter((l) => l !== leaf);
+    set({ leaves: next.length === leaves.length ? null : next });
+  };
+
   async function pull(req: () => Promise<{ runId: string | null; stats: PullStats; note?: string }>, label: string) {
     setBusy(label);
     try {
@@ -104,7 +140,8 @@ export default function QogitaPage() {
         loadPresets();
         return;
       }
-      toast.success(`Pulled ${s.kept.toLocaleString("en-GB")} products${dropped ? `; ${dropped}` : ""}${s.truncated ? "; stopped at the row limit" : ""}. Screening now.`);
+      const reused = (s as PullStats & { reused?: number }).reused;
+      toast.success(`Pulled ${s.kept.toLocaleString("en-GB")} products${dropped ? `; ${dropped}` : ""}${s.truncated ? "; stopped at Max products" : ""}${reused ? `; ${reused} reused from the last ${filters.skipScreenedDays ?? 7} days` : ""}. Screening now.`);
       router.push(`/runs/${r.runId}`);
     } catch (e) {
       toast.error((e as Error).message);
@@ -132,8 +169,24 @@ export default function QogitaPage() {
               <Label className="field-label">Category</Label>
               {catError ? <p className="text-sm text-fail">Couldn&apos;t load categories: {catError}</p>
                 : !cats ? <Skeleton className="h-9" />
-                : <CategoryPicker cats={cats} value={filters.category} onChange={(category) => set({ category })} />}
+                : <CategoryPicker cats={cats} value={filters.category} onChange={(category) => set({ category, leaves: null })} />}
               <p className="text-xs text-muted-foreground">Any level: a parent pulls every category under it.</p>
+              {leaves.length > 1 && (
+                <fieldset className="mt-2 space-y-1.5 rounded-md border p-3">
+                  <legend className="px-1 text-xs text-muted-foreground">
+                    {filters.leaves ? `${filters.leaves.length} of ${leaves.length}` : `All ${leaves.length}`} categories under it
+                    {" · "}<button type="button" className="text-brand hover:underline" onClick={() => set({ leaves: null })}>all</button>
+                    {" · "}<button type="button" className="text-brand hover:underline" onClick={() => set({ leaves: [] })}>none</button>
+                  </legend>
+                  <div className="grid max-h-48 gap-x-4 gap-y-1 overflow-auto sm:grid-cols-2 lg:grid-cols-3">
+                    {leaves.map((leaf) => (
+                      <label key={leaf} className="flex items-center gap-2 text-sm">
+                        <Checkbox checked={ticked(leaf)} onCheckedChange={(v) => tick(leaf, !!v)} /> <span className="truncate">{leaf}</span>
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+              )}
             </div>
             <div className="space-y-1.5 sm:col-span-2">
               <Label className="field-label" htmlFor="brand">Brands</Label>
@@ -145,6 +198,10 @@ export default function QogitaPage() {
               hint="Products with no estimate are kept." />
             <NumberField id="movLimit" label="MOV limit (€)" value={filters.movLimit} step={50} onChange={(movLimit) => set({ movLimit })}
               hint="Applied to the supplier offers of rows that pass." />
+            <NumberField id="maxProducts" label="Max products" value={filters.maxProducts ?? 500} step={50} onChange={(maxProducts) => set({ maxProducts })}
+              hint="The pull stops here." />
+            <NumberField id="skipDays" label="Skip EANs screened in the last N days" value={filters.skipScreenedDays ?? 7} step={1} onChange={(skipScreenedDays) => set({ skipScreenedDays })}
+              hint="Those reuse their recent result (re-checked at the new price, no API calls). 0 screens everything." />
           </div>
           <div className="grid gap-4 border-t pt-5 sm:grid-cols-2">
             <div className="space-y-1.5">
@@ -159,6 +216,21 @@ export default function QogitaPage() {
             </div>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-3">
+            {canEstimate && (
+              <p className="mr-auto text-sm" aria-live="polite">
+                {!est ? <span className="text-muted-foreground">Estimating…</span>
+                  : est.error ? <span className="text-fail">Couldn&apos;t estimate: {est.error}</span>
+                  : est.value && (
+                    <>
+                      About <span className="num font-semibold">{est.value.products.toLocaleString("en-GB")}</span> products
+                      <span className="text-muted-foreground"> ({est.value.matching.toLocaleString("en-GB")} on Qogita)</span>
+                      {est.value.reused > 0 && <span className="text-muted-foreground"> · {est.value.reused.toLocaleString("en-GB")} reused</span>}
+                      {" · "}~<span className="num font-semibold">{est.value.amazonMinutes}</span> min on Amazon
+                      {" · "}~<span className="num font-semibold">{est.value.keepaTokens.toLocaleString("en-GB")}</span> Keepa tokens
+                    </>
+                  )}
+              </p>
+            )}
             {!canPull && <span className="text-sm text-muted-foreground">Choose a category or a brand, and name the pull.</span>}
             <Button size="lg" disabled={!canPull || !!busy}
               onClick={() => pull(() => api("/api/qogita/pull", { method: "POST", json: { name, filters, profileId } }), "new")}>

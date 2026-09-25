@@ -85,6 +85,11 @@ class Query implements PromiseLike<{ data: unknown; error: { message: string; co
   in(c: string, vs: unknown[]) { this.filters.push((r) => vs.includes(get(r, c))); return this; }
   gte(c: string, v: string) { this.filters.push((r) => String(r[c]) >= v); return this; }
   lte(c: string, v: string) { this.filters.push((r) => r[c] != null && String(r[c]) <= v); return this; }
+  like(c: string, pattern: string) {
+    const re = new RegExp(`^${pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/%/g, ".*").replace(/_/g, ".")}$`);
+    this.filters.push((r) => r[c] != null && re.test(String(r[c])));
+    return this;
+  }
   gt(c: string, v: string) { this.filters.push((r) => r[c] != null && String(r[c]) > v); return this; }
   lt(c: string, v: string) { this.filters.push((r) => r[c] != null && String(r[c]) < v); return this; }
   neq(c: string, v: unknown) { this.filters.push((r) => get(r, c) !== v); return this; }
