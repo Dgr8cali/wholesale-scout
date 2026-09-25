@@ -4,6 +4,7 @@
  *
  * Pure and shared by the browser (preview) and the server (ingest).
  */
+import { decodeEntities } from "../text";
 
 /** Upload limits. Rows are parsed in the browser; 5,000 rows is ~1.5 MB of JSON to store. */
 export const MAX_FILE_BYTES = 10 * 1024 * 1024;
@@ -228,7 +229,7 @@ export function applyMapping(
   const { records } = rowsToObjects(rows, mapping.headerRow);
   const col = mapping.columns;
   const get = (v: Record<string, Cell>, f: FieldKey) => (col[f] ? v[col[f]!] : undefined);
-  const text = (c: Cell) => (c == null || String(c).trim() === "" ? null : String(c).trim());
+  const text = (c: Cell) => (c == null || String(c).trim() === "" ? null : decodeEntities(String(c)).replace(/\s+/g, " ").trim());
 
   const out: NormalizedRow[] = [];
   const rejected: RejectedRow[] = [];

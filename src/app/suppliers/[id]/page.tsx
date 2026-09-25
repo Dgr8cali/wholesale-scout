@@ -136,7 +136,7 @@ export default function SupplierPage() {
       <Documents supplier={{ id: s.id, name: s.name }} />
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <section className="space-y-2 lg:col-span-2" aria-label="Best products">
+        <section className="min-w-0 space-y-2 lg:col-span-2" aria-label="Best products">
           <h2 className="text-sm font-semibold">Best products <span className="font-normal text-muted-foreground">· pass or warn, most room under the max landed cost</span></h2>
           {!data.best.length ? <p className="panel px-4 py-6 text-center text-sm text-muted-foreground">None of its costed products pass or warn on your default profile.</p> : (
             <div className="panel overflow-x-auto">

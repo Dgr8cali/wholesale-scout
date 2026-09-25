@@ -269,7 +269,8 @@ export default function UploadPage() {
                     s === step ? "bg-brand text-brand-foreground" : done ? "bg-brand/15 text-brand" : "bg-muted text-muted-foreground")}>
                     {done ? <CheckIcon className="size-3.5" /> : i + 1}
                   </span>
-                  {label}
+                  {/* Phones: only the current step's name, so the four fit. */}
+                  <span className={s === step ? undefined : "hidden sm:inline"}>{label}</span>
                 </button>
               </li>
             </Fragment>

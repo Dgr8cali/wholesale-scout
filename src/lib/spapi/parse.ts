@@ -1,4 +1,5 @@
 /** Response parsers for SP-API — kept separate from I/O so they can be tested on fixtures. */
+import { decodeEntities } from "../text";
 import type { AmazonDg, CatalogMatch, CompetitivePrice, FeesEstimate, Restriction, RestrictionLink, RestrictionStatus } from "./types";
 
 type Json = Record<string, unknown>;
@@ -68,7 +69,7 @@ export function parseCatalogItem(raw: unknown, marketplaceId: string): CatalogMa
     asin,
     eans,
     imageUrl: main ? String(main.link) : null,
-    title: str(summary.itemName),
+    title: str(summary.itemName) && decodeEntities(str(summary.itemName)!),
     brand: str(summary.brand) ?? str(summary.brandName),
     // Root category, for the referral fee: the rank's display group, else the summary's
     // display group, else the leaf browse node as a last resort.

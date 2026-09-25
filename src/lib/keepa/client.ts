@@ -6,6 +6,7 @@
  * - HttpKeepaClient: the Keepa product API (amazon.co.uk = domain 2), by ASIN or by
  *   EAN, batches of up to 100. Every request is logged with Keepa's own token figures.
  */
+import { decodeEntities } from "../text";
 import { decodeSeries, summarize } from "./summarize";
 import type { KeepaClient, KeepaLookup, KeepaProduct, KeepaResponseMeta, OnKeepaResponse, KeepaTokens, SellerLookup, SellerProfile, Storefront } from "./types";
 
@@ -140,7 +141,7 @@ export function parseKeepaProduct(p: RawKeepaProduct, now = Date.now(), buyBoxFe
   return {
     asin: p.asin,
     eans: [...(p.eanList ?? []), ...(p.upcList ?? [])],
-    title: p.title ?? null,
+    title: p.title ? decodeEntities(p.title) : null,
     brand: p.brand ?? null,
     category: p.categoryTree?.[0]?.name ?? null,
     dimsCm: dims,
