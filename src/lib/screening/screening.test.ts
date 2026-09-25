@@ -124,6 +124,19 @@ describe("gates", () => {
     expect(runGates(c, strictApproval).failedGate).toBe("gating");
   });
 
+  it("carries Amazon's apply link on approval-needed and blocked, https only", () => {
+    const links = [
+      { resource: "https://sellercentral.amazon.co.uk/hz/approvalrequest?asin=B1", verb: "GET", title: "Request Approval via Seller Central.", type: "text/html" },
+      { resource: "javascript:alert(1)", verb: "GET", title: "x", type: null },
+    ];
+    for (const status of ["approval_required", "blocked"] as const) {
+      const g = runGates(ctx({ restriction: { status, message: "You need approval to list this brand.", links } }), DEFAULT_PROFILE).outcomes.find((o) => o.gate === "gating")!;
+      expect(g.links).toEqual([links[0]]);
+    }
+    const none = runGates(ctx({ restriction: { status: "approval_required", message: "x", links: [] } }), DEFAULT_PROFILE).outcomes.find((o) => o.gate === "gating")!;
+    expect(none.links).toBeUndefined();
+  });
+
   it("names category approval with the listing's category", () => {
     const c = ctx({ amazonCategory: "Grocery", restriction: { status: "approval_required", message: "You need approval to list in this category." } });
     expect(runGates(c, DEFAULT_PROFILE).outcomes.find((o) => o.gate === "gating")!.detail).toMatch(/^Category approval needed \(Grocery\)/);

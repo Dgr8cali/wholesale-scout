@@ -11,8 +11,8 @@ import {
   type Economics,
 } from "../fees/engine";
 import type { RateCard } from "../fees/rateCard";
-import { approvalKind } from "../spapi/parse";
-import type { RestrictionStatus } from "../spapi/types";
+import { applyLinks, approvalKind } from "../spapi/parse";
+import type { RestrictionLink, RestrictionStatus } from "../spapi/types";
 import { GATE_LABELS, GATE_ORDER, type GateId, type GateMode, type ProfileConfig } from "./config";
 import { matchRules, type CategoryRule, type RuleMatch } from "./rules";
 
@@ -26,6 +26,8 @@ export interface GateOutcome {
   detail: string;
   /** Short machine tags, e.g. SPIKE, EROSION, MULTI_ASIN. */
   tags?: string[];
+  /** Gating: Amazon's links for requesting approval, shown as "Apply on Amazon". */
+  links?: RestrictionLink[];
 }
 
 /** Market data, from Keepa history when available, else SP-API's current snapshot. */
@@ -73,7 +75,8 @@ export interface ScreenContext {
     hazmat: string[];
   };
   market: MarketData | null;
-  restriction: { status: RestrictionStatus; message: string } | null;
+  /** `links` is undefined for restrictions checked before links were kept. */
+  restriction: { status: RestrictionStatus; message: string; links?: RestrictionLink[] } | null;
   amazonFees: AmazonFeeOverride | null;
 }
 
@@ -260,13 +263,15 @@ const EVALUATORS: Record<GateId, Evaluator> = {
     const what = kind === "brand" ? ctx.product.brand : kind === "category" ? ctx.amazonCategory : null;
     const label = kind ? `${kind[0].toUpperCase()}${kind.slice(1)} approval` : "Approval";
     const reason = r.message ? `: ${r.message}` : "";
+    const links = applyLinks(r.links);
+    const withLinks = links.length ? { links } : {};
     if (r.status === "blocked") {
-      return { status: failAs(g.mode), detail: `Blocked for your account${kind ? ` (${kind}${what ? `: ${what}` : ""})` : ""}${reason}`, tags: ["BLOCKED"] };
+      return { status: failAs(g.mode), detail: `Blocked for your account${kind ? ` (${kind}${what ? `: ${what}` : ""})` : ""}${reason}`, tags: ["BLOCKED"], ...withLinks };
     }
     if (r.status === "approval_required") {
       const mode: GateMode = g.mode === "off" ? "off" : g.approvalRequired;
       if (mode !== "off") {
-        return { status: failAs(mode), detail: `${label} needed${what ? ` (${what})` : ""}${reason}`, tags: ["APPROVAL", ...(kind ? [kind.toUpperCase()] : [])] };
+        return { status: failAs(mode), detail: `${label} needed${what ? ` (${what})` : ""}${reason}`, tags: ["APPROVAL", ...(kind ? [kind.toUpperCase()] : [])], ...withLinks };
       }
     }
     if (r.status === "unknown") return { status: "skipped", detail: r.message || "Restriction status unknown" };

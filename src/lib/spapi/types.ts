@@ -41,10 +41,18 @@ export interface FeesEstimate {
 
 export type RestrictionStatus = "open" | "approval_required" | "blocked" | "unknown";
 
+/** A link Amazon attaches to a restriction reason, e.g. "Request Approval via Seller Central." */
+export interface RestrictionLink {
+  resource: string;
+  verb: string;
+  title: string | null;
+  type: string | null;
+}
+
 export interface Restriction {
   asin: string;
   status: RestrictionStatus;
-  reasons: { code: string; message: string }[];
+  reasons: { code: string; message: string; links: RestrictionLink[] }[];
 }
 
 export interface CompetitivePrice {

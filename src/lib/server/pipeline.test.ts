@@ -12,6 +12,7 @@ import { processRun, rescreenRun } from "./process";
 
 const catalogCalls: string[][] = [];
 const FLAKY_EAN = "5000000000059";
+const APPLY = { resource: "https://sellercentral.amazon.co.uk/hz/approvalrequest/restrictions/approve?asin=B0MULTIB01", verb: "GET", title: "Request Approval via Seller Central.", type: "text/html" };
 const calls = { catalog: 0, pricing: 0, restrictions: 0, fees: 0 };
 
 const cat = (asin: string, ean: string, over: Partial<CatalogMatch> = {}): CatalogMatch => ({
@@ -57,7 +58,7 @@ vi.mock("../spapi/client", async (orig) => {
       async getListingsRestrictions(asin: string) {
         calls.restrictions++;
         return asin === "B0MULTIB01"
-          ? { asin, status: "approval_required", reasons: [{ code: "APPROVAL_REQUIRED", message: "You need approval to list this brand." }] }
+          ? { asin, status: "approval_required", reasons: [{ code: "APPROVAL_REQUIRED", message: "You need approval to list this brand.", links: [APPLY] }] }
           : { asin, status: "open", reasons: [] };
       },
       async getMyFeesEstimates(items: { asin: string; price: number }[]) {
@@ -167,6 +168,20 @@ describe("ingest → process", () => {
     expect(byAsin("B0MULTIA01").failed_gate).not.toBe("gating");
     expect(byAsin("B0MULTIB01")).toMatchObject({ verdict: "warn", failed_gate: null });
     expect(byAsin("B0MULTIB01").why).toContain("Brand approval needed (Brand)");
+    const gating = (byAsin("B0MULTIB01").gate_outcomes as { gate: string; links?: unknown[] }[]).find((g) => g.gate === "gating")!;
+    expect(gating.links).toEqual([APPLY]);
+
+    // A restriction stored before links were kept is checked again on Re-screen, once.
+    const multiB = byAsin("B0MULTIB01");
+    const legacy = structuredClone(multiB.inputs) as { restriction: { links?: unknown } };
+    delete legacy.restriction.links;
+    multiB.inputs = legacy;
+    const before = calls.restrictions;
+    const rs = await rescreenRun(runId);
+    expect(rs.requeued).toBe(1 + 1); // this row, plus the errored lookup row
+    while (!(await processRun(runId)).done);
+    expect(calls.restrictions).toBe(before + 1);
+    expect(((byAsin("B0MULTIB01").inputs as { restriction: { links: unknown[] } }).restriction.links)).toEqual([APPLY]);
   });
 
   it("re-screens from stored data, fetching only what a row never had", async () => {

@@ -1,5 +1,5 @@
 /** Response parsers for SP-API — kept separate from I/O so they can be tested on fixtures. */
-import type { CatalogMatch, CompetitivePrice, FeesEstimate, Restriction, RestrictionStatus } from "./types";
+import type { CatalogMatch, CompetitivePrice, FeesEstimate, Restriction, RestrictionLink, RestrictionStatus } from "./types";
 
 type Json = Record<string, unknown>;
 const obj = (v: unknown): Json => (v && typeof v === "object" ? (v as Json) : {});
@@ -103,6 +103,16 @@ export function parseFeesEstimate(raw: unknown, asin: string): FeesEstimate {
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
+/** Links worth showing as "Apply on Amazon": https only, one per URL. */
+export function applyLinks(links: RestrictionLink[] | undefined): RestrictionLink[] {
+  const seen = new Set<string>();
+  return (links ?? []).filter((l) => {
+    if (!/^https:\/\//i.test(l.resource) || seen.has(l.resource)) return false;
+    seen.add(l.resource);
+    return true;
+  });
+}
+
 export type ApprovalKind = "brand" | "category" | "product";
 
 /**
@@ -121,7 +131,16 @@ export function parseRestrictions(asin: string, restrictions: unknown[]): Restri
   const reasons = restrictions
     .flatMap((x) => arr(obj(x).reasons))
     .map(obj)
-    .map((r) => ({ code: String(r.reasonCode ?? "UNKNOWN"), message: String(r.message ?? "") }));
+    .map((r) => ({
+      code: String(r.reasonCode ?? "UNKNOWN"),
+      message: String(r.message ?? ""),
+      links: arr(r.links).map(obj).filter((l) => str(l.resource)).map((l) => ({
+        resource: String(l.resource),
+        verb: str(l.verb) ?? "GET",
+        title: str(l.title),
+        type: str(l.type),
+      })),
+    }));
   let status: RestrictionStatus = "open";
   if (reasons.some((r) => r.code === "NOT_ELIGIBLE")) status = "blocked";
   else if (reasons.some((r) => r.code === "APPROVAL_REQUIRED")) status = "approval_required";

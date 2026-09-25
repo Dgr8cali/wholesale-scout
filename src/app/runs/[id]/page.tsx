@@ -358,7 +358,10 @@ export default function RunPage() {
                     <td className="num px-3 py-2 text-right">{pct(r.roi)}</td>
                     <td className="num px-3 py-2 text-right">{pct(r.margin)}</td>
                     <td className="num px-3 py-2 text-right">{gbp(r.hurdle_price)}</td>
-                    <td className="min-w-[320px] px-3 py-2 text-xs leading-snug">{r.status === "error" ? r.error : r.why}</td>
+                    <td className="min-w-[320px] px-3 py-2 text-xs leading-snug">
+                      {r.status === "error" ? r.error : r.why}
+                      <ApplyLink r={r} />
+                    </td>
                   </tr>
                   {isOpen && (
                     <tr className="border-b border-line bg-surface-2/50">
@@ -380,6 +383,20 @@ export default function RunPage() {
   );
 }
 
+/** "Apply on Amazon" for approval-needed or blocked rows, only when Amazon returned a link. */
+function ApplyLink({ r }: { r: Result }) {
+  const g = r.gate_outcomes.find((o) => o.gate === "gating" && (o.status === "warn" || o.status === "fail"));
+  const link = g?.links?.[0];
+  if (!link) return null;
+  return (
+    <a href={link.resource} target="_blank" rel="noreferrer noopener" onClick={(e) => e.stopPropagation()}
+      title={link.title ?? "Request approval in Seller Central"}
+      className="ml-2 inline-flex items-center rounded border border-accent px-1.5 py-0.5 text-[11px] font-semibold text-accent hover:bg-accent-soft">
+      Apply on Amazon ↗
+    </a>
+  );
+}
+
 function Detail({ r }: { r: Result }) {
   return (
     <div className="grid gap-4 lg:grid-cols-[2fr_1fr_1fr]">
@@ -390,7 +407,7 @@ function Detail({ r }: { r: Result }) {
             <li key={g.gate} className="flex gap-2 text-xs">
               <span className={`flex h-4 w-4 flex-none items-center justify-center rounded-full text-[10px] font-bold text-white ${STATUS_STYLE[g.status]}`}>{STATUS_ICON[g.status]}</span>
               <span className="w-40 flex-none font-medium">{g.label}</span>
-              <span className="text-muted">{g.detail}</span>
+              <span className="text-muted">{g.detail}{g.gate === "gating" && <ApplyLink r={r} />}</span>
             </li>
           ))}
           {r.failed_gate && <li className="text-xs text-muted">Stopped at {GATE_LABELS[r.failed_gate]}; later gates didn&apos;t run.</li>}

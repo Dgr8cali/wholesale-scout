@@ -287,7 +287,7 @@ export class SpApiClient {
   /** getListingsRestrictions — whether this seller account can list the ASIN new. */
   async getListingsRestrictions(asin: string): Promise<Restriction> {
     if (!this.config.sellerId) {
-      return { asin, status: "unknown", reasons: [{ code: "NO_SELLER_ID", message: "Set SPAPI_SELLER_ID to check gating" }] };
+      return { asin, status: "unknown", reasons: [{ code: "NO_SELLER_ID", message: "Set SPAPI_SELLER_ID to check gating", links: [] }] };
     }
     const res = await this.request<{ restrictions?: unknown[] }>("restrictions", "GET", "/listings/2021-08-01/restrictions", {
       query: {

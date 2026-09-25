@@ -90,6 +90,13 @@ describe("getListingsRestrictions", () => {
   const withReasons = (reasons: unknown[]) =>
     mockFetch([(url) => (url.includes("/restrictions") ? json({ restrictions: [{ marketplaceId: CFG.marketplaceId, conditionType: "new_new", reasons }] }) : undefined)]);
 
+  it("keeps each reason's links", async () => {
+    const link = { resource: "https://sellercentral.amazon.co.uk/hz/approvalrequest/restrictions/approve?asin=B1", verb: "GET", title: "Request Approval via Seller Central.", type: "text/html" };
+    const c = new SpApiClient(CFG, withReasons([{ reasonCode: "APPROVAL_REQUIRED", message: "You need approval to list this brand.", links: [link] }]).fn, noSleep);
+    const r = await c.getListingsRestrictions("B1");
+    expect(r.reasons[0].links).toEqual([link]);
+  });
+
   it("maps APPROVAL_REQUIRED and NOT_ELIGIBLE", async () => {
     let c = new SpApiClient(CFG, withReasons([{ reasonCode: "APPROVAL_REQUIRED", message: "You need approval" }]).fn, noSleep);
     expect((await c.getListingsRestrictions("B1")).status).toBe("approval_required");

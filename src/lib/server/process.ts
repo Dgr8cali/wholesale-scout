@@ -224,6 +224,15 @@ async function safely(row: Row, fn: () => Promise<void>) {
   }
 }
 
+/**
+ * Gating needs checking when it never was, or when an approval-needed / blocked result was
+ * stored before Amazon's "apply" links were kept (so the button can be shown).
+ */
+function needsRestrictionCheck(row: Row): boolean {
+  const r = row.restriction;
+  return !r || ((r.status === "approval_required" || r.status === "blocked") && r.links === undefined);
+}
+
 /** "search miss: tried a batch of 20, EAN 3264680023323, UPC …; Amazon returned no items". */
 function missNote(trace: LookupTrace | undefined): string | undefined {
   if (!trace) return undefined;
@@ -312,7 +321,7 @@ export async function rescreenRun(runId: string, profileId?: string | null): Pro
     if (STAGE_RANK[row.stage] < STAGE_RANK.enriched) return void requeue.push(row.resultId);
     const mid = runGates(ctx, cfg, middle);
     if (mid.failedGate) return void work.push(() => safely(row, () => finalize(row, mid, cfg, ctx)));
-    if (STAGE_RANK[row.stage] < STAGE_RANK.account) return void requeue.push(row.resultId);
+    if (STAGE_RANK[row.stage] < STAGE_RANK.account || needsRestrictionCheck(row)) return void requeue.push(row.resultId);
     const full = runGates(ctx, cfg);
     work.push(() => safely(row, () => finalize(row, full, cfg, ctx)));
   });
@@ -530,10 +539,14 @@ export async function processRun(runId: string, limit = 20): Promise<{ done: boo
     // Stage 4 — your account: gating, and Amazon's own fee at the scoring price.
     if (spapi) {
       for (const row of stage3) {
-        if (!row.match?.asin || row.restriction) continue;
+        if (!row.match?.asin || !needsRestrictionCheck(row)) continue;
         try {
           const r = await spapi.getListingsRestrictions(row.match.asin);
-          row.restriction = { status: r.status, message: r.reasons.map((x) => x.message).filter(Boolean).join(" ") };
+          row.restriction = {
+            status: r.status,
+            message: r.reasons.map((x) => x.message).filter(Boolean).join(" "),
+            links: r.reasons.flatMap((x) => x.links),
+          };
         } catch (e) {
           row.restriction = { status: "unknown", message: `Restriction check failed: ${(e as Error).message}` };
         }
