@@ -95,6 +95,8 @@ export interface ListingOffers {
   totalOffers: number | null;
   /** Landed Buy Box price, GBP. */
   buyBox: number | null;
+  /** The seller whose offer wins the Buy Box, when there is one. */
+  buyBoxSellerId?: string | null;
 }
 
 /** One catalog query made while resolving an EAN. */

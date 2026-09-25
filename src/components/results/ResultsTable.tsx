@@ -111,6 +111,8 @@ export interface ResultsTableProps {
   lineCapGbp: number;
   /** Max months to sell the order (Demand gate), to colour the figure. */
   maxMonths: number;
+  /** A seller scan: rows where this seller holds the Buy Box now are marked. */
+  scanSellerId?: string | null;
 }
 
 export function ResultsTable(props: ResultsTableProps) {
@@ -332,6 +334,11 @@ function Cell({ id, d, props, compact, isOpen }: { id: string; d: DisplayRow; pr
               {r.product?.asin && <> · <a className="text-brand hover:underline" href={`https://www.amazon.co.uk/dp/${r.product.asin}`} target="_blank" rel="noreferrer" onClick={stop}>{r.product.asin}</a></>}
               {r.offer?.supplier && <> · {r.offer.supplier.name}{r.offer_count > 1 ? ` (+${r.offer_count - 1})` : ""}</>}
             </div>
+            {props.scanSellerId && r.inputs?.market?.buyBoxSellerId != null && (
+              r.inputs.market.buyBoxSellerId === props.scanSellerId
+                ? <span className="mt-0.5 inline-block rounded bg-brand-soft px-1 text-2xs font-semibold text-brand" title="This seller holds the Buy Box now">Holds Buy Box</span>
+                : <span className="mt-0.5 inline-block text-2xs text-muted-foreground" title={`Buy Box held by ${r.inputs.market.buyBoxSellerId}`}>Buy Box: another seller</span>
+            )}
             {!alt && d.others > 0 && (
               <button className="text-xs font-medium text-brand hover:underline" onClick={(e) => { stop(e); props.onToggleGroup(d.groupKey); }}>
                 {props.expandedGroups.has(d.groupKey) ? "▾ Hide" : "▸"} {d.others} other ASIN{d.others > 1 ? "s" : ""} for this EAN
@@ -401,7 +408,12 @@ function Cell({ id, d, props, compact, isOpen }: { id: string; d: DisplayRow; pr
         </div>
       );
     }
-    case "landed": return <span className={num}>{gbp(r.landed_cost)}</span>;
+    case "landed":
+      // No cost given (a check or a seller scan): the most it can cost landed and clear the floors.
+      if (r.landed_cost == null && r.inputs?.maxLandedGbp != null) {
+        return <span className={cn(num, "text-muted-foreground")} title="No cost given: the most it can cost landed and still clear the profit floors">≤ {gbp(r.inputs.maxLandedGbp)}</span>;
+      }
+      return <span className={num}>{gbp(r.landed_cost)}</span>;
     case "sell": return <span className={num}>{gbp(r.sell_price)}</span>;
     case "profit": return <span className={cn(num, r.profit != null && r.profit < 0 && "text-fail")}>{gbp(r.profit)}</span>;
     case "roi": return <span className={num}>{pct(r.roi)}</span>;

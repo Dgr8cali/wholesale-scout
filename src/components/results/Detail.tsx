@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ShoppingCartIcon } from "lucide-react";
 import { useState } from "react";
+import Link from "next/link";
 import type { Fav, Result, Seller } from "./types";
 
 const STATUS_ICON: Record<string, string> = { pass: "✓", warn: "!", fail: "✕", skipped: "–", off: "·" };
@@ -63,6 +64,8 @@ function Sellers({ sellers, flaggedText }: { sellers: Seller[]; flaggedText: str
             {s.brandSharePct != null && (
               <span className={flagged(s) ? "font-semibold text-warn" : "text-muted-foreground"}> · {s.brandSharePct}% this brand{flagged(s) ? " (likely distributor)" : ""}</span>
             )}
+            <span className="text-muted-foreground"> · </span>
+            <Link className="font-medium text-brand hover:underline" href={`/sellers/scan?seller=${s.sellerId}`} onClick={(e) => e.stopPropagation()}>Scan this seller</Link>
           </li>
         ))}
       </ul>

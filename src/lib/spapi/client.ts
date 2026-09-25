@@ -434,7 +434,7 @@ export function parseItemOffers(responses: unknown[]): ListingOffers[] {
     const p = r.body?.payload as {
       ASIN?: string;
       Summary?: { TotalOfferCount?: number; NumberOfOffers?: { condition?: string; fulfillmentChannel?: string; OfferCount?: number }[]; BuyBoxPrices?: { condition?: string; LandedPrice?: { Amount?: number } }[] };
-      Offers?: { SellerId?: string }[];
+      Offers?: { SellerId?: string; IsBuyBoxWinner?: boolean }[];
     } | undefined;
     if (!p?.ASIN || (r.status?.statusCode && r.status.statusCode >= 300)) continue;
     const s = p.Summary ?? {};
@@ -447,6 +447,7 @@ export function parseItemOffers(responses: unknown[]): ListingOffers[] {
       fbaOffers: s.NumberOfOffers ? fba : null,
       totalOffers: s.TotalOfferCount ?? null,
       buyBox: bb != null ? Number(bb) : null,
+      buyBoxSellerId: (p.Offers ?? []).find((o) => o.IsBuyBoxWinner)?.SellerId ?? null,
     });
   }
   return out;

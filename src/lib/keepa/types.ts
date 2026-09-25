@@ -33,6 +33,8 @@ export interface KeepaSummary {
   keepaRankDrops30?: number | null;
   /** The sellers who held the Buy Box longest over 365 days, most first. */
   topSellers?: { sellerId: string; sharePct: number }[];
+  /** Who holds the Buy Box at the end of the history (Buy Box data only). */
+  buyBoxSellerNow?: string | null;
   /** Keepa's FBA pick-and-pack fee estimate, GBP ex-VAT. */
   fbaFee?: number | null;
   referralFeePct?: number | null;
@@ -122,6 +124,18 @@ export interface SellerProfile {
   brands: { brand: string; count: number }[];
 }
 
+/** A seller's storefront (Keepa seller with storefront=1: 10 tokens). */
+export interface Storefront {
+  profile: SellerProfile;
+  /** Registered business name, when Keepa has it. */
+  businessName: string | null;
+  /** Share of its listings' Buy Box it holds (new), %. */
+  buyBoxOwnershipPct: number | null;
+  /** The storefront's ASINs, most recently seen first. */
+  asins: string[];
+  tokensUsed: number;
+}
+
 export interface SellerLookup {
   profiles: Map<string, SellerProfile>;
   tokensUsed: number;
@@ -147,6 +161,8 @@ export interface KeepaClient {
   lookupByEans(eans: string[], onResponse?: OnKeepaResponse, opts?: { buyBox?: boolean }): Promise<KeepaLookup>;
   lookupByAsins(asins: string[], onResponse?: OnKeepaResponse, opts?: { buyBox?: boolean }): Promise<KeepaLookup>;
   lookupSellers(sellerIds: string[], onResponse?: OnKeepaResponse): Promise<SellerLookup>;
+  /** A seller's storefront ASIN list and profile (10 tokens); null when Keepa doesn't know the seller. */
+  storefront?(sellerId: string, onResponse?: OnKeepaResponse): Promise<Storefront | null>;
   /** Current token balance (free). null when unknown. */
   tokenStatus(): Promise<KeepaTokens | null>;
 }

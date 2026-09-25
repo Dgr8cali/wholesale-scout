@@ -27,6 +27,7 @@ import { EMPTY_FILTERS, matches, normalizeFilters, type FilterSet } from "@/lib/
 import { GATE_LABELS, GATE_ORDER, withDefaults, type GateId } from "@/lib/screening/config";
 import { api, when } from "@/lib/ui/client";
 import { favouriteSync, favStore, type FavStore } from "@/lib/ui/favouriteSync";
+import { storefrontUrl } from "@/lib/check/seller";
 import { firstOrderFigures } from "@/lib/ui/metrics";
 import { groupRows } from "@/lib/ui/group";
 import { brandOf, dormantOf, favKey, toFilterRow } from "@/lib/ui/resultRows";
@@ -369,6 +370,16 @@ export default function RunPage() {
               }} />
           </h1>
           {run.name && run.name !== run.source && <p className="text-xs text-muted-foreground">{run.source}</p>}
+          {run.stats?.scan && (
+            <p className="text-xs text-muted-foreground">
+              Storefront of{" "}
+              <a className="font-medium text-brand hover:underline" href={storefrontUrl(run.stats.scan.sellerId)} target="_blank" rel="noreferrer">{run.stats.scan.sellerName ?? run.stats.scan.sellerId}</a>
+              : {run.stats.scan.asins.toLocaleString("en-GB")} ASINs screened with no cost
+              {run.stats.scan.more > 0 ? `; ${run.stats.scan.more.toLocaleString("en-GB")} more on the storefront not scanned` : ""}
+              {" · "}{results.filter((x) => x.inputs?.market?.buyBoxSellerId === run.stats?.scan?.sellerId).length} where it holds the Buy Box now
+              {" · "}<Link className="text-brand hover:underline" href="/sellers">Sellers</Link>
+            </p>
+          )}
           <p className="text-sm text-muted-foreground">
             {run.profile?.name ?? "Profile"}{profileVersion(run)} · started {when(run.started_at)} · {products.length || total} products ({total} listings) · {run.token_cost.toLocaleString("en-GB")} Keepa tokens{tokenStages(run)}
           </p>
@@ -458,7 +469,7 @@ export default function RunPage() {
         expandedGroups={expanded} onToggleGroup={(k) => setExpanded((s) => { const n = new Set(s); if (n.has(k)) n.delete(k); else n.add(k); return n; })}
         open={open} onToggleOpen={(rid) => setOpen((s) => { const n = new Set(s); if (n.has(rid)) n.delete(rid); else n.add(rid); return n; })}
         activeId={active?.id ?? null} onActivate={(rid) => setActiveId((cur) => (cur === rid ? null : rid))}
-        favourites={favourites} onStar={toggleFavourite}
+        favourites={favourites} onStar={toggleFavourite} scanSellerId={run.stats?.scan?.sellerId ?? null}
         sort={sort} onSort={(key) => setSort((s) => ({ key, dir: s.key === key ? (s.dir === 1 ? -1 : 1) : key === "title" ? 1 : -1 }))}
         sparks={sparks} observeSparks={observeSparks}
         renderDetail={(r) => <Detail r={r} fav={favOf(r)} onNote={saveNote} onWaive={waive} budgetGbp={lineBudget} />}

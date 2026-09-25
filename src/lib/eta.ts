@@ -4,6 +4,8 @@
  */
 
 export interface RunStats {
+  /** A seller scan: whose storefront this run screens (rows mark whether it holds the Buy Box). */
+  scan?: { sellerId: string; sellerName: string | null; asins: number; more: number } | null;
   /** Rows leaving the Amazon queue per minute, measured on this run (smoothed across batches). */
   amazonPerMin?: number | null;
   /** Keepa's own figures, as last read by the Keepa stage. */

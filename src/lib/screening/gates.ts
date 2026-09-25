@@ -68,6 +68,8 @@ export interface MarketData {
   buyBoxFetched?: boolean;
   /** From SP-API's current offers before any Keepa history: Amazon holds an offer now. */
   amazonNow?: boolean | null;
+  /** Seller holding the Buy Box now: SP-API's current offers, else the end of Keepa's history. */
+  buyBoxSellerId?: string | null;
   // From the Keepa history, for dormant listings (see ./dormant).
   lastBuyBox12m?: number | null;
   lastBuyBoxAt?: string | null;

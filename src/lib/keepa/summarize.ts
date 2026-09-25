@@ -204,6 +204,8 @@ export function summarize(i: SummaryInput): KeepaSummary {
   // Buy Box share by seller over the last year, by time held.
   let topSellerBbSharePct: number | null = null;
   let topSellers: { sellerId: string; sharePct: number }[] = [];
+  const lastHolder = i.buyBoxSellers?.at(-1)?.[1];
+  const buyBoxSellerNow = lastHolder && lastHolder !== "-1" && lastHolder !== "-2" ? lastHolder : null;
   if (i.buyBoxSellers?.length) {
     const held = new Map<string, number>();
     const s = i.buyBoxSellers;
@@ -248,6 +250,7 @@ export function summarize(i: SummaryInput): KeepaSummary {
     amazonLastSeenDays,
     topSellerBbSharePct,
     topSellers,
+    buyBoxSellerNow,
     reviewJumpPct,
     youngerThanParent: i.parentFirstSeen == null || !Number.isFinite(firstPoint) ? null : firstPoint > i.parentFirstSeen + 30 * DAY,
     ...dormancy(i, now),

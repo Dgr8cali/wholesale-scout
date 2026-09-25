@@ -1,6 +1,6 @@
 import "server-only";
 import { brandKey } from "../brands";
-import { computeFees, economics, referralCategoryFor } from "../fees/engine";
+import { computeFees, economics, maxLandedCost, referralCategoryFor } from "../fees/engine";
 import type { RateCard } from "../fees/rateCard";
 import { estimateEta, type Eta, type RunStats } from "../eta";
 import { addDailyTokens } from "../keepaLedger";
@@ -129,8 +129,9 @@ interface Row {
 
 const FRESH = (ts: string | null, ttl: number) => !!ts && Date.now() - Date.parse(ts) < ttl;
 
-function marketFromKeepa(s: KeepaSummary): MarketData {
-  return { hasHistory: true, ...s };
+/** Market data from a Keepa summary; the Buy Box holder seen in current offers is kept. */
+function marketFromKeepa(s: KeepaSummary, prev?: MarketData | null): MarketData {
+  return { hasHistory: true, ...s, buyBoxSellerId: prev?.buyBoxSellerId ?? s.buyBoxSellerNow ?? null };
 }
 
 function marketFromSpApi(p: CompetitivePrice | undefined, rank: number | null): MarketData | null {
@@ -185,6 +186,9 @@ function packFor(row: Row): { listing: number; supplier: number; ratio: number; 
   const supplier = supplierPack(row.offer.title);
   return { listing: l.count, supplier, ratio: l.count / supplier, mismatch: l.mismatch };
 }
+
+/** A product known only by its ASIN: its EAN field holds the ASIN until the catalog gives one. */
+const isAsinOnly = (p: Pick<Product, "ean" | "asin">) => !!p.asin && p.ean === p.asin;
 
 function context(row: Row, card: RateCard, rules: CategoryRule[], cfg: ProfileConfig, approved: Approved): ScreenContext {
   const p = row.product, o = row.offer, s = row.supplier;
@@ -264,6 +268,17 @@ function feeComparison(price: number, ctx: ScreenContext, cfg: ProfileConfig) {
   };
 }
 
+/**
+ * No cost given, and the row failed before the fee gate: the most it can cost landed at its
+ * sell price all the same (it doesn't depend on the verdict).
+ */
+function maxLandedFor(ctx: ScreenContext, run: GateRun, cfg: ProfileConfig): number | null {
+  if (run.scoringPrice == null) return null;
+  const item = { referralCategory: ctx.product.referralCategory, dimsCm: ctx.product.dimsCm, weightG: ctx.product.weightG, goodsVatRatePct: ctx.offer.goodsVatRatePct };
+  const g = cfg.gates.fees;
+  return maxLandedCost(run.scoringPrice, item, ctx.card, cfg.fees, { minProfit: g.minProfit, minRoiPct: g.minRoiPct, minMarginPct: g.minMarginPct }, { date: ctx.now, amazon: ctx.amazonFees });
+}
+
 /** A screened row's result columns: verdict, gates, money, score, why and the inputs behind them. */
 function resultFields(row: Row, run: GateRun, cfg: ProfileConfig, ctx: ScreenContext) {
   const w = winScore(ctx, run, cfg, { deliveryDays: row.supplier.delivery_days, supplierRating: row.supplier.rating });
@@ -278,7 +293,7 @@ function resultFields(row: Row, run: GateRun, cfg: ProfileConfig, ctx: ScreenCon
     v: 1, stage: row.stage, match: row.match, market: row.market, hazmat: row.hazmat,
     restriction: row.restriction, amazonFees: row.amazonFees, lookup: row.lookup, sellers: row.sellers, notes: row.dataNotes,
     qogita: row.qogita ? { ...row.qogita, ...pick(row.qogita, cfg) } : null,
-    maxLandedGbp: ctx.offer.costKnown === false ? run.maxLandedGbp ?? null : undefined,
+    maxLandedGbp: ctx.offer.costKnown === false ? run.maxLandedGbp ?? maxLandedFor(ctx, run, cfg) : undefined,
     pack: ctx.pack && ctx.pack.ratio !== 1 ? { listing: ctx.pack.listing, supplier: ctx.pack.supplier, ratio: ctx.pack.ratio } : null,
   };
   return {
@@ -613,7 +628,7 @@ async function loadRows(results: PendingRow[], maxAge: number = KEEPA_TTL): Prom
       resultId: r.id, product, offer, supplier: S.get(offer.supplier_id)!,
       stage: i?.stage ?? "row",
       match,
-      market: snap && !i?.market?.hasHistory ? marketFromKeepa(snap) : i?.market ?? null,
+      market: snap && !i?.market?.hasHistory ? marketFromKeepa(snap, i?.market) : i?.market ?? null,
       hazmat: i?.hazmat ?? [],
       restriction: i?.restriction ?? null,
       amazonFees: i?.amazonFees ?? null,
@@ -968,7 +983,7 @@ export async function processRun(runId: string, opts: { budgetMs?: number } = {}
       stats.keepaStages = st;
       return addRunTokens(runId, meta.tokensConsumed);
     };
-    const env: StageEnv = { runId, cfg, card, rules, approved, spapi, keepa, recordTokens };
+    const env: StageEnv = { runId, cfg, card, rules, approved, spapi, keepa, recordTokens, scanSellerId: stats.scan?.sellerId ?? null };
 
     const pending: PendingRow[] = [];
     for (let from = 0; ; from += 1000) {
@@ -1060,6 +1075,8 @@ interface StageEnv {
   spapi: ReturnType<typeof getSpApi>;
   keepa: ReturnType<typeof getKeepa>;
   recordTokens: OnKeepaResponse;
+  /** A seller scan: fetch current offers for every row, to see whether this seller holds the Buy Box. */
+  scanSellerId?: string | null;
 }
 
 interface StageOut {
@@ -1147,11 +1164,25 @@ async function stageLookup(rows: Row[], env: StageEnv): Promise<StageOut & { add
   const needCatalog = live.filter((r) => !r.product.asin || !FRESH(r.product.catalog_updated_at, CATALOG_TTL));
   let catalog = new Map<string, CatalogMatch[]>();
   let traces = new Map<string, LookupTrace>();
-  if (spapi && needCatalog.length) {
+  // A product known only by its ASIN (a seller scan) has the ASIN for an EAN: look it up by ASIN.
+  const byAsin = needCatalog.filter((r) => isAsinOnly(r.product));
+  const byEan = needCatalog.filter((r) => !isAsinOnly(r.product));
+  if (spapi && byEan.length) {
     try {
-      ({ matches: catalog, traces } = await spapi.lookupEans([...new Set(needCatalog.map((r) => r.product.ean))]));
+      ({ matches: catalog, traces } = await spapi.lookupEans([...new Set(byEan.map((r) => r.product.ean))]));
     } catch (e) {
-      for (const r of needCatalog) r.dataNotes.push(`Catalog lookup failed: ${(e as Error).message}.`);
+      for (const r of byEan) r.dataNotes.push(`Catalog lookup failed: ${(e as Error).message}.`);
+    }
+  }
+  if (spapi && byAsin.length) {
+    try {
+      const items = await spapi.catalogByAsins([...new Set(byAsin.map((r) => r.product.asin!))]);
+      for (const r of byAsin) {
+        const c = items.get(r.product.asin!);
+        if (c) catalog.set(r.product.ean, [c]);
+      }
+    } catch (e) {
+      for (const r of byAsin) r.dataNotes.push(`Catalog lookup failed: ${(e as Error).message}.`);
     }
   }
   let keepaByEan = new Map<string, KeepaProduct[]>();
@@ -1196,7 +1227,7 @@ async function stageLookup(rows: Row[], env: StageEnv): Promise<StageOut & { add
   }
   // Rows headed for Keepa: who's selling now (free) settles some gates first.
   let offers = new Map<string, ListingOffers>();
-  const bound = keepa.available ? noHistory.filter((r) => r.match?.asin) : [];
+  const bound = env.scanSellerId ? live.filter((r) => r.match?.asin) : keepa.available ? noHistory.filter((r) => r.match?.asin) : [];
   if (spapi && bound.length) {
     try {
       offers = await spapi.getItemOffersBatch([...new Set(bound.map((r) => r.match!.asin!))]);
@@ -1211,6 +1242,7 @@ async function stageLookup(rows: Row[], env: StageEnv): Promise<StageOut & { add
       const snap = cached.get(asin);
       row.market = snap ? marketFromKeepa(snap) : marketFromSpApi(pricing.get(asin), row.product.sales_rank);
       const o = offers.get(asin);
+      if (o && row.market?.hasHistory) row.market = { ...row.market, buyBoxSellerId: o.buyBoxSellerId ?? row.market.buyBoxSellerId ?? null };
       if (o && row.market && !row.market.hasHistory) {
         row.market = {
           ...row.market,
@@ -1219,6 +1251,7 @@ async function stageLookup(rows: Row[], env: StageEnv): Promise<StageOut & { add
           fbaOffers: o.fbaOffers != null ? Math.max(0, o.fbaOffers - (o.amazon ? 1 : 0)) : row.market.fbaOffers,
           offersNow: o.totalOffers ?? row.market.offersNow,
           currentBuyBox: o.buyBox ?? row.market.currentBuyBox,
+          buyBoxSellerId: o.buyBoxSellerId ?? null,
         };
       }
     }
@@ -1311,13 +1344,13 @@ async function stageKeepa(rows: Row[], env: StageEnv): Promise<StageOut & { defe
     }
     if (stage2(row)) {
       // Stage 2: the Buy Box data is in (or couldn't be had); back to the account stage for the verdict.
-      if (snap) row.market = marketFromKeepa(snap);
+      if (snap) row.market = marketFromKeepa(snap, row.market);
       if (row.market?.buyBoxFetched === false) row.market = { ...row.market, buyBoxFetched: true };
       row.stage = "account";
       next.push(row);
       continue;
     }
-    if (snap) row.market = marketFromKeepa(snap);
+    if (snap) row.market = marketFromKeepa(snap, row.market);
     row.stage = "enriched";
     const ctx = context(row, card, rules, cfg, approved);
     const mid = runGates(ctx, cfg, GATE_ORDER.filter((g) => g !== "gating" && g !== "fees"));
@@ -1494,6 +1527,12 @@ async function resolveRow(
       keepa_updated_at: new Date().toISOString(),
       image_url: update.image_url || k.imageUrl || p.image_url || "",
     });
+  }
+  // Known only by its ASIN: take the listing's EAN, unless that pair is already a product.
+  const realEan = isAsinOnly(p) ? c?.eans.find((e) => /^\d{13}$/.test(e)) ?? c?.eans.find((e) => /^\d{8,14}$/.test(e)) : undefined;
+  if (realEan) {
+    const taken = must(await d.from("products").select("id").eq("ean", realEan).eq("asin", primary).limit(1), "product") as { id: string }[];
+    if (!taken.length) update.ean = realEan;
   }
   update.pack_count = listingPack((update.title ?? p.title) as string | null, (update.pack_attrs ?? p.pack_attrs) as PackAttrs | null).count;
   update.referral_category = referralCategoryFor((update.category ?? p.category) as string | null, x.card);

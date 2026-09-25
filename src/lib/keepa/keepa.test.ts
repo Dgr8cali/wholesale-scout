@@ -58,6 +58,9 @@ describe("summary", () => {
     const sellers: [number, string][] = [[daysAgo(365), "A"], [daysAgo(73), "B"]];
     const s = summarize({ now: NOW, rank, buyBox: [], offerCount: [], amazon: [], reviewCount: [], buyBoxSellers: sellers });
     expect(s.topSellerBbSharePct).toBeCloseTo(80, 0);
+    expect(s.buyBoxSellerNow).toBe("B");
+    // Nobody holding it now (-1: no Buy Box).
+    expect(summarize({ now: NOW, rank, buyBox: [], offerCount: [], amazon: [], reviewCount: [], buyBoxSellers: [...sellers, [daysAgo(1), "-1"]] }).buyBoxSellerNow).toBeNull();
   });
 
   it("flags a one-day review jump", () => {

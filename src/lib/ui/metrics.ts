@@ -17,6 +17,8 @@ export interface StoredMarket {
   lastOfferDaysAgo?: number | null;
   lastBuyBox12m?: number | null;
   lastBuyBoxAt?: string | null;
+  /** Seller holding the Buy Box now, when known. */
+  buyBoxSellerId?: string | null;
 }
 
 export interface Figure {

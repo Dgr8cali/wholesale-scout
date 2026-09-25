@@ -7,7 +7,7 @@
  *   EAN, batches of up to 100. Every request is logged with Keepa's own token figures.
  */
 import { decodeSeries, summarize } from "./summarize";
-import type { KeepaClient, KeepaLookup, KeepaProduct, KeepaResponseMeta, OnKeepaResponse, KeepaTokens, SellerLookup, SellerProfile } from "./types";
+import type { KeepaClient, KeepaLookup, KeepaProduct, KeepaResponseMeta, OnKeepaResponse, KeepaTokens, SellerLookup, SellerProfile, Storefront } from "./types";
 
 export * from "./types";
 
@@ -35,13 +35,19 @@ interface RawSeller {
   sellerName?: string | null;
   currentRating?: number | null;
   currentRatingCount?: number | null;
-  /** [keepa minutes, count, ...]: the last count is current. */
+  /** [keepa minutes, count]: a count Keepa may not have refreshed. */
   totalStorefrontAsins?: number[] | null;
+  /** [keepa minutes, count, ...] history: the last count is the latest. */
+  totalStorefrontAsinsCSV?: number[] | null;
+  businessName?: string | null;
+  buyBoxNewOwnershipRate?: number | null;
+  asinList?: string[] | null;
   sellerBrandStatistics?: { brand?: string; productCount?: number }[] | null;
 }
 
 export function parseSeller(id: string, s: RawSeller): SellerProfile {
-  const store = s.totalStorefrontAsins ?? [];
+  // The history's last count is the latest; totalStorefrontAsins alone can be months old.
+  const store = s.totalStorefrontAsinsCSV?.length ? s.totalStorefrontAsinsCSV : s.totalStorefrontAsins ?? [];
   const size = store.length >= 2 ? store[store.length - 1] : null;
   const pos = (n: number | null | undefined) => (n != null && n >= 0 ? n : null);
   return {
@@ -55,6 +61,20 @@ export function parseSeller(id: string, s: RawSeller): SellerProfile {
       .map((b) => ({ brand: b.brand!, count: b.productCount! }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 20),
+  };
+}
+
+/** A seller object fetched with storefront=1. */
+export function parseStorefront(id: string, s: RawSeller, tokensUsed: number): Storefront {
+  const asins = [...new Set((s.asinList ?? []).filter((a) => typeof a === "string" && /^[A-Z0-9]{10}$/.test(a)))];
+  const profile = parseSeller(id, s);
+  return {
+    // The list itself is the floor for the size when Keepa's count lags.
+    profile: { ...profile, storefrontSize: Math.max(profile.storefrontSize ?? 0, asins.length) || null },
+    businessName: s.businessName ?? null,
+    buyBoxOwnershipPct: s.buyBoxNewOwnershipRate != null && s.buyBoxNewOwnershipRate >= 0 ? s.buyBoxNewOwnershipRate : null,
+    asins,
+    tokensUsed,
   };
 }
 
@@ -173,10 +193,10 @@ export class HttpKeepaClient implements KeepaClient {
   ) {}
 
   /** One request, logged with Keepa's own token figures and reported before it's parsed. */
-  private async request(kind: "asin" | "code" | "seller", ids: string[], onResponse?: OnKeepaResponse, buyBox = true): Promise<{ body: KeepaBody; meta: KeepaResponseMeta }> {
+  private async request(kind: "asin" | "code" | "seller", ids: string[], onResponse?: OnKeepaResponse, buyBox = true, storefront = false): Promise<{ body: KeepaBody; meta: KeepaResponseMeta }> {
     const url = new URL(kind === "seller" ? "https://api.keepa.com/seller" : "https://api.keepa.com/product");
     url.search = new URLSearchParams(kind === "seller"
-      ? { key: this.key, domain: "2", seller: ids.join(",") }
+      ? { key: this.key, domain: "2", seller: ids.join(","), ...(storefront ? { storefront: "1" } : {}) }
       : { key: this.key, domain: "2", [kind]: ids.join(","), stats: "365", history: "1", ...(buyBox ? { buybox: "1" } : {}) }).toString();
     const res = await this.fetchImpl(url);
     const body = (await res.json().catch(() => ({}))) as KeepaBody;
@@ -243,6 +263,13 @@ export class HttpKeepaClient implements KeepaClient {
     } catch {
       return null;
     }
+  }
+
+  /** One seller's storefront: its ASIN list and profile, 10 tokens (1 + 9 for the list). */
+  async storefront(sellerId: string, onResponse?: OnKeepaResponse): Promise<Storefront | null> {
+    const { body, meta } = await this.request("seller", [sellerId], onResponse, true, true);
+    const raw = body.sellers?.[sellerId];
+    return raw ? parseStorefront(sellerId, raw, meta.tokensConsumed) : null;
   }
 
   /** Seller profiles, 1 token each, batches of 100. */
