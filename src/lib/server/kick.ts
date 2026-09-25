@@ -29,3 +29,14 @@ export async function kickRun(origin: string, runId: string, path: "process" | "
 export function scheduleNext(origin: string, runId: string, path: "process" | "rescreen" = "process"): void {
   waitUntil(kickRun(origin, runId, path));
 }
+
+/** Call one of the app's own POST routes in the background (the brand map's refresh chain). */
+export function scheduleCall(origin: string, path: string): void {
+  waitUntil((async () => {
+    try {
+      await fetch(`${origin}${path}`, { method: "POST", headers: auth(), signal: AbortSignal.timeout(5_000) });
+    } catch {
+      // Timed out waiting, as intended; the called route carries on.
+    }
+  })());
+}

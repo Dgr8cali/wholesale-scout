@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { STATUS_LABELS, type BrandRow } from "@/lib/brands";
+import { GATING_LABELS, GATING_VARIANT, type BrandSummary } from "@/lib/brandMap";
 import { etaLabel } from "@/lib/eta";
 import type { Dashboard } from "@/lib/server/dashboard";
 import { api, when } from "@/lib/ui/client";
@@ -72,13 +72,12 @@ const ListSkeleton = ({ rows = 4 }: { rows?: number }) => (
 );
 const Empty = ({ children }: { children: ReactNode }) => <p className="py-6 text-center text-sm text-muted-foreground">{children}</p>;
 
-const AWAITING = new Set(["not_applied", "applied"]);
 
 export default function HomePage() {
   const dash = useLoad<Dashboard>("/api/dashboard", (d) => (d.runs.some((r) => r.counts.pending > 0) ? 15_000 : null));
   const keepa = useLoad<KeepaBalance>("/api/keepa", () => 60_000);
   const favs = useLoad<{ items: FavItem[]; unavailable?: string }>("/api/favourites");
-  const brands = useLoad<{ brands: BrandRow[] }>("/api/brands");
+  const brands = useLoad<{ brands: BrandSummary[]; updating: boolean; awaiting: { brands: number; passing: number } }>("/api/brands?chase=5");
 
   return (
     <div className="space-y-6">
@@ -112,11 +111,8 @@ export default function HomePage() {
             value={f.items.filter((x) => x.outdated).length} hint={`of ${f.items.length} favourites`} />}
         </Section>
         <Section load={brands} skeleton={<StatSkeleton />}>
-          {(b) => {
-            const awaiting = b.brands.filter((x) => AWAITING.has(x.approval?.status ?? "not_applied"));
-            return <Stat icon={<BuildingIcon />} label="Brands awaiting approval" href="/brands" value={awaiting.length}
-              hint={`${awaiting.reduce((s, x) => s + x.products.length, 0).toLocaleString("en-GB")} products held back`} />;
-          }}
+          {(b) => <Stat icon={<BuildingIcon />} label="Brands awaiting approval" href="/brands" value={b.awaiting.brands}
+            hint={`${b.awaiting.passing.toLocaleString("en-GB")} passing products held back`} />}
         </Section>
       </div>
 
@@ -216,34 +212,34 @@ export default function HomePage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Brands awaiting approval</CardTitle>
-              <CardDescription>Products that need a brand approval, by brand.</CardDescription>
+              <CardTitle>Brands to chase</CardTitle>
+              <CardDescription>Most wholesale-friendly brands you&apos;re not approved for yet, with products that pass.</CardDescription>
               <CardAction><Button variant="ghost" size="sm" asChild><Link href="/brands">Brands <ArrowRightIcon /></Link></Button></CardAction>
             </CardHeader>
             <CardContent>
-              <Section load={brands} skeleton={<ListSkeleton rows={3} />}>
-                {(b) => {
-                  const awaiting = b.brands.filter((x) => AWAITING.has(x.approval?.status ?? "not_applied"))
-                    .sort((x, y) => y.passFees - x.passFees || y.products.length - x.products.length);
-                  if (!awaiting.length) return <Empty>No brands waiting on an approval.</Empty>;
-                  return (
-                    <ul className="space-y-3">
-                      {awaiting.slice(0, 6).map((x) => (
-                        <li key={x.key} className="flex items-center justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-medium" title={x.brand}>{x.brand}</p>
-                            <p className="text-xs text-muted-foreground">
-                              <span className="num">{x.products.length}</span> product{x.products.length === 1 ? "" : "s"}
-                              {x.passFees > 0 && <> · <span className="num text-pass">{x.passFees}</span> pass fees</>}
-                            </p>
-                          </div>
-                          <Badge variant={x.approval?.status === "applied" ? "brand" : "muted"} className="flex-none">{STATUS_LABELS[x.approval?.status ?? "not_applied"]}</Badge>
-                        </li>
-                      ))}
-                      {awaiting.length > 6 && <li className="text-xs text-muted-foreground">and {awaiting.length - 6} more</li>}
-                    </ul>
-                  );
-                }}
+              <Section load={brands} skeleton={<ListSkeleton rows={5} />}>
+                {(b) => !b.brands.length ? (
+                  <Empty>{b.updating ? "Building the brand map…" : "No brand has a product that passes on your default profile yet."}</Empty>
+                ) : (
+                  <ul className="space-y-3">
+                    {b.brands.map((x) => (
+                      <li key={x.key} className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <Link href={`/brands/${encodeURIComponent(x.key)}`} className="block truncate text-sm font-medium hover:underline" title={x.brand}>{x.brand}</Link>
+                          <p className="text-xs text-muted-foreground">
+                            <span className="num text-pass">{x.pass}</span> pass · <span className="num text-warn">{x.warn}</span> warn of {x.asins}
+                            {x.avgSellers != null && <> · {x.avgSellers} sellers</>}
+                            {x.amazonSharePct != null && <> · Amazon {x.amazonSharePct}%</>}
+                          </p>
+                        </div>
+                        <div className="flex flex-none items-center gap-1.5">
+                          <Badge variant={GATING_VARIANT[x.gating]}>{GATING_LABELS[x.gating]}</Badge>
+                          <span className="num w-7 text-right text-sm font-semibold" title="Wholesale-friendly score">{x.score}</span>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </Section>
             </CardContent>
           </Card>

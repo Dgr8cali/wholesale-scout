@@ -1,33 +1,28 @@
-import { APPROVAL_STATUSES, brandKey, groupApprovals, type ApprovalResult, type BrandApproval } from "@/lib/brands";
-import { withDefaults, type ProfileConfig } from "@/lib/screening/config";
-import { chunks, db, must } from "@/lib/server/db";
+import type { NextRequest } from "next/server";
+import { brandsToChase } from "@/lib/brandMap";
+import { APPROVAL_STATUSES, brandKey } from "@/lib/brands";
+import { brandMapStale, brandSummaries } from "@/lib/server/brandMap";
+import { db, loadProfile, must } from "@/lib/server/db";
 import { handle } from "@/lib/server/http";
+import { scheduleCall } from "@/lib/server/kick";
 
-/** Every approval-needed brand across runs, with fee-engine passes and approval status. */
-export const GET = handle(async () => {
-  const d = db();
-  const results: (Omit<ApprovalResult, "floors"> & { run_id: string })[] = [];
-  for (let from = 0; ; from += 1000) {
-    const page = must(
-      await d.from("results")
-        .select("run_id, product_id, updated_at, profit, roi, margin, gate_outcomes, inputs, product:products(asin, ean, title, brand), offer:offers(brand)")
-        .eq("status", "done")
-        .order("updated_at")
-        .range(from, from + 999),
-      "results",
-    ) as unknown as (Omit<ApprovalResult, "floors"> & { run_id: string })[];
-    results.push(...page);
-    if (page.length < 1000) break;
-  }
-  const floors = new Map<string, ApprovalResult["floors"]>();
-  for (const c of chunks([...new Set(results.map((r) => r.run_id))])) {
-    const runs = must(await d.from("runs").select("id, profile_snapshot").in("id", c), "runs") as { id: string; profile_snapshot: ProfileConfig }[];
-    for (const r of runs) floors.set(r.id, withDefaults(r.profile_snapshot).gates.fees);
-  }
-  const approvals = must(await d.from("brand_approvals").select("brand_key, brand, status, requirement, status_date"), "approvals") as BrandApproval[];
-  const fallback = withDefaults(null).gates.fees;
-  const brands = groupApprovals(results.map((r) => ({ ...r, floors: floors.get(r.run_id) ?? fallback })), approvals);
-  return Response.json({ brands });
+/**
+ * The brand map: one row per brand seen in any run, on the current default profile, sorted
+ * by the wholesale-friendly score. ?chase=5: Home's "Brands to chase" instead. Served from the
+ * cached map; when that's behind, a refresh starts in the background and `updating` says so.
+ */
+export const GET = handle(async (req: NextRequest) => {
+  const stale = await brandMapStale();
+  if (stale) scheduleCall(req.nextUrl.origin, "/api/brands/refresh");
+  const [brands, profile] = await Promise.all([brandSummaries(), loadProfile(null)]);
+  const chase = Number(req.nextUrl.searchParams.get("chase"));
+  const awaiting = brands.filter((b) => b.gating === "approval_needed" || b.gating === "applied");
+  return Response.json({
+    brands: chase > 0 ? brandsToChase(brands, chase) : brands,
+    awaiting: { brands: awaiting.length, passing: awaiting.reduce((s, b) => s + b.pass + b.warn, 0) },
+    updating: stale,
+    profile: { id: profile.id, name: profile.name },
+  });
 });
 
 /** Save a brand's approval requirement, status and date. */

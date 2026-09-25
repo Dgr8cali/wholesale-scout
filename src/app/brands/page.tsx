@@ -1,194 +1,194 @@
 "use client";
 
+import { ArrowDownIcon, ArrowUpIcon, BuildingIcon, ExternalLinkIcon, LoaderIcon, SearchIcon } from "lucide-react";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import { usePageCrumbs } from "@/components/Crumbs";
 import { EmptyState, ErrorState } from "@/components/States";
-import { BuildingIcon, CheckIcon, ChevronRightIcon, ExternalLinkIcon, SearchIcon } from "lucide-react";
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { APPROVAL_STATUSES, STATUS_LABELS, type ApprovalStatus, type BrandRow } from "@/lib/brands";
-import { api } from "@/lib/ui/client";
+import { GATING_LABELS, GATING_VARIANT, type BrandSummary } from "@/lib/brandMap";
+import { api, gbp } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
-const STATUS_STYLE: Record<ApprovalStatus, string> = {
-  not_applied: "text-muted-foreground",
-  applied: "text-warn",
-  approved: "text-pass",
-  refused: "text-fail",
+
+type SortKey = "score" | "brand" | "asins" | "passing" | "sellers" | "amazon" | "buyBox" | "maxLanded";
+const VALUE: Record<SortKey, (b: BrandSummary) => number | string | null> = {
+  score: (b) => b.score,
+  brand: (b) => b.brand.toLowerCase(),
+  asins: (b) => b.asins,
+  passing: (b) => b.pass * 1000 + b.warn,
+  sellers: (b) => b.avgSellers,
+  amazon: (b) => b.amazonSharePct,
+  buyBox: (b) => b.avgBuyBox,
+  maxLanded: (b) => b.medianMaxLanded,
 };
+const PAGE = 200;
 
-interface Draft {
-  status: ApprovalStatus;
-  requirement: string;
-  status_date: string;
-}
-
+/** The brand-level map: every brand seen in any run, on your default profile. */
 export default function BrandsPage() {
-  const [brands, setBrands] = useState<BrandRow[] | null>(null);
-  const [drafts, setDrafts] = useState<Record<string, Draft>>({});
-  const [saved, setSaved] = useState<Record<string, "saving" | "saved" | string>>({});
-  const [open, setOpen] = useState<Set<string>>(new Set());
+  usePageCrumbs([{ label: "Brands" }]);
+  const [data, setData] = useState<{ brands: BrandSummary[]; updating: boolean; profile: { name: string } } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState("");
-  const [show, setShow] = useState<"all" | "awaiting" | "approved" | "refused">("all");
+  const [gating, setGating] = useState<"all" | "listable" | "approval" | "approved" | "blocked">("all");
+  const [passingOnly, setPassingOnly] = useState(false);
+  const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "score", dir: -1 });
+  const [limit, setLimit] = useState(PAGE);
 
+  // While the map is being rebuilt in the background, check back every few seconds.
   useEffect(() => {
-    api<{ brands: BrandRow[] }>("/api/brands")
-      .then((r) => {
-        setBrands(r.brands);
-        setDrafts(Object.fromEntries(r.brands.map((b) => [b.key, {
-          status: b.approval?.status ?? "not_applied",
-          requirement: b.approval?.requirement ?? "",
-          status_date: b.approval?.status_date ?? "",
-        }])));
-      })
-      .catch((e) => setError(e.message));
+    let stop = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const load = () => api<{ brands: BrandSummary[]; updating: boolean; profile: { name: string } }>("/api/brands")
+      .then((r) => { if (stop) return; setData(r); setError(null); if (r.updating) timer = setTimeout(load, 5_000); })
+      .catch((e) => !stop && setError(e.message));
+    load();
+    return () => { stop = true; clearTimeout(timer); };
   }, []);
 
-  async function save(b: BrandRow, patch: Partial<Draft>) {
-    const next = { ...drafts[b.key], ...patch };
-    setDrafts((d) => ({ ...d, [b.key]: next }));
-    setSaved((s) => ({ ...s, [b.key]: "saving" }));
-    try {
-      await api("/api/brands", { method: "PUT", json: { brand: b.brand, ...next } });
-      setSaved((s) => ({ ...s, [b.key]: "saved" }));
-    } catch (e) {
-      setSaved((s) => ({ ...s, [b.key]: (e as Error).message }));
-    }
-  }
+  const shown = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    const list = (data?.brands ?? []).filter((b) => {
+      if (needle && !b.brand.toLowerCase().includes(needle) && !b.suppliers.some((s) => s.name.toLowerCase().includes(needle))) return false;
+      if (passingOnly && !(b.pass + b.warn)) return false;
+      if (gating === "listable") return b.gating === "open" || b.gating === "approved";
+      if (gating === "approval") return b.gating === "approval_needed" || b.gating === "applied";
+      if (gating === "approved") return b.gating === "approved";
+      if (gating === "blocked") return b.gating === "blocked";
+      return true;
+    });
+    const v = VALUE[sort.key];
+    return [...list].sort((a, b) => {
+      const x = v(a), y = v(b);
+      if (x == null && y == null) return 0;
+      if (x == null) return 1;
+      if (y == null) return -1;
+      return (x < y ? -1 : x > y ? 1 : 0) * sort.dir || b.score - a.score;
+    });
+  }, [data, q, gating, passingOnly, sort]);
 
-  const shown = useMemo(() => (brands ?? []).filter((b) => {
-    const st = drafts[b.key]?.status ?? "not_applied";
-    if (show === "awaiting" && !(st === "not_applied" || st === "applied")) return false;
-    if (show === "approved" && st !== "approved") return false;
-    if (show === "refused" && st !== "refused") return false;
-    return !q.trim() || b.brand.toLowerCase().includes(q.trim().toLowerCase());
-  }), [brands, drafts, show, q]);
+  const th = (key: SortKey, label: string, className?: string, title?: string) => (
+    <TableHead className={className} title={title} aria-sort={sort.key === key ? (sort.dir === 1 ? "ascending" : "descending") : undefined}>
+      <button className="inline-flex items-center gap-1 hover:text-foreground" onClick={() => setSort((s) => ({ key, dir: s.key === key ? (s.dir === 1 ? -1 : 1) : key === "brand" ? 1 : -1 }))}>
+        {label}
+        {sort.key === key && (sort.dir === 1 ? <ArrowUpIcon className="size-3" /> : <ArrowDownIcon className="size-3" />)}
+      </button>
+    </TableHead>
+  );
 
   const header = (
-    <div>
-      <h1 className="page-title">Brand approvals</h1>
-      <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-        Every product that needs approval, grouped by brand, from each product&apos;s latest result. A brand marked approved counts as open at gate 11 the next time a run is screened or re-screened.
-      </p>
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <h1 className="page-title">Brands</h1>
+        <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+          Every brand seen in any run, each product&apos;s latest result re-checked on your default profile{data ? ` (${data.profile.name})` : ""}.
+          The score is high where you can list it, Amazon rarely sells it, 2–8 sellers share it and several ASINs pass.
+        </p>
+      </div>
+      {data?.updating && <Badge variant="muted"><LoaderIcon className="animate-spin" /> Updating from the latest results…</Badge>}
     </div>
   );
   if (error) return <div className="space-y-5">{header}<ErrorState title="Couldn't load brands" message={error} onRetry={() => window.location.reload()} /></div>;
-  if (!brands) return <div className="space-y-5">{header}<div className="panel space-y-3 p-4">{Array.from({ length: 8 }, (_, i) => <Skeleton key={i} className="h-10" />)}</div></div>;
-
-  const worth = brands.filter((b) => b.passFees > 0).length;
+  if (!data) return <div className="space-y-5">{header}<div className="panel space-y-3 p-4">{Array.from({ length: 8 }, (_, i) => <Skeleton key={i} className="h-10" />)}</div></div>;
+  if (!data.brands.length) {
+    return (
+      <div className="space-y-5">
+        {header}
+        <EmptyState icon={<BuildingIcon />} title={data.updating ? "Building the brand map…" : "No brands yet"}>
+          {data.updating ? "Every product's latest result is being re-checked on your default profile; this page fills in by itself." : "Brands appear once a run has screened some products."}
+        </EmptyState>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">
       {header}
-
-      {!brands.length && (
-        <EmptyState icon={<BuildingIcon />} title="No approval-needed products">
-          Brands appear here once gating finds a listing you need approval for.
-        </EmptyState>
-      )}
-
-      {brands.length > 0 && (
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="relative w-64">
-            <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input className="pl-8" placeholder="Find a brand" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Find a brand" />
-          </div>
-          <ToggleGroup type="single" variant="outline" size="sm" spacing={0} value={show} onValueChange={(v) => v && setShow(v as typeof show)} aria-label="Show">
-            <ToggleGroupItem value="all" className="px-3 text-xs">All</ToggleGroupItem>
-            <ToggleGroupItem value="awaiting" className="px-3 text-xs">Awaiting</ToggleGroupItem>
-            <ToggleGroupItem value="approved" className="px-3 text-xs">Approved</ToggleGroupItem>
-            <ToggleGroupItem value="refused" className="px-3 text-xs">Refused</ToggleGroupItem>
-          </ToggleGroup>
-          <span className="text-sm text-muted-foreground"><span className="num font-medium text-foreground">{worth}</span> of {brands.length} brands have products that clear the fee engine</span>
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative w-64">
+          <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input className="pl-8" placeholder="Find a brand or supplier" value={q} onChange={(e) => { setQ(e.target.value); setLimit(PAGE); }} aria-label="Find a brand or supplier" />
         </div>
-      )}
+        <ToggleGroup type="single" variant="outline" size="sm" spacing={0} value={gating} onValueChange={(v) => v && setGating(v as typeof gating)} aria-label="Gating">
+          <ToggleGroupItem value="all" className="px-3 text-xs">All</ToggleGroupItem>
+          <ToggleGroupItem value="listable" className="px-3 text-xs">Can list</ToggleGroupItem>
+          <ToggleGroupItem value="approval" className="px-3 text-xs">Approval needed</ToggleGroupItem>
+          <ToggleGroupItem value="approved" className="px-3 text-xs">Approved</ToggleGroupItem>
+          <ToggleGroupItem value="blocked" className="px-3 text-xs">Blocked</ToggleGroupItem>
+        </ToggleGroup>
+        <div className="flex items-center gap-2">
+          <Switch id="passing-only" checked={passingOnly} onCheckedChange={setPassingOnly} />
+          <Label htmlFor="passing-only" className="text-sm font-normal">Has passing ASINs</Label>
+        </div>
+        <span className="text-sm text-muted-foreground"><span className="num font-medium text-foreground">{shown.length.toLocaleString("en-GB")}</span> of {data.brands.length.toLocaleString("en-GB")} brands</span>
+      </div>
 
-      {brands.length > 0 && (
-        <div className="panel overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="pl-4">Brand</TableHead>
-                <TableHead className="text-right">Products</TableHead>
-                <TableHead className="text-right">Pass fees</TableHead>
-                <TableHead>Apply</TableHead>
-                <TableHead>Requirement</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead className="w-16 pr-4" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {!shown.length && (
-                <TableRow><TableCell colSpan={8} className="py-10 text-center text-muted-foreground">No brands match.</TableCell></TableRow>
-              )}
-              {shown.map((b) => {
-                const d = drafts[b.key];
-                const isOpen = open.has(b.key);
-                return (
-                  <Fragment key={b.key}>
-                    <TableRow className="align-top">
-                      <TableCell className="pl-2 whitespace-normal">
-                        <Button variant="ghost" size="sm" className="h-auto justify-start px-2 py-1 text-left font-medium" aria-expanded={isOpen}
-                          onClick={() => setOpen((s) => { const n = new Set(s); if (n.has(b.key)) n.delete(b.key); else n.add(b.key); return n; })}>
-                          <ChevronRightIcon className={cn("transition-transform", isOpen && "rotate-90")} /> {b.brand}
-                        </Button>
-                        <div className="pl-8 text-xs text-muted-foreground">{b.kinds.map((k) => (k === "unspecified" ? "approval" : `${k} approval`)).join(", ")}</div>
-                      </TableCell>
-                      <TableCell className="num pt-3 text-right">{b.products.length}</TableCell>
-                      <TableCell className={cn("num pt-3 text-right font-semibold", b.passFees ? "text-pass" : "text-muted-foreground")}>{b.passFees}</TableCell>
-                      <TableCell className="pt-2.5">
-                        {b.applyUrl && (
-                          <a href={b.applyUrl} target="_blank" rel="noreferrer noopener" title={b.applyTitle ?? "Request approval in Seller Central"}
-                            className="inline-flex items-center gap-1 rounded border border-brand px-1.5 py-0.5 text-xs font-semibold whitespace-nowrap text-brand hover:bg-brand-soft">
-                            Apply on Amazon <ExternalLinkIcon className="size-3" />
-                          </a>
-                        )}
-                      </TableCell>
-                      <TableCell className="min-w-56">
-                        <Input placeholder="e.g. 3 invoices, 30 units" defaultValue={d.requirement} aria-label={`${b.brand} requirement`}
-                          onBlur={(e) => e.target.value !== d.requirement && save(b, { requirement: e.target.value })} />
-                      </TableCell>
-                      <TableCell>
-                        <NativeSelect className={cn("w-36 font-medium", STATUS_STYLE[d.status])} value={d.status} aria-label={`${b.brand} status`}
-                          onChange={(e) => save(b, { status: e.target.value as ApprovalStatus, status_date: d.status_date || new Date().toISOString().slice(0, 10) })}>
-                          {APPROVAL_STATUSES.map((s) => <NativeSelectOption key={s} value={s}>{STATUS_LABELS[s]}</NativeSelectOption>)}
-                        </NativeSelect>
-                      </TableCell>
-                      <TableCell>
-                        <Input className="num w-36" type="date" value={d.status_date} aria-label={`${b.brand} date`}
-                          onChange={(e) => save(b, { status_date: e.target.value })} />
-                      </TableCell>
-                      <TableCell className="pt-3 pr-4 text-xs">
-                        {saved[b.key] === "saving" ? <span className="text-muted-foreground">Saving…</span>
-                          : saved[b.key] === "saved" ? <span className="inline-flex items-center gap-1 text-pass"><CheckIcon className="size-3" /> Saved</span>
-                          : saved[b.key] ? <span className="text-fail whitespace-normal">{saved[b.key]}</span> : null}
-                      </TableCell>
-                    </TableRow>
-                    {isOpen && (
-                      <TableRow className="bg-muted/40 hover:bg-muted/40">
-                        <TableCell colSpan={8} className="px-10 py-2 whitespace-normal">
-                          <ul className="space-y-0.5 text-xs">
-                            {b.products.map((p) => (
-                              <li key={`${p.ean}-${p.asin}`} className="flex gap-2">
-                                <span className={p.passesFees ? "text-pass" : "text-muted-foreground"}>{p.passesFees ? "✓ passes fees" : "✕ fails fees"}</span>
-                                <span className="num text-muted-foreground">{p.asin ? <a className="text-brand hover:underline" href={`https://www.amazon.co.uk/dp/${p.asin}`} target="_blank" rel="noreferrer">{p.asin}</a> : p.ean}</span>
-                                <span className="truncate">{p.title}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </TableCell>
-                      </TableRow>
+      <div className="panel overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              {th("brand", "Brand", "pl-4")}
+              {th("score", "Score", "text-right", "Wholesale-friendly, 0–100")}
+              {th("asins", "ASINs", "text-right")}
+              {th("passing", "Pass / warn", "text-right", "On your default profile, among priced products")}
+              {th("sellers", "Sellers", "text-right", "Average FBA sellers")}
+              {th("amazon", "Amazon", "text-right", "Share of its listings Amazon sells or sold")}
+              {th("buyBox", "Buy Box", "text-right", "Average Buy Box")}
+              {th("maxLanded", "Max landed", "text-right", "Median of the most each product can cost landed and clear the floors")}
+              <TableHead>Gating</TableHead>
+              <TableHead title="IP-complaint risk: coming next">IP risk</TableHead>
+              <TableHead className="pr-4">Carried by</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {!shown.length && <TableRow><TableCell colSpan={11} className="py-10 text-center text-muted-foreground">No brands match.</TableCell></TableRow>}
+            {shown.slice(0, limit).map((b) => (
+              <TableRow key={b.key}>
+                <TableCell className="max-w-56 pl-4 whitespace-normal">
+                  <Link className="font-medium hover:underline" href={`/brands/${encodeURIComponent(b.key)}`}>{b.brand}</Link>
+                </TableCell>
+                <TableCell className="text-right">
+                  <span className={cn("num inline-block min-w-8 rounded px-1.5 py-0.5 text-center text-xs font-semibold",
+                    b.score >= 70 ? "bg-pass-soft text-pass" : b.score >= 50 ? "bg-warn-soft text-warn" : "bg-muted text-muted-foreground")}>{b.score}</span>
+                </TableCell>
+                <TableCell className="num text-right">{b.asins}</TableCell>
+                <TableCell className="num text-right">
+                  <span className={b.pass ? "font-semibold text-pass" : "text-muted-foreground"}>{b.pass}</span>
+                  <span className="text-muted-foreground"> / </span>
+                  <span className={b.warn ? "text-warn" : "text-muted-foreground"}>{b.warn}</span>
+                </TableCell>
+                <TableCell className="num text-right">{b.avgSellers ?? "—"}</TableCell>
+                <TableCell className={cn("num text-right", (b.amazonSharePct ?? 0) >= 50 && "text-fail")}>{b.amazonSharePct == null ? "—" : `${b.amazonSharePct}%`}</TableCell>
+                <TableCell className="num text-right">{gbp(b.avgBuyBox)}</TableCell>
+                <TableCell className="num text-right">{gbp(b.medianMaxLanded)}</TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-1.5">
+                    <Badge variant={GATING_VARIANT[b.gating]}>{GATING_LABELS[b.gating]}</Badge>
+                    {b.applyUrl && (
+                      <a href={b.applyUrl} target="_blank" rel="noreferrer noopener" title="Request approval in Seller Central" className="text-brand"><ExternalLinkIcon className="size-3.5" /></a>
                     )}
-                  </Fragment>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
+                  </div>
+                </TableCell>
+                <TableCell className="text-muted-foreground" title="IP-complaint risk: coming next">—</TableCell>
+                <TableCell className="max-w-64 pr-4 text-xs whitespace-normal text-muted-foreground">
+                  {[
+                    [...b.suppliers.slice(0, 2).map((s) => s.name), ...(b.suppliers.length > 2 ? [`+${b.suppliers.length - 2}`] : [])].join(", "),
+                    b.sellers.length ? `${b.sellers.length} seller${b.sellers.length === 1 ? "" : "s"}` : "",
+                  ].filter(Boolean).join(" · ") || "—"}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+      {shown.length > limit && (
+        <div className="flex justify-center"><Button variant="outline" onClick={() => setLimit((l) => l + PAGE)}>Show {Math.min(PAGE, shown.length - limit)} more</Button></div>
       )}
     </div>
   );

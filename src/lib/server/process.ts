@@ -588,6 +588,46 @@ interface PendingRow {
   inputs: StoredInputs | null;
 }
 
+/** A stored result re-gated on a profile, without saving anything (the brand map). */
+export interface StoredEvaluation {
+  resultId: string;
+  product: { id: string; ean: string; asin: string | null; title: string | null; brand: string | null; image_url: string | null };
+  verdict: "pass" | "warn" | "fail";
+  /** A sell price to judge by: rows never priced don't count as passing. */
+  priced: boolean;
+  scoringPrice: number | null;
+  /** The most a unit can cost landed and clear the floors at the sell price. */
+  maxLandedGbp: number | null;
+  market: MarketData | null;
+  restriction: ScreenContext["restriction"];
+  sellers: SellerView[] | null;
+}
+
+/**
+ * Re-run every gate on stored results with `cfg`, from what was stored (no API calls, nothing
+ * saved): how each would come out on that profile today.
+ */
+export async function evaluateStored(results: PendingRow[], cfg: ProfileConfig): Promise<StoredEvaluation[]> {
+  const [card, rules, approved] = await Promise.all([activeRateCard(), loadRules(), approvedBrands()]);
+  const rows = await loadRows(results, maxAgeMs(cfg));
+  return rows.map((row) => {
+    const ctx = context(row, card, rules, cfg, approved);
+    const run = runGates(ctx, cfg);
+    const p = row.product;
+    return {
+      resultId: row.resultId,
+      product: { id: p.id, ean: p.ean, asin: p.asin, title: p.title, brand: p.brand ?? row.offer.brand, image_url: p.image_url ?? null },
+      verdict: verdictOf(run.outcomes),
+      priced: run.scoringPrice != null && !!row.match?.asin,
+      scoringPrice: run.scoringPrice,
+      maxLandedGbp: run.maxLandedGbp ?? maxLandedFor(ctx, run, cfg),
+      market: row.market,
+      restriction: row.restriction,
+      sellers: row.sellers,
+    };
+  });
+}
+
 /** Build rows from results, with their product, offer, supplier and any stored inputs. */
 async function loadRows(results: PendingRow[], maxAge: number = KEEPA_TTL): Promise<Row[]> {
   const d = db();

@@ -85,6 +85,7 @@ class Query implements PromiseLike<{ data: unknown; error: { message: string; co
   in(c: string, vs: unknown[]) { this.filters.push((r) => vs.includes(get(r, c))); return this; }
   gte(c: string, v: string) { this.filters.push((r) => String(r[c]) >= v); return this; }
   lte(c: string, v: string) { this.filters.push((r) => r[c] != null && String(r[c]) <= v); return this; }
+  gt(c: string, v: string) { this.filters.push((r) => r[c] != null && String(r[c]) > v); return this; }
   lt(c: string, v: string) { this.filters.push((r) => r[c] != null && String(r[c]) < v); return this; }
   neq(c: string, v: unknown) { this.filters.push((r) => get(r, c) !== v); return this; }
   order(col: string, o?: { ascending?: boolean }) { this.orderBy = { col, asc: o?.ascending ?? true }; return this; }
