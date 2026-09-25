@@ -9,6 +9,7 @@ import { api, gbp, pct, when } from "@/lib/ui/client";
 import { EditableName } from "@/components/EditableName";
 import { FilterBar, type FilterOptions } from "@/components/FilterBar";
 import { EMPTY_FILTERS, matches, normalizeFilters, type FilterSet } from "@/lib/filters";
+import { etaLabel, type Eta } from "@/lib/eta";
 import { groupRows } from "@/lib/ui/group";
 import { brandOf, favKey, isWaived, toFilterRow } from "@/lib/ui/resultRows";
 import { WaiveControl } from "@/components/WaiveControl";
@@ -75,6 +76,7 @@ interface Progress {
   total: number;
   waiting: { amazon: number; keepa: number };
   keepaResumeAt: string | null;
+  eta?: Eta;
   working: boolean;
   tokenCost: number;
 }
@@ -448,6 +450,7 @@ export default function RunPage() {
           <div className="h-2 overflow-hidden rounded-full bg-surface-2">
             <div className="h-full bg-accent transition-all" style={{ width: `${progress.total ? (progress.processed / progress.total) * 100 : 0}%` }} />
           </div>
+          {progress.eta && <p className="text-sm font-medium" aria-live="polite">{etaLabel(progress.eta)[0].toUpperCase() + etaLabel(progress.eta).slice(1)}</p>}
           <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted">
             <span><span className="num font-semibold text-ink">{progress.waiting.amazon}</span> waiting on Amazon (catalog, price, gating, fees)</span>
             <span>

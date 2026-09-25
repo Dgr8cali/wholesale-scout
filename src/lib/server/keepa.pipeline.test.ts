@@ -219,6 +219,11 @@ describe("Keepa path", () => {
     expect(p1.done).toBe(false);
     expect(p1.waiting).toEqual({ amazon: 0, keepa: 1 });
     expect(Date.parse(p1.keepaResumeAt!)).toBeGreaterThan(Date.now() + 50_000);
+    // Each batch records the run's measured rate and Keepa's own token figures for the estimate.
+    const stats = fake.tables.runs.find((r) => r.id === runId)!.stats as { amazonPerMin: number; keepa: { tokensLeft: number; refillRate: number } };
+    expect(stats.amazonPerMin).toBeGreaterThan(0);
+    expect(stats.keepa).toMatchObject({ tokensLeft: 4, refillRate: 21 });
+    expect(p1.eta.minutes).not.toBeNull();
     // The waiting row kept its SP-API price and match; nothing was finalised without history.
     const waiting = results(runId).find((r) => r.status === "pending")!;
     expect((waiting.inputs as { stage: string; market: { currentBuyBox: number } })).toMatchObject({ stage: "priced", market: { currentBuyBox: 23.55 } });

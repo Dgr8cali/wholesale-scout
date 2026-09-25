@@ -2,7 +2,8 @@ import "server-only";
 import { brandKey } from "../brands";
 import { computeFees, referralCategoryFor } from "../fees/engine";
 import type { RateCard } from "../fees/rateCard";
-import { getKeepa, type KeepaProduct, type KeepaResponseMeta, type KeepaSummary, type OnKeepaResponse, type SellerProfile } from "../keepa/client";
+import { estimateEta, type Eta, type RunStats } from "../eta";
+import { getKeepa, type KeepaProduct, type KeepaResponseMeta, type KeepaSummary, type KeepaTokens, type OnKeepaResponse, type SellerProfile } from "../keepa/client";
 import { trimSeries } from "../keepa/summarize";
 import { GATE_ORDER, withDefaults, type GateId, type ProfileConfig } from "../screening/config";
 import { resolveScoringPrice, runGates, verdictOf, type GateRun, type MarketData, type ScreenContext, type SellerView } from "../screening/gates";
@@ -626,6 +627,8 @@ export interface RunProgress {
   keepaResumeAt: string | null;
   /** Rows finished or moved on by this call. */
   progressed: number;
+  /** Estimated time left (see lib/eta). */
+  eta: Eta;
   /** Another call holds the run's lease. */
   busy?: boolean;
   /** False until the lease migration is run: then only the run page drives the run, one call at a time. */
@@ -662,13 +665,16 @@ export async function runProgress(runId: string, extra: Partial<RunProgress> = {
     d.from("runs").select("*").eq("id", runId).single(),
   ]);
   const t = total ?? 0, p = pending ?? 0, k = keepa ?? 0;
-  const resume = (run.data as { resume_after?: string | null } | null)?.resume_after ?? null;
+  const r = run.data as { resume_after?: string | null; stats?: RunStats | null } | null;
+  const resume = r?.resume_after ?? null;
+  const waiting = { amazon: p - k, keepa: k };
   return {
     done: p === 0,
     processed: t - p,
     total: t,
-    waiting: { amazon: p - k, keepa: k },
+    waiting,
     keepaResumeAt: k > 0 ? resume : null,
+    eta: estimateEta(waiting, r?.stats, k > 0 ? resume : null),
     progressed: 0,
     ...extra,
   };
@@ -679,7 +685,8 @@ async function updateRun(runId: string, fields: Record<string, unknown>, optiona
   const d = db();
   const res = await d.from("runs").update({ ...fields, ...optional }).eq("id", runId);
   if (res.error && schemaMissing(res.error.message) && Object.keys(optional).length) {
-    must(await d.from("runs").update(fields).eq("id", runId), "run");
+    // A column isn't migrated yet: keep the required fields, drop the optional ones.
+    if (Object.keys(fields).length) must(await d.from("runs").update(fields).eq("id", runId), "run");
     return;
   }
   must(res, "run");
@@ -709,8 +716,9 @@ export async function processRun(runId: string, opts: { budgetMs?: number } = {}
   const margin = Math.min(3_000, budget * 0.1);
   const d = db();
   const runRow = must(await d.from("runs").select("*").eq("id", runId).single(), "run") as {
-    id: string; status: string; profile_snapshot: ProfileConfig; token_cost: number;
+    id: string; status: string; profile_snapshot: ProfileConfig; token_cost: number; stats?: RunStats | null;
   };
+  const stats: RunStats = { ...(runRow.stats ?? {}) };
   if (runRow.status === "done" && !(await runProgress(runId)).waiting.amazon && !(await runProgress(runId)).waiting.keepa) {
     return runProgress(runId);
   }
@@ -753,10 +761,21 @@ export async function processRun(runId: string, opts: { budgetMs?: number } = {}
         }
         break;
       }
+      const started = Date.now();
       const [la, kb, ac]: [Awaited<ReturnType<typeof stageLookup>>, Awaited<ReturnType<typeof stageKeepa>>, StageOut] =
         await Promise.all([stageLookup(a, env), stageKeepa(b, env), stageAccount(c, env)]);
       progressed += la.finished + kb.finished + ac.finished + la.next.length + kb.next.length;
       for (const row of [...la.next, ...kb.next]) route(row, q, env);
+      // Throughput for the time-left estimate: rows that left the Amazon queue this batch
+      // (finished, or handed to Keepa), per minute, smoothed across batches.
+      const leftAmazon = la.finished + ac.finished + la.next.filter((r) => r.stage === "priced").length;
+      const minutes = (Date.now() - started) / 60_000;
+      if ((a.length || c.length) && minutes > 0) {
+        const measured = leftAmazon / minutes;
+        stats.amazonPerMin = stats.amazonPerMin ? 0.5 * stats.amazonPerMin + 0.5 * measured : measured;
+      }
+      if (kb.tokens) stats.keepa = { ...kb.tokens, at: new Date().toISOString() };
+      await updateRun(runId, {}, { stats });
       q.lookup.push(...la.added);
       q.keepa.unshift(...kb.deferred);
       if (kb.waitUntil != null) keepaWaitUntil = kb.waitUntil;
@@ -942,9 +961,10 @@ async function stageLookup(rows: Row[], env: StageEnv): Promise<StageOut & { add
 }
 
 /** Stage 2: Keepa history, as many rows as the token balance covers; the rest wait. */
-async function stageKeepa(rows: Row[], env: StageEnv): Promise<StageOut & { deferred: Row[]; waitUntil: number | null }> {
+async function stageKeepa(rows: Row[], env: StageEnv): Promise<StageOut & { deferred: Row[]; waitUntil: number | null; tokens?: KeepaTokens }> {
   const { cfg, card, rules, approved, keepa } = env;
   if (!rows.length) return { finished: 0, next: [], deferred: [], waitUntil: null };
+  let tokens: KeepaTokens | undefined;
 
   // Snapshots under 24h cost nothing; count only the ASINs that need fetching.
   const fresh = await freshSnapshots(rows.map((r) => r.match!.asin!));
@@ -954,6 +974,7 @@ async function stageKeepa(rows: Row[], env: StageEnv): Promise<StageOut & { defe
   let waitUntil: number | null = null;
   if (needAsins.length) {
     const status = await keepa.tokenStatus();
+    if (status) tokens = status;
     if (status) {
       const affordable = Math.floor(status.tokensLeft / KEEPA_TOKENS_PER_ASIN);
       if (affordable < needAsins.length) {
@@ -968,7 +989,7 @@ async function stageKeepa(rows: Row[], env: StageEnv): Promise<StageOut & { defe
       }
     }
   }
-  if (!take.length) return { finished: 0, next: [], deferred, waitUntil };
+  if (!take.length) return { finished: 0, next: [], deferred, waitUntil, tokens };
 
   const { summaries, exhausted } = await attachKeepa(take, new Map(), env.recordTokens);
   const done: { row: Row; run: GateRun; ctx: ScreenContext }[] = [];
@@ -987,7 +1008,7 @@ async function stageKeepa(rows: Row[], env: StageEnv): Promise<StageOut & { defe
     if (mid.failedGate) done.push({ row, run: mid, ctx });
     else next.push(row);
   }
-  return { finished: await finishAll(done, cfg), next, deferred, waitUntil };
+  return { finished: await finishAll(done, cfg), next, deferred, waitUntil, tokens };
 }
 
 /** Stage 3: your account — gating in parallel, Amazon's fees 20 at a time, sellers, verdict. */
