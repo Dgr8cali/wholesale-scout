@@ -11,3 +11,16 @@ describe("EditableName", () => {
     expect(link).toContain("<strong>Run one</strong>");
   });
 });
+
+describe("FavouriteStar", () => {
+  it("is an outline star in a visible colour, filled when starred", async () => {
+    const { FavouriteStar } = await import("./FavouriteStar");
+    const off = renderToStaticMarkup(<FavouriteStar starred={false} onToggle={() => {}} />);
+    expect(off).toContain('aria-label="Add to favourites"');
+    expect(off).toContain('fill="none"');
+    expect(off).toContain("text-muted"); // not the near-white border grey
+    const on = renderToStaticMarkup(<FavouriteStar starred onToggle={() => {}} />);
+    expect(on).toContain('fill="currentColor"');
+    expect(on).toContain("text-warn");
+  });
+});

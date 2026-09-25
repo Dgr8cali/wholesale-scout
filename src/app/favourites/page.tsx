@@ -232,9 +232,9 @@ export default function FavouritesPage() {
           <div className="card table-scroll" data-min="62">
             <table className="w-full min-w-[62rem] table-fixed text-sm">
               <colgroup>
-                <col className="w-[4rem]" />
+                <col className="w-[5.5rem]" />
                 <col className="w-[3.25rem]" />
-                <col className="w-[17rem]" />
+                <col className="w-[15.5rem]" />
                 <col className="w-[8rem]" />
                 <col className="w-[4.5rem]" />
                 <col className="w-[4.5rem]" />
@@ -264,9 +264,12 @@ export default function FavouritesPage() {
                     <tr key={i.favourite.id} className="cursor-pointer border-b border-line align-top hover:bg-surface-2"
                       onClick={() => setOpen((x) => { const n = new Set(x); if (n.has(i.favourite.id)) n.delete(i.favourite.id); else n.add(i.favourite.id); return n; })}>
                       <td className="px-2 py-2">
+                        <div className="flex items-center gap-1.5">
+                        <FavouriteStar starred onToggle={() => unstar(i)} />
                         {l?.status === "error" ? <span className="rounded-full bg-fail-soft px-2 py-0.5 text-xs font-semibold text-fail">error</span>
                           : l?.verdict ? <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${VERDICT_STYLE[l.verdict]}`}>{l.verdict}</span>
                           : <span className="text-xs text-muted">—</span>}
+                        </div>
                       </td>
                       <td className="px-2 py-2 text-right">
                         {l?.score != null && l.band
@@ -274,10 +277,7 @@ export default function FavouritesPage() {
                           : <span className="text-muted">—</span>}
                       </td>
                       <td className="px-2 py-2">
-                        <div className="flex items-start gap-1.5">
-                          <FavouriteStar starred onToggle={() => unstar(i)} />
-                          <div className="line-clamp-2 min-w-0 font-medium leading-snug break-words" title={titleOf(i)}>{titleOf(i)}</div>
-                        </div>
+                        <div className="line-clamp-2 min-w-0 font-medium leading-snug break-words" title={titleOf(i)}>{titleOf(i)}</div>
                         <div className="num truncate text-xs text-muted">
                           {i.favourite.ean}
                           {i.favourite.asin && <> · <a className="text-accent hover:underline" href={`https://www.amazon.co.uk/dp/${i.favourite.asin}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>{i.favourite.asin}</a></>}

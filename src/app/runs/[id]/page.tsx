@@ -148,10 +148,16 @@ export default function RunPage() {
       setError((e as Error).message);
     }
   }
-  async function saveNote(f: Fav, note: string) {
+  /** Save a note; on a product not yet starred, the note stars it. */
+  async function saveNote(r: Result, f: Fav | undefined, note: string) {
     try {
-      await api("/api/favourites", { method: "PATCH", json: { id: f.id, note } });
-      setFavs((m) => new Map(m).set(favKey(f.ean, f.asin), { ...f, note }));
+      if (f) {
+        await api("/api/favourites", { method: "PATCH", json: { id: f.id, note } });
+        setFavs((m) => new Map(m).set(favKey(f.ean, f.asin), { ...f, note }));
+      } else if (r.product && note.trim()) {
+        const { favourite } = await api<{ favourite: Fav }>("/api/favourites", { method: "POST", json: { ean: r.product.ean, asin: r.product.asin, note } });
+        setFavs((m) => new Map(m).set(favKey(favourite.ean, favourite.asin), favourite));
+      }
     } catch (e) {
       setError((e as Error).message);
     }
@@ -408,9 +414,9 @@ export default function RunPage() {
       <div className="card table-scroll" data-min="70">
         <table className="w-full min-w-[70rem] table-fixed text-sm">
           <colgroup>
-            <col className="w-[4rem]" />{/* verdict */}
+            <col className="w-[5.5rem]" />{/* star + verdict */}
             <col className="w-[3.25rem]" />{/* score */}
-            <col className="w-[14.5rem]" />{/* product */}
+            <col className="w-[13rem]" />{/* product */}
             <col className="w-[4rem]" />{/* sales */}
             <col className="w-[4.25rem]" />{/* sellers */}
             <col className="w-[4.25rem]" />{/* buy box */}
@@ -450,9 +456,14 @@ export default function RunPage() {
                   <tr className={`cursor-pointer border-b border-line align-top hover:bg-surface-2 ${alt ? "bg-surface-2/40 text-muted" : ""}`}
                     onClick={() => setOpen((s) => { const n = new Set(s); if (n.has(r.id)) n.delete(r.id); else n.add(r.id); return n; })}>
                     <td className="px-2 py-2">
-                      {r.status === "error"
-                        ? <span className="rounded-full bg-fail-soft px-2 py-0.5 text-xs font-semibold text-fail">error</span>
-                        : r.verdict && <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${VERDICT_STYLE[r.verdict]}`}>{r.verdict}</span>}
+                      <div className="flex items-center gap-1.5">
+                        {r.product
+                          ? <FavouriteStar starred={favourites.has(favKey(r.product.ean, r.product.asin))} onToggle={() => toggleFavourite(r)} />
+                          : <span className="w-4 flex-none" />}
+                        {r.status === "error"
+                          ? <span className="rounded-full bg-fail-soft px-2 py-0.5 text-xs font-semibold text-fail">error</span>
+                          : r.verdict && <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${VERDICT_STYLE[r.verdict]}`}>{r.verdict}</span>}
+                      </div>
                     </td>
                     <td className="px-2 py-2 text-right">
                       {r.score != null && r.band
@@ -460,10 +471,7 @@ export default function RunPage() {
                         : <span className="text-muted">—</span>}
                     </td>
                     <td className={`px-2 py-2 ${alt ? "pl-6" : ""}`}>
-                      <div className="flex items-start gap-1.5">
-                        {r.product && <FavouriteStar starred={favourites.has(favKey(r.product.ean, r.product.asin))} onToggle={() => toggleFavourite(r)} />}
-                        <div className="line-clamp-2 min-w-0 font-medium leading-snug break-words" title={titleOf(r)}>{alt ? "↳ " : ""}{titleOf(r)}</div>
-                      </div>
+                      <div className="line-clamp-2 min-w-0 font-medium leading-snug break-words" title={titleOf(r)}>{alt ? "↳ " : ""}{titleOf(r)}</div>
                       <div className="num truncate text-xs text-muted">
                         {r.product?.ean}
                         {r.product?.asin && <> · <a className="text-accent hover:underline" href={`https://www.amazon.co.uk/dp/${r.product.asin}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>{r.product.asin}</a></>}
@@ -570,7 +578,7 @@ function FigureCell({ f, money }: { f: Figure; money?: boolean }) {
   );
 }
 
-function Detail({ r, fav, onNote }: { r: Result; fav?: Fav; onNote: (f: Fav, note: string) => void }) {
+function Detail({ r, fav, onNote }: { r: Result; fav?: Fav; onNote: (r: Result, f: Fav | undefined, note: string) => void }) {
   return (
     <div className="grid gap-4 lg:grid-cols-[2fr_1fr_1fr]">
       <div>
@@ -642,7 +650,11 @@ function Detail({ r, fav, onNote }: { r: Result; fav?: Fav; onNote: (f: Fav, not
             })}
           </ul>
         ) : <p className="text-xs text-muted">Not scored.</p>}
-        {fav && <div className="mt-3"><FavouriteNote note={fav.note} onSave={(note) => onNote(fav, note)} /></div>}
+        {r.product && (
+          <div className="mt-3">
+            <FavouriteNote note={fav?.note ?? null} starred={!!fav} onSave={(note) => onNote(r, fav, note)} />
+          </div>
+        )}
         {r.inputs?.sellers && r.inputs.sellers.length > 0 && (
           <Sellers sellers={r.inputs.sellers} flaggedText={r.gate_outcomes.find((g) => g.tags?.includes("BRAND_DISTRIBUTOR"))?.detail ?? ""} />
         )}
