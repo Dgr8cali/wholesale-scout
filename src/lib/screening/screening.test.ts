@@ -100,6 +100,25 @@ describe("gates", () => {
     expect(run.failedGate).toBe("amazonPresence");
   });
 
+  it("fails a doubtful match on a multi-ASIN EAN and leaves it unscored (Onagrine on a Sébium EAN)", () => {
+    const c = ctx({
+      match: { asin: "B076HZHD2X", asinCount: 2, looked: true },
+      sheet: { brand: "Bioderma", title: "Bioderma Sébium Purifying and Foaming Cleansing Gel 500 ml" },
+      listing: { brand: "Bioderma", title: "Onagrine CC Cream Extreme Perfection Complexion Perfecting Care 40ml - Dark" },
+    });
+    const run = runGates(c, DEFAULT_PROFILE);
+    expect(run.failedGate).toBe("matchQuality");
+    expect(run.outcomes.at(-1)!.tags).toContain("DOUBTFUL_MATCH");
+    expect(run.outcomes.at(-1)!.detail).toMatch(/^Doubtful match: /);
+    expect(winScore(c, run, DEFAULT_PROFILE, fit).score).toBeNull();
+
+    const soft = withDefaults({ gates: { ...DEFAULT_PROFILE.gates, matchQuality: { mode: "warn" } } });
+    expect(runGates(c, soft).failedGate).toBe("matchQuality");
+
+    const right = ctx({ ...c, listing: { brand: "Bioderma", title: "Bioderma Sebium Purifying Cleansing Foaming Gel 500ml" } });
+    expect(runGates(right, DEFAULT_PROFILE).outcomes.find((o) => o.gate === "matchQuality")!.status).toBe("warn");
+  });
+
   it("warns on borrowed rank (Chanteclair)", () => {
     const run = runGates(ctx({ market: market({ historyDays: 42 }) }), DEFAULT_PROFILE);
     const m = run.outcomes.find((o) => o.gate === "mirage")!;

@@ -137,6 +137,8 @@ function context(row: Row, card: RateCard, rules: CategoryRule[], cfg: ProfileCo
     card,
     rules,
     text: [o.title, o.brand, o.category, p.title].filter(Boolean).join(" · "),
+    sheet: { brand: o.brand, title: o.title },
+    listing: row.match?.asin ? { brand: p.brand, title: p.title } : undefined,
     amazonCategory: p.category,
     offer: {
       unitCostGbp: Number(o.unit_cost_gbp),

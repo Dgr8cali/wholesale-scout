@@ -25,7 +25,7 @@ const CATALOG: Record<string, CatalogMatch[]> = {
   "4006381333931": [cat("B0TAPE0001", "4006381333931")],
   "5000000000011": [cat("B0FRAG0001", "5000000000011")],
   "5000000000035": [cat("B0CHEAP001", "5000000000035")],
-  "5000000000042": [cat("B0MULTIA01", "5000000000042"), cat("B0MULTIB01", "5000000000042")],
+  "5000000000042": [cat("B0MULTIA01", "5000000000042", { title: "Two-listing thing, single" }), cat("B0MULTIB01", "5000000000042", { title: "Two-listing thing, twin pack" })],
 };
 
 const PRICES: Record<string, { buyBox: number; offers: number }> = {

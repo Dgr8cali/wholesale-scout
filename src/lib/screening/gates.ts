@@ -14,6 +14,7 @@ import type { RateCard } from "../fees/rateCard";
 import { applyLinks, approvalKind } from "../spapi/parse";
 import type { RestrictionLink, RestrictionStatus } from "../spapi/types";
 import { GATE_LABELS, GATE_ORDER, type GateId, type GateMode, type ProfileConfig } from "./config";
+import { doubtfulMatch, type Listing } from "./match";
 import { matchRules, type CategoryRule, type RuleMatch } from "./rules";
 
 export type GateStatus = "pass" | "warn" | "fail" | "skipped" | "off";
@@ -57,6 +58,9 @@ export interface ScreenContext {
   rules: CategoryRule[];
   /** Row's own text: product name, brand, supplier category. */
   text: string;
+  /** The sheet line's own brand and name, and the matched Amazon listing's. */
+  sheet?: Listing;
+  listing?: Listing;
   amazonCategory: string | null;
   offer: {
     unitCostGbp: number;
@@ -178,7 +182,13 @@ const EVALUATORS: Record<GateId, Evaluator> = {
     if (!ctx.match.asin) {
       return { status: failAs(g.mode), detail: `EAN didn't resolve to an Amazon UK listing${ctx.match.note ? `: ${ctx.match.note}` : ""}` };
     }
-    if (ctx.match.asinCount > 1) return { status: "warn", detail: `EAN maps to ${ctx.match.asinCount} ASINs; each is scored`, tags: ["MULTI_ASIN"] };
+    if (ctx.match.asinCount > 1) {
+      // Several listings on one EAN: drop one that's clearly another product. Not scored
+      // whatever the gate's mode (unless the gate is off).
+      const doubt = ctx.sheet && ctx.listing ? doubtfulMatch(ctx.sheet, ctx.listing) : null;
+      if (doubt) return { status: "fail", detail: `Doubtful match: ${doubt}`, tags: ["DOUBTFUL_MATCH", "MULTI_ASIN"] };
+      return { status: "warn", detail: `EAN maps to ${ctx.match.asinCount} ASINs; each is scored`, tags: ["MULTI_ASIN"] };
+    }
     return { status: "pass", detail: `Matched ${ctx.match.asin}` };
   },
 
