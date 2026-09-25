@@ -5,6 +5,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useDialogs } from "@/components/Dialogs";
+import { usePageCrumbs } from "@/components/Crumbs";
 import { useParams, useRouter } from "next/navigation";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import * as XLSX from "xlsx";
@@ -109,6 +110,7 @@ export default function RunPage() {
   const router = useRouter();
   const { confirm } = useDialogs();
   const [run, setRun] = useState<Run | null>(null);
+  usePageCrumbs([{ label: "Runs", href: "/runs" }, { label: run ? run.name || run.source : "…" }]);
   const [results, setResults] = useState<Result[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<Progress | null>(null);
@@ -439,7 +441,7 @@ export default function RunPage() {
             if (!(await confirm({ title: "Delete this run?", description: "The run and its results are removed. Products, favourites and waivers are kept.", confirmLabel: "Delete", destructive: true }))) return;
             cancel.current();
             await api(`/api/runs/${id}`, { method: "DELETE" }).catch(() => {});
-            router.push("/");
+            router.push("/runs");
           }}>Delete</Button>
         </div>
       </div>

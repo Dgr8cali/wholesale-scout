@@ -54,7 +54,7 @@ export function BulkBar({ count, stashed, onReselect, onClear, onStar, onUnstar,
     ) : null;
   }
 
-  const sep = <Separator orientation="vertical" className="h-5!" />;
+  const sep = <Separator orientation="vertical" className="data-vertical:h-5 data-vertical:self-center" />;
   const remove = async () => {
     const ok = await confirm({
       title: `Remove ${count} row${count === 1 ? "" : "s"} from this run?`,
@@ -65,7 +65,7 @@ export function BulkBar({ count, stashed, onReselect, onClear, onStar, onUnstar,
     if (ok) await act("remove", onRemove, `Removed ${count}`);
   };
   return (
-    <div className="panel sticky top-2 z-20 flex flex-wrap items-center gap-2 border-brand px-3 py-2 shadow-md" role="toolbar" aria-label="Actions on selected rows">
+    <div className="panel sticky top-14 z-20 flex flex-wrap items-center gap-2 border-brand px-3 py-2 shadow-md" role="toolbar" aria-label="Actions on selected rows">
       <span className="text-sm font-semibold"><span className="num">{count}</span> selected</span>
       {sep}
       <Button variant="outline" size="xs" disabled={!!busy} onClick={() => act("star", onStar, `Starred ${count}`)}><StarIcon /> Star</Button>

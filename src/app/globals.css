@@ -198,18 +198,24 @@
  * to its top. Wide enough for the table (a container query on the wrapper): the card doesn't
  * scroll, so the header sticks to the top of the viewport as the page scrolls.
  */
+:root {
+  /* Height of the app's sticky top bar: page-level sticky things sit below it. */
+  --app-header: 3rem;
+}
 .table-wrap {
   container-type: inline-size;
 }
 .table-scroll {
   overflow: auto;
-  max-height: calc(100dvh - 1rem);
+  max-height: calc(100dvh - var(--app-header) - 1rem);
 }
 @container (min-width: 75rem) {
   .table-scroll[data-min="75"] { overflow: visible; max-height: none; }
+  .table-scroll[data-min="75"] .sticky-th { top: var(--app-header); }
 }
 @container (min-width: 65rem) {
   .table-scroll[data-min="65"] { overflow: visible; max-height: none; }
+  .table-scroll[data-min="65"] .sticky-th { top: var(--app-header); }
 }
 .sticky-th {
   position: sticky;

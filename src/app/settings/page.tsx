@@ -168,7 +168,7 @@ function Profiles() {
 
   return (
     <div className="space-y-5">
-      <div className="panel sticky top-0 z-10 flex flex-wrap items-center gap-2 p-3">
+      <div className="panel sticky top-14 z-10 flex flex-wrap items-center gap-2 p-3">
         <NativeSelect className="w-56" value={id} onChange={async (e) => {
           const next = e.target.value;
           if (dirty && !(await confirm({ title: "Discard unsaved changes?", confirmLabel: "Discard", destructive: true }))) return;
