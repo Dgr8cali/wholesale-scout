@@ -1,5 +1,6 @@
 "use client";
 
+import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   columnOrderingFeature, columnPinningFeature, columnResizingFeature, columnSizingFeature, columnVisibilityFeature,
   createColumnHelper, tableFeatures, useTable,
@@ -159,10 +160,34 @@ export function ResultsTable(props: ResultsTableProps) {
   const pinStyle = (c: Column<typeof features, DisplayRow, unknown>): CSSProperties | undefined =>
     c.getIsPinned() === "start" ? { position: "sticky", insetInlineStart: c.getStart("start") } : undefined;
 
-  // Keep the active row (the one in the drawer) in view as it steps.
+  // Only the rows in view (plus a margin) are in the DOM: a 2,000-row run stays quick. Each row
+  // and its open details are one measured <tbody>, so expanded rows keep their real height.
+  const modelRows = table.getRowModel().rows;
+  // TanStack Virtual returns functions the React Compiler can't memoise safely; this component opts out.
+  // eslint-disable-next-line react-hooks/incompatible-library
+  const virtualizer = useVirtualizer({
+    count: modelRows.length,
+    getScrollElement: () => scroller.current,
+    estimateSize: () => (prefs.density === "compact" ? 37 : 69),
+    overscan: 8,
+    getItemKey: (i) => modelRows[i]?.id ?? i,
+  });
+  const items = virtualizer.getVirtualItems();
+  const padTop = items[0]?.start ?? 0;
+  const padBottom = items.length ? virtualizer.getTotalSize() - items[items.length - 1].end : 0;
+
+  // Keep the active row (the one in the drawer) in view as it steps, rendered or not.
   useEffect(() => {
     if (!activeId) return;
-    scroller.current?.querySelector(`[data-row-id="${CSS.escape(activeId)}"]`)?.scrollIntoView({ block: "nearest" });
+    const i = modelRows.findIndex((r) => r.id === activeId);
+    if (i < 0) return;
+    // Jump there (the row may not be rendered yet), then settle exactly once it's measured.
+    virtualizer.scrollToIndex(i, { align: "auto" });
+    const f = requestAnimationFrame(() => requestAnimationFrame(() => {
+      scroller.current?.querySelector(`[data-row-id="${CSS.escape(activeId)}"]`)?.scrollIntoView({ block: "nearest" });
+    }));
+    return () => cancelAnimationFrame(f);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only when the active row changes
   }, [activeId]);
 
   // Header drag to reorder (the Columns menu does the same by buttons).
@@ -213,14 +238,15 @@ export function ResultsTable(props: ResultsTableProps) {
               ))}
             </tr>
           </thead>
-          <tbody>
-            {table.getRowModel().rows.map((row) => {
+          {padTop > 0 && <tbody aria-hidden="true"><tr><td colSpan={headers.length} style={{ height: padTop, padding: 0, border: 0 }} /></tr></tbody>}
+            {items.map((vi) => {
+              const row = modelRows[vi.index];
               const d = row.original;
               const r = d.r;
               const cells = [...row.getStartVisibleCells(), ...row.getCenterVisibleCells(), ...row.getEndVisibleCells()];
               const isOpen = props.open.has(r.id);
               return (
-                <Fragment key={row.id}>
+                <tbody key={row.id} data-index={vi.index} ref={virtualizer.measureElement}>
                   <tr data-row-id={r.id} className="rt-row group cursor-pointer scroll-mt-12 align-top"
                     data-alt={d.alt || undefined} data-selected={props.selected.has(r.id) || undefined} data-active={activeId === r.id || undefined}
                     onClick={() => props.onActivate(r.id)}>
@@ -240,15 +266,15 @@ export function ResultsTable(props: ResultsTableProps) {
                       </td>
                     </tr>
                   )}
-                </Fragment>
+                </tbody>
               );
             })}
-            {!rows.length && (
-              <tr><td colSpan={headers.length} className="p-0">
-                <div className="sticky left-0 px-4 py-10 text-center text-sm text-muted-foreground" style={{ width: boxW || undefined }}>{props.empty}</div>
-              </td></tr>
-            )}
-          </tbody>
+          {padBottom > 0 && <tbody aria-hidden="true"><tr><td colSpan={headers.length} style={{ height: padBottom, padding: 0, border: 0 }} /></tr></tbody>}
+          {!rows.length && (
+            <tbody><tr><td colSpan={headers.length} className="p-0">
+              <div className="sticky left-0 px-4 py-10 text-center text-sm text-muted-foreground" style={{ width: boxW || undefined }}>{props.empty}</div>
+            </td></tr></tbody>
+          )}
         </table>
       </div>
     </div>
