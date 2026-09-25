@@ -29,7 +29,15 @@ export const GET = handle(async (_req: NextRequest, ctx: { params: Promise<{ id:
 /** Rename a run. */
 export const PATCH = handle(async (req: NextRequest, ctx: { params: Promise<{ id: string }> }) => {
   const { id } = await ctx.params;
-  const { name } = (await req.json()) as { name?: string };
+  const body = (await req.json()) as { name?: string; archived?: boolean };
+  // Archive / unarchive.
+  if (typeof body.archived === "boolean") {
+    const res = await db().from("runs").update({ archived_at: body.archived ? new Date().toISOString() : null }).eq("id", id);
+    if (res.error && /archived_at/.test(res.error.message)) return Response.json({ error: "Run migration 20260927000200_runs_list.sql to archive runs" }, { status: 409 });
+    must(res, "archive run");
+    return Response.json({ ok: true });
+  }
+  const { name } = body;
   const clean = name?.trim();
   if (!clean) return Response.json({ error: "A name is required" }, { status: 400 });
   if (clean.length > 120) return Response.json({ error: "Keep the name under 120 characters" }, { status: 400 });
