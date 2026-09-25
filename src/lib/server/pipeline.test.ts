@@ -308,3 +308,54 @@ describe("run names", () => {
     expect(fake.tables.runs.find((r) => r.id === b.runId)!.name).toBe("Pharmazon September");
   });
 });
+
+describe("favourites", () => {
+  it("stars by EAN + ASIN across runs, shows the latest result, and re-screens only favourites", async () => {
+    const fake = new FakeDb();
+    __setDbForTests(fake);
+    const { addFavourite, favouritesWithLatest, favouritesRunName, removeFavourite, rescreenFavourites } = await import("./favourites");
+    const f = file("pharmazon.xlsx", [
+      ["EAN", "Name", "Price", "MOQ"],
+      ["4006381333931", "Walker Tape 25mm", "5.00", 12],
+      ["5000000000035", "Cheap widget", "6.00", 10],
+    ], { name: "Pharmazon", vatBasis: "ex_vat", vatRate: 20, currency: "GBP" });
+    const first = await ingest({ files: [f] });
+    while (!(await processRun(first.runId)).done);
+
+    const star = await addFavourite("4006381333931", "B0TAPE0001", "Try 24 units");
+    expect((await addFavourite("4006381333931", "B0TAPE0001")).id).toBe(star.id); // idempotent
+
+    // A later run of the same product: the favourite follows the product, not the run.
+    const second = await ingest({ files: [f] });
+    while (!(await processRun(second.runId)).done);
+    const [view] = await favouritesWithLatest();
+    expect(view.favourite.note).toBe("Try 24 units");
+    expect((view.latest as { run_id: string }).run_id).toBe(second.runId);
+    expect((view.latest as { offer: { supplier: { name: string } } }).offer.supplier.name).toBe("Pharmazon");
+    expect(view.outdated).toBe(false);
+
+    // Re-screen: a run with only the favourite, named for the date.
+    const r = await rescreenFavourites();
+    expect(r).toMatchObject({ count: 1, skipped: 0 });
+    const run = fake.tables.runs.find((x) => x.id === r.runId)!;
+    expect(run.name).toBe(favouritesRunName());
+    expect(run.name).toMatch(/^Favourites \d{1,2} \w{3,4} \d{4}$/); // e.g. "Favourites 25 Sept 2026"
+    expect(fake.tables.results.filter((x) => x.run_id === r.runId)).toHaveLength(1);
+
+    await removeFavourite(star.id);
+    expect(await favouritesWithLatest()).toEqual([]);
+  });
+
+  it("marks a favourite outdated when its latest result is over 7 days old", async () => {
+    const fake = new FakeDb();
+    __setDbForTests(fake);
+    const { addFavourite, favouritesWithLatest } = await import("./favourites");
+    const f = file("p.xlsx", [["EAN", "Name", "Price", "MOQ"], ["4006381333931", "Walker Tape 25mm", "5.00", 12]],
+      { name: "P", vatBasis: "ex_vat", vatRate: 20, currency: "GBP" });
+    const { runId } = await ingest({ files: [f] });
+    while (!(await processRun(runId)).done);
+    await addFavourite("4006381333931", "B0TAPE0001");
+    for (const r of fake.tables.results) r.updated_at = new Date(Date.now() - 8 * 86_400_000).toISOString();
+    expect((await favouritesWithLatest())[0].outdated).toBe(true);
+  });
+});

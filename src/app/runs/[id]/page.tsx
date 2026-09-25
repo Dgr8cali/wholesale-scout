@@ -10,7 +10,8 @@ import { EditableName } from "@/components/EditableName";
 import { FilterBar, type FilterOptions } from "@/components/FilterBar";
 import { EMPTY_FILTERS, matches, normalizeFilters, type FilterSet } from "@/lib/filters";
 import { groupRows } from "@/lib/ui/group";
-import { brandOf, toFilterRow } from "@/lib/ui/resultRows";
+import { brandOf, favKey, toFilterRow } from "@/lib/ui/resultRows";
+import { FavouriteNote, FavouriteStar } from "@/components/FavouriteStar";
 import { RestrictionLink } from "@/lib/ui/RestrictionLink";
 import { buyBox, estSales, sellers, type Figure, type StoredMarket } from "@/lib/ui/metrics";
 
@@ -56,6 +57,13 @@ interface Run {
 interface Seller {
   sellerId: string; sharePct: number; name: string | null; ratingPct: number | null; ratingCount: number | null;
   storefrontSize: number | null; brandSharePct: number | null;
+}
+
+interface Fav {
+  id: string;
+  ean: string;
+  asin: string | null;
+  note: string | null;
 }
 
 interface Progress {
@@ -116,7 +124,38 @@ export default function RunPage() {
       // Private window or storage blocked: the filters just won't be remembered.
     }
   };
-  const favourites = useMemo(() => new Set<string>(), []);
+  // Favourites are per product (EAN + ASIN), not per run.
+  const [favs, setFavs] = useState<Map<string, Fav>>(new Map());
+  const favourites = useMemo(() => new Set(favs.keys()), [favs]);
+  useEffect(() => {
+    api<{ favourites: Fav[] }>("/api/favourites?light=1")
+      .then((r) => setFavs(new Map(r.favourites.map((f) => [favKey(f.ean, f.asin), f]))))
+      .catch(() => {});
+  }, []);
+  async function toggleFavourite(r: Result) {
+    if (!r.product) return;
+    const key = favKey(r.product.ean, r.product.asin);
+    const existing = favs.get(key);
+    try {
+      if (existing) {
+        await api(`/api/favourites?id=${existing.id}`, { method: "DELETE" });
+        setFavs((m) => { const n = new Map(m); n.delete(key); return n; });
+      } else {
+        const { favourite } = await api<{ favourite: Fav }>("/api/favourites", { method: "POST", json: { ean: r.product.ean, asin: r.product.asin } });
+        setFavs((m) => new Map(m).set(key, favourite));
+      }
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+  async function saveNote(f: Fav, note: string) {
+    try {
+      await api("/api/favourites", { method: "PATCH", json: { id: f.id, note } });
+      setFavs((m) => new Map(m).set(favKey(f.ean, f.asin), { ...f, note }));
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
   const [profiles, setProfiles] = useState<{ id: string; name: string }[]>([]);
   const [rescreenProfile, setRescreenProfile] = useState("");
   const [rescreening, setRescreening] = useState(false);
@@ -420,7 +459,10 @@ export default function RunPage() {
                         : <span className="text-muted">—</span>}
                     </td>
                     <td className={`px-2 py-2 ${alt ? "pl-6" : ""}`}>
-                      <div className="line-clamp-2 font-medium leading-snug break-words" title={titleOf(r)}>{alt ? "↳ " : ""}{titleOf(r)}</div>
+                      <div className="flex items-start gap-1.5">
+                        {r.product && <FavouriteStar starred={favourites.has(favKey(r.product.ean, r.product.asin))} onToggle={() => toggleFavourite(r)} />}
+                        <div className="line-clamp-2 min-w-0 font-medium leading-snug break-words" title={titleOf(r)}>{alt ? "↳ " : ""}{titleOf(r)}</div>
+                      </div>
                       <div className="num truncate text-xs text-muted">
                         {r.product?.ean}
                         {r.product?.asin && <> · <a className="text-accent hover:underline" href={`https://www.amazon.co.uk/dp/${r.product.asin}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>{r.product.asin}</a></>}
@@ -450,7 +492,7 @@ export default function RunPage() {
                   {isOpen && (
                     <tr className="border-b border-line bg-surface-2/50">
                       <td colSpan={13} className="px-4 py-3">
-                        <Detail r={r} />
+                        <Detail r={r} fav={r.product ? favs.get(favKey(r.product.ean, r.product.asin)) : undefined} onNote={saveNote} />
                       </td>
                     </tr>
                   )}
@@ -526,7 +568,7 @@ function FigureCell({ f, money }: { f: Figure; money?: boolean }) {
   );
 }
 
-function Detail({ r }: { r: Result }) {
+function Detail({ r, fav, onNote }: { r: Result; fav?: Fav; onNote: (f: Fav, note: string) => void }) {
   return (
     <div className="grid gap-4 lg:grid-cols-[2fr_1fr_1fr]">
       <div>
@@ -598,6 +640,7 @@ function Detail({ r }: { r: Result }) {
             })}
           </ul>
         ) : <p className="text-xs text-muted">Not scored.</p>}
+        {fav && <div className="mt-3"><FavouriteNote note={fav.note} onSave={(note) => onNote(fav, note)} /></div>}
         {r.inputs?.sellers && r.inputs.sellers.length > 0 && (
           <Sellers sellers={r.inputs.sellers} flaggedText={r.gate_outcomes.find((g) => g.tags?.includes("BRAND_DISTRIBUTOR"))?.detail ?? ""} />
         )}
