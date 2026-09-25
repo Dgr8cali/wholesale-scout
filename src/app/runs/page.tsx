@@ -172,8 +172,8 @@ export default function RunsPage() {
   async function exportRun(r: Run) {
     const t = toast.loading("Preparing the spreadsheet…");
     try {
-      const { results } = await api<{ results: Result[] }>(`/api/runs/${r.id}`);
-      const cfg = withDefaults(r.profile_snapshot ?? null);
+      const { run, results } = await api<{ run: { profile_snapshot?: Partial<ProfileConfig> | null }; results: Result[] }>(`/api/runs/${r.id}`);
+      const cfg = withDefaults(run.profile_snapshot ?? null);
       downloadXlsx(exportRows(allListings(results), (cfg.budget * cfg.gates.budgetFit.maxLineSharePct) / 100), r.name || r.source);
       toast.success("Exported", { id: t });
     } catch (e) {

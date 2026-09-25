@@ -2,7 +2,7 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronsUpIcon, PauseIcon, PlayIcon } from "lucide-react";
+import { ChevronsUpIcon, LoaderIcon, PauseIcon, PlayIcon } from "lucide-react";
 import { VerdictCard } from "@/components/check/VerdictCard";
 import type { VerdictCard as VerdictCardData } from "@/lib/server/check";
 import { toast } from "sonner";
@@ -116,7 +116,7 @@ export default function RunPage() {
       method: "POST",
       json: { items: [{ ean: r.product.ean, asin: r.product.asin }], gate, action, reason, runId: id },
     });
-    apply(await fetchRun());
+    await refresh();
     if (res.requeued) {
       toast.success(`${GATE_LABELS[gate]} ${action === "waive" ? "waived" : "un-waived"}; fetching the data later gates need for this product.`);
       setNonce((n) => n + 1);
@@ -138,7 +138,7 @@ export default function RunPage() {
   }
   async function bulkWaive(gate: GateId, action: "waive" | "unwaive", reason?: string) {
     const res = await api<{ requeued: number }>("/api/overrides", { method: "POST", json: { items: itemsOf(selectedRows()), gate, action, reason, runId: id } });
-    apply(await fetchRun());
+    await refresh();
     if (res.requeued) setNonce((n) => n + 1);
   }
   async function bulkRescreen() {
@@ -148,7 +148,7 @@ export default function RunPage() {
   async function bulkRemove() {
     await api(`/api/runs/${id}/selection`, { method: "DELETE", json: { resultIds: [...selected] } });
     setSelected(new Set());
-    apply(await fetchRun());
+    await loadAll();
   }
 
   /** Put a row on the watchlist (starring it) with its flip condition. */
@@ -175,11 +175,10 @@ export default function RunPage() {
   // Stops the status polling of the current effect (and on delete).
   const cancel = useRef<() => void>(() => {});
 
-  const fetchRun = useCallback(() => api<{ run: Run; results: Result[] }>(`/api/runs/${id}`), [id]);
-  const apply = useCallback((r: { run: Run; results: Result[] }) => {
-    setRun(r.run);
-    setResults(r.results);
-  }, []);
+  const [loadingRest, setLoadingRest] = useState<{ loaded: number; total: number } | null>(null);
+  const loader = useMemo(() => runLoader(id, { setRun, setResults, setLoadingRest }), [id]);
+  const loadAll = loader.loadAll;
+  const refresh = loader.refresh;
 
   // Screening runs in the background. Poll its status, reload the table when rows land,
   // and resume the worker if none holds the run (the chain stalled, or the page was the
@@ -210,7 +209,7 @@ export default function RunPage() {
         if (lastProcessed === -1 || (changed && Date.now() - lastReload > 4_000) || (p.done && changed)) {
           lastProcessed = p.processed;
           lastReload = Date.now();
-          apply(await fetchRun());
+          await refresh();
         }
         if (p.paused) {
           // Paused: keep watching (it may be resumed elsewhere) but never kick it.
@@ -241,7 +240,7 @@ export default function RunPage() {
     return () => {
       stopped = true;
     };
-  }, [id, fetchRun, apply, nonce]);
+  }, [id, loadAll, refresh, nonce]);
 
   useEffect(() => {
     api<{ profiles: { id: string; name: string }[] }>("/api/profiles").then((r) => setProfiles(r.profiles)).catch(() => {});
@@ -471,6 +470,11 @@ export default function RunPage() {
 
       <FilterBar value={filters} onChange={setFilters} options={filterOptions} favouritesAvailable={favourites.size > 0}
         matching={rows.length} total={products.length} unit={`products (${listingCount} listings shown)`} gateLabels={GATE_LABELS} />
+      {loadingRest && (
+        <p className="flex items-center gap-2 text-xs text-muted-foreground" role="status">
+          <LoaderIcon className="size-3 animate-spin" /> Loading rows: {loadingRest.loaded.toLocaleString("en-GB")} of {loadingRest.total.toLocaleString("en-GB")}. Filters, sorting and export cover the rows loaded so far.
+        </p>
+      )}
 
       <ResultsTable rows={displayRows} storageKey="ws.table.results.v1"
         selected={selected} onToggleSelect={(rid) => setSelected((s) => { const n = new Set(s); if (n.has(rid)) n.delete(rid); else n.add(rid); return n; })}
@@ -530,4 +534,67 @@ function tokenStages(run: Run): string {
   const parts = [["history", s.history], ["Buy Box", s.buyBox], ["EAN lookups", s.lookup], ["sellers", s.sellers]]
     .filter(([, n]) => (n as number) > 0).map(([l, n]) => `${l} ${(n as number).toLocaleString("en-GB")}`);
   return parts.length ? ` (${parts.join(" · ")})` : "";
+}
+
+type RunPage = { run: Run; results: Result[]; total: number | null; at: string };
+
+/** The server's order: best score first, then id. */
+function mergeRows(prev: Result[], rows: Result[]): Result[] {
+  if (!rows.length) return prev;
+  const m = new Map(prev.map((r) => [r.id, r]));
+  for (const r of rows) m.set(r.id, r);
+  return [...m.values()].sort((a, b) => (b.score ?? -Infinity) - (a.score ?? -Infinity) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+}
+
+/**
+ * A run's rows: the first screen at once, then the rest in pages of 1,000 (loadAll); later
+ * refreshes ask only for rows changed since the last answer and merge them in, starting again
+ * if rows were removed.
+ */
+function runLoader(id: string, set: {
+  setRun: (r: Run) => void;
+  setResults: (f: (prev: Result[]) => Result[]) => void;
+  setLoadingRest: (x: { loaded: number; total: number } | null) => void;
+}) {
+  let at: string | null = null;
+  let full: Promise<void> | null = null;
+  // Row ids held, to notice rows removed since (more held than the run has).
+  let ids = new Set<string>();
+  const loadAll = (): Promise<void> => {
+    full ??= (async () => {
+      try {
+        const first = await api<RunPage>(`/api/runs/${id}?limit=100`);
+        set.setRun(first.run);
+        set.setResults(() => first.results);
+        ids = new Set(first.results.map((r) => r.id));
+        at = first.at;
+        const total = first.total ?? first.results.length;
+        let loaded = first.results.length;
+        if (loaded < total) set.setLoadingRest({ loaded, total });
+        for (let offset = loaded; offset < total; offset += 1000) {
+          const p = await api<RunPage>(`/api/runs/${id}?offset=${offset}&limit=1000`);
+          if (!p.results.length) break;
+          set.setResults((prev) => mergeRows(prev, p.results));
+          for (const r of p.results) ids.add(r.id);
+          loaded += p.results.length;
+          set.setLoadingRest({ loaded: Math.min(loaded, total), total });
+        }
+      } finally {
+        set.setLoadingRest(null);
+        full = null;
+      }
+    })();
+    return full;
+  };
+  const refresh = async (): Promise<void> => {
+    if (full) await full;
+    if (!at) return loadAll();
+    const r = await api<RunPage>(`/api/runs/${id}?since=${encodeURIComponent(at)}`);
+    at = r.at;
+    set.setRun(r.run);
+    set.setResults((prev) => mergeRows(prev, r.results));
+    for (const x of r.results) ids.add(x.id);
+    if (r.total != null && ids.size > r.total) { at = null; await loadAll(); }
+  };
+  return { loadAll: () => { at = null; return loadAll(); }, refresh };
 }

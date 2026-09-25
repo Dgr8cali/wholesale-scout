@@ -4,6 +4,7 @@ import { APPROVAL_STATUSES, brandKey } from "@/lib/brands";
 import { brandMapStale, brandSummaries } from "@/lib/server/brandMap";
 import { db, loadProfile, must } from "@/lib/server/db";
 import { handle } from "@/lib/server/http";
+import { forget, memo } from "@/lib/server/memo";
 import { scheduleCall } from "@/lib/server/kick";
 
 /**
@@ -12,9 +13,10 @@ import { scheduleCall } from "@/lib/server/kick";
  * cached map; when that's behind, a refresh starts in the background and `updating` says so.
  */
 export const GET = handle(async (req: NextRequest) => {
-  const stale = await brandMapStale();
+  // The map and whether it's behind are kept for 60 s (Home asks for them too).
+  const stale = await memo("brands:stale", 60_000, brandMapStale);
   if (stale) scheduleCall(req.nextUrl.origin, "/api/brands/refresh");
-  const [brands, profile] = await Promise.all([brandSummaries(), loadProfile(null)]);
+  const [brands, profile] = await Promise.all([memo("brands:all", 60_000, brandSummaries), loadProfile(null)]);
   const chase = Number(req.nextUrl.searchParams.get("chase"));
   const awaiting = brands.filter((b) => b.gating === "approval_needed" || b.gating === "applied");
   return Response.json({
@@ -42,5 +44,6 @@ export const PUT = handle(async (req: Request) => {
     ),
     "save approval",
   );
+  forget("brands:");
   return Response.json({ ok: true });
 });

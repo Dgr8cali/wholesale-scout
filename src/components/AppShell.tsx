@@ -18,7 +18,7 @@ import {
   SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarRail, SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { api } from "@/lib/ui/client";
+import { api, sharedGet } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -104,7 +104,7 @@ function StatusBar() {
   const [keepa, setKeepa] = useState<KeepaBalance | null>(null);
   useEffect(() => {
     api<Status>("/api/status").then(setStatus).catch(() => setDown(true));
-    const load = () => api<KeepaBalance>("/api/keepa").then(setKeepa).catch(() => {});
+    const load = () => sharedGet<KeepaBalance>("/api/keepa").then(setKeepa).catch(() => {});
     load();
     const t = setInterval(load, 60_000);
     window.addEventListener("focus", load);

@@ -3,6 +3,8 @@ import type { Eta } from "../eta";
 import { dailySpend, ukDay, type TokensByDay } from "../keepaLedger";
 import { db, must } from "./db";
 import { runProgress } from "./process";
+import { memo } from "./memo";
+import { runSummaries } from "./runSummaries";
 import { nightlySummaries, type NightlySummary } from "./qogitaNightly";
 
 export interface DashboardRun {
@@ -36,17 +38,10 @@ export async function dashboard(recent = 6): Promise<Dashboard> {
     "runs",
   ) as (Omit<DashboardRun, "counts" | "eta"> & { stats?: { keepaByDay?: TokensByDay | null } | null })[];
 
-  const count = async (runId: string, f: (q: ReturnType<typeof base>) => ReturnType<typeof base>) => (await f(base(runId))).count ?? 0;
-  const base = (runId: string) => d.from("results").select("id", { count: "exact", head: true }).eq("run_id", runId);
-
-  const out = await Promise.all(runs.slice(0, recent).map(async (r): Promise<DashboardRun> => {
-    const [pass, warn, fail, error, pending] = await Promise.all([
-      count(r.id, (q) => q.eq("status", "done").eq("verdict", "pass")),
-      count(r.id, (q) => q.eq("status", "done").eq("verdict", "warn")),
-      count(r.id, (q) => q.eq("status", "done").eq("verdict", "fail")),
-      count(r.id, (q) => q.eq("status", "error")),
-      count(r.id, (q) => q.eq("status", "pending")),
-    ]);
+  const shown = runs.slice(0, recent);
+  const sums = await runSummaries(shown.map((r) => r.id));
+  const out = await Promise.all(shown.map(async (r): Promise<DashboardRun> => {
+    const { pass, warn, fail, error, pending } = sums.get(r.id) ?? { pass: 0, warn: 0, fail: 0, error: 0, pending: 0 };
     const eta = pending > 0 ? (await runProgress(r.id)).eta : null;
     return {
       id: r.id, name: r.name ?? null, source: r.source, status: r.status, started_at: r.started_at,
@@ -54,6 +49,13 @@ export async function dashboard(recent = 6): Promise<Dashboard> {
       counts: { pass, warn, fail, error, pending }, eta,
     };
   }));
+  // The Keepa week and last night's Qogita re-pulls change slowly: kept for 60 s.
+  const { keepa, qogita } = await memo("dashboard:tiles", 60_000, () => slowTiles());
+  return { runs: out, keepa, qogita };
+}
+
+async function slowTiles(): Promise<Pick<Dashboard, "keepa" | "qogita">> {
+  const d = db();
   const day = ukDay();
   // Every run that can have spent tokens in the last week: started in it, or with ledger days in it.
   const week = new Date(Date.now() - 8 * 86_400_000).toISOString();
@@ -68,5 +70,5 @@ export async function dashboard(recent = 6): Promise<Dashboard> {
     7,
   );
   const qogita = await nightlySummaries().catch(() => []);
-  return { runs: out, keepa: { spentToday: last7.at(-1)?.tokens ?? 0, day, last7 }, qogita };
+  return { keepa: { spentToday: last7.at(-1)?.tokens ?? 0, day, last7 }, qogita };
 }

@@ -11,7 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { GATING_LABELS, GATING_VARIANT, type BrandSummary } from "@/lib/brandMap";
 import { etaLabel } from "@/lib/eta";
 import type { Dashboard } from "@/lib/server/dashboard";
-import { api, when } from "@/lib/ui/client";
+import { sharedGet, when } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
 
 interface FavItem {
@@ -28,7 +28,8 @@ function useLoad<T>(url: string, pollMs?: (d: T) => number | null): Load<T> {
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     let live = true;
-    const load = () => api<T>(url).then(
+    // Shared with the top bar (the Keepa balance) and anything else asking at the same moment.
+    const load = () => sharedGet<T>(url, 2_000).then(
       (data) => {
         if (!live) return;
         setState({ data });

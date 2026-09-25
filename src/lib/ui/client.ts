@@ -10,6 +10,20 @@ export async function api<T>(url: string, init?: RequestInit & { json?: unknown 
   return body as T;
 }
 
+/**
+ * A GET shared by everything on the page that asks within `maxAgeMs` (e.g. the Keepa balance,
+ * shown in the top bar and on Home): one request, one answer.
+ */
+const shared = new Map<string, { at: number; value: Promise<unknown> }>();
+export function sharedGet<T>(url: string, maxAgeMs = 10_000): Promise<T> {
+  const hit = shared.get(url);
+  if (hit && Date.now() - hit.at < maxAgeMs) return hit.value as Promise<T>;
+  const value = api<T>(url);
+  shared.set(url, { at: Date.now(), value });
+  value.catch(() => shared.delete(url));
+  return value;
+}
+
 export const gbp = (n: number | null | undefined, dp = 2) =>
   n == null ? "—" : `£${Number(n).toLocaleString("en-GB", { minimumFractionDigits: dp, maximumFractionDigits: dp })}`;
 

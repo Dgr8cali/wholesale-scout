@@ -109,13 +109,27 @@ function statsFor(supplierId: string, data: Awaited<ReturnType<typeof ledgerData
   };
 }
 
+/** Per-supplier figures from the supplier_stats SQL function; null where it isn't available (tests). */
+async function statsFromSql(): Promise<Map<string, SupplierStats> | null> {
+  const d = db();
+  if (typeof d.rpc !== "function") return null;
+  const res = await d.rpc("supplier_stats", {});
+  if (res.error || !Array.isArray(res.data)) return null;
+  return new Map((res.data as { supplier_id: string; runs: number; products: number; pass: number; warn: number; brands: { brand: string; count: number }[]; last_seen: string | null }[])
+    .map((r) => [r.supplier_id, { runs: r.runs, products: r.products, pass: r.pass, warn: r.warn, brands: r.brands ?? [], lastSeen: r.last_seen }]));
+}
+
 /** Every supplier with its figures, most used first. */
 export async function supplierLedger(): Promise<(SupplierRecord & { stats: SupplierStats })[]> {
   await prefillQogita();
-  const suppliers = must(await db().from("suppliers").select("*").order("name"), "suppliers") as SupplierRecord[];
-  const data = await ledgerData();
+  const [suppliers, sql] = await Promise.all([
+    db().from("suppliers").select("*").order("name").then((r) => must(r, "suppliers") as SupplierRecord[]),
+    statsFromSql(),
+  ]);
+  const data = sql ? null : await ledgerData();
+  const none: SupplierStats = { runs: 0, products: 0, pass: 0, warn: 0, brands: [], lastSeen: null };
   return suppliers
-    .map((s) => ({ ...s, stats: statsFor(s.id, data) }))
+    .map((s) => ({ ...s, stats: sql ? sql.get(s.id) ?? none : statsFor(s.id, data!) }))
     .sort((a, b) => b.stats.products - a.stats.products || a.name.localeCompare(b.name));
 }
 

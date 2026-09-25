@@ -1,4 +1,5 @@
 import "server-only";
+import { forget } from "./memo";
 import { aggregateBrands, type BrandProduct, type BrandSummary } from "../brandMap";
 import { brandKey, type BrandApproval } from "../brands";
 import { applyLinks } from "../spapi/parse";
@@ -124,6 +125,8 @@ export async function refreshBrandMap(budgetMs = 40_000): Promise<{ busy?: boole
       remaining,
       ...(remaining ? {} : { profile_version: version, refreshed_at: startedAt }),
     }).eq("id", 1), "brand map state");
+    // The cached map (60 s) is out of date now.
+    forget("brands:");
     return { refreshed, remaining };
   } finally {
     await d.from("brand_map_state").update({ lease_until: null }).eq("id", 1);
