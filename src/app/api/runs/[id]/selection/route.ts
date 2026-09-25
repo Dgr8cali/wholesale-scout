@@ -1,6 +1,6 @@
-import { after, type NextRequest } from "next/server";
+import type { NextRequest } from "next/server";
 import { handle } from "@/lib/server/http";
-import { kickRun } from "@/lib/server/kick";
+import { scheduleNext } from "@/lib/server/kick";
 import { removeFromRun, runFromSelection } from "@/lib/server/runs";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -12,7 +12,7 @@ export const POST = handle(async (req: NextRequest, ctx: Ctx) => {
   if (!Array.isArray(b.resultIds) || !b.resultIds.length) return Response.json({ error: "Select some rows" }, { status: 400 });
   try {
     const r = await runFromSelection(id, b.resultIds, b.profileId);
-    after(() => kickRun(req.nextUrl.origin, r.runId));
+    scheduleNext(req.nextUrl.origin, r.runId);
     return Response.json(r);
   } catch (e) {
     return Response.json({ error: (e as Error).message }, { status: 400 });

@@ -767,6 +767,8 @@ export interface RunProgress {
   busy?: boolean;
   /** A re-screen in progress: rows it hasn't reached yet. */
   rescreen?: { left: number; startedAt: string } | null;
+  /** The run is paused: no call works on it until it's resumed. */
+  paused?: boolean;
   /** False until the lease migration is run: then only the run page drives the run, one call at a time. */
   leased?: boolean;
 }

@@ -14,6 +14,7 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.109.0",
     "@tanstack/react-table": "^9.2.4",
+    "@vercel/functions": "^3.9.9",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.48.0",

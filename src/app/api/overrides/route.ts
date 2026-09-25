@@ -1,8 +1,8 @@
-import { after, type NextRequest } from "next/server";
+import type { NextRequest } from "next/server";
 import { GATE_ORDER, type GateId } from "@/lib/screening/config";
 import { chunks, db, must } from "@/lib/server/db";
 import { handle } from "@/lib/server/http";
-import { kickRun } from "@/lib/server/kick";
+import { scheduleNext } from "@/lib/server/kick";
 import { addOverride, listOverrides, OVERRIDES_MIGRATION, removeOverride } from "@/lib/server/overrides";
 import { rescreenRun } from "@/lib/server/process";
 import { resultIdsFor } from "@/lib/server/runRows";
@@ -20,7 +20,7 @@ async function refresh(req: NextRequest, runId: string | undefined, items: Item[
   const resultIds = await resultIdsFor(runId, items);
   if (!resultIds.length) return { rescored: 0, requeued: 0 };
   const r = await rescreenRun(runId, null, { resultIds });
-  if (r.requeued) after(() => kickRun(req.nextUrl.origin, runId));
+  if (r.requeued) scheduleNext(req.nextUrl.origin, runId);
   return r;
 }
 

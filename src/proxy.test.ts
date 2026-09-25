@@ -16,6 +16,14 @@ describe("password gate", () => {
     expect(proxy(req("/api/runs", `Basic ${btoa("x:pw")}`)).status).toBe(200);
   });
 
+  it("lets the watchdog through with its own secret", () => {
+    process.env.APP_PASSWORD = "pw";
+    process.env.WATCHDOG_SECRET = "dog-secret";
+    expect(proxy(req("/api/cron/watchdog", "Bearer dog-secret")).status).toBe(200);
+    expect(proxy(req("/api/runs", "Bearer dog-secret")).status).toBe(401);
+    delete process.env.WATCHDOG_SECRET;
+  });
+
   it("never lets cron through when no CRON_SECRET is set", () => {
     process.env.APP_PASSWORD = "pw";
     expect(proxy(req("/api/cron/qogita", "Bearer ")).status).toBe(401);
