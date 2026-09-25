@@ -32,7 +32,8 @@ The password is kept in `chrome.storage.local` on this computer only and sent to
 "Read stock" adds 999 of each FBA seller's offer to **your** Amazon cart, one seller at a time (4 seconds apart, at most 8 sellers), reads the quantity Amazon allows (or a "per customer" limit, which is marked as a limit, not stock), then removes it from your cart. It only runs when you click it, never automatically, and it refuses to run if the product is already in your cart.
 
 - It uses your own Amazon session. Amazon's Conditions of Use prohibit automated data gathering, so use it sparingly and at your own risk to that account.
-- It reads Amazon's pages (the all-offers panel and the cart), which Amazon changes without notice. When it can't read a quantity it says so for that seller rather than guessing. It was written without access to live Amazon pages, so expect to adjust the selectors in `product.js` (`fetchOffers`, `stockOf`, `removeFromCart`) the first time.
+- How it reads: the FBA sellers come from Amazon's all-offers (AOD) list, `/gp/product/ajax/ref=dp_aod_NEW_mbc?asin=…&pc=dp&experienceId=aodAjaxMain&filters={"all":true,"new":true}` (each `#aod-offer`: seller, `aod-offer-shipsFrom` = Amazon, offer listing ID); when that isn't available, from the Buy Box and "Other sellers on Amazon" rows on the page. Each offer is added by its listing ID with quantity 999; the "only N left" / "limited to N per customer" message is read from the add response or the cart line, and the line is removed.
+- Amazon changes these pages without notice. When a step fails the panel says so for that seller rather than guessing, and a collapsed **Debug** section under the stock list holds what Amazon sent back at each step (first 1,500 characters): **Copy** it and paste it to have the reader fixed (`offersFromAod`, `offersOnPage`, `stockOf`, `removeLine` in `product.js`).
 
 Readings are saved to the product and shown in the app under "From the extension" in the row's details.
 
