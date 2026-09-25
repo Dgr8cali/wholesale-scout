@@ -54,6 +54,16 @@ interface Seller {
   storefrontSize: number | null; brandSharePct: number | null;
 }
 
+interface Progress {
+  done: boolean;
+  processed: number;
+  total: number;
+  waiting: { amazon: number; keepa: number };
+  keepaResumeAt: string | null;
+  working: boolean;
+  tokenCost: number;
+}
+
 type SortKey = "score" | "profit" | "roi" | "margin" | "sell_price" | "landed_cost" | "hurdle_price" | "title" | "verdict" | "sales" | "sellers" | "buybox";
 
 /** Figures computed from the stored market data, for display and sorting. */
@@ -77,7 +87,8 @@ export default function RunPage() {
   const [run, setRun] = useState<Run | null>(null);
   const [results, setResults] = useState<Result[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [processing, setProcessing] = useState(false);
+  const [progress, setProgress] = useState<Progress | null>(null);
+  const processing = !!progress && !progress.done;
   const [open, setOpen] = useState<Set<string>>(new Set());
   // EANs whose other ASINs are shown.
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -92,7 +103,7 @@ export default function RunPage() {
   const [notice, setNotice] = useState<string | null>(null);
   // Bumped after a re-screen so the effect below reloads and resumes processing.
   const [nonce, setNonce] = useState(0);
-  // Cancels the processing loop of the current effect (and on delete).
+  // Stops the status polling of the current effect (and on delete).
   const cancel = useRef<() => void>(() => {});
 
   const fetchRun = useCallback(() => api<{ run: Run; results: Result[] }>(`/api/runs/${id}`), [id]);
@@ -101,39 +112,48 @@ export default function RunPage() {
     setResults(r.results);
   }, []);
 
-  // Drive the processor in chunks until the run is done, refreshing the table as rows land.
+  // Screening runs in the background. Poll its status, reload the table when rows land,
+  // and resume the worker if none holds the run (the chain stalled, or the page was the
+  // first thing to notice). Closing the page doesn't stop it.
   useEffect(() => {
-    let cancelled = false;
+    let stopped = false;
+    let lastProcessed = -1;
+    let lastReload = 0;
+    let lastKick = 0;
+    let kicking = false;
     cancel.current = () => {
-      cancelled = true;
+      stopped = true;
     };
-    (async () => {
+    const tick = async () => {
       try {
-        const first = await fetchRun();
-        apply(first);
-        if (first.run.status === "done" || cancelled) return;
-        setProcessing(true);
-        let failures = 0;
-        while (!cancelled) {
-          try {
-            const p = await api<{ done: boolean }>(`/api/runs/${id}/process`, { method: "POST" });
-            failures = 0;
-            if (cancelled) break;
-            apply(await fetchRun());
-            if (p.done) break;
-          } catch (e) {
-            if (++failures >= 3) throw e;
-            await new Promise((r) => setTimeout(r, 3000 * failures));
-          }
+        const p = await api<Progress>(`/api/runs/${id}/progress`);
+        if (stopped) return;
+        setProgress(p);
+        const changed = p.processed !== lastProcessed;
+        if (lastProcessed === -1 || (changed && Date.now() - lastReload > 4_000) || (p.done && changed)) {
+          lastProcessed = p.processed;
+          lastReload = Date.now();
+          apply(await fetchRun());
         }
+        // Never overlap our own call; a worker holding the lease shows as working.
+        if (!p.done && !p.working && !kicking && Date.now() - lastKick > 15_000) {
+          lastKick = Date.now();
+          kicking = true;
+          fetch(`/api/runs/${id}/process`, { method: "POST" }).catch(() => {}).finally(() => {
+            kicking = false;
+          });
+        }
+        if (!p.done && !stopped) setTimeout(tick, 3_000);
       } catch (e) {
-        if (!cancelled) setError((e as Error).message);
-      } finally {
-        if (!cancelled) setProcessing(false);
+        if (!stopped) {
+          setError((e as Error).message);
+          setTimeout(tick, 10_000);
+        }
       }
-    })();
+    };
+    tick();
     return () => {
-      cancelled = true;
+      stopped = true;
     };
   }, [id, fetchRun, apply, nonce]);
 
@@ -287,14 +307,24 @@ export default function RunPage() {
         </div>
       </div>
 
-      {(processing || run.status !== "done") && (
+      {progress && !progress.done && (
         <div className="card space-y-2 p-4">
-          <div className="flex justify-between text-sm">
-            <span>{processing ? "Screening…" : "Paused"} {done.length} of {total}</span>
-            <span className="text-muted">Row gates first; Keepa and SP-API only for rows that survive them</span>
+          <div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
+            <span className="font-medium">Screening {progress.processed} of {progress.total}</span>
+            <span className="text-muted">
+              {progress.working ? "Working in the background: you can close this page." : "Resuming…"}
+            </span>
           </div>
           <div className="h-2 overflow-hidden rounded-full bg-surface-2">
-            <div className="h-full bg-accent transition-all" style={{ width: `${total ? (done.length / total) * 100 : 0}%` }} />
+            <div className="h-full bg-accent transition-all" style={{ width: `${progress.total ? (progress.processed / progress.total) * 100 : 0}%` }} />
+          </div>
+          <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted">
+            <span><span className="num font-semibold text-ink">{progress.waiting.amazon}</span> waiting on Amazon (catalog, price, gating, fees)</span>
+            <span>
+              <span className="num font-semibold text-ink">{progress.waiting.keepa}</span> waiting on Keepa tokens
+              {progress.waiting.keepa > 0 && progress.keepaResumeAt && <> · resumes about {new Date(progress.keepaResumeAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</>}
+            </span>
+            <span><span className="num font-semibold text-ink">{progress.tokenCost}</span> Keepa tokens so far</span>
           </div>
         </div>
       )}

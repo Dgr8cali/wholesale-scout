@@ -39,19 +39,25 @@ npm run build
 
 ## How a run works
 
-1. **Upload** (`/upload`). xlsx/csv is parsed in the browser. The header row is detected and the
+1. **Upload** (`/upload`). xlsx/csv, up to 10 MB per file and 5,000 rows per upload, parsed in the browser. The header row is detected and the
    layout fingerprinted; a known layout maps itself, a new one gets the mapping screen. VAT basis,
    VAT rate and currency are saved on the supplier. Non-GBP prices convert at ingest using ECB
    rates (editable), and every offer stores its rate and date. Costs are stored per unit, GBP, ex-VAT.
 2. **Ingest** stores suppliers, mappings, products (one per EAN–ASIN pair) and offers, then opens a
    run with one row per product, using the cheapest landed offer across all uploaded files.
-3. **Process** (the results page drives it, 20 rows per call):
-   - row gates first (compliance, budget fit): no API call is spent on a row that fails them;
-   - SP-API catalog lookup by EAN and Keepa history (cached 24 h). An EAN with several ASINs keeps
-     them all as separate rows;
-   - the market gates, then gating and Amazon's own fee estimate only for rows still standing;
-   - fees from `getMyFeesEstimate` when available, else the rate card; profit, ROI, margin, hurdle
-     price, win score, band and the why line.
+3. **Process**, in the background: it starts when the rows are stored and carries on with the page
+   closed. Each call holds a lease on the run, works for ~45 s, parks what's left and hands on to
+   the next call; the run page resumes it if the chain stops. Three stages run side by side, each
+   on its own rate limits:
+   - *lookup*: compliance and budget first (no API call), then SP-API catalog by EAN (20 per
+     request; truncated batches and GTIN/UPC variants retried in batches), current Buy Box (20 per
+     request), then no-match and a price-band check that fails only when certain (a Buy Box under
+     the floor can't pass under the "lower of current and median" rule) — before any Keepa token;
+   - *keepa*: history by ASIN (up to 100 per request) for rows still standing, as many as Keepa's
+     token balance covers (read free from /token); the rest wait for the refill;
+   - *account*: listings restrictions in parallel (token bucket at Amazon's 5/s, burst 10, backoff
+     on 429), Amazon's fee estimates 20 per request, seller profiles, final score.
+   The run page shows how many rows are waiting on Amazon and on Keepa tokens.
 4. **Re-screen** (button on a run): re-runs gates and score with a profile's current settings from
    the data stored on each result (match, Buy Box, gating, Amazon's fee and its price), with no
    re-upload and no new Amazon or Keepa calls. Rows that never fetched data a gate now needs are

@@ -112,6 +112,15 @@ export interface SellerLookup {
   exhausted?: { refillInMs: number | null; skipped: number };
 }
 
+/** Keepa's token bucket, from its free /token endpoint. */
+export interface KeepaTokens {
+  tokensLeft: number;
+  /** Until the next refill, ms. */
+  refillInMs: number;
+  /** Tokens added per minute. */
+  refillRate: number;
+}
+
 export type OnKeepaResponse = (meta: KeepaResponseMeta) => void | Promise<void>;
 
 export interface KeepaClient {
@@ -121,4 +130,6 @@ export interface KeepaClient {
   lookupByEans(eans: string[], onResponse?: OnKeepaResponse): Promise<KeepaLookup>;
   lookupByAsins(asins: string[], onResponse?: OnKeepaResponse): Promise<KeepaLookup>;
   lookupSellers(sellerIds: string[], onResponse?: OnKeepaResponse): Promise<SellerLookup>;
+  /** Current token balance (free). null when unknown. */
+  tokenStatus(): Promise<KeepaTokens | null>;
 }

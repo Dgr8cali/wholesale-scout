@@ -56,8 +56,9 @@ interface Supplier {
 }
 
 /** How far a row's data collection got: row text only, matched and priced, account checked. */
-type Stage = "row" | "enriched" | "account";
-const STAGE_RANK: Record<Stage, number> = { row: 0, enriched: 1, account: 2 };
+type Stage = "row" | "priced" | "enriched" | "account";
+/** row: text only; priced: matched and priced, waiting on Keepa; enriched: history in; account: done. */
+const STAGE_RANK: Record<Stage, number> = { row: 0, priced: 1, enriched: 2, account: 3 };
 
 /** What a result was screened on, stored so Re-screen can re-run gates without fetching. */
 export interface StoredInputs {
@@ -331,7 +332,7 @@ async function addRunTokens(runId: string, tokens: number): Promise<void> {
  * 24 hours old. New snapshots are stored one ASIN at a time before any gate runs; if a
  * store fails, the fetched data is still used and the failure is logged and noted.
  */
-async function attachKeepa(rows: Row[], alreadyFetched: Map<string, KeepaProduct>, onResponse: OnKeepaResponse): Promise<Map<string, KeepaSummary>> {
+async function attachKeepa(rows: Row[], alreadyFetched: Map<string, KeepaProduct>, onResponse: OnKeepaResponse): Promise<{ summaries: Map<string, KeepaSummary>; exhausted: boolean }> {
   const keepa = getKeepa();
   const withAsin = rows.filter((r) => r.match?.asin);
   const asins = [...new Set(withAsin.map((r) => r.match!.asin!))];
@@ -365,13 +366,7 @@ async function attachKeepa(rows: Row[], alreadyFetched: Map<string, KeepaProduct
       await db().from("products").update({ keepa_updated_at: new Date().toISOString() }).in("asin", c);
     }
   }
-  if (exhausted) {
-    const wait = exhausted.refillInMs != null ? ` (refill in ${Math.ceil(exhausted.refillInMs / 1000)}s)` : "";
-    for (const r of withAsin) {
-      if (!summaries.has(r.match!.asin!)) r.dataNotes.push(`Keepa out of tokens${wait}: history not checked. Re-screen after the refill.`);
-    }
-  }
-  return summaries;
+  return { summaries, exhausted: !!exhausted };
 }
 
 const SELLER_TTL = 7 * DAY;
@@ -462,7 +457,7 @@ function needsRestrictionCheck(row: Row): boolean {
 /** "search miss: tried a batch of 20, EAN 3264680023323, UPC …; Amazon returned no items". */
 function missNote(trace: LookupTrace | undefined): string | undefined {
   if (!trace) return undefined;
-  const tried = trace.attempts.map((a) => (a.code.startsWith("batch") ? `a ${a.code}` : `${a.identifiersType} ${a.code}`));
+  const tried = trace.attempts.map((a) => (a.code.startsWith("batch") ? `an ${a.identifiersType} ${a.code}` : `${a.identifiersType} ${a.code}`));
   return `search miss: tried ${tried.join(", ")}; Amazon returned no items`;
 }
 
@@ -589,253 +584,514 @@ export async function rescreenRun(runId: string, profileId?: string | null): Pro
   return { rescored: work.length, requeued: requeue.length };
 }
 
-/** Screen the next `limit` pending rows of a run. The page calls this until `done`. */
-export async function processRun(runId: string, limit = 20): Promise<{ done: boolean; processed: number; total: number }> {
+// ---------------------------------------------------------------------------------------
+// Background processing. A run moves through three stages, each on its own rate limits,
+// run side by side on different rows:
+//   lookup  — row gates, SP-API catalog and pricing, match and early price-band checks
+//   keepa   — history for rows still standing, paced by Keepa's token balance
+//   account — gating (parallel), Amazon's fee estimates (20 per call), sellers, final score
+// One worker per run holds a lease; each call works for a time budget, parks what's left,
+// and the route hands on to the next call.
+// ---------------------------------------------------------------------------------------
+
+export interface RunProgress {
+  done: boolean;
+  processed: number;
+  total: number;
+  /** Pending rows waiting on Amazon (lookup or account checks) and on Keepa tokens. */
+  waiting: { amazon: number; keepa: number };
+  /** When Keepa should have tokens again, if rows are waiting on it. */
+  keepaResumeAt: string | null;
+  /** Rows finished or moved on by this call. */
+  progressed: number;
+  /** Another call holds the run's lease. */
+  busy?: boolean;
+  /** False until the lease migration is run: then only the run page drives the run, one call at a time. */
+  leased?: boolean;
+}
+
+const BATCH = { lookup: 100, keepa: 100, account: 60 };
+const KEEPA_TOKENS_PER_ASIN = 3;
+
+/** Rows a call keeps in memory between stages. */
+interface Queues {
+  lookup: Row[];
+  keepa: Row[];
+  account: Row[];
+}
+
+const sleepMs = (ms: number) => new Promise((r) => setTimeout(r, Math.max(0, ms)));
+
+/** Run `fn` over items, at most `limit` at a time. */
+async function mapLimit<T>(items: T[], limit: number, fn: (x: T) => Promise<void>): Promise<void> {
+  let i = 0;
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (i < items.length) await fn(items[i++]);
+  }));
+}
+
+/** Pending rows of a run, and how many wait on Keepa (stage "priced"). */
+export async function runProgress(runId: string, extra: Partial<RunProgress> = {}): Promise<RunProgress> {
+  const d = db();
+  const [{ count: total }, { count: pending }, { count: keepa }, run] = await Promise.all([
+    d.from("results").select("id", { count: "exact", head: true }).eq("run_id", runId),
+    d.from("results").select("id", { count: "exact", head: true }).eq("run_id", runId).eq("status", "pending"),
+    d.from("results").select("id", { count: "exact", head: true }).eq("run_id", runId).eq("status", "pending").eq("inputs->>stage", "priced"),
+    d.from("runs").select("*").eq("id", runId).single(),
+  ]);
+  const t = total ?? 0, p = pending ?? 0, k = keepa ?? 0;
+  const resume = (run.data as { resume_after?: string | null } | null)?.resume_after ?? null;
+  return {
+    done: p === 0,
+    processed: t - p,
+    total: t,
+    waiting: { amazon: p - k, keepa: k },
+    keepaResumeAt: k > 0 ? resume : null,
+    progressed: 0,
+    ...extra,
+  };
+}
+
+/** A write refused because a column isn't there yet: retry without the optional fields. */
+async function updateRun(runId: string, fields: Record<string, unknown>, optional: Record<string, unknown> = {}) {
+  const d = db();
+  const res = await d.from("runs").update({ ...fields, ...optional }).eq("id", runId);
+  if (res.error && schemaMissing(res.error.message) && Object.keys(optional).length) {
+    must(await d.from("runs").update(fields).eq("id", runId), "run");
+    return;
+  }
+  must(res, "run");
+}
+
+/** Take the run's lease for `ms`. false: someone else has it. null: leases not migrated yet. */
+async function claimLease(runId: string, ms: number): Promise<boolean | null> {
+  const now = new Date().toISOString();
+  const res = await db().from("runs").update({ lease_until: new Date(Date.now() + ms).toISOString() })
+    .eq("id", runId).or(`lease_until.is.null,lease_until.lt.${now}`).select("id");
+  if (res.error) {
+    if (schemaMissing(res.error.message)) return null;
+    throw new Error(`lease: ${res.error.message}`);
+  }
+  return (res.data ?? []).length > 0;
+}
+
+/**
+ * Work on a run for up to `budgetMs`: take the lease, run the three stages side by side until
+ * nothing's left or time's up (waiting for Keepa tokens inside the budget when that's all
+ * that's left), park unfinished rows, and report progress.
+ */
+export async function processRun(runId: string, opts: { budgetMs?: number } = {}): Promise<RunProgress> {
+  const budget = opts.budgetMs ?? 45_000;
+  const deadline = Date.now() + budget;
+  // Stop starting new work this close to the end: enough to park rows and report.
+  const margin = Math.min(3_000, budget * 0.1);
   const d = db();
   const runRow = must(await d.from("runs").select("*").eq("id", runId).single(), "run") as {
-    id: string; status: string; profile_snapshot: ProfileConfig; row_count: number; token_cost: number;
+    id: string; status: string; profile_snapshot: ProfileConfig; token_cost: number;
   };
-  const counts = async () => {
-    const [{ count: total }, { count: pending }] = await Promise.all([
-      d.from("results").select("id", { count: "exact", head: true }).eq("run_id", runId),
-      d.from("results").select("id", { count: "exact", head: true }).eq("run_id", runId).eq("status", "pending"),
-    ]);
-    return { total: total ?? 0, pending: pending ?? 0 };
-  };
-  if (runRow.status === "done") {
-    const c = await counts();
-    return { done: true, processed: c.total - c.pending, total: c.total };
+  if (runRow.status === "done" && !(await runProgress(runId)).waiting.amazon && !(await runProgress(runId)).waiting.keepa) {
+    return runProgress(runId);
   }
-  if (runRow.status === "pending") must(await d.from("runs").update({ status: "processing" }).eq("id", runId), "run status");
+  const lease = await claimLease(runId, budget + 30_000);
+  if (lease === false) return runProgress(runId, { busy: true });
 
-  const cfg = withDefaults(runRow.profile_snapshot);
-  const [card, rules, approved] = await Promise.all([activeRateCard(), loadRules(), approvedBrands()]);
-  const spapi = getSpApi();
-  const keepa = getKeepa();
-  // Keepa's own tokensConsumed, added to the run as each response arrives.
-  const recordTokens = (meta: KeepaResponseMeta) => addRunTokens(runId, meta.tokensConsumed);
+  let progressed = 0;
+  let keepaWaitUntil: number | null = null;
+  try {
+    if (runRow.status !== "processing") await updateRun(runId, { status: "processing", finished_at: null });
+    const cfg = withDefaults(runRow.profile_snapshot);
+    const [card, rules, approved] = await Promise.all([activeRateCard(), loadRules(), approvedBrands()]);
+    const spapi = getSpApi();
+    const keepa = getKeepa();
+    const recordTokens = (meta: KeepaResponseMeta) => addRunTokens(runId, meta.tokensConsumed);
+    const env: StageEnv = { runId, cfg, card, rules, approved, spapi, keepa, recordTokens };
 
-  const pending = must(
-    await d.from("results").select("id, product_id, offer_id, inputs").eq("run_id", runId).eq("status", "pending").limit(limit),
-    "pending",
-  ) as PendingRow[];
-
-  if (pending.length) {
-    let rows = await loadRows(pending);
-
-    // Stage 1 — gates that need only the row: compliance and budget fit. No API calls yet.
-    const pre: GateId[] = ["compliance", "budgetFit"];
-    const survivors: Row[] = [];
-    for (const row of rows) {
-      await safely(row, async () => {
-        const ctx = context(row, card, rules, cfg, approved);
-        const run = runGates(ctx, cfg, pre);
-        if (run.failedGate) await finalize(row, run, cfg, ctx);
-        else survivors.push(row);
-      });
+    const pending: PendingRow[] = [];
+    for (let from = 0; ; from += 1000) {
+      const page = must(
+        await d.from("results").select("id, product_id, offer_id, inputs").eq("run_id", runId).eq("status", "pending").range(from, from + 999),
+        "pending",
+      ) as PendingRow[];
+      pending.push(...page);
+      if (page.length < 1000) break;
     }
-    // Rows re-queued by Re-screen keep what was already fetched for them.
-    const enrichedBefore = survivors.filter((r) => STAGE_RANK[r.stage] >= STAGE_RANK.enriched);
-    rows = survivors.filter((r) => STAGE_RANK[r.stage] < STAGE_RANK.enriched);
+    const q: Queues = { lookup: [], keepa: [], account: [] };
+    for (const row of await loadRows(pending)) route(row, q, env);
 
-    // Stage 2 — match and enrich: SP-API catalog by EAN, Keepa history (24-hour cache).
-    // Notes from an earlier pass's failed lookups are cleared before this pass looks again.
-    for (const r of rows) r.dataNotes = r.dataNotes.filter((n) => !/lookup failed|Keepa/i.test(n));
-    // Unmatched EANs are always asked again: a miss isn't cached.
-    const needCatalog = rows.filter((r) => !r.product.asin || !FRESH(r.product.catalog_updated_at, CATALOG_TTL));
-    let catalog = new Map<string, CatalogMatch[]>();
-    let traces = new Map<string, LookupTrace>();
-    if (spapi && needCatalog.length) {
-      try {
-        ({ matches: catalog, traces } = await spapi.lookupEans([...new Set(needCatalog.map((r) => r.product.ean))]));
-      } catch (e) {
-        for (const r of needCatalog) r.dataNotes.push(`Catalog lookup failed: ${(e as Error).message}.`);
+    while (Date.now() < deadline - margin) {
+      const a = q.lookup.splice(0, BATCH.lookup);
+      const c = q.account.splice(0, BATCH.account);
+      const keepaReady: boolean = keepa.available && (keepaWaitUntil == null || Date.now() >= keepaWaitUntil);
+      const b: Row[] = keepaReady ? q.keepa.splice(0, BATCH.keepa) : [];
+      if (!a.length && !b.length && !c.length) {
+        // Only rows waiting on Keepa tokens: wait for the refill inside the budget.
+        if (q.keepa.length && keepaWaitUntil != null && keepaWaitUntil < deadline - margin) {
+          await sleepMs(keepaWaitUntil - Date.now());
+          continue;
+        }
+        break;
       }
-    }
-
-    // Keepa by EAN only where neither the catalog nor an earlier match found a listing;
-    // everything with an ASIN gets its history by ASIN below.
-    let keepaByEan = new Map<string, KeepaProduct[]>();
-    const fetched = new Map<string, KeepaProduct>();
-    const unresolved = rows.filter((r) => !r.product.asin && !catalog.get(r.product.ean)?.length);
-    if (keepa.available && unresolved.length) {
-      try {
-        const res = await keepa.lookupByEans([...new Set(unresolved.map((r) => r.product.ean))], recordTokens);
-        keepaByEan = res.byEan;
-        for (const [asin, k] of res.byAsin) fetched.set(asin, k);
-      } catch (e) {
-        for (const r of unresolved) r.dataNotes.push(`Keepa lookup failed: ${(e as Error).message}.`);
-      }
+      const [la, kb, ac]: [Awaited<ReturnType<typeof stageLookup>>, Awaited<ReturnType<typeof stageKeepa>>, StageOut] =
+        await Promise.all([stageLookup(a, env), stageKeepa(b, env), stageAccount(c, env)]);
+      progressed += la.finished + kb.finished + ac.finished + la.next.length + kb.next.length;
+      for (const row of [...la.next, ...kb.next]) route(row, q, env);
+      q.lookup.push(...la.added);
+      q.keepa.unshift(...kb.deferred);
+      if (kb.waitUntil != null) keepaWaitUntil = kb.waitUntil;
+      else if (kb.next.length) keepaWaitUntil = null;
     }
 
-    // Resolve ASINs. An EAN that maps to several ASINs keeps them all: extra ones become
-    // new products with the same offer and join this run as pending rows.
-    const resolved: Row[] = [];
-    for (const row of rows) await safely(row, async () => {
-      const p = row.product;
-      const cat = catalog.get(p.ean) ?? [];
-      const kp = keepaByEan.get(p.ean) ?? [];
-      const looked = !!spapi || keepa.available;
-      if (!looked) return void resolved.push(row);
-      const catalogChecked = needCatalog.includes(row) && spapi;
-      const asins = [...new Set([...cat.map((c) => c.asin), ...kp.map((k) => k.asin), ...(p.asin ? [p.asin] : [])])];
-      const primary = p.asin ?? asins[0] ?? null;
-      const trace = traces.get(p.ean);
-      if (trace) row.lookup = trace;
-      row.match = { asin: primary, asinCount: Math.max(1, asins.length, row.match?.asinCount ?? 0), looked: true };
-      if (!primary && trace?.outcome === "api_error") {
-        // Amazon didn't answer, so this isn't a verdict on the product: leave it retryable.
-        const err = trace.attempts.find((a) => a.error)?.error ?? "no response";
-        throw new Error(`Catalog lookup failed for EAN ${p.ean}: ${err}. Re-screen to retry.`);
-      }
-      resolved.push(row);
-      if (!primary) {
-        row.match.note = missNote(trace);
-        if (catalogChecked) must(await d.from("products").update({ catalog_updated_at: new Date().toISOString() }).eq("id", p.id), "product");
-        return;
-      }
-      const c = cat.find((x) => x.asin === primary);
-      const k = kp.find((x) => x.asin === primary);
-      const update: Partial<Product> & { updated_at: string } = { asin: primary, updated_at: new Date().toISOString() };
-      if (c) {
-        Object.assign(update, {
-          title: c.title ?? p.title, brand: c.brand ?? p.brand, category: c.category ?? p.category,
-          dims_cm: c.dimsCm ?? p.dims_cm, weight_g: c.weightG ?? p.weight_g, sales_rank: c.salesRank,
-          parent_asin: c.parentAsin, variation_count: c.variationCount, catalog_updated_at: new Date().toISOString(),
-        });
-        row.hazmat = [...c.hazmat, ...(c.batteries ? ["batteries"] : [])];
-      }
-      if (k) {
-        Object.assign(update, {
-          title: update.title ?? k.title ?? p.title, brand: update.brand ?? k.brand ?? p.brand,
-          category: update.category ?? k.category ?? p.category,
-          dims_cm: update.dims_cm ?? k.dimsCm ?? p.dims_cm, weight_g: update.weight_g ?? k.weightG ?? p.weight_g,
-          parent_asin: update.parent_asin ?? k.parentAsin, variation_count: update.variation_count ?? k.variationCount,
-          keepa_updated_at: new Date().toISOString(),
-        });
-      }
-      update.referral_category = referralCategoryFor((update.category ?? p.category) as string | null, card);
-      must(await d.from("products").update(update).eq("id", p.id), "update product");
-      row.product = { ...p, ...update } as Product;
+    // Park what's left, with what it has collected so far.
+    await mapLimit([...q.lookup, ...q.keepa, ...q.account], 10, (row) => safely(row, () => park(row)));
+  } finally {
+    const p = await runProgress(runId);
+    await updateRun(
+      runId,
+      {
+        processed_count: p.processed,
+        row_count: p.total,
+        ...(p.done ? { status: "done", finished_at: new Date().toISOString() } : {}),
+      },
+      {
+        lease_until: null,
+        resume_after: keepaWaitUntil != null && p.waiting.keepa ? new Date(keepaWaitUntil).toISOString() : null,
+        ...(progressed ? { last_progress_at: new Date().toISOString() } : {}),
+      },
+    );
+  }
+  return runProgress(runId, { progressed, leased: lease === true });
+}
 
-      for (const extra of asins.filter((a) => a !== primary)) {
-        const existing = must(await d.from("products").select("id").eq("ean", p.ean).eq("asin", extra).maybeSingle(), "product") as { id: string } | null;
-        const productId = existing?.id ?? (must(
-          await d.from("products").insert({ ean: p.ean, asin: extra, title: p.title, brand: p.brand }).select("id").single(),
-          "insert product",
-        ) as { id: string }).id;
-        const { id: _omit, ...offerCopy } = row.offer;
-        void _omit;
-        const newOffer = must(await d.from("offers").insert({ ...offerCopy, product_id: productId }).select("id").single(), "copy offer") as { id: string };
-        const inserted = await d.from("results").upsert(
-          { run_id: runId, product_id: productId, offer_id: newOffer.id },
-          { onConflict: "run_id,product_id", ignoreDuplicates: true },
-        );
-        if (inserted.error) throw new Error(`queue ASIN ${extra}: ${inserted.error.message}`);
-      }
-    });
-    rows = resolved;
+interface StageEnv {
+  runId: string;
+  cfg: ProfileConfig;
+  card: RateCard;
+  rules: CategoryRule[];
+  approved: Approved;
+  spapi: ReturnType<typeof getSpApi>;
+  keepa: ReturnType<typeof getKeepa>;
+  recordTokens: OnKeepaResponse;
+}
 
-    // Keepa history for every row in this chunk that has an ASIN and no history yet,
-    // including rows Re-screen sent back. Stored before any gate runs.
-    for (const r of enrichedBefore) r.dataNotes = r.dataNotes.filter((n) => !/Keepa/i.test(n));
-    const snapshots = await attachKeepa([...enrichedBefore, ...rows], fetched, recordTokens);
+interface StageOut {
+  /** Rows finished (a verdict saved). */
+  finished: number;
+  /** Rows moved on to a later stage. */
+  next: Row[];
+}
 
-    // Market data: Keepa history, else SP-API's current Buy Box and offer count.
-    const noHistory = rows.filter((r) => r.match?.asin && !snapshots.has(r.match.asin));
-    let pricing = new Map<string, CompetitivePrice>();
-    if (spapi && noHistory.length) {
-      try {
-        pricing = await spapi.getCompetitivePricing([...new Set(noHistory.map((r) => r.match!.asin!))]);
-      } catch (e) {
-        for (const r of noHistory) r.dataNotes.push(`Pricing lookup failed: ${(e as Error).message}.`);
-      }
+/** Put a row in the queue its stage calls for. */
+function route(row: Row, q: Queues, env: StageEnv) {
+  if (STAGE_RANK[row.stage] < STAGE_RANK.enriched && row.stage !== "priced") q.lookup.push(row);
+  else if (env.keepa.available && row.match?.asin && !row.market?.hasHistory) {
+    row.stage = "priced";
+    q.keepa.push(row);
+  } else q.account.push(row);
+}
+
+/** Save a row that's still in progress: its inputs so far, still pending. */
+async function park(row: Row) {
+  const inputs: StoredInputs = {
+    v: 1, stage: row.stage, match: row.match, market: row.market, hazmat: row.hazmat,
+    restriction: row.restriction, amazonFees: row.amazonFees, lookup: row.lookup, sellers: row.sellers, notes: row.dataNotes,
+  };
+  must(await db().from("results").update({ inputs, status: "pending", updated_at: new Date().toISOString() }).eq("id", row.resultId), "park");
+}
+
+/** Save verdicts in parallel. */
+async function finishAll(items: { row: Row; run: GateRun; ctx: ScreenContext }[], cfg: ProfileConfig) {
+  await mapLimit(items, 10, ({ row, run, ctx }) => safely(row, () => finalize(row, run, cfg, ctx)));
+  return items.length;
+}
+
+/**
+ * The scoring price can only fail the price band before Keepa if the failure is certain:
+ * under the "lower of current and median" rule the price can't rise above today's Buy Box,
+ * so a Buy Box under the floor fails whatever the median; under "current" either end is final.
+ */
+function earlyPriceFail(row: Row, cfg: ProfileConfig): boolean {
+  const g = cfg.gates.priceBand;
+  const bb = row.market?.currentBuyBox;
+  if (g.mode !== "fail" || bb == null || row.market?.hasHistory) return false;
+  if (cfg.scoringPrice === "lower") return bb < g.min;
+  if (cfg.scoringPrice === "current") return bb < g.min || bb > g.max;
+  return false;
+}
+
+/** Stage 1: row gates, catalog match, current price, and the checks those make possible. */
+async function stageLookup(rows: Row[], env: StageEnv): Promise<StageOut & { added: Row[] }> {
+  const { cfg, card, rules, approved, spapi, keepa, runId } = env;
+  const d = db();
+  if (!rows.length) return { finished: 0, next: [], added: [] };
+  const done: { row: Row; run: GateRun; ctx: ScreenContext }[] = [];
+  const addedIds: string[] = [];
+
+  // Row gates first: a failure here costs no API call.
+  const pre: GateId[] = ["compliance", "budgetFit"];
+  let live: Row[] = [];
+  for (const row of rows) {
+    const ctx = context(row, card, rules, cfg, approved);
+    const run = runGates(ctx, cfg, pre);
+    if (run.failedGate) done.push({ row, run, ctx });
+    else live.push(row);
+  }
+
+  for (const r of live) r.dataNotes = r.dataNotes.filter((n) => !/lookup failed|Keepa/i.test(n));
+  const needCatalog = live.filter((r) => !r.product.asin || !FRESH(r.product.catalog_updated_at, CATALOG_TTL));
+  let catalog = new Map<string, CatalogMatch[]>();
+  let traces = new Map<string, LookupTrace>();
+  if (spapi && needCatalog.length) {
+    try {
+      ({ matches: catalog, traces } = await spapi.lookupEans([...new Set(needCatalog.map((r) => r.product.ean))]));
+    } catch (e) {
+      for (const r of needCatalog) r.dataNotes.push(`Catalog lookup failed: ${(e as Error).message}.`);
     }
-    for (const row of rows) {
-      const asin = row.match?.asin;
-      if (!asin) continue;
-      const snap = snapshots.get(asin);
+  }
+  let keepaByEan = new Map<string, KeepaProduct[]>();
+  const fetched = new Map<string, KeepaProduct>();
+  const unresolved = live.filter((r) => !r.product.asin && !catalog.get(r.product.ean)?.length);
+  if (keepa.available && unresolved.length) {
+    try {
+      const res = await keepa.lookupByEans([...new Set(unresolved.map((r) => r.product.ean))], env.recordTokens);
+      keepaByEan = res.byEan;
+      for (const [asin, k] of res.byAsin) fetched.set(asin, k);
+    } catch (e) {
+      for (const r of unresolved) r.dataNotes.push(`Keepa lookup failed: ${(e as Error).message}.`);
+    }
+  }
+
+  const resolved: Row[] = [];
+  await mapLimit(live, 10, (row) => safely(row, async () => {
+    const extras = await resolveRow(row, { catalog, traces, keepaByEan, needCatalog, spapi: !!spapi, keepaLive: keepa.available, card, runId });
+    addedIds.push(...extras);
+    resolved.push(row);
+  }));
+  live = resolved;
+
+  // History already on hand (a snapshot under 24h, or found by EAN just now), else SP-API pricing.
+  const cached = await freshSnapshots(live.map((r) => r.match?.asin).filter((a): a is string => !!a));
+  for (const [asin, k] of fetched) {
+    try {
+      await saveSnapshot(k);
+    } catch (e) {
+      console.error(`[keepa] storing snapshot for ${asin} failed: ${(e as Error).message}`);
+    }
+    cached.set(asin, k.summary);
+  }
+  const noHistory = live.filter((r) => r.match?.asin && !cached.has(r.match.asin));
+  let pricing = new Map<string, CompetitivePrice>();
+  if (spapi && noHistory.length) {
+    try {
+      pricing = await spapi.getCompetitivePricing([...new Set(noHistory.map((r) => r.match!.asin!))]);
+    } catch (e) {
+      for (const r of noHistory) r.dataNotes.push(`Pricing lookup failed: ${(e as Error).message}.`);
+    }
+  }
+  const next: Row[] = [];
+  for (const row of live) {
+    const asin = row.match?.asin;
+    if (asin) {
+      const snap = cached.get(asin);
       row.market = snap ? marketFromKeepa(snap) : marketFromSpApi(pricing.get(asin), row.product.sales_rank);
     }
-    for (const row of enrichedBefore) {
-      const snap = row.match?.asin ? snapshots.get(row.match.asin) : undefined;
-      if (snap) row.market = marketFromKeepa(snap);
+    row.stage = "enriched";
+    const ctx = context(row, card, rules, cfg, approved);
+    // No listing, or a price that fails whatever Keepa says: done before any Keepa token.
+    const early = runGates(ctx, cfg, earlyPriceFail(row, cfg) ? [...pre, "matchQuality", "priceBand"] : [...pre, "matchQuality"]);
+    if (early.failedGate) {
+      done.push({ row, run: early, ctx });
+      continue;
     }
-    for (const row of rows) row.stage = "enriched";
-    rows = [...enrichedBefore, ...rows];
-
-    // Stage 3 — every gate except gating and fees, on the enriched rows.
-    const middle = GATE_ORDER.filter((g) => g !== "gating" && g !== "fees");
-    const stage3: Row[] = [];
-    for (const row of rows) {
-      await safely(row, async () => {
-        const ctx = context(row, card, rules, cfg, approved);
-        const run = runGates(ctx, cfg, middle);
-        if (run.failedGate) await finalize(row, run, cfg, ctx);
-        else stage3.push(row);
-      });
+    if (keepa.available && asin && !row.market?.hasHistory) {
+      row.stage = "priced";
+      next.push(row);
+      continue;
     }
-
-    // Stage 4 — your account: gating, and Amazon's own fee at the scoring price.
-    if (spapi) {
-      for (const row of stage3) {
-        if (!row.match?.asin || !needsRestrictionCheck(row)) continue;
-        try {
-          const r = await spapi.getListingsRestrictions(row.match.asin);
-          row.restriction = {
-            status: r.status,
-            message: r.reasons.map((x) => x.message).filter(Boolean).join(" "),
-            links: r.reasons.flatMap((x) => x.links),
-          };
-        } catch (e) {
-          row.restriction = { status: "unknown", message: `Restriction check failed: ${(e as Error).message}` };
-        }
-      }
-      const priced = stage3
-        .map((row) => ({ row, price: resolveScoringPrice(row.market, cfg).price }))
-        .filter((x): x is { row: Row; price: number } =>
-          !!x.row.match?.asin && x.price != null && x.row.restriction?.status !== "blocked" &&
-          !(x.row.amazonFees && Math.abs(x.row.amazonFees.price - x.price) < 0.005));
-      for (const c of chunks(priced, 20)) {
-        try {
-          const est = await spapi.getMyFeesEstimates(c.map((x) => ({ asin: x.row.match!.asin!, price: x.price })));
-          est.forEach((f, i) => {
-            if (f.ok && f.referral != null && f.fba != null) c[i].row.amazonFees = { price: c[i].price, referral: f.referral, fba: f.fba };
-          });
-        } catch (e) {
-          for (const x of c) x.row.notes.push(`Amazon fee estimate failed, rate card used: ${(e as Error).message}.`);
-        }
-      }
-    }
-    // Rows that pass every gate: profile their top Buy Box sellers (cached 7 days), then re-run
-    // the gates so a likely brand distributor is flagged.
-    const passing = stage3.filter((row) => needsSellers(row, runGates(context(row, card, rules, cfg, approved), cfg), cfg));
-    if (passing.length && keepa.available) {
-      const { profiles, note } = await sellerProfiles(passing.flatMap((r) => wantedSellers(r, cfg).map((s) => s.sellerId)), recordTokens);
-      for (const row of passing) {
-        row.sellers = sellerViews(row, cfg, profiles);
-        if (note) row.notes.push(note);
-        if (row.sellers.some((s) => !s.name && s.storefrontSize == null)) row.sellers = null; // not looked up: try again next time
-      }
-    }
-    for (const row of stage3) {
-      await safely(row, async () => {
-        row.stage = "account";
-        const ctx = context(row, card, rules, cfg, approved);
-        await finalize(row, runGates(ctx, cfg), cfg, ctx);
-      });
-    }
+    const mid = runGates(ctx, cfg, GATE_ORDER.filter((g) => g !== "gating" && g !== "fees"));
+    if (mid.failedGate) done.push({ row, run: mid, ctx });
+    else next.push(row);
   }
 
-  const c = await counts();
-  const done = c.pending === 0;
-  must(
-    await d.from("runs").update({
-      processed_count: c.total - c.pending,
-      row_count: c.total,
-      ...(done ? { status: "done", finished_at: new Date().toISOString() } : {}),
-    }).eq("id", runId),
-    "run progress",
-  );
-  return { done, processed: c.total - c.pending, total: c.total };
+  const finished = await finishAll(done, cfg);
+  const added = addedIds.length
+    ? await loadRows(must(await d.from("results").select("id, product_id, offer_id, inputs").in("id", addedIds), "added") as PendingRow[])
+    : [];
+  return { finished, next, added };
+}
+
+/** Stage 2: Keepa history, as many rows as the token balance covers; the rest wait. */
+async function stageKeepa(rows: Row[], env: StageEnv): Promise<StageOut & { deferred: Row[]; waitUntil: number | null }> {
+  const { cfg, card, rules, approved, keepa } = env;
+  if (!rows.length) return { finished: 0, next: [], deferred: [], waitUntil: null };
+
+  // Snapshots under 24h cost nothing; count only the ASINs that need fetching.
+  const fresh = await freshSnapshots(rows.map((r) => r.match!.asin!));
+  const needAsins = [...new Set(rows.map((r) => r.match!.asin!).filter((a) => !fresh.has(a)))];
+  let take = rows;
+  let deferred: Row[] = [];
+  let waitUntil: number | null = null;
+  if (needAsins.length) {
+    const status = await keepa.tokenStatus();
+    if (status) {
+      const affordable = Math.floor(status.tokensLeft / KEEPA_TOKENS_PER_ASIN);
+      if (affordable < needAsins.length) {
+        const allowed = new Set(needAsins.slice(0, Math.max(0, affordable)));
+        take = rows.filter((r) => fresh.has(r.match!.asin!) || allowed.has(r.match!.asin!));
+        deferred = rows.filter((r) => !take.includes(r));
+        // Next batch of up to 20 ASINs: wait for the next refill, plus whole minutes beyond it.
+        const want = Math.min(20, needAsins.length - allowed.size) * KEEPA_TOKENS_PER_ASIN;
+        const short = Math.max(0, want - Math.max(0, status.tokensLeft - allowed.size * KEEPA_TOKENS_PER_ASIN));
+        const minutes = Math.max(0, Math.ceil(short / Math.max(1, status.refillRate)) - 1);
+        waitUntil = Date.now() + status.refillInMs + minutes * 60_000;
+      }
+    }
+  }
+  if (!take.length) return { finished: 0, next: [], deferred, waitUntil };
+
+  const { summaries, exhausted } = await attachKeepa(take, new Map(), env.recordTokens);
+  const done: { row: Row; run: GateRun; ctx: ScreenContext }[] = [];
+  const next: Row[] = [];
+  for (const row of take) {
+    const snap = summaries.get(row.match!.asin!);
+    if (!snap && exhausted) {
+      deferred.push(row);
+      waitUntil ??= Date.now() + 60_000;
+      continue;
+    }
+    if (snap) row.market = marketFromKeepa(snap);
+    row.stage = "enriched";
+    const ctx = context(row, card, rules, cfg, approved);
+    const mid = runGates(ctx, cfg, GATE_ORDER.filter((g) => g !== "gating" && g !== "fees"));
+    if (mid.failedGate) done.push({ row, run: mid, ctx });
+    else next.push(row);
+  }
+  return { finished: await finishAll(done, cfg), next, deferred, waitUntil };
+}
+
+/** Stage 3: your account — gating in parallel, Amazon's fees 20 at a time, sellers, verdict. */
+async function stageAccount(rows: Row[], env: StageEnv): Promise<StageOut> {
+  const { cfg, card, rules, approved, spapi, keepa } = env;
+  if (!rows.length) return { finished: 0, next: [] };
+  if (spapi) {
+    // Parallel up to Amazon's burst; the client's token bucket holds it to 5 a second.
+    await mapLimit(rows.filter((r) => r.match?.asin && needsRestrictionCheck(r)), 10, async (row) => {
+      try {
+        const r = await spapi.getListingsRestrictions(row.match!.asin!);
+        row.restriction = {
+          status: r.status,
+          message: r.reasons.map((x) => x.message).filter(Boolean).join(" "),
+          links: r.reasons.flatMap((x) => x.links),
+        };
+      } catch (e) {
+        row.restriction = { status: "unknown", message: `Restriction check failed: ${(e as Error).message}` };
+      }
+    });
+    const priced = rows
+      .map((row) => ({ row, price: resolveScoringPrice(row.market, cfg).price }))
+      .filter((x): x is { row: Row; price: number } =>
+        !!x.row.match?.asin && x.price != null && x.row.restriction?.status !== "blocked" &&
+        !(x.row.amazonFees && Math.abs(x.row.amazonFees.price - x.price) < 0.005));
+    if (priced.length) {
+      try {
+        const est = await spapi.getMyFeesEstimates(priced.map((x) => ({ asin: x.row.match!.asin!, price: x.price })));
+        est.forEach((f, i) => {
+          if (f.ok && f.referral != null && f.fba != null) priced[i].row.amazonFees = { price: priced[i].price, referral: f.referral, fba: f.fba };
+        });
+      } catch (e) {
+        for (const x of priced) x.row.notes.push(`Amazon fee estimate failed, rate card used: ${(e as Error).message}.`);
+      }
+    }
+  }
+  const passing = rows.filter((row) => needsSellers(row, runGates(context(row, card, rules, cfg, approved), cfg), cfg));
+  if (passing.length && keepa.available) {
+    const { profiles, note } = await sellerProfiles(passing.flatMap((r) => wantedSellers(r, cfg).map((s) => s.sellerId)), env.recordTokens);
+    for (const row of passing) {
+      row.sellers = sellerViews(row, cfg, profiles);
+      if (note) row.notes.push(note);
+      if (row.sellers.some((s) => !s.name && s.storefrontSize == null)) row.sellers = null;
+    }
+  }
+  const done = rows.map((row) => {
+    row.stage = "account";
+    const ctx = context(row, card, rules, cfg, approved);
+    return { row, run: runGates(ctx, cfg), ctx };
+  });
+  return { finished: await finishAll(done, cfg), next: [] };
+}
+
+/**
+ * Match a row's EAN to its listing(s) and update the product. An EAN with several ASINs
+ * keeps them all: extra ones become new products and join the run; their result ids are
+ * returned so the same call can pick them up.
+ */
+async function resolveRow(
+  row: Row,
+  x: {
+    catalog: Map<string, CatalogMatch[]>; traces: Map<string, LookupTrace>; keepaByEan: Map<string, KeepaProduct[]>;
+    needCatalog: Row[]; spapi: boolean; keepaLive: boolean; card: RateCard; runId: string;
+  },
+): Promise<string[]> {
+  const d = db();
+  const p = row.product;
+  const cat = x.catalog.get(p.ean) ?? [];
+  const kp = x.keepaByEan.get(p.ean) ?? [];
+  if (!x.spapi && !x.keepaLive) return [];
+  const catalogChecked = x.needCatalog.includes(row) && x.spapi;
+  const asins = [...new Set([...cat.map((c) => c.asin), ...kp.map((k) => k.asin), ...(p.asin ? [p.asin] : [])])];
+  const primary = p.asin ?? asins[0] ?? null;
+  const trace = x.traces.get(p.ean);
+  if (trace) row.lookup = trace;
+  row.match = { asin: primary, asinCount: Math.max(1, asins.length, row.match?.asinCount ?? 0), looked: true };
+  if (!primary && trace?.outcome === "api_error") {
+    // Amazon didn't answer, so this isn't a verdict on the product: leave it retryable.
+    const err = trace.attempts.find((a) => a.error)?.error ?? "no response";
+    throw new Error(`Catalog lookup failed for EAN ${p.ean}: ${err}. Re-screen to retry.`);
+  }
+  if (!primary) {
+    row.match.note = missNote(trace);
+    if (catalogChecked) must(await d.from("products").update({ catalog_updated_at: new Date().toISOString() }).eq("id", p.id), "product");
+    return [];
+  }
+  const c = cat.find((y) => y.asin === primary);
+  const k = kp.find((y) => y.asin === primary);
+  const update: Partial<Product> & { updated_at: string } = { asin: primary, updated_at: new Date().toISOString() };
+  if (c) {
+    Object.assign(update, {
+      title: c.title ?? p.title, brand: c.brand ?? p.brand, category: c.category ?? p.category,
+      dims_cm: c.dimsCm ?? p.dims_cm, weight_g: c.weightG ?? p.weight_g, sales_rank: c.salesRank,
+      parent_asin: c.parentAsin, variation_count: c.variationCount, catalog_updated_at: new Date().toISOString(),
+    });
+    row.hazmat = [...c.hazmat, ...(c.batteries ? ["batteries"] : [])];
+  }
+  if (k) {
+    Object.assign(update, {
+      title: update.title ?? k.title ?? p.title, brand: update.brand ?? k.brand ?? p.brand,
+      category: update.category ?? k.category ?? p.category,
+      dims_cm: update.dims_cm ?? k.dimsCm ?? p.dims_cm, weight_g: update.weight_g ?? k.weightG ?? p.weight_g,
+      parent_asin: update.parent_asin ?? k.parentAsin, variation_count: update.variation_count ?? k.variationCount,
+      keepa_updated_at: new Date().toISOString(),
+    });
+  }
+  update.referral_category = referralCategoryFor((update.category ?? p.category) as string | null, x.card);
+  must(await d.from("products").update(update).eq("id", p.id), "update product");
+  row.product = { ...p, ...update } as Product;
+
+  const added: string[] = [];
+  for (const extra of asins.filter((a) => a !== primary)) {
+    const existing = must(await d.from("products").select("id").eq("ean", p.ean).eq("asin", extra).maybeSingle(), "product") as { id: string } | null;
+    const productId = existing?.id ?? (must(
+      await d.from("products").insert({ ean: p.ean, asin: extra, title: p.title, brand: p.brand }).select("id").single(),
+      "insert product",
+    ) as { id: string }).id;
+    const { id: _omit, ...offerCopy } = row.offer;
+    void _omit;
+    const newOffer = must(await d.from("offers").insert({ ...offerCopy, product_id: productId }).select("id").single(), "copy offer") as { id: string };
+    const inserted = await d.from("results").upsert(
+      { run_id: x.runId, product_id: productId, offer_id: newOffer.id },
+      { onConflict: "run_id,product_id", ignoreDuplicates: true },
+    ).select("id");
+    if (inserted.error) throw new Error(`queue ASIN ${extra}: ${inserted.error.message}`);
+    added.push(...((inserted.data ?? []) as { id: string }[]).map((r) => r.id));
+  }
+  return added;
 }

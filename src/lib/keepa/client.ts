@@ -7,7 +7,7 @@
  *   EAN, batches of up to 100. Every request is logged with Keepa's own token figures.
  */
 import { decodeSeries, summarize } from "./summarize";
-import type { KeepaClient, KeepaLookup, KeepaProduct, KeepaResponseMeta, OnKeepaResponse, SellerLookup, SellerProfile } from "./types";
+import type { KeepaClient, KeepaLookup, KeepaProduct, KeepaResponseMeta, OnKeepaResponse, KeepaTokens, SellerLookup, SellerProfile } from "./types";
 
 export * from "./types";
 
@@ -24,6 +24,9 @@ export class StubKeepaClient implements KeepaClient {
   }
   async lookupSellers(): Promise<SellerLookup> {
     return { profiles: new Map(), tokensUsed: 0 };
+  }
+  async tokenStatus(): Promise<KeepaTokens | null> {
+    return null;
   }
 }
 
@@ -220,6 +223,19 @@ export class HttpKeepaClient implements KeepaClient {
       }
     }
     return out;
+  }
+
+  /** Token balance from Keepa's /token endpoint, which costs nothing. */
+  async tokenStatus(): Promise<KeepaTokens | null> {
+    try {
+      const res = await this.fetchImpl(new URL(`https://api.keepa.com/token?key=${encodeURIComponent(this.key)}`));
+      const b = (await res.json()) as { tokensLeft?: number; refillIn?: number; refillRate?: number };
+      if (b.tokensLeft == null) return null;
+      this.log(`[keepa] token status tokensLeft=${b.tokensLeft} refillIn=${b.refillIn}ms refillRate=${b.refillRate}/min`);
+      return { tokensLeft: b.tokensLeft, refillInMs: b.refillIn ?? 60_000, refillRate: b.refillRate ?? 1 };
+    } catch {
+      return null;
+    }
   }
 
   /** Seller profiles, 1 token each, batches of 100. */

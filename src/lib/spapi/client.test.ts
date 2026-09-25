@@ -266,6 +266,7 @@ describe("catalog lookup by EAN", () => {
       outcome: "matched",
       attempts: [{ identifiersType: "EAN", code: "batch of 2", items: 0, total: 26 }, { identifiersType: "EAN", code: "3282770204681", items: 6 }],
     });
+    // The retry is batched in fives; with one EAN cut off, that's a single-code request.
   });
 
   it("tries UPC for 12-digit codes and records a search miss with the raw response", async () => {
@@ -273,7 +274,7 @@ describe("catalog lookup by EAN", () => {
     const { fn, calls } = mockFetch([(url) => {
       if (!url.includes("/catalog/2022-04-01/items")) return undefined;
       const q = new URL(url).searchParams;
-      const hit = q.get("identifiersType") === "UPC" && q.get("identifiers") === "036000291452";
+      const hit = q.get("identifiersType") === "UPC" && q.get("identifiers")!.split(",").includes("036000291452");
       return json({ numberOfResults: hit ? 1 : 0, items: hit ? [upcItem] : [] });
     }]);
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
@@ -281,9 +282,11 @@ describe("catalog lookup by EAN", () => {
     expect(r.matches.get("0036000291452")![0].asin).toBe("B0UPC00001");
     const types = calls.filter((x) => x.url.includes("identifiers=036000291452")).map((x) => new URL(x.url).searchParams.get("identifiersType"));
     expect(types).toEqual(["UPC"]);
+    // Every pass batched: EANs, then GTIN-14s together; UPC only for the 12-digit code.
+    expect(calls.filter((x) => x.url.includes("/catalog/")).map((x) => new URL(x.url).searchParams.get("identifiersType"))).toEqual(["EAN", "GTIN", "UPC"]);
     const miss = r.traces.get("5000000000028")!;
     expect(miss.outcome).toBe("search_miss");
-    expect(miss.attempts.map((a) => `${a.identifiersType} ${a.code}`)).toEqual(["EAN batch of 2", "EAN 5000000000028", "GTIN 05000000000028"]);
+    expect(miss.attempts.map((a) => `${a.identifiersType} ${a.code}`)).toEqual(["EAN batch of 2", "GTIN batch of 2"]);
     expect(miss.raw).toContain('"numberOfResults":0');
     expect(log).toHaveBeenCalledWith(expect.stringContaining("[catalog] 5000000000028 search_miss"));
     log.mockRestore();
@@ -294,7 +297,7 @@ describe("catalog lookup by EAN", () => {
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
     const r = await new SpApiClient(CFG, fn, noSleep).lookupEans(["3264680023323"]);
     expect(r.traces.get("3264680023323")!.outcome).toBe("api_error");
-    expect(r.traces.get("3264680023323")!.attempts[1].error).toMatch(/400: Bad identifier/);
+    expect(r.traces.get("3264680023323")!.attempts.at(-1)!.error).toMatch(/400: Bad identifier/);
     log.mockRestore();
   });
 
@@ -324,5 +327,30 @@ describe("getCompetitivePricing", () => {
     const { fn } = mockFetch([(url) => (url.includes("/competitivePrice") ? json({ payload }) : undefined)]);
     const out = await new SpApiClient(CFG, fn, noSleep).getCompetitivePricing(["B1"]);
     expect(out.get("B1")).toEqual({ asin: "B1", buyBox: 24.99, newOffers: 5, salesRank: 1200 });
+  });
+});
+
+describe("rate limiting", () => {
+  it("runs restriction checks in parallel up to Amazon's burst, then at its rate", async () => {
+    let now = 1_000_000;
+    let slept = 0;
+    const clock = vi.spyOn(Date, "now").mockImplementation(() => now);
+    const sleep = async (ms: number) => {
+      slept += ms;
+      now += ms;
+    };
+    const { fn } = mockFetch([(url) => (url.includes("/restrictions") ? json({ restrictions: [] }) : undefined)]);
+    const c = new SpApiClient(CFG, fn, sleep);
+    await Promise.all(Array.from({ length: 12 }, (_, i) => c.getListingsRestrictions(`B${i}`)));
+    // Burst of 10 goes at once; the 11th and 12th wait 200 ms each at 5 per second.
+    expect(slept).toBe(400);
+    clock.mockRestore();
+  });
+
+  it("shares one LWA token exchange across parallel requests", async () => {
+    const { fn, calls } = mockFetch([(url) => (url.includes("/restrictions") ? json({ restrictions: [] }) : undefined)]);
+    const c = new SpApiClient(CFG, fn, noSleep);
+    await Promise.all(Array.from({ length: 5 }, (_, i) => c.getListingsRestrictions(`B${i}`)));
+    expect(calls.filter((x) => x.url.includes("/auth/o2/token"))).toHaveLength(1);
   });
 });

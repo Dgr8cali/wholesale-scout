@@ -5,6 +5,10 @@
  * Pure and shared by the browser (preview) and the server (ingest).
  */
 
+/** Upload limits. Rows are parsed in the browser; 5,000 rows is ~1.5 MB of JSON to store. */
+export const MAX_FILE_BYTES = 10 * 1024 * 1024;
+export const MAX_ROWS = 5_000;
+
 export const MAPPABLE_FIELDS = [
   { key: "ean", label: "EAN / GTIN", required: true },
   { key: "unitPrice", label: "Unit price", required: true },

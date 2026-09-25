@@ -1,6 +1,6 @@
 import "server-only";
 import type { ColumnMapping, Fx, NormalizedRow } from "../ingest/mapping";
-import { CURRENCIES } from "../ingest/mapping";
+import { CURRENCIES, MAX_ROWS } from "../ingest/mapping";
 import { chunks, db, loadProfile, must } from "./db";
 
 export interface IngestFile {
@@ -20,6 +20,8 @@ export interface IngestPayload {
 
 function validate(p: IngestPayload) {
   if (!Array.isArray(p?.files) || !p.files.length) throw new Error("No files");
+  const rows = p.files.reduce((a, f) => a + (Array.isArray(f.rows) ? f.rows.length : 0), 0);
+  if (rows > MAX_ROWS) throw new Error(`${rows.toLocaleString("en-GB")} rows is over the ${MAX_ROWS.toLocaleString("en-GB")}-row limit per upload; split the file`);
   for (const f of p.files) {
     if (!f.supplier?.name?.trim()) throw new Error(`${f.fileName}: supplier name is required`);
     if (!["ex_vat", "inc_vat"].includes(f.supplier.vatBasis)) throw new Error(`${f.fileName}: VAT basis must be ex_vat or inc_vat`);

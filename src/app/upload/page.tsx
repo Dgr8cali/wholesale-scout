@@ -8,6 +8,8 @@ import {
   currencyFromHeader,
   CURRENCIES,
   detectHeaderRow,
+  MAX_FILE_BYTES,
+  MAX_ROWS,
   guessMapping,
   headerFingerprint,
   MAPPABLE_FIELDS,
@@ -115,6 +117,10 @@ export default function UploadPage() {
     if (!list) return;
     setError(null);
     for (const file of Array.from(list)) {
+      if (file.size > MAX_FILE_BYTES) {
+        setError(`${file.name} is ${(file.size / 1024 / 1024).toFixed(1)} MB; the limit is ${MAX_FILE_BYTES / 1024 / 1024} MB per file. Filter the export or split it.`);
+        continue;
+      }
       try {
         const buf = await file.arrayBuffer();
         const isText = /\.(csv|tsv|txt)$/i.test(file.name);
@@ -173,6 +179,8 @@ export default function UploadPage() {
     if (f.mapping.columns.packUnits && !f.mapping.pricePer) p.push(`${f.fileName}: say whether price is per piece or per pack`);
     return p;
   });
+  const rowTotal = files.reduce((a, f) => a + (previews[f.key]?.rows.length ?? 0), 0);
+  if (rowTotal > MAX_ROWS) problems.push(`${rowTotal.toLocaleString("en-GB")} rows is over the ${MAX_ROWS.toLocaleString("en-GB")}-row limit per upload: remove a file or split it`);
   const totalRows = files.reduce((a, f) => a + (previews[f.key]?.rows.length ?? 0), 0);
 
   async function submit() {
@@ -213,7 +221,7 @@ export default function UploadPage() {
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => { e.preventDefault(); addFiles(e.dataTransfer.files); }}>
         <span className="h2">Drop files here or choose them</span>
-        <span className="text-sm text-muted">.xlsx, .xls, .csv</span>
+        <span className="text-sm text-muted">.xlsx, .xls, .csv · up to {MAX_FILE_BYTES / 1024 / 1024} MB each, {MAX_ROWS.toLocaleString("en-GB")} rows per upload</span>
         <input type="file" multiple accept=".xlsx,.xls,.csv,.tsv,.txt" className="sr-only" onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
       </label>
 

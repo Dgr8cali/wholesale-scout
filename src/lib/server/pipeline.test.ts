@@ -126,7 +126,7 @@ describe("ingest → process", () => {
     expect(fake.tables.suppliers.find((s) => s.name === "Qogita")).toMatchObject({ currency: "EUR", vat_basis: "inc_vat" });
 
     let guard = 0;
-    while (!(await processRun(runId, 3)).done) if (++guard > 20) throw new Error("run never finished");
+    while (!(await processRun(runId)).done) if (++guard > 20) throw new Error("run never finished");
 
     const results = fake.tables.results.filter((r) => r.run_id === runId);
     const productOf = (r: Record<string, unknown>) => fake.tables.products.find((p) => p.id === r.product_id)!;
@@ -157,7 +157,7 @@ describe("ingest → process", () => {
     // No listing → match quality fails, and says what was tried.
     const unlisted = results.find((r) => productOf(r).ean === "5000000000028")!;
     expect(unlisted).toMatchObject({ verdict: "fail", failed_gate: "matchQuality" });
-    expect(unlisted.why).toMatch(/: search miss: tried a batch of \d+, EAN 5000000000028; Amazon returned no items/);
+    expect(unlisted.why).toMatch(/: search miss: tried an EAN batch of \d+, EAN 5000000000028; Amazon returned no items/);
     expect((unlisted.inputs as { lookup: { outcome: string } }).lookup.outcome).toBe("search_miss");
 
     // Amazon failing to answer isn't a verdict: the row is an error to retry, not a failed match.
@@ -283,5 +283,15 @@ describe("ingest → process", () => {
     await ingest({ files: [f] });
     const again = headerFingerprint(["mo q".replace(" ", ""), "price", "NAME", "ean"]);
     expect(fake.tables.supplier_mappings.find((m) => m.header_fingerprint === again)).toBeTruthy();
+  });
+});
+
+describe("upload limits", () => {
+  it("refuses more than 5,000 rows in one upload", async () => {
+    __setDbForTests(new FakeDb());
+    const row = { ean: "4006381333931", unitCost: 1, unitCostGbp: 1, packUnits: 1, moq: null, stock: null, title: null, brand: null, category: null, sourceRow: 2, eanValid: true };
+    const f = { fileName: "big.csv", supplier: { name: "S", vatBasis: "ex_vat" as const, vatRate: 20, currency: "GBP" }, headers: [], fingerprint: "x",
+      mapping: { headerRow: 0, columns: {}, pricePer: "unit" as const }, fx: { rate: 1, date: "2026-09-25" }, rows: Array(5_001).fill(row) };
+    await expect(ingest({ files: [f] })).rejects.toThrow(/5,001 rows is over the 5,000-row limit/);
   });
 });

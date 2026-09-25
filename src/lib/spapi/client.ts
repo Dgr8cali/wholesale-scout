@@ -47,18 +47,26 @@ type Fetch = typeof fetch;
 /** Extra attempts for fee estimates that come back as Amazon-side ServerErrors. */
 const FEE_RETRIES = 2;
 
-/** Per-operation minimum spacing between calls, from SP-API's documented rate limits. */
-const MIN_INTERVAL_MS: Record<string, number> = {
-  catalog: 500, // searchCatalogItems: 2 rps
-  feesSingle: 1000, // getMyFeesEstimateForASIN: 1 rps
-  feesBatch: 2000, // getMyFeesEstimates: 0.5 rps
-  restrictions: 200, // getListingsRestrictions: 5 rps
-  pricing: 2000, // getCompetitivePricing: 0.5 rps
+/** SP-API's documented rate (requests/second) and burst per operation, for the token buckets. */
+export const RATE_LIMITS: Record<string, { rate: number; burst: number }> = {
+  catalog: { rate: 2, burst: 2 }, // searchCatalogItems
+  feesSingle: { rate: 1, burst: 2 }, // getMyFeesEstimateForASIN
+  feesBatch: { rate: 0.5, burst: 1 }, // getMyFeesEstimates (20 per request)
+  restrictions: { rate: 5, burst: 10 }, // getListingsRestrictions
+  pricing: { rate: 0.5, burst: 1 }, // getCompetitivePricing (20 per request)
 };
+
+interface Bucket {
+  tokens: number;
+  at: number;
+  /** Callers queue on this, so parallel requests share the bucket fairly. */
+  turn: Promise<void>;
+}
 
 export class SpApiClient {
   private token: { value: string; expiresAt: number } | null = null;
-  private lastCall: Record<string, number> = {};
+  private buckets = new Map<string, Bucket>();
+  private tokenInFlight: Promise<string> | null = null;
 
   constructor(
     readonly config: SpApiConfig,
@@ -69,6 +77,14 @@ export class SpApiClient {
   /** LWA refresh-token exchange. Cached until a minute before expiry. */
   async accessToken(): Promise<string> {
     if (this.token && Date.now() < this.token.expiresAt - 60_000) return this.token.value;
+    // Parallel requests share one exchange.
+    this.tokenInFlight ??= this.exchangeToken().finally(() => {
+      this.tokenInFlight = null;
+    });
+    return this.tokenInFlight;
+  }
+
+  private async exchangeToken(): Promise<string> {
     const res = await this.fetchImpl(LWA_URL, {
       method: "POST",
       headers: { "content-type": "application/x-www-form-urlencoded;charset=UTF-8" },
@@ -87,11 +103,41 @@ export class SpApiClient {
     return this.token.value;
   }
 
+  private bucket(op: string): Bucket | null {
+    const cfg = RATE_LIMITS[op];
+    if (!cfg) return null;
+    let b = this.buckets.get(op);
+    if (!b) this.buckets.set(op, (b = { tokens: cfg.burst, at: Date.now(), turn: Promise.resolve() }));
+    return b;
+  }
+
+  /** Token bucket per operation: bursts up to Amazon's burst, then its steady rate. Safe in parallel. */
   private async throttle(op: string) {
-    const gap = MIN_INTERVAL_MS[op] ?? 0;
-    const wait = (this.lastCall[op] ?? 0) + gap - Date.now();
-    if (wait > 0) await this.sleep(wait);
-    this.lastCall[op] = Date.now();
+    const cfg = RATE_LIMITS[op];
+    const b = this.bucket(op);
+    if (!cfg || !b) return;
+    const mine = b.turn.then(async () => {
+      const now = Date.now();
+      b.tokens = Math.min(cfg.burst, b.tokens + ((now - b.at) / 1000) * cfg.rate);
+      b.at = now;
+      if (b.tokens < 1) {
+        await this.sleep(((1 - b.tokens) / cfg.rate) * 1000);
+        b.tokens = 1;
+        b.at = Date.now();
+      }
+      b.tokens -= 1;
+    });
+    b.turn = mine.catch(() => {});
+    await mine;
+  }
+
+  /** After a 429, empty the bucket so parallel callers back off too. */
+  private drain(op: string) {
+    const b = this.bucket(op);
+    if (b) {
+      b.tokens = Math.min(b.tokens, 0);
+      b.at = Date.now();
+    }
   }
 
   /** Signed request with retries on 429 and 5xx (exponential backoff, 4 attempts). */
@@ -113,6 +159,7 @@ export class SpApiClient {
       });
       if (res.ok) return (await res.json()) as T;
       const retryable = res.status === 429 || res.status >= 500;
+      if (res.status === 429) this.drain(op);
       if (res.status === 401 || res.status === 403) this.token = null;
       if (!retryable || attempt >= 3) {
         const body = await res.json().catch(() => undefined);
@@ -144,13 +191,14 @@ export class SpApiClient {
   }
 
   /**
-   * Resolve EANs to catalog items, with a trace per EAN.
+   * Resolve EANs to catalog items, with a trace per EAN. Every pass is batched and items are
+   * attributed by their identifiers, so a miss costs a fraction of a request:
    *
-   * 1. Batches of 20, following nextToken. Amazon caps a page at 20 items and sometimes
-   *    reports more results than it returns without a token, so a batch can drop EANs.
-   * 2. Any EAN still unmatched is asked on its own: EAN-13 without extra leading zeros,
-   *    then UPC for codes of 12 digits or fewer, then GTIN-14. A single-code query
-   *    attributes every item it returns to that code.
+   * 1. EANs, 20 per request, following nextToken.
+   * 2. Where a batch came back truncated (Amazon reports more results than it returns, and
+   *    sometimes gives no token), its unmatched EANs again, 5 per request.
+   * 3. Still unmatched: the GTIN-14 form, 20 per request; then UPC for codes of 12 digits or
+   *    fewer, 20 per request.
    */
   async lookupEans(eans: string[]): Promise<{ matches: Map<string, CatalogMatch[]>; traces: Map<string, LookupTrace> }> {
     const matches = new Map<string, CatalogMatch[]>();
@@ -162,57 +210,57 @@ export class SpApiClient {
       matches.set(ean, list);
     };
 
-    for (let i = 0; i < eans.length; i += 20) {
-      const chunk = eans.slice(i, i + 20);
-      const found = new Map<string, number>();
-      let total: number | undefined;
-      try {
-        let token: string | undefined;
-        for (let page = 0; page < 5; page++) {
-          const res = await this.searchCatalog("EAN", chunk, token);
-          total = res.numberOfResults;
-          for (const raw of res.items ?? []) {
-            const item = parseCatalogItem(raw, this.config.marketplaceId);
-            for (const ean of chunk) {
-              if (item.eans.some((e) => sameGtin(e, ean))) {
-                add(ean, item);
-                found.set(ean, (found.get(ean) ?? 0) + 1);
+    /** One batched pass: `codes` maps each EAN to the identifier sent for it. */
+    const pass = async (type: LookupAttempt["identifiersType"], batch: { ean: string; code: string }[], size: number) => {
+      const truncated: string[] = [];
+      for (let i = 0; i < batch.length; i += size) {
+        const chunk = batch.slice(i, i + size);
+        const found = new Map<string, number>();
+        let total: number | undefined, returned = 0, token: string | undefined, error: string | undefined, lastPage: unknown;
+        try {
+          for (let page = 0; page < 5; page++) {
+            const res = await this.searchCatalog(type, chunk.map((c) => c.code), token);
+            total = res.numberOfResults;
+            returned += res.items?.length ?? 0;
+            lastPage = res;
+            for (const raw of res.items ?? []) {
+              const item = parseCatalogItem(raw, this.config.marketplaceId);
+              for (const { ean, code } of chunk) {
+                if (item.eans.some((e) => sameGtin(e, code) || sameGtin(e, ean))) {
+                  add(ean, item);
+                  found.set(ean, (found.get(ean) ?? 0) + 1);
+                }
               }
             }
-          }
-          for (const ean of chunk) if (!found.has(ean)) lastRaw.set(ean, res);
-          token = res.pagination?.nextToken;
-          if (!token) break;
-        }
-        for (const ean of chunk) {
-          traces.get(ean)!.attempts.push({ identifiersType: "EAN", code: `batch of ${chunk.length}`, items: found.get(ean) ?? 0, total });
-        }
-      } catch (e) {
-        for (const ean of chunk) {
-          traces.get(ean)!.attempts.push({ identifiersType: "EAN", code: `batch of ${chunk.length}`, items: 0, error: (e as Error).message });
-        }
-      }
-    }
-
-    for (const ean of eans) {
-      if (matches.has(ean)) continue;
-      const trace = traces.get(ean)!;
-      for (const [type, code] of lookupCandidates(ean)) {
-        try {
-          const res = await this.searchCatalog(type, [code]);
-          const items = (res.items ?? []).map((raw) => parseCatalogItem(raw, this.config.marketplaceId));
-          trace.attempts.push({ identifiersType: type, code, items: items.length, total: res.numberOfResults });
-          lastRaw.set(ean, res);
-          if (items.length) {
-            items.forEach((item) => add(ean, item));
-            break;
+            token = res.pagination?.nextToken;
+            if (!token) break;
           }
         } catch (e) {
-          trace.attempts.push({ identifiersType: type, code, items: 0, error: (e as Error).message });
-          lastRaw.set(ean, { error: (e as Error).message, body: (e as SpApiError).body });
+          error = (e as Error).message;
+          lastPage = { error, body: (e as SpApiError).body };
         }
+        const label = chunk.length === 1 ? chunk[0].code : `batch of ${chunk.length}`;
+        for (const { ean } of chunk) {
+          traces.get(ean)!.attempts.push({ identifiersType: type, code: label, items: found.get(ean) ?? 0, total, ...(error ? { error } : {}) });
+          if (!found.has(ean)) lastRaw.set(ean, lastPage);
+        }
+        if (!error && total != null && total > returned) truncated.push(...chunk.map((c) => c.ean).filter((e) => !found.has(e)));
       }
+      return truncated;
+    };
+
+    const unmatched = () => eans.filter((e) => !matches.has(e));
+    const bare = (e: string) => e.replace(/\D/g, "").replace(/^0+/, "");
+
+    const truncated = await pass("EAN", eans.map((ean) => ({ ean, code: ean })), 20);
+    const cut = truncated.filter((e) => !matches.has(e));
+    if (cut.length) {
+      const still = await pass("EAN", cut.map((ean) => ({ ean, code: bare(ean).padStart(13, "0") })), 5);
+      // Five EANs can still overflow a page; those few go one at a time.
+      if (still.length) await pass("EAN", still.filter((e) => !matches.has(e)).map((ean) => ({ ean, code: bare(ean).padStart(13, "0") })), 1);
     }
+    await pass("GTIN", unmatched().filter((e) => bare(e).length <= 14).map((ean) => ({ ean, code: bare(ean).padStart(14, "0") })), 20);
+    await pass("UPC", unmatched().filter((e) => bare(e).length <= 12).map((ean) => ({ ean, code: bare(ean).padStart(12, "0") })), 20);
 
     for (const ean of eans) {
       const trace = traces.get(ean)!;
@@ -220,9 +268,8 @@ export class SpApiClient {
         trace.outcome = "matched";
         continue;
       }
-      // A miss only counts as a miss if Amazon answered every individual query.
-      const individual = trace.attempts.filter((a) => !a.code.startsWith("batch"));
-      trace.outcome = individual.length && individual.every((a) => !a.error) ? "search_miss" : "api_error";
+      // A miss counts only if Amazon answered the last query for it; otherwise it's an API error.
+      trace.outcome = trace.attempts.at(-1)?.error ? "api_error" : "search_miss";
       trace.raw = JSON.stringify(lastRaw.get(ean) ?? null).slice(0, 1500);
       console.log(`[catalog] ${ean} ${trace.outcome}: ${JSON.stringify(trace.attempts)} raw=${trace.raw}`);
     }

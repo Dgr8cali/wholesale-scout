@@ -11,7 +11,10 @@ import { FakeDb } from "./fakeDb";
 import { ingest } from "./ingest";
 import { processRun, rescreenRun } from "./process";
 
-const k = vi.hoisted(() => ({ live: true, asinCalls: [] as string[][], codeCalls: [] as string[][], sellerCalls: [] as string[][] }));
+const k = vi.hoisted(() => ({
+  live: true, asinCalls: [] as string[][], codeCalls: [] as string[][], sellerCalls: [] as string[][],
+  tokens: { tokensLeft: 1000, refillInMs: 60_000, refillRate: 21 },
+}));
 
 const summary = (over: Partial<KeepaSummary> = {}): KeepaSummary => ({
   historyDays: 1200, rankNow: 5568, rankDrops30d: 68, monthlySold: 300, avgRank90d: 6562, rankTrendPct12m: -5,
@@ -38,6 +41,9 @@ vi.mock("../keepa/client", async (orig) => {
     async lookupByEans(eans: string[]) {
       k.codeCalls.push(eans);
       return { byEan: new Map(), byAsin: new Map(), tokensUsed: 0, tokensLeft: null, requests: [] };
+    },
+    async tokenStatus() {
+      return { ...k.tokens };
     },
     async lookupSellers(ids: string[], onResponse?: OnKeepaResponse) {
       k.sellerCalls.push(ids);
@@ -115,6 +121,7 @@ describe("Keepa path", () => {
     k.asinCalls.length = 0;
     k.codeCalls.length = 0;
     k.sellerCalls.length = 0;
+    k.tokens = { tokensLeft: 1000, refillInMs: 60_000, refillRate: 21 };
     vi.spyOn(console, "error").mockImplementation(() => {});
   });
 
@@ -202,6 +209,33 @@ describe("Keepa path", () => {
     await rescreenRun(runId);
     await until(runId);
     expect(k.asinCalls).toHaveLength(1);
+  });
+
+  it("paces Keepa by its token balance: fetches what it can afford, waits for the rest", async () => {
+    k.tokens = { tokensLeft: 4, refillInMs: 60_000, refillRate: 21 }; // enough for one ASIN (3 tokens)
+    const { runId } = await ingest({ files: [upload()] });
+    const p1 = await processRun(runId, { budgetMs: 1_000 });
+    expect(k.asinCalls).toEqual([["B0060OMXUA"]]);
+    expect(p1.done).toBe(false);
+    expect(p1.waiting).toEqual({ amazon: 0, keepa: 1 });
+    expect(Date.parse(p1.keepaResumeAt!)).toBeGreaterThan(Date.now() + 50_000);
+    // The waiting row kept its SP-API price and match; nothing was finalised without history.
+    const waiting = results(runId).find((r) => r.status === "pending")!;
+    expect((waiting.inputs as { stage: string; market: { currentBuyBox: number } })).toMatchObject({ stage: "priced", market: { currentBuyBox: 23.55 } });
+
+    k.tokens = { tokensLeft: 300, refillInMs: 60_000, refillRate: 21 };
+    const p2 = await processRun(runId, { budgetMs: 1_000 });
+    expect(p2.done).toBe(true);
+    expect(k.asinCalls).toEqual([["B0060OMXUA"], ["B002XZLAWM"]]);
+    expect(results(runId).every((r) => (r.inputs as { market: { hasHistory: boolean } }).market.hasHistory)).toBe(true);
+  });
+
+  it("lets one worker hold a run at a time", async () => {
+    const { runId } = await ingest({ files: [upload()] });
+    fake.tables.runs.find((r) => r.id === runId)!.lease_until = new Date(Date.now() + 30_000).toISOString();
+    const p = await processRun(runId);
+    expect(p.busy).toBe(true);
+    expect(k.asinCalls).toEqual([]);
   });
 
   it("uses fetched history even if storing the snapshot fails, and says so", async () => {

@@ -22,6 +22,14 @@ const DEFAULTS: Record<string, Row> = {
   profiles: { is_default: false },
 };
 
+/** Column or JSON path (`inputs->>stage`) value, as PostgREST reads it. */
+function get(r: Row, c: string): unknown {
+  const m = c.match(/^(\w+)->>(\w+)$/);
+  if (!m) return r[c];
+  const v = (r[m[1]] as Record<string, unknown> | null | undefined)?.[m[2]];
+  return v == null ? undefined : String(v);
+}
+
 let seq = 0;
 const uuid = () => `00000000-0000-4000-8000-${String(++seq).padStart(12, "0")}`;
 
@@ -59,7 +67,18 @@ class Query implements PromiseLike<{ data: unknown; error: { message: string; co
   upsert(rows: Row[] | Row, opts?: { onConflict?: string; ignoreDuplicates?: boolean }) { this.op = "upsert"; this.payload = rows; this.opts = { ...opts }; return this; }
   update(row: Row) { this.op = "update"; this.payload = row; return this; }
   delete() { this.op = "delete"; return this; }
-  eq(c: string, v: unknown) { this.filters.push((r) => r[c] === v); return this; }
+  eq(c: string, v: unknown) { this.filters.push((r) => get(r, c) === v); return this; }
+  /** PostgREST or(): only the forms the app uses, `col.is.null` and `col.lt.value`. */
+  or(expr: string) {
+    const parts = expr.split(",").map((p) => p.split("."));
+    this.filters.push((r) => parts.some(([col, op, ...rest]) => {
+      const v = r[col];
+      if (op === "is") return v == null;
+      if (op === "lt") return v != null && String(v) < rest.join(".");
+      return false;
+    }));
+    return this;
+  }
   in(c: string, vs: unknown[]) { this.filters.push((r) => vs.includes(r[c])); return this; }
   gte(c: string, v: string) { this.filters.push((r) => String(r[c]) >= v); return this; }
   order(col: string, o?: { ascending?: boolean }) { this.orderBy = { col, asc: o?.ascending ?? true }; return this; }
