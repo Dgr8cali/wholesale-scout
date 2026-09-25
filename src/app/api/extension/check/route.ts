@@ -13,7 +13,7 @@ const REUSE_MS = 12 * 3_600_000;
 // The extension calls from its own origin; the password (Basic or Bearer) is the protection.
 const CORS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Access-Control-Allow-Headers": "Authorization, Content-Type",
   "Access-Control-Max-Age": "86400",
 };

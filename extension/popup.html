@@ -1,0 +1,37 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <style>
+    body { width: 320px; margin: 0; padding: 14px; font: 13px/1.4 -apple-system, "Segoe UI", sans-serif; color: #111; }
+    h1 { font-size: 15px; margin: 0 0 10px; }
+    label { display: block; margin: 10px 0 4px; font-weight: 600; font-size: 12px; }
+    input[type=text], input[type=password], input[type=url] { width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid #d4d4d8; border-radius: 6px; font-size: 13px; }
+    .row { display: flex; gap: 8px; margin-top: 12px; }
+    button { border: 1px solid #d4d4d8; background: #fff; border-radius: 6px; padding: 6px 10px; cursor: pointer; }
+    button.p { background: #0f766e; border-color: #0f766e; color: #fff; }
+    .hint { color: #71717a; font-size: 11px; margin-top: 3px; }
+    #msg { margin-top: 10px; font-size: 12px; }
+    .ok { color: #15803d; } .err { color: #b91c1c; }
+    .check { display: flex; gap: 6px; align-items: center; font-weight: 400; }
+  </style>
+</head>
+<body>
+  <h1>Wholesale Scout</h1>
+  <label for="appUrl">App URL</label>
+  <input id="appUrl" type="url" placeholder="https://wholesale-scout.vercel.app" />
+  <label for="password">APP_PASSWORD</label>
+  <input id="password" type="password" autocomplete="off" />
+  <label for="dgUrl">Seller Central DG page</label>
+  <input id="dgUrl" type="text" />
+  <div class="hint">Opened by “Look up”; {asin} is replaced. Use whichever Seller Central page shows the dangerous-goods classification for you.</div>
+  <label class="check"><input id="autoCheck" type="checkbox" /> Check product pages automatically</label>
+  <div class="hint">Off: the panel shows a Check button instead (a new ASIN is a check run in the app).</div>
+  <div class="row">
+    <button id="save" class="p">Save</button>
+    <button id="test">Test connection</button>
+  </div>
+  <div id="msg"></div>
+  <script src="popup.js"></script>
+</body>
+</html>

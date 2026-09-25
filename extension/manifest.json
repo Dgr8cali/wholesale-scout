@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "Wholesale Scout",
+  "version": "0.1.0",
+  "description": "Wholesale Scout's verdict on Amazon UK product and search pages, competitor stock on request, and Seller Central DG look-ups.",
+  "action": { "default_popup": "popup.html", "default_title": "Wholesale Scout settings" },
+  "background": { "service_worker": "background.js" },
+  "permissions": ["storage"],
+  "host_permissions": ["https://www.amazon.co.uk/*", "https://sellercentral.amazon.co.uk/*"],
+  "optional_host_permissions": ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"],
+  "content_scripts": [
+    { "matches": ["https://www.amazon.co.uk/*"], "js": ["shared.js", "product.js", "search.js"], "run_at": "document_idle" },
+    { "matches": ["https://sellercentral.amazon.co.uk/*"], "js": ["shared.js", "sellercentral.js"], "run_at": "document_idle" }
+  ]
+}

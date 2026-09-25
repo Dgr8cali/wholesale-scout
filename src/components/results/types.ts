@@ -35,7 +35,12 @@ export interface Result {
   offer_count: number;
   error: string | null;
   inputs: { market?: StoredMarket | null; sellers?: Seller[] | null; qogita?: QogitaOffers | null; maxLandedGbp?: number | null; movMoq?: number; pack?: { listing: number; supplier: number; ratio: number } | null; lookup?: { outcome: string; attempts: { identifiersType: string; code: string; items: number; total?: number; error?: string }[]; raw?: string } | null } | null;
-  product: { ean: string; asin: string | null; title: string | null; brand: string | null; category: string | null; image_url?: string | null } | null;
+  product: {
+    ean: string; asin: string | null; title: string | null; brand: string | null; category: string | null; image_url?: string | null;
+    /** From the Chrome extension: competitors' stock, and Seller Central's DG classification. */
+    competitor_stock?: { at: string; sellers: { sellerId: string; name: string | null; fba: boolean; stock: number | null; limited: boolean }[] } | null;
+    sc_dg?: { at: string; status: "hazmat" | "not_hazmat" | "unknown"; detail: string | null; url: string | null } | null;
+  } | null;
   offer: { unit_cost: number; currency: string; unit_cost_gbp: number; cost_known?: boolean; moq: number | null; pack_units: number; stock?: number | null; title: string | null; source_ref: string | null; supplier: { id?: string; name: string } | null } | null;
 }
 

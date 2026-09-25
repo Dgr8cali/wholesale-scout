@@ -75,6 +75,40 @@ function Sellers({ sellers, flaggedText }: { sellers: Seller[]; flaggedText: str
   );
 }
 
+/** What the Chrome extension read on Amazon and Seller Central for this product. */
+function FromExtension({ r }: { r: Result }) {
+  const stock = r.product?.competitor_stock;
+  const dg = r.product?.sc_dg;
+  if (!stock && !dg) return null;
+  const day = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  return (
+    <div className="mt-3 space-y-1 text-xs">
+      <p className="font-semibold uppercase tracking-wide text-muted-foreground">From the extension</p>
+      {dg && (
+        <p>
+          Seller Central DG: <span className={dg.status === "hazmat" ? "font-semibold text-fail" : dg.status === "not_hazmat" ? "text-pass" : "text-muted-foreground"}>
+            {dg.status === "hazmat" ? "hazmat" : dg.status === "not_hazmat" ? "not hazmat" : "unknown"}</span>
+          {dg.detail && <span className="text-muted-foreground"> · {dg.detail}</span>}
+          <span className="text-muted-foreground"> · {day(dg.at)}</span>
+        </p>
+      )}
+      {stock && (
+        <div>
+          <p className="text-muted-foreground">Competitors&apos; stock · {day(stock.at)}</p>
+          <ul className="space-y-0.5">
+            {stock.sellers.map((s) => (
+              <li key={s.sellerId}>
+                {s.name ?? s.sellerId}{s.fba ? " (FBA)" : ""}: <span className="num font-medium">{s.stock == null ? "?" : s.stock.toLocaleString("en-GB")}</span>
+                {s.limited && <span className="text-muted-foreground"> (a per-customer limit, not stock)</span>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** Everything about one result: gates (with waive), per-unit money, fee sources, score groups, note, sellers. */
 export function Detail({ r, fav, onNote, onWaive, onWatch, stacked = false, budgetGbp }: {
   stacked?: boolean;
@@ -187,6 +221,7 @@ export function Detail({ r, fav, onNote, onWaive, onWatch, stacked = false, budg
             {onWatch && <div className="mt-2"><WatchEditor key={`${fav?.id ?? "new"}-${JSON.stringify(fav?.condition ?? null)}`} r={r} fav={fav} onWatch={onWatch} /></div>}
           </div>
         )}
+        <FromExtension r={r} />
         {r.inputs?.sellers && r.inputs.sellers.length > 0 && (
           <Sellers sellers={r.inputs.sellers} flaggedText={r.gate_outcomes.find((g) => g.tags?.includes("BRAND_DISTRIBUTOR"))?.detail ?? ""} />
         )}
