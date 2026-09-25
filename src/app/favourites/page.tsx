@@ -1,6 +1,9 @@
 "use client";
 
 import { VerdictBadge } from "@/components/VerdictBadge";
+import { StarIcon } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -194,8 +197,14 @@ export default function FavouritesPage() {
     </th>
   );
 
-  if (error && !items) return <p className="rounded-md bg-fail-soft px-3 py-2 text-sm text-fail">{error}</p>;
-  if (!items) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (error && !items) return <div className="space-y-4"><h1 className="page-title">Favourites</h1><p className="rounded-md bg-fail-soft px-3 py-2 text-sm text-fail">Couldn&apos;t load favourites: {error}</p></div>;
+  if (!items) return (
+    <div className="space-y-4">
+      <h1 className="page-title">Favourites</h1>
+      <Skeleton className="h-24 rounded-xl" />
+      <div className="panel space-y-3 p-4">{Array.from({ length: 6 }, (_, i) => <Skeleton key={i} className="h-12" />)}</div>
+    </div>
+  );
   const outdated = all.filter((i) => i.outdated).length;
 
   return (
@@ -224,16 +233,19 @@ export default function FavouritesPage() {
       {error && <p className="rounded-md bg-fail-soft px-3 py-2 text-sm text-fail">{error}</p>}
 
       {!all.length ? (
-        <div className="panel px-6 py-10 text-center">
-          <p className="section-title">No favourites yet</p>
-          <p className="mt-1 text-sm text-muted-foreground">Star a product on any run&apos;s results to keep it here.</p>
+        <div className="panel flex flex-col items-center gap-3 px-6 py-14 text-center">
+          <span className="flex size-12 items-center justify-center rounded-full bg-warn-soft text-warn"><StarIcon className="size-5" /></span>
+          <div>
+            <p className="section-title">No favourites yet</p>
+            <p className="mt-1 text-sm text-muted-foreground">Star a product on any run&apos;s results to keep it here, with its latest result and your notes.</p>
+          </div>
+          <Button variant="outline" asChild><Link href="/runs">Go to runs</Link></Button>
         </div>
       ) : (
         <>
           <FilterBar value={filters} onChange={setFilters} options={options} favouritesAvailable={false}
             matching={rows.length} total={all.length} unit="favourites" gateLabels={GATE_LABELS} />
-          <div className="table-wrap">
-          <div className="panel table-scroll" data-min="65">
+          <div className="results-scroll panel">
             <table className="w-full min-w-[65rem] table-fixed text-sm">
               <colgroup>
                 <col className="w-[3.5rem]" />
@@ -267,9 +279,9 @@ export default function FavouritesPage() {
                   const s = estSales(l?.inputs?.market);
                   const isOpen = open.has(i.favourite.id);
                   return [
-                    <tr key={i.favourite.id} className="cursor-pointer border-b border-border align-top hover:bg-muted"
+                    <tr key={i.favourite.id} className="rt-row cursor-pointer border-b border-border align-top"
                       onClick={() => setOpen((x) => { const n = new Set(x); if (n.has(i.favourite.id)) n.delete(i.favourite.id); else n.add(i.favourite.id); return n; })}>
-                      <td className="px-1 py-1.5">
+                      <td className="py-1.5 pr-1 pl-2" style={{ boxShadow: `inset 3px 0 0 ${l?.status === "error" ? "var(--fail)" : l?.verdict ? `var(--${l.verdict})` : "transparent"}` }}>
                         <ProductThumb url={(l?.product as { image_url?: string | null } | null)?.image_url} asin={i.favourite.asin} title={titleOf(i)} brand={l ? brandOf(l) : null} />
                       </td>
                       <td className="px-2 py-2">
@@ -302,14 +314,14 @@ export default function FavouritesPage() {
                         {l ? (
                           <>
                             <span>{when(l.updated_at)}</span>
-                            {i.outdated && <span className="ml-1.5 rounded bg-warn-soft px-1.5 py-0.5 text-2xs font-semibold text-warn">outdated</span>}
+                            {i.outdated && <Badge variant="warn" className="ml-1.5">outdated</Badge>}
                             {l.run && <div className="truncate"><Link className="text-brand hover:underline" href={`/runs/${l.run.id}`} onClick={(e) => e.stopPropagation()}>{l.run.name}</Link></div>}
                           </>
                         ) : <span className="text-warn">Not screened yet</span>}
                       </td>
                     </tr>,
                     isOpen && (
-                      <tr key={`${i.favourite.id}-d`} className="border-b border-border bg-muted/50">
+                      <tr key={`${i.favourite.id}-d`} className="border-b border-border bg-muted/40">
                         <td colSpan={10} className="px-4 py-3">
                           <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
                             <p className="text-xs leading-snug">{l?.status === "error" ? l.error : l?.why ?? "No result yet: re-screen favourites to screen it."}</p>
@@ -323,7 +335,6 @@ export default function FavouritesPage() {
                 {!rows.length && <tr><td colSpan={10} className="px-4 py-8 text-center text-sm text-muted-foreground">Nothing matches these filters.</td></tr>}
               </tbody>
             </table>
-          </div>
           </div>
         </>
       )}

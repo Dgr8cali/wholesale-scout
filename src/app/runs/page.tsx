@@ -1,9 +1,14 @@
 "use client";
 
+import { ImageIcon, ListChecksIcon, UploadIcon } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { EditableName } from "@/components/EditableName";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { api, when } from "@/lib/ui/client";
 
 interface Run {
@@ -28,56 +33,76 @@ export default function RunsPage() {
   }, []);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="page-title">Runs</h1>
-        <Button asChild><Link href="/upload">Upload price lists</Link></Button>
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="page-title">Runs</h1>
+          <p className="text-sm text-muted-foreground">Every price list you&apos;ve screened. Click a name to rename it.</p>
+        </div>
+        <ImageBackfill />
       </div>
 
-      {error && <p className="rounded-md bg-fail-soft px-3 py-2 text-sm text-fail">{error}</p>}
-      <ImageBackfill />
-
-      {runs && !runs.length && (
-        <div className="panel px-6 py-10 text-center">
-          <p className="section-title">No runs yet</p>
-          <p className="mt-1 text-sm text-muted-foreground">Upload a supplier price list to screen it against Amazon UK.</p>
+      {error ? (
+        <p className="rounded-md bg-fail-soft px-3 py-2 text-sm text-fail">Couldn&apos;t load runs: {error}</p>
+      ) : !runs ? (
+        <div className="panel space-y-3 p-4">{Array.from({ length: 6 }, (_, i) => <Skeleton key={i} className="h-10" />)}</div>
+      ) : !runs.length ? (
+        <div className="panel flex flex-col items-center gap-3 px-6 py-14 text-center">
+          <span className="flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground"><ListChecksIcon className="size-5" /></span>
+          <div>
+            <p className="section-title">No runs yet</p>
+            <p className="mt-1 text-sm text-muted-foreground">Upload a supplier price list to screen it against Amazon UK.</p>
+          </div>
+          <Button asChild><Link href="/upload"><UploadIcon /> Upload price list</Link></Button>
         </div>
-      )}
-
-      {runs && runs.length > 0 && (
-        <div className="panel overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
-              <tr>
-                <th className="px-4 py-2">Source</th>
-                <th className="px-4 py-2">Profile</th>
-                <th className="px-4 py-2">Started</th>
-                <th className="px-4 py-2 text-right">Rows</th>
-                <th className="px-4 py-2">Status</th>
-                <th className="px-4 py-2 text-right">Keepa tokens</th>
-              </tr>
-            </thead>
-            <tbody>
-              {runs.map((r) => (
-                <tr key={r.id} className="border-b border-border last:border-0 hover:bg-muted">
-                  <td className="px-4 py-2">
-                    <EditableName value={r.name || r.source} inputClassName="py-1"
-                      display={<Link href={`/runs/${r.id}`} className="font-medium text-brand hover:underline">{r.name || r.source}</Link>}
-                      onSave={async (name) => {
-                        await api(`/api/runs/${r.id}`, { method: "PATCH", json: { name } });
-                        setRuns((rs) => rs && rs.map((x) => (x.id === r.id ? { ...x, name } : x)));
-                      }} />
-                    {r.name && r.name !== r.source && <div className="truncate text-xs text-muted-foreground">{r.source}</div>}
-                  </td>
-                  <td className="px-4 py-2">{r.profile?.name ?? "—"}</td>
-                  <td className="px-4 py-2">{when(r.started_at)}</td>
-                  <td className="num px-4 py-2 text-right">{r.row_count}</td>
-                  <td className="px-4 py-2">{r.status === "done" ? "Done" : `${r.processed_count} / ${r.row_count} screened`}</td>
-                  <td className="num px-4 py-2 text-right">{r.token_cost}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      ) : (
+        <div className="panel overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="pl-4">Run</TableHead>
+                <TableHead>Profile</TableHead>
+                <TableHead>Started</TableHead>
+                <TableHead className="text-right">Rows</TableHead>
+                <TableHead className="w-48">Status</TableHead>
+                <TableHead className="pr-4 text-right">Keepa tokens</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {runs.map((r) => {
+                const done = r.status === "done";
+                const pctDone = r.row_count ? Math.min(100, (r.processed_count / r.row_count) * 100) : 0;
+                return (
+                  <TableRow key={r.id}>
+                    <TableCell className="max-w-[28rem] pl-4 whitespace-normal">
+                      <EditableName value={r.name || r.source} inputClassName="py-1"
+                        display={<Link href={`/runs/${r.id}`} className="font-medium hover:underline">{r.name || r.source}</Link>}
+                        onSave={async (name) => {
+                          await api(`/api/runs/${r.id}`, { method: "PATCH", json: { name } });
+                          setRuns((rs) => rs && rs.map((x) => (x.id === r.id ? { ...x, name } : x)));
+                        }} />
+                      {r.name && r.name !== r.source && <div className="truncate text-xs text-muted-foreground">{r.source}</div>}
+                    </TableCell>
+                    <TableCell>{r.profile?.name ?? "—"}</TableCell>
+                    <TableCell className="text-muted-foreground">{when(r.started_at)}</TableCell>
+                    <TableCell className="num text-right">{r.row_count.toLocaleString("en-GB")}</TableCell>
+                    <TableCell>
+                      {done ? <Badge variant="pass">Done</Badge> : r.status === "error" ? <Badge variant="fail">Error</Badge> : (
+                        <div className="space-y-1">
+                          <Badge variant="brand">Screening</Badge>
+                          <div className="flex items-center gap-2">
+                            <Progress value={pctDone} className="h-1.5 w-24" aria-label="Screened" />
+                            <span className="num text-2xs text-muted-foreground">{r.processed_count} / {r.row_count}</span>
+                          </div>
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell className="num pr-4 text-right">{r.token_cost.toLocaleString("en-GB")}</TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
         </div>
       )}
     </div>
@@ -108,9 +133,9 @@ function ImageBackfill() {
     }
   }
   return (
-    <p className="text-xs text-muted-foreground">
-      <button className="text-brand hover:underline disabled:opacity-50" disabled={busy} onClick={run}>{busy ? "Fetching images…" : "Fetch missing product images"}</button>
-      {state && <span className="ml-2">{state}</span>}
-    </p>
+    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+      {state && <span>{state}</span>}
+      <Button variant="outline" size="sm" disabled={busy} onClick={run}><ImageIcon /> {busy ? "Fetching images…" : "Fetch missing images"}</Button>
+    </div>
   );
 }
