@@ -124,9 +124,11 @@ export async function favouritesWithLatest(): Promise<FavouriteView[]> {
     return m;
   };
   const latest = [...latestByProduct.values()];
-  const offers = await byId("offers", latest.map((r) => r.offer_id as string));
+  const [offers, runs] = await Promise.all([
+    byId("offers", latest.map((r) => r.offer_id as string)),
+    byId("runs", latest.map((r) => r.run_id as string), "id, name, source"),
+  ]);
   const suppliers = await byId("suppliers", [...offers.values()].map((o) => o.supplier_id as string), "id, name");
-  const runs = await byId("runs", latest.map((r) => r.run_id as string));
   const productById = new Map([...products.values()].flat().map((p) => [p.id as string, p]));
 
   return favs.map((favourite) => {

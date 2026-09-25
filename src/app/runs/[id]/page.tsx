@@ -563,7 +563,8 @@ function runLoader(id: string, set: {
   const loadAll = (): Promise<void> => {
     full ??= (async () => {
       try {
-        const first = await api<RunPage>(`/api/runs/${id}?limit=100`);
+        // About two screens of rows: shown at once, the rest follows.
+        const first = await api<RunPage>(`/api/runs/${id}?limit=60`);
         set.setRun(first.run);
         set.setResults(() => first.results);
         ids = new Set(first.results.map((r) => r.id));

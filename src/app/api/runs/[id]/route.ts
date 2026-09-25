@@ -19,12 +19,6 @@ export const GET = handle(async (req: NextRequest, ctx: { params: Promise<{ id: 
   const q = req.nextUrl.searchParams;
   const at = new Date(Date.now() - 2_000).toISOString(); // a little early: a write in flight isn't missed
   const d = db();
-  const [runRes, countRes] = await Promise.all([
-    d.from("runs").select("*, profile:profiles(name)").eq("id", id).maybeSingle(),
-    d.from("results").select("id", { count: "exact", head: true }).eq("run_id", id),
-  ]);
-  const run = must(runRes, "run");
-  if (!run) return Response.json({ error: "Run not found" }, { status: 404 });
   const since = q.get("since");
   const offset = Math.max(0, Number(q.get("offset")) || 0);
   const limit = q.has("limit") ? Math.min(1000, Math.max(1, Number(q.get("limit")) || 100)) : null;
@@ -33,9 +27,18 @@ export const GET = handle(async (req: NextRequest, ctx: { params: Promise<{ id: 
     if (since) x = x.gt("updated_at", since);
     return x.order("score", { ascending: false, nullsFirst: false }).order("id").range(from, to);
   };
+  // The run, its row count and (for one page) the rows, all at once.
+  const one = limit != null && !since;
+  const [runRes, countRes, firstPage] = await Promise.all([
+    d.from("runs").select("*, profile:profiles(name)").eq("id", id).maybeSingle(),
+    d.from("results").select("id", { count: "exact", head: true }).eq("run_id", id),
+    one ? page(offset, offset + limit - 1) : null,
+  ]);
+  const run = must(runRes, "run");
+  if (!run) return Response.json({ error: "Run not found" }, { status: 404 });
   const results: unknown[] = [];
-  if (limit != null && !since) {
-    results.push(...(must(await page(offset, offset + limit - 1), "results") as unknown[]));
+  if (one) {
+    results.push(...(must(firstPage!, "results") as unknown[]));
   } else {
     // PostgREST caps a page at 1,000 rows.
     for (let from = 0; ; from += 1000) {
