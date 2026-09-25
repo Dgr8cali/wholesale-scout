@@ -206,7 +206,11 @@ export default function RunPage() {
           leftSince = Date.now();
         }
         const changed = p.processed !== lastProcessed || (left > 0 && Date.now() - lastReload > 4_000) || (!left && lastLeft > 0);
-        if (lastProcessed === -1 || (changed && Date.now() - lastReload > 4_000) || (p.done && changed)) {
+        if (lastProcessed === -1) {
+          // The rows were asked for as the page opened (below), alongside this.
+          lastProcessed = p.processed;
+          lastReload = Date.now();
+        } else if ((changed && Date.now() - lastReload > 4_000) || (p.done && changed)) {
           lastProcessed = p.processed;
           lastReload = Date.now();
           await refresh();
@@ -236,6 +240,8 @@ export default function RunPage() {
         }
       }
     };
+    // Rows straight away (the first screen, then the rest), not after the first status check.
+    refresh().catch((e: Error) => { if (!stopped) setError(e.message); });
     tick();
     return () => {
       stopped = true;
