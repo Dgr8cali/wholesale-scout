@@ -85,20 +85,20 @@ function Profiles() {
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [rules, setRules] = useState<CategoryRule[]>([]);
 
-  const load = useCallback(async (select?: string) => {
-    const r = await api<{ profiles: Profile[] }>("/api/profiles");
-    setProfiles(r.profiles);
-    const pick = r.profiles.find((p) => p.id === select) ?? r.profiles.find((p) => p.is_default) ?? r.profiles[0];
+  const apply = useCallback((list: Profile[], select?: string) => {
+    setProfiles(list);
+    const pick = list.find((p) => p.id === select) ?? list.find((p) => p.is_default) ?? list[0];
     if (pick) {
       setId(pick.id);
       setDraft(structuredClone(pick.config));
     }
   }, []);
+  const load = async (select?: string) => apply((await api<{ profiles: Profile[] }>("/api/profiles")).profiles, select);
 
   useEffect(() => {
-    load().catch((e) => setMsg({ ok: false, text: e.message }));
+    api<{ profiles: Profile[] }>("/api/profiles").then((r) => apply(r.profiles)).catch((e) => setMsg({ ok: false, text: e.message }));
     api<{ rules: CategoryRule[] }>("/api/rules").then((r) => setRules(r.rules)).catch(() => {});
-  }, [load]);
+  }, [apply]);
 
   const current = profiles.find((p) => p.id === id);
   const dirty = useMemo(() => !!current && !!draft && JSON.stringify(current.config) !== JSON.stringify(draft), [current, draft]);
@@ -402,15 +402,15 @@ function Rates() {
   const [cards, setCards] = useState<CardRow[] | null>(null);
   const [text, setText] = useState("");
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const load = useCallback(async () => {
-    const r = await api<{ cards: CardRow[] }>("/api/rate-card");
-    setCards(r.cards);
-    const active = r.cards.find((c) => c.is_active) ?? r.cards[0];
+  const apply = useCallback((list: CardRow[]) => {
+    setCards(list);
+    const active = list.find((c) => c.is_active) ?? list[0];
     if (active) setText(JSON.stringify(active.card, null, 2));
   }, []);
+  const load = async () => apply((await api<{ cards: CardRow[] }>("/api/rate-card")).cards);
   useEffect(() => {
-    load().catch((e) => setMsg({ ok: false, text: e.message }));
-  }, [load]);
+    api<{ cards: CardRow[] }>("/api/rate-card").then((r) => apply(r.cards)).catch((e) => setMsg({ ok: false, text: e.message }));
+  }, [apply]);
 
   const save = async () => {
     setMsg(null);
