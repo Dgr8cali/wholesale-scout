@@ -2,6 +2,7 @@
  * Profile configuration: every gate mode and parameter, score weights and scales,
  * fee assumptions and the scoring-price rule. Stored as JSON in `profiles.config`.
  */
+import { DEFAULT_RANK_BY_CATEGORY } from "./categories";
 import { DEFAULT_FEE_ASSUMPTIONS, type FeeAssumptions } from "../fees/engine";
 
 export type GateMode = "off" | "warn" | "fail";
@@ -15,7 +16,7 @@ export interface GateConfigs {
   mirage: { mode: GateMode; minHistoryDays: number; maxReviewJumpPct: number };
   amazonPresence: { mode: GateMode; days: number };
   competition: { mode: GateMode; minSellers: number; maxSellers: number; maxBbSharePct: number };
-  demand: { mode: GateMode; minRankDrops30d: number; maxAvgRank90d: number; /** Your share: sales ÷ (sellers + you). */ minSharePerMonth: number; /** The first order must sell within this many months at your share. */ maxMonthsToSell: number };
+  demand: { mode: GateMode; minRankDrops30d: number; maxAvgRank90d: number; /** Rank ceiling per top-level category (Keepa's root category); others use maxAvgRank90d. */ maxRankByCategory: Record<string, number>; /** Your share: sales ÷ (sellers + you). */ minSharePerMonth: number; /** The first order must sell within this many months at your share. */ maxMonthsToSell: number };
   priceRegime: { mode: GateMode; spikePct: number };
   priceDrift: { mode: GateMode; maxDeclinePctYr: number };
   /** Blocked always takes the gate's mode; approval-required has its own (warn by default). */
@@ -159,7 +160,7 @@ export const DEFAULT_GATES: GateConfigs = {
   mirage: { mode: "warn", minHistoryDays: 90, maxReviewJumpPct: 50 },
   amazonPresence: { mode: "fail", days: 365 },
   competition: { mode: "warn", minSellers: 3, maxSellers: 12, maxBbSharePct: 70 },
-  demand: { mode: "fail", minRankDrops30d: 30, maxAvgRank90d: 50000, minSharePerMonth: 5, maxMonthsToSell: 3 },
+  demand: { mode: "fail", minRankDrops30d: 30, maxAvgRank90d: 50000, maxRankByCategory: { ...DEFAULT_RANK_BY_CATEGORY }, minSharePerMonth: 5, maxMonthsToSell: 3 },
   priceRegime: { mode: "warn", spikePct: 15 },
   priceDrift: { mode: "warn", maxDeclinePctYr: 20 },
   gating: { mode: "fail", approvalRequired: "warn" },
@@ -259,7 +260,7 @@ export function invalidNumbers(cfg: ProfileConfig): string[] {
       val.forEach((v, i) => walk(Array.isArray(def) && def.length ? def[0] : def, v, `${path}[${i}]`));
     } else if (def && typeof def === "object" && val && typeof val === "object") {
       for (const k of Object.keys(val as object)) {
-        const d = (def as Record<string, unknown>)[k] ?? (path.endsWith("scales") ? DEFAULT_SCALES.rankDrops : undefined);
+        const d = (def as Record<string, unknown>)[k] ?? (path.endsWith("scales") ? DEFAULT_SCALES.rankDrops : path.endsWith("maxRankByCategory") ? 0 : undefined);
         if (d !== undefined) walk(d, (val as Record<string, unknown>)[k], path ? `${path}.${k}` : k);
       }
     }

@@ -13,7 +13,7 @@ All of these must hold:
 
 - **Sales a month (total)** at least **Min sales / month (total)**. Sales are the highest of three figures from Keepa: rank drops in 30 days counted from the history, Keepa's own 30-day rank-drop count, and Amazon's "bought in past month". This is the same figure as the **Sales / mo** column.
 - **[Your share](/help/reference/glossary#your-share)** at least **Min your share**. Your share = sales ÷ (other FBA sellers + 1 for you). When Amazon is on the listing it counts as three sellers.
-- **Average rank** no worse than **Max 90-day average rank**. Without a 90-day average, the current rank is used.
+- **Average rank** no worse than the product's category ceiling in **Max rank by category**, else **Max 90-day average rank**. The category is Keepa's top-level category (the one the rank is counted in); for Keepa data fetched before categories were kept, the catalog's category. Without a 90-day average, the current rank is used.
 - **[Months to sell](/help/reference/glossary#months-to-sell)** the first order no more than **Max months to sell the order**. The first order is what one line's share of the budget buys at the landed cost (see [Budget fit](/help/gates/budgetFit)), raised to the MOQ if that's larger. Months to sell = that quantity ÷ your share. This part needs a cost, so an ASIN check with no cost skips it.
 
 ### Dormant listings
@@ -33,7 +33,8 @@ Settings, **Gates** tab, card **8 Demand** (Needs: Keepa / SP-API).
 | Mode | **fail** | **off**, **warn** or **fail**. |
 | **Min sales / month (total)** | 30 | Lower it to accept slower sellers. |
 | **Min your share (sales / month)** | 5 | Lower it to accept crowded listings where you'd sell fewer. |
-| **Max 90-day average rank** | 50,000 | Raise it to accept products further down the rankings. |
+| **Max 90-day average rank** | 50,000 | Raise it to accept products further down the rankings. Used for any category not in the table below. |
+| **Max rank by category** | Beauty 60,000; Health & Personal Care 60,000; Grocery 50,000; Automotive 150,000; DIY & Tools 150,000; Sports & Outdoors 150,000; Home & Kitchen 200,000 | A rank means different sales in different categories: tighter in Beauty, Grocery and Health, looser in the big categories. Change a value, remove a category (it then uses the max above), add one from the list, or **Reset to suggested**. Names are matched loosely ("Health & Household" counts as Health & Personal Care). Every shipped profile starts with this table. |
 | **Max months to sell the order** | 3 | Raise it to accept slower sell-through of the first order. |
 
 The first-order size depends on **Budget** (Profiles tab) and **Max first order per line** ([Budget fit](/help/gates/budgetFit)).
@@ -50,6 +51,8 @@ The first-order size depends on **Budget** (Profiles tab) and **Max first order 
 First order asks for fewer sales (10 a month) but a bigger share for you (8 a month), and accepts a 90-day average rank up to 100,000. Its line cap is 25% of the budget and Test order's is 30%, so their first orders are smaller and sell through sooner than in Strict and Dry goods only, which allow 100%.
 
 ## Reading the why-line
+
+When a category's own ceiling applies, the line says which: "90-day average rank 70,000, over 60,000 for Beauty" on a fail, and "… avg rank 12,000 (Beauty max 60,000)" on a pass. Without "for …", the profile-wide ceiling was used.
 
 When it trips, each failed check is listed, joined with "; ".
 

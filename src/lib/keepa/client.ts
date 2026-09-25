@@ -159,6 +159,7 @@ export function parseKeepaProduct(p: RawKeepaProduct, now = Date.now(), buyBoxFe
       packageWeightG: weightG,
       variationCount,
       buyBoxFetched,
+      rootCategory: p.categoryTree?.[0]?.name ?? null,
     },
   };
 }

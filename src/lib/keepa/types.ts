@@ -24,6 +24,8 @@ export interface KeepaSummary {
   amazonLastSeenDays: number | null;
   /** When Amazon last held an offer (now, while it does); null when never seen. */
   amazonLastSeenAt?: string | null;
+  /** Keepa's top-level category (the one the sales rank is in). */
+  rootCategory?: string | null;
   /** Largest share of the year any single seller held the Buy Box, %. */
   topSellerBbSharePct: number | null;
   /** Largest one-day percentage jump in review count. */

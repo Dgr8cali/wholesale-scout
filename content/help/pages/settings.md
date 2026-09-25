@@ -43,7 +43,7 @@ Each of the twelve gates has a card with its number, name, what data it **Needs*
 | 5 | [Borrowed rank (mirage)](/help/gates/mirage) (warn) | **Min rank history (days)** 90, **Max one-day review jump (%)** 50 |
 | 6 | [Amazon presence](/help/gates/amazonPresence) (fail) | **Amazon held an offer in the last (days)** 365 |
 | 7 | [Competition shape](/help/gates/competition) (warn) | **Min FBA sellers** 3, **Max FBA sellers** 12, **Max top-seller Buy Box share (%)** 70 |
-| 8 | [Demand](/help/gates/demand) (fail) | **Min sales / month (total)** 30, **Min your share (sales / month)** 5, **Max 90-day average rank** 50,000, **Max months to sell the order** 3 |
+| 8 | [Demand](/help/gates/demand) (fail) | **Min sales / month (total)** 30, **Min your share (sales / month)** 5, **Max 90-day average rank** 50,000 (any category not in **Max rank by category**, which starts with the suggested table: Beauty and Health & Personal Care 60,000, Grocery 50,000, Automotive, DIY & Tools and Sports & Outdoors 150,000, Home & Kitchen 200,000; **Reset to suggested** restores it), **Max months to sell the order** 3 |
 | 9 | [Price regime](/help/gates/priceRegime) (warn) | **Spike tolerance over median (%)** 15 |
 | 10 | [Price drift](/help/gates/priceDrift) (warn) | **Max Buy Box decline (% / year)** 20 |
 | 11 | [Gating and blocks](/help/gates/gating) (fail) | **Approval needed counts as** warn. "Blocked always uses the gate's mode" |

@@ -204,7 +204,16 @@ describe("gates", () => {
     });
 
     it("fails a good sales count with a poor 90-day rank", () => {
-      expect(demand(market({ rankDrops30d: 90, avgRank90d: 120_000 })).status).toBe("fail");
+      expect(demand(market({ rankDrops30d: 90, avgRank90d: 120_000, rootCategory: "Toys & Games" })).status).toBe("fail");
+    });
+
+    it("uses the category's rank ceiling (Keepa's category, else the catalog's), else the profile's", () => {
+      // Beauty is tighter (60,000), DIY & Tools looser (150,000), Toys & Games uses the profile's 50,000.
+      expect(demand(market({ rankDrops30d: 90, avgRank90d: 70_000, rootCategory: "Beauty" }))).toMatchObject({ status: "fail", detail: "90-day average rank 70,000, over 60,000 for Beauty" });
+      expect(demand(market({ rankDrops30d: 90, avgRank90d: 120_000, rootCategory: "DIY & Tools" }))).toMatchObject({ status: "pass", detail: expect.stringContaining("(DIY & Tools max 150,000)") });
+      expect(demand(market({ rankDrops30d: 90, avgRank90d: 60_000, rootCategory: "Toys & Games" })).detail).toBe("90-day average rank 60,000, over 50,000");
+      // No Keepa category on an older snapshot: the catalog's ("DIY & Tools" in these tests).
+      expect(demand(market({ rankDrops30d: 90, avgRank90d: 120_000 })).status).toBe("pass");
     });
 
     it("fails history with no recorded sales at all, rather than skipping the count", () => {
@@ -242,7 +251,7 @@ describe("gates", () => {
       expect(demand(m).status).toBe("fail"); // 18 is under the default 30 total
       const d = demand(m, lowTotal);
       expect(d.status).toBe("pass");
-      expect(d.detail).toMatch(/^18 sales\/mo, your share 9\/mo, avg rank 20,000; order \d+ sells in /);
+      expect(d.detail).toMatch(/^18 sales\/mo, your share 9\/mo, avg rank 20,000 \(DIY & Tools max 150,000\); order \d+ sells in /);
     });
 
     it("flags a high-volume product split twenty ways", () => {

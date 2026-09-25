@@ -20,6 +20,7 @@ import { applyLinks, approvalKind } from "../spapi/parse";
 import type { RestrictionLink, RestrictionStatus } from "../spapi/types";
 import { GATE_LABELS, GATE_ORDER, type GateId, type GateMode, type ProfileConfig } from "./config";
 import { doubtfulMatch, type Listing } from "./match";
+import { rankCeiling } from "./categories";
 import { amazonRuleMatches, DEFAULT_RULES, DG_RULE_KEYS, matchReason, matchRules, type CategoryRule, type DgFacts, type RuleMatch } from "./rules";
 import { dgLookupText, type DgLookup } from "../dg/report";
 import { ipRiskText, type IpRiskMatch } from "../ipRisk";
@@ -56,6 +57,8 @@ export interface MarketData {
   fbaOffers: number | null;
   amazonLastSeenDays: number | null;
   amazonLastSeenAt?: string | null;
+  /** Keepa's top-level category, where the rank is counted. */
+  rootCategory?: string | null;
   topSellerBbSharePct: number | null;
   reviewJumpPct: number | null;
   youngerThanParent: boolean | null;
@@ -424,6 +427,9 @@ const EVALUATORS: Record<GateId, Evaluator> = {
     };
     const orderText = plan?.months != null ? `; order ${plan.qty}${plan.moqOverCap ? " (MOQ)" : ""} sells in ${monthsLabel(plan.months)}` : "";
     const shareText = share.value != null ? `, your share ${share.value}/mo` : "";
+    // The rank ceiling for the product's category (Keepa's, else the catalog's), else the profile's.
+    const ceil = rankCeiling(g, m.rootCategory ?? ctx.amazonCategory);
+    const over = () => `over ${ceil.max.toLocaleString("en-GB")}${ceil.category ? ` for ${ceil.category}` : ""}`;
     if (isDormant(m)) {
       // No rank now: judge the past year instead, as a monthly rate.
       const drops = m.rankDrops12m ?? 0;
@@ -435,7 +441,7 @@ const EVALUATORS: Record<GateId, Evaluator> = {
       const reasons: string[] = [];
       if (perMonth < g.minRankDrops30d) reasons.push(`${drops} rank drops in 12 months (${perMonth}/mo), under ${g.minRankDrops30d}/mo`);
       shareCheck(reasons);
-      if (m.avgRank12m != null && m.avgRank12m > g.maxAvgRank90d) reasons.push(`12-month average rank ${m.avgRank12m.toLocaleString("en-GB")}, over ${g.maxAvgRank90d.toLocaleString("en-GB")}`);
+      if (m.avgRank12m != null && m.avgRank12m > ceil.max) reasons.push(`12-month average rank ${m.avgRank12m.toLocaleString("en-GB")}, ${over()}`);
       if (reasons.length) return { status: failAs(g.mode), detail: `dormant: ${reasons.join("; ")}`, tags: ["DORMANT"] };
       return { status: "pass", detail: `dormant: ${drops} rank drops in 12 months (${perMonth}/mo)${m.avgRank12m != null ? `, 12-month average rank ${m.avgRank12m.toLocaleString("en-GB")}` : ""}${orderText}`, tags: ["DORMANT"] };
     }
@@ -446,9 +452,9 @@ const EVALUATORS: Record<GateId, Evaluator> = {
     if (sales < g.minRankDrops30d) reasons.push(`${sales} sales in 30 days, under ${g.minRankDrops30d}`);
     shareCheck(reasons);
     if (rank == null) reasons.push("no rank in the last 90 days");
-    else if (rank > g.maxAvgRank90d) reasons.push(`${rankLabel} ${rank.toLocaleString("en-GB")}, over ${g.maxAvgRank90d.toLocaleString("en-GB")}`);
+    else if (rank > ceil.max) reasons.push(`${rankLabel} ${rank.toLocaleString("en-GB")}, ${over()}`);
     if (reasons.length) return { status: failAs(g.mode), detail: reasons.join("; ") };
-    return { status: "pass", detail: `${sales} sales/mo${shareText}, ${m.avgRank90d != null ? "avg" : "current"} rank ${rank!.toLocaleString("en-GB")}${orderText}` };
+    return { status: "pass", detail: `${sales} sales/mo${shareText}, ${m.avgRank90d != null ? "avg" : "current"} rank ${rank!.toLocaleString("en-GB")}${ceil.category ? ` (${ceil.category} max ${ceil.max.toLocaleString("en-GB")})` : ""}${orderText}` };
   },
 
   priceRegime(ctx, p) {

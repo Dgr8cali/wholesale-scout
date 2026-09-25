@@ -2,6 +2,7 @@
 
 import { useSearchParams } from "next/navigation";
 import { IpRiskTab } from "@/components/settings/IpRiskTab";
+import { CategoryRanks } from "@/components/settings/CategoryRanks";
 import { FilterIcon, GaugeIcon, ReceiptIcon, ShieldAlertIcon, ShieldCheckIcon, SlidersHorizontalIcon, Trash2Icon, UndoIcon } from "lucide-react";
 import { Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { activeChips, normalizeFilters, type FilterSet } from "@/lib/filters";
@@ -275,6 +276,10 @@ function GatesTab({ editor: e }: { editor: Editor }) {
                       onChange={(n) => setGate(g, { [p.key]: n } as Partial<GateConfigs[typeof g]>)} />
                   ))}
                 </div>
+              )}
+              {g === "demand" && (
+                <CategoryRanks value={draft.gates.demand.maxRankByCategory ?? {}} fallback={draft.gates.demand.maxAvgRank90d}
+                  onChange={(v) => setGate("demand", { maxRankByCategory: v })} />
               )}
               {g === "gating" && (
                 <label className="flex flex-wrap items-center gap-2 text-sm">
