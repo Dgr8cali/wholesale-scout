@@ -58,6 +58,8 @@ export interface NormalizedRow {
   category: string | null;
   sourceRow: number;
   eanValid: boolean;
+  /** Where the row came from outside a sheet (Qogita: the product link). */
+  externalRef?: string | null;
 }
 
 export interface RejectedRow {

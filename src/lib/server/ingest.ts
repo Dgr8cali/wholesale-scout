@@ -105,16 +105,19 @@ export async function ingest(payload: IngestPayload): Promise<{ runId: string; r
         brand: r.brand,
         category: r.category,
         source_ref: `${f.fileName} row ${r.sourceRow}`,
+        ...(r.externalRef ? { external_ref: r.externalRef } : {}),
         _vatRate: sup.vatRate,
       })),
     );
   });
   const offers: { id: string; product_id: string; unit_cost_gbp: number; _vatRate: number }[] = [];
   for (const c of chunks(offerRows, 500)) {
-    const inserted = must(
-      await d.from("offers").insert(c.map(({ _vatRate, ...o }) => (void _vatRate, o))).select("id, product_id, unit_cost_gbp"),
-      "insert offers",
-    ) as { id: string; product_id: string; unit_cost_gbp: number }[];
+    let res = await d.from("offers").insert(c.map(({ _vatRate, ...o }) => (void _vatRate, o))).select("id, product_id, unit_cost_gbp");
+    // Before the Qogita migration there's no external_ref column: keep the offers without it.
+    if (res.error && /external_ref/.test(res.error.message)) {
+      res = await d.from("offers").insert(c.map(({ _vatRate, ...o }) => { void _vatRate; const { external_ref, ...rest } = o as typeof o & { external_ref?: string }; void external_ref; return rest; })).select("id, product_id, unit_cost_gbp");
+    }
+    const inserted = must(res, "insert offers") as { id: string; product_id: string; unit_cost_gbp: number }[];
     inserted.forEach((o, i) => offers.push({ ...o, _vatRate: c[i]._vatRate }));
   }
 
