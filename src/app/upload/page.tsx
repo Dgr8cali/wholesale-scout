@@ -1,5 +1,6 @@
 "use client";
 
+import { Badge } from "@/components/ui/badge";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
@@ -21,6 +22,9 @@ import {
 } from "@/lib/ingest/mapping";
 import { api, gbp } from "@/lib/ui/client";
 
+import { Button } from "@/components/ui/button";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { Input } from "@/components/ui/input";
 interface Supplier { id: string; name: string; vat_basis: "ex_vat" | "inc_vat"; vat_rate: number; currency: string }
 interface Profile { id: string; name: string; is_default: boolean }
 interface SavedMapping { mapping: ColumnMapping; supplier: Supplier }
@@ -212,15 +216,15 @@ export default function UploadPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="h1">Upload price lists</h1>
-        <p className="mt-1 text-sm text-muted">xlsx or csv, several at once. A layout you&apos;ve mapped before is recognised and needs no setup.</p>
+        <h1 className="page-title">Upload price lists</h1>
+        <p className="mt-1 text-sm text-muted-foreground">xlsx or csv, several at once. A layout you&apos;ve mapped before is recognised and needs no setup.</p>
       </div>
 
-      <label className="card flex cursor-pointer flex-col items-center gap-2 border-dashed px-6 py-8 text-center hover:bg-surface-2"
+      <label className="panel flex cursor-pointer flex-col items-center gap-2 border-dashed px-6 py-8 text-center hover:bg-muted"
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => { e.preventDefault(); addFiles(e.dataTransfer.files); }}>
-        <span className="h2">Drop files here or choose them</span>
-        <span className="text-sm text-muted">.xlsx, .xls, .csv · up to {MAX_FILE_BYTES / 1024 / 1024} MB each, {MAX_ROWS.toLocaleString("en-GB")} rows per upload</span>
+        <span className="section-title">Drop files here or choose them</span>
+        <span className="text-sm text-muted-foreground">.xlsx, .xls, .csv · up to {MAX_FILE_BYTES / 1024 / 1024} MB each, {MAX_ROWS.toLocaleString("en-GB")} rows per upload</span>
         <input type="file" multiple accept=".xlsx,.xls,.csv,.tsv,.txt" className="sr-only" onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
       </label>
 
@@ -228,22 +232,22 @@ export default function UploadPage() {
         const headers = headersOf(f.rows, f.mapping.headerRow);
         const pv = previews[f.key];
         return (
-          <section key={f.key} className="card space-y-4 p-4">
+          <section key={f.key} className="panel space-y-4 p-4">
             <div className="flex flex-wrap items-center gap-3">
-              <h2 className="h2">{f.fileName}</h2>
+              <h2 className="section-title">{f.fileName}</h2>
               {f.remembered
-                ? <span className="rounded-full bg-pass-soft px-2 py-0.5 text-xs font-medium text-pass">Layout remembered: {f.remembered}</span>
-                : <span className="rounded-full bg-warn-soft px-2 py-0.5 text-xs font-medium text-warn">New layout: check the mapping</span>}
+                ? <Badge variant="pass">Layout remembered: {f.remembered}</Badge>
+                : <Badge variant="warn">New layout: check the mapping</Badge>}
               {f.sheetNames.length > 1 && (
-                <select className="input w-auto" value={f.sheet} onChange={async (e) => {
+                <NativeSelect className="w-auto" value={f.sheet} onChange={async (e) => {
                   const rows = sheetRows(f.workbook, e.target.value);
                   const next = await loadLayout({ ...f, sheet: e.target.value, rows });
                   update(f.key, () => next);
                 }}>
-                  {f.sheetNames.map((s) => <option key={s}>{s}</option>)}
-                </select>
+                  {f.sheetNames.map((s) => <NativeSelectOption key={s}>{s}</NativeSelectOption>)}
+                </NativeSelect>
               )}
-              <button className="btn ml-auto" onClick={() => setFiles((fs) => fs.filter((x) => x.key !== f.key))}>Remove</button>
+              <Button variant="outline" className="ml-auto" onClick={() => setFiles((fs) => fs.filter((x) => x.key !== f.key))}>Remove</Button>
             </div>
 
             <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
@@ -251,49 +255,49 @@ export default function UploadPage() {
                 <p className="text-sm font-semibold">Supplier</p>
                 <div className="grid grid-cols-2 gap-3">
                   <label className="col-span-2 space-y-1">
-                    <span className="label">Name</span>
-                    <input className="input" list="suppliers" value={f.supplier.name} onChange={(e) => pickSupplier(f.key, e.target.value)} />
+                    <span className="field-label">Name</span>
+                    <Input  list="suppliers" value={f.supplier.name} onChange={(e) => pickSupplier(f.key, e.target.value)} />
                   </label>
                   <label className="space-y-1">
-                    <span className="label">Prices are</span>
-                    <select className="input" value={f.supplier.vatBasis} onChange={(e) => update(f.key, (x) => ({ ...x, supplier: { ...x.supplier, vatBasis: e.target.value as "ex_vat" | "inc_vat" } }))}>
-                      <option value="ex_vat">Ex-VAT</option>
-                      <option value="inc_vat">Inc-VAT</option>
-                    </select>
+                    <span className="field-label">Prices are</span>
+                    <NativeSelect value={f.supplier.vatBasis} onChange={(e) => update(f.key, (x) => ({ ...x, supplier: { ...x.supplier, vatBasis: e.target.value as "ex_vat" | "inc_vat" } }))}>
+                      <NativeSelectOption value="ex_vat">Ex-VAT</NativeSelectOption>
+                      <NativeSelectOption value="inc_vat">Inc-VAT</NativeSelectOption>
+                    </NativeSelect>
                   </label>
                   <label className="space-y-1">
-                    <span className="label">VAT rate on these goods (%)</span>
-                    <input className="input num" type="number" step="any" value={f.supplier.vatRate} onChange={(e) => update(f.key, (x) => ({ ...x, supplier: { ...x.supplier, vatRate: Number(e.target.value) } }))} />
+                    <span className="field-label">VAT rate on these goods (%)</span>
+                    <Input className="num" type="number" step="any" value={f.supplier.vatRate} onChange={(e) => update(f.key, (x) => ({ ...x, supplier: { ...x.supplier, vatRate: Number(e.target.value) } }))} />
                   </label>
                   <label className="space-y-1">
-                    <span className="label">Currency</span>
-                    <select className="input" value={f.supplier.currency} onChange={(e) => setCurrency(f.key, e.target.value)}>
-                      {CURRENCIES.map((c) => <option key={c}>{c}</option>)}
-                    </select>
+                    <span className="field-label">Currency</span>
+                    <NativeSelect value={f.supplier.currency} onChange={(e) => setCurrency(f.key, e.target.value)}>
+                      {CURRENCIES.map((c) => <NativeSelectOption key={c}>{c}</NativeSelectOption>)}
+                    </NativeSelect>
                   </label>
                   <label className="space-y-1">
-                    <span className="label">GBP per 1 {f.supplier.currency}{f.fx.source && f.fx.source !== "fixed" ? ` (${f.fx.source}, ${f.fx.date})` : ""}</span>
-                    <input className="input num" type="number" step="any" disabled={f.supplier.currency === "GBP"} value={f.fx.rate}
+                    <span className="field-label">GBP per 1 {f.supplier.currency}{f.fx.source && f.fx.source !== "fixed" ? ` (${f.fx.source}, ${f.fx.date})` : ""}</span>
+                    <Input className="num" type="number" step="any" disabled={f.supplier.currency === "GBP"} value={f.fx.rate}
                       onChange={(e) => update(f.key, (x) => ({ ...x, fx: { rate: Number(e.target.value), date: today(), source: "entered by hand" } }))} />
                     {f.fxError && <span className="text-xs text-fail">{f.fxError}</span>}
-                    {f.currencyHint && !f.fxError && <span className="text-xs text-accent">{f.currencyHint}</span>}
+                    {f.currencyHint && !f.fxError && <span className="text-xs text-brand">{f.currencyHint}</span>}
                   </label>
                 </div>
-                <p className="text-xs text-muted">VAT basis and currency are saved with the supplier and applied to every future file from them. Costs are stored in GBP ex-VAT at this rate.</p>
+                <p className="text-xs text-muted-foreground">VAT basis and currency are saved with the supplier and applied to every future file from them. Costs are stored in GBP ex-VAT at this rate.</p>
               </div>
 
               <div className="space-y-3">
                 <p className="text-sm font-semibold">Columns</p>
                 <div className="grid grid-cols-2 gap-3">
                   <label className="space-y-1">
-                    <span className="label">Header row</span>
-                    <input className="input num" type="number" min={1} value={f.mapping.headerRow + 1}
+                    <span className="field-label">Header row</span>
+                    <Input className="num" type="number" min={1} value={f.mapping.headerRow + 1}
                       onChange={(e) => update(f.key, (x) => ({ ...x, mapping: { ...x.mapping, headerRow: Math.max(0, Number(e.target.value) - 1) } }))} />
                   </label>
                   {MAPPABLE_FIELDS.map((fd) => (
                     <label key={fd.key} className="space-y-1">
-                      <span className="label">{fd.label}{fd.required ? " *" : ""}</span>
-                      <select className="input" value={f.mapping.columns[fd.key] ?? ""}
+                      <span className="field-label">{fd.label}{fd.required ? " *" : ""}</span>
+                      <NativeSelect value={f.mapping.columns[fd.key] ?? ""}
                         onChange={async (e) => {
                           const value = e.target.value || undefined;
                           update(f.key, (x) => ({ ...x, mapping: { ...x.mapping, columns: { ...x.mapping.columns, [fd.key as FieldKey]: value } } }));
@@ -302,9 +306,9 @@ export default function UploadPage() {
                             update(f.key, (x) => ({ ...x, supplier: { ...x.supplier, currency: next.supplier.currency }, fx: next.fx, fxError: next.fxError, currencyHint: next.currencyHint }));
                           }
                         }}>
-                        <option value="">—</option>
-                        {headers.map((h) => <option key={h}>{h}</option>)}
-                      </select>
+                        <NativeSelectOption value="">—</NativeSelectOption>
+                        {headers.map((h) => <NativeSelectOption key={h}>{h}</NativeSelectOption>)}
+                      </NativeSelect>
                     </label>
                   ))}
                 </div>
@@ -334,12 +338,12 @@ export default function UploadPage() {
                 </p>
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
-                    <thead className="text-left text-muted">
+                    <thead className="text-left text-muted-foreground">
                       <tr><th className="py-1 pr-3">Row</th><th className="pr-3">EAN</th><th className="pr-3">Name</th><th className="pr-3 text-right">Quoted / unit</th><th className="pr-3 text-right">GBP ex-VAT / unit</th><th className="pr-3 text-right">Pack</th><th className="text-right">MOQ</th></tr>
                     </thead>
                     <tbody>
                       {pv.rows.slice(0, 5).map((r) => (
-                        <tr key={r.sourceRow} className="border-t border-line">
+                        <tr key={r.sourceRow} className="border-t border-border">
                           <td className="num py-1 pr-3">{r.sourceRow}</td>
                           <td className={`num pr-3 ${r.eanValid ? "" : "text-warn"}`}>{r.ean}</td>
                           <td className="max-w-[320px] truncate pr-3">{r.title}</td>
@@ -354,7 +358,7 @@ export default function UploadPage() {
                 </div>
                 {pv.rejected.length > 0 && (
                   <details className="text-xs">
-                    <summary className="cursor-pointer text-muted">Rows set aside</summary>
+                    <summary className="cursor-pointer text-muted-foreground">Rows set aside</summary>
                     <ul className="mt-1 space-y-0.5">
                       {pv.rejected.slice(0, 50).map((r) => <li key={r.sourceRow}>Row {r.sourceRow}: {r.reason}{r.title ? ` · ${r.title}` : ""}</li>)}
                     </ul>
@@ -369,17 +373,17 @@ export default function UploadPage() {
       <datalist id="suppliers">{suppliers.map((s) => <option key={s.id} value={s.name} />)}</datalist>
 
       {files.length > 0 && (
-        <div className="card flex flex-wrap items-end gap-4 p-4">
+        <div className="panel flex flex-wrap items-end gap-4 p-4">
           <label className="space-y-1">
-            <span className="label">Profile</span>
-            <select className="input w-56" value={profileId} onChange={(e) => setProfileId(e.target.value)}>
-              {profiles.map((p) => <option key={p.id} value={p.id}>{p.name}{p.is_default ? " (default)" : ""}</option>)}
-            </select>
+            <span className="field-label">Profile</span>
+            <NativeSelect className="w-56" value={profileId} onChange={(e) => setProfileId(e.target.value)}>
+              {profiles.map((p) => <NativeSelectOption key={p.id} value={p.id}>{p.name}{p.is_default ? " (default)" : ""}</NativeSelectOption>)}
+            </NativeSelect>
           </label>
-          <div className="text-sm text-muted">{totalRows} rows from {files.length} file{files.length > 1 ? "s" : ""}. The same EAN across files becomes one product; the cheapest offer is scored.</div>
-          <button className="btn btn-primary ml-auto" disabled={busy || problems.length > 0 || totalRows === 0} onClick={submit}>
+          <div className="text-sm text-muted-foreground">{totalRows} rows from {files.length} file{files.length > 1 ? "s" : ""}. The same EAN across files becomes one product; the cheapest offer is scored.</div>
+          <Button className="ml-auto" disabled={busy || problems.length > 0 || totalRows === 0} onClick={submit}>
             {busy ? "Starting…" : "Screen these rows"}
-          </button>
+          </Button>
           {problems.length > 0 && <ul className="w-full text-sm text-warn">{problems.map((p) => <li key={p}>{p}</li>)}</ul>}
         </div>
       )}

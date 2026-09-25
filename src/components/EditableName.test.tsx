@@ -18,7 +18,7 @@ describe("FavouriteStar", () => {
     const off = renderToStaticMarkup(<FavouriteStar starred={false} onToggle={() => {}} />);
     expect(off).toContain('aria-label="Add to favourites"');
     expect(off).toContain('fill="none"');
-    expect(off).toContain("text-muted"); // not the near-white border grey
+    expect(off).toContain("text-muted-foreground"); // not the near-white border grey
     const on = renderToStaticMarkup(<FavouriteStar starred onToggle={() => {}} />);
     expect(on).toContain('fill="currentColor"');
     expect(on).toContain("text-warn");

@@ -1,5 +1,10 @@
 "use client";
 
+import { VerdictBadge } from "@/components/VerdictBadge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
+import { useDialogs } from "@/components/Dialogs";
 import { useParams, useRouter } from "next/navigation";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import * as XLSX from "xlsx";
@@ -19,6 +24,8 @@ import { FavouriteNote, FavouriteStar } from "@/components/FavouriteStar";
 import { RestrictionLink } from "@/lib/ui/RestrictionLink";
 import { buyBox, estSales, sellers, type Figure, type StoredMarket } from "@/lib/ui/metrics";
 
+import { Button } from "@/components/ui/button";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 interface Result {
   id: string;
   status: "pending" | "done" | "error";
@@ -87,13 +94,12 @@ type SortKey = "score" | "profit" | "roi" | "margin" | "sell_price" | "landed_co
 const FIGURES = { sales: estSales, sellers, buybox: buyBox } as const;
 const figure = (r: Result, k: keyof typeof FIGURES): Figure => FIGURES[k](r.inputs?.market);
 
-const VERDICT_STYLE = { pass: "bg-pass-soft text-pass", warn: "bg-warn-soft text-warn", fail: "bg-fail-soft text-fail" } as const;
-const BAND_STYLE = { green: "bg-pass text-white", amber: "bg-warn text-white", grey: "bg-surface-2 text-muted" } as const;
+const BAND_STYLE = { green: "bg-pass text-white", amber: "bg-warn text-white", grey: "bg-muted text-muted-foreground" } as const;
 const STATUS_ICON: Record<string, string> = { pass: "✓", warn: "!", fail: "✕", skipped: "–", off: "·" };
-const STATUS_STYLE: Record<string, string> = { pass: "bg-pass", warn: "bg-warn", fail: "bg-fail", skipped: "bg-muted", off: "bg-line" };
+const STATUS_STYLE: Record<string, string> = { pass: "bg-pass", warn: "bg-warn", fail: "bg-fail", skipped: "bg-muted", off: "bg-border" };
 
 /** Compact numeric cell: tabular figures, never wrapped, clipped rather than widening the table. */
-const NUM = "num overflow-hidden px-2 py-2 text-right text-[13px] whitespace-nowrap text-ellipsis";
+const NUM = "num overflow-hidden px-2 py-2 text-right text-xs whitespace-nowrap text-ellipsis";
 
 const titleOf = (r: Result) => r.product?.title ?? r.offer?.title ?? r.product?.ean ?? "";
 const eanOf = (r: Result) => r.product?.ean ?? r.id;
@@ -101,6 +107,7 @@ const eanOf = (r: Result) => r.product?.ean ?? r.id;
 export default function RunPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const { confirm } = useDialogs();
   const [run, setRun] = useState<Run | null>(null);
   const [results, setResults] = useState<Result[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -157,7 +164,7 @@ export default function RunPage() {
         setFavs((m) => new Map(m).set(key, favourite));
       }
     } catch (e) {
-      setError((e as Error).message);
+      toast.error((e as Error).message);
     }
   }
   /** Waive or un-waive a gate for this product; its rows in this run are re-screened now. */
@@ -169,7 +176,7 @@ export default function RunPage() {
     });
     apply(await fetchRun());
     if (res.requeued) {
-      setNotice(`${GATE_LABELS[gate]} ${action === "waive" ? "waived" : "un-waived"}; fetching the data later gates need for this product.`);
+      toast.success(`${GATE_LABELS[gate]} ${action === "waive" ? "waived" : "un-waived"}; fetching the data later gates need for this product.`);
       setNonce((n) => n + 1);
     }
   }
@@ -213,13 +220,12 @@ export default function RunPage() {
         setFavs((m) => new Map(m).set(favKey(favourite.ean, favourite.asin), favourite));
       }
     } catch (e) {
-      setError((e as Error).message);
+      toast.error((e as Error).message);
     }
   }
   const [profiles, setProfiles] = useState<{ id: string; name: string }[]>([]);
   const [rescreenProfile, setRescreenProfile] = useState("");
   const [rescreening, setRescreening] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
   // Bumped after a re-screen so the effect below reloads and resumes processing.
   const [nonce, setNonce] = useState(0);
   // Stops the status polling of the current effect (and on delete).
@@ -283,20 +289,19 @@ export default function RunPage() {
   async function rescreen() {
     setRescreening(true);
     setError(null);
-    setNotice(null);
     try {
       cancel.current();
       const r = await api<{ rescored: number; requeued: number }>(`/api/runs/${id}/rescreen`, {
         method: "POST",
         json: { profileId: rescreenProfile || undefined },
       });
-      setNotice(
+      toast.success(
         `Re-screened ${r.rescored} rows from stored data` +
           (r.requeued ? `; ${r.requeued} need data they never fetched and are being looked up now.` : "."),
       );
       setNonce((n) => n + 1);
     } catch (e) {
-      setError((e as Error).message);
+      toast.error((e as Error).message);
     } finally {
       setRescreening(false);
     }
@@ -392,7 +397,7 @@ export default function RunPage() {
 
   const th = (key: SortKey, label: ReactNode, right = false, hint?: string) => (
     <th className={`sticky-th overflow-hidden px-2 py-2 align-bottom leading-tight ${right ? "text-right" : ""}`} title={hint}>
-      <button className={`uppercase hover:text-ink ${right ? "text-right tracking-normal" : "text-left tracking-wide"}`}
+      <button className={`uppercase hover:text-foreground ${right ? "text-right tracking-normal" : "text-left tracking-wide"}`}
         onClick={() => setSort((s) => ({ key, dir: s.key === key ? (s.dir === 1 ? -1 : 1) : key === "title" ? 1 : -1 }))}>
         {label}{sort.key === key ? (sort.dir === -1 ? " ↓" : " ↑") : ""}
       </button>
@@ -400,7 +405,7 @@ export default function RunPage() {
   );
 
   if (error && !run) return <p className="rounded-md bg-fail-soft px-3 py-2 text-sm text-fail">{error}</p>;
-  if (!run) return <p className="text-sm text-muted">Loading…</p>;
+  if (!run) return <p className="text-sm text-muted-foreground">Loading…</p>;
 
   const total = Math.max(run.row_count, results.length);
 
@@ -408,61 +413,60 @@ export default function RunPage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="h1">
+          <h1 className="page-title">
             <EditableName value={run.name || run.source} inputClassName="text-lg font-semibold"
               onSave={async (name) => {
                 await api(`/api/runs/${id}`, { method: "PATCH", json: { name } });
                 setRun((r) => r && { ...r, name });
               }} />
           </h1>
-          {run.name && run.name !== run.source && <p className="text-xs text-muted">{run.source}</p>}
-          <p className="text-sm text-muted">
+          {run.name && run.name !== run.source && <p className="text-xs text-muted-foreground">{run.source}</p>}
+          <p className="text-sm text-muted-foreground">
             {run.profile?.name ?? "Profile"} · started {when(run.started_at)} · {products.length || total} products ({total} listings) · {run.token_cost} Keepa tokens
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <select className="input w-48" value={rescreenProfile} onChange={(e) => setRescreenProfile(e.target.value)} aria-label="Profile to re-screen with">
-            <option value="">{run.profile?.name ?? "This run's profile"} (as saved now)</option>
-            {profiles.filter((p) => p.name !== run.profile?.name).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
-          <button className="btn" onClick={rescreen} disabled={rescreening || processing}
+          <NativeSelect className="w-60" value={rescreenProfile} onChange={(e) => setRescreenProfile(e.target.value)} aria-label="Profile to re-screen with">
+            <NativeSelectOption value="">{run.profile?.name ?? "This run's profile"} (as saved now)</NativeSelectOption>
+            {profiles.filter((p) => p.name !== run.profile?.name).map((p) => <NativeSelectOption key={p.id} value={p.id}>{p.name}</NativeSelectOption>)}
+          </NativeSelect>
+          <Button variant="outline" onClick={rescreen} disabled={rescreening || processing}
             title="Re-run gates and score with the profile's current settings, using the data already fetched. No re-upload, no new Amazon or Keepa calls.">
             {rescreening ? "Re-screening…" : "Re-screen"}
-          </button>
-          <button className="btn" onClick={() => exportXlsx()} disabled={!rows.length}>Export {rows.length} products to xlsx</button>
-          <button className="btn text-fail" onClick={async () => {
-            if (!confirm("Delete this run and its results?")) return;
+          </Button>
+          <Button variant="outline" onClick={() => exportXlsx()} disabled={!rows.length}>Export {rows.length} products to xlsx</Button>
+          <Button variant="destructive" onClick={async () => {
+            if (!(await confirm({ title: "Delete this run?", description: "The run and its results are removed. Products, favourites and waivers are kept.", confirmLabel: "Delete", destructive: true }))) return;
             cancel.current();
             await api(`/api/runs/${id}`, { method: "DELETE" }).catch(() => {});
             router.push("/");
-          }}>Delete</button>
+          }}>Delete</Button>
         </div>
       </div>
 
       {progress && !progress.done && (
-        <div className="card space-y-2 p-4">
+        <div className="panel space-y-2 p-4">
           <div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
             <span className="font-medium">Screening {progress.processed} of {progress.total}</span>
-            <span className="text-muted">
+            <span className="text-muted-foreground">
               {progress.working ? "Working in the background: you can close this page." : "Resuming…"}
             </span>
           </div>
-          <div className="h-2 overflow-hidden rounded-full bg-surface-2">
-            <div className="h-full bg-accent transition-all" style={{ width: `${progress.total ? (progress.processed / progress.total) * 100 : 0}%` }} />
+          <div className="h-2 overflow-hidden rounded-full bg-muted">
+            <div className="h-full bg-brand transition-all" style={{ width: `${progress.total ? (progress.processed / progress.total) * 100 : 0}%` }} />
           </div>
           {progress.eta && <p className="text-sm font-medium" aria-live="polite">{etaLabel(progress.eta)[0].toUpperCase() + etaLabel(progress.eta).slice(1)}</p>}
-          <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted">
-            <span><span className="num font-semibold text-ink">{progress.waiting.amazon}</span> waiting on Amazon (catalog, price, gating, fees)</span>
+          <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
+            <span><span className="num font-semibold text-foreground">{progress.waiting.amazon}</span> waiting on Amazon (catalog, price, gating, fees)</span>
             <span>
-              <span className="num font-semibold text-ink">{progress.waiting.keepa}</span> waiting on Keepa tokens
+              <span className="num font-semibold text-foreground">{progress.waiting.keepa}</span> waiting on Keepa tokens
               {progress.waiting.keepa > 0 && progress.keepaResumeAt && <> · resumes about {new Date(progress.keepaResumeAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</>}
             </span>
-            <span><span className="num font-semibold text-ink">{progress.tokenCost}</span> Keepa tokens so far</span>
+            <span><span className="num font-semibold text-foreground">{progress.tokenCost}</span> Keepa tokens so far</span>
           </div>
         </div>
       )}
       {error && <p className="rounded-md bg-fail-soft px-3 py-2 text-sm text-fail">{error}</p>}
-      {notice && <p className="rounded-md bg-accent-soft px-3 py-2 text-sm">{notice}</p>}
 
       <BulkBar count={selected.size} stashed={stash?.size ?? 0}
         onReselect={() => { if (stash) setSelected(new Set([...stash].filter((x) => results.some((r) => r.id === x)))); setStash(null); }}
@@ -477,7 +481,7 @@ export default function RunPage() {
       {/* Fixed layout: numeric columns compact, product capped, why takes the rest and wraps.
           Scrolls sideways inside the card only below the table's minimum width. */}
       <div className="table-wrap">
-      <div className="card table-scroll" data-min="75">
+      <div className="panel table-scroll" data-min="75">
         <table className="w-full min-w-[75rem] table-fixed text-sm">
           <colgroup>
             <col className="w-[2.25rem]" />{/* select */}
@@ -496,7 +500,7 @@ export default function RunPage() {
             <col className="w-[4.25rem]" />{/* hurdle */}
             <col />{/* why: the rest */}
           </colgroup>
-          <thead className="text-left text-xs text-muted">
+          <thead className="text-left text-xs text-muted-foreground">
             <tr>
               <th className="sticky-th px-2 py-2 align-bottom">
                 <SelectAll visible={visibleIds} selected={selected} onChange={setSelected} />
@@ -525,11 +529,11 @@ export default function RunPage() {
               const isOpen = open.has(r.id);
               return (
                 <Fragment key={r.id}>
-                  <tr className={`cursor-pointer border-b border-line align-top hover:bg-surface-2 ${alt ? "bg-surface-2/40 text-muted" : ""}`}
+                  <tr className={`cursor-pointer border-b border-border align-top hover:bg-muted ${alt ? "bg-muted/40 text-muted-foreground" : ""}`}
                     onClick={() => setOpen((s) => { const n = new Set(s); if (n.has(r.id)) n.delete(r.id); else n.add(r.id); return n; })}>
                     <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
-                      <input type="checkbox" className="mt-0.5 cursor-pointer" aria-label={`Select ${titleOf(r)}`} checked={selected.has(r.id)}
-                        onChange={() => setSelected((s) => { const n = new Set(s); if (n.has(r.id)) n.delete(r.id); else n.add(r.id); return n; })} />
+                      <Checkbox className="mt-0.5" aria-label={`Select ${titleOf(r)}`} checked={selected.has(r.id)}
+                        onCheckedChange={() => setSelected((s) => { const n = new Set(s); if (n.has(r.id)) n.delete(r.id); else n.add(r.id); return n; })} />
                     </td>
                     <td className="px-1 py-1.5">
                       <ProductThumb url={r.product?.image_url} asin={r.product?.asin} title={titleOf(r)} brand={brandOf(r)} />
@@ -539,26 +543,24 @@ export default function RunPage() {
                         {r.product
                           ? <FavouriteStar starred={favourites.has(favKey(r.product.ean, r.product.asin))} onToggle={() => toggleFavourite(r)} />
                           : <span className="w-4 flex-none" />}
-                        {r.status === "error"
-                          ? <span className="rounded-full bg-fail-soft px-2 py-0.5 text-xs font-semibold text-fail">error</span>
-                          : r.verdict && <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${VERDICT_STYLE[r.verdict]}`}>{r.verdict}</span>}
+                        <VerdictBadge verdict={r.verdict} error={r.status === "error"} />
                       </div>
-                      {isWaived(r) && <span className="ml-[22px] mt-1 inline-block rounded bg-accent-soft px-1.5 text-[10px] font-semibold text-accent" title="A gate on this row is waived by you">waived</span>}
+                      {isWaived(r) && <Badge variant="brand" className="mt-1 ml-[22px]" title="A gate on this row is waived by you">waived</Badge>}
                     </td>
                     <td className="px-2 py-2 text-right">
                       {r.score != null && r.band
                         ? <span className={`num inline-block min-w-9 rounded px-1.5 py-0.5 text-center text-xs font-semibold ${BAND_STYLE[r.band]}`}>{Math.round(r.score)}</span>
-                        : <span className="text-muted">—</span>}
+                        : <span className="text-muted-foreground">—</span>}
                     </td>
                     <td className={`px-2 py-2 ${alt ? "pl-6" : ""}`}>
                       <div className="line-clamp-2 min-w-0 font-medium leading-snug break-words" title={titleOf(r)}>{alt ? "↳ " : ""}{titleOf(r)}</div>
-                      <div className="num truncate text-xs text-muted">
+                      <div className="num truncate text-xs text-muted-foreground">
                         {r.product?.ean}
-                        {r.product?.asin && <> · <a className="text-accent hover:underline" href={`https://www.amazon.co.uk/dp/${r.product.asin}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>{r.product.asin}</a></>}
+                        {r.product?.asin && <> · <a className="text-brand hover:underline" href={`https://www.amazon.co.uk/dp/${r.product.asin}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>{r.product.asin}</a></>}
                         {r.offer?.supplier && <> · {r.offer.supplier.name}{r.offer_count > 1 ? ` (+${r.offer_count - 1})` : ""}</>}
                       </div>
                       {!alt && g.others.length > 0 && (
-                        <button className="mt-1 text-xs font-medium text-accent hover:underline"
+                        <button className="mt-1 text-xs font-medium text-brand hover:underline"
                           onClick={(e) => { e.stopPropagation(); setExpanded((s) => { const n = new Set(s); if (n.has(g.key)) n.delete(g.key); else n.add(g.key); return n; }); }}>
                           {expanded.has(g.key) ? "▾ Hide" : "▸"} {g.others.length} other ASIN{g.others.length > 1 ? "s" : ""} for this EAN
                         </button>
@@ -579,7 +581,7 @@ export default function RunPage() {
                     </td>
                   </tr>
                   {isOpen && (
-                    <tr className="border-b border-line bg-surface-2/50">
+                    <tr className="border-b border-border bg-muted/50">
                       <td colSpan={15} className="px-4 py-3">
                         <Detail r={r} fav={r.product ? favs.get(favKey(r.product.ean, r.product.asin)) : undefined} onNote={saveNote} onWaive={waive} />
                       </td>
@@ -589,7 +591,7 @@ export default function RunPage() {
               );
             })}
             {!rows.length && (
-              <tr><td colSpan={15} className="px-4 py-8 text-center text-sm text-muted">{done.length ? "Nothing matches these filters." : "Rows appear here as they're screened."}</td></tr>
+              <tr><td colSpan={15} className="px-4 py-8 text-center text-sm text-muted-foreground">{done.length ? "Nothing matches these filters." : "Rows appear here as they're screened."}</td></tr>
             )}
           </tbody>
         </table>
@@ -608,20 +610,20 @@ function FeeCompare({ c, dimsSource }: { c: NonNullable<NonNullable<Result["fees
   ];
   return (
     <div className="mt-3">
-      <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">Fees by source (ex-VAT)</p>
+      <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Fees by source (ex-VAT)</p>
       <table className="num w-full text-xs">
-        <thead className="text-muted"><tr><th className="text-left font-normal">Source</th><th className="text-right font-normal">Referral</th><th className="text-right font-normal">FBA</th></tr></thead>
+        <thead className="text-muted-foreground"><tr><th className="text-left font-normal">Source</th><th className="text-right font-normal">Referral</th><th className="text-right font-normal">FBA</th></tr></thead>
         <tbody>
           {rows.map(([label, v]) => (
             <tr key={label}>
               <td className="pr-2">{label}</td>
-              <td className="text-right">{v?.referral != null ? gbp(v.referral) : <span className="text-muted">—</span>}</td>
-              <td className="text-right">{v?.fba != null ? gbp(v.fba) : <span className="text-muted">—</span>}</td>
+              <td className="text-right">{v?.referral != null ? gbp(v.referral) : <span className="text-muted-foreground">—</span>}</td>
+              <td className="text-right">{v?.fba != null ? gbp(v.fba) : <span className="text-muted-foreground">—</span>}</td>
             </tr>
           ))}
         </tbody>
       </table>
-      {dimsSource === "keepa" && <p className="mt-1 text-xs text-muted">Size from Keepa (no catalog dimensions).</p>}
+      {dimsSource === "keepa" && <p className="mt-1 text-xs text-muted-foreground">Size from Keepa (no catalog dimensions).</p>}
     </div>
   );
 }
@@ -631,16 +633,16 @@ function Sellers({ sellers, flaggedText }: { sellers: Seller[]; flaggedText: str
   const flagged = (s: Seller) => flaggedText.includes(`likely brand distributor: ${s.name ?? s.sellerId} `);
   return (
     <div className="mt-3">
-      <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">Top Buy Box sellers (365 days)</p>
+      <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Top Buy Box sellers (365 days)</p>
       <ul className="space-y-1 text-xs">
         {sellers.map((s) => (
           <li key={s.sellerId}>
-            <a className="font-medium text-accent hover:underline" href={`https://www.amazon.co.uk/sp?seller=${s.sellerId}`} target="_blank" rel="noreferrer">{s.name ?? s.sellerId}</a>
-            <span className="text-muted"> · {s.sharePct}% of Buy Box</span>
-            {s.ratingPct != null && <span className="text-muted"> · {s.ratingPct}% of {s.ratingCount?.toLocaleString("en-GB")} ratings</span>}
-            {s.storefrontSize != null && <span className="text-muted"> · {s.storefrontSize.toLocaleString("en-GB")} listings</span>}
+            <a className="font-medium text-brand hover:underline" href={`https://www.amazon.co.uk/sp?seller=${s.sellerId}`} target="_blank" rel="noreferrer">{s.name ?? s.sellerId}</a>
+            <span className="text-muted-foreground"> · {s.sharePct}% of Buy Box</span>
+            {s.ratingPct != null && <span className="text-muted-foreground"> · {s.ratingPct}% of {s.ratingCount?.toLocaleString("en-GB")} ratings</span>}
+            {s.storefrontSize != null && <span className="text-muted-foreground"> · {s.storefrontSize.toLocaleString("en-GB")} listings</span>}
             {s.brandSharePct != null && (
-              <span className={flagged(s) ? "font-semibold text-warn" : "text-muted"}> · {s.brandSharePct}% this brand{flagged(s) ? " (likely distributor)" : ""}</span>
+              <span className={flagged(s) ? "font-semibold text-warn" : "text-muted-foreground"}> · {s.brandSharePct}% this brand{flagged(s) ? " (likely distributor)" : ""}</span>
             )}
           </li>
         ))}
@@ -654,10 +656,10 @@ function SelectAll({ visible, selected, onChange }: { visible: string[]; selecte
   const n = visible.filter((x) => selected.has(x)).length;
   const all = n > 0 && n === visible.length;
   return (
-    <input type="checkbox" className="cursor-pointer" aria-label={all ? "Clear selection" : `Select all ${visible.length} shown`}
+    <Checkbox aria-label={all ? "Clear selection" : `Select all ${visible.length} shown`}
       title={all ? "Clear selection" : `Select all ${visible.length} rows matching the filters`}
-      checked={all} ref={(el) => { if (el) el.indeterminate = n > 0 && !all; }}
-      onChange={() => {
+      checked={all ? true : n > 0 ? "indeterminate" : false}
+      onCheckedChange={() => {
         const next = new Set(selected);
         if (all) for (const x of visible) next.delete(x);
         else for (const x of visible) next.add(x);
@@ -670,7 +672,7 @@ function SelectAll({ visible, selected, onChange }: { visible: string[]; selecte
 function FigureCell({ f, money }: { f: Figure; money?: boolean }) {
   return (
     <td className={NUM} title={f.note}>
-      {f.value == null ? <span className="text-muted">—</span> : money ? gbp(f.value) : Math.round(f.value).toLocaleString("en-GB")}
+      {f.value == null ? <span className="text-muted-foreground">—</span> : money ? gbp(f.value) : Math.round(f.value).toLocaleString("en-GB")}
     </td>
   );
 }
@@ -684,13 +686,13 @@ function Detail({ r, fav, onNote, onWaive }: {
   return (
     <div className="grid gap-4 lg:grid-cols-[2fr_1fr_1fr]">
       <div>
-        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">Gates</p>
+        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Gates</p>
         <ul className="space-y-1">
           {r.gate_outcomes.map((g) => (
             <li key={g.gate} className="flex gap-2 text-xs">
-              <span className={`flex h-4 w-4 flex-none items-center justify-center rounded-full text-[10px] font-bold text-white ${STATUS_STYLE[g.status]}`}>{STATUS_ICON[g.status]}</span>
+              <span className={`flex h-4 w-4 flex-none items-center justify-center rounded-full text-2xs font-bold text-white ${STATUS_STYLE[g.status]}`}>{STATUS_ICON[g.status]}</span>
               <span className="w-40 flex-none font-medium">{g.label}</span>
-              <span className="min-w-0 text-muted">
+              <span className="min-w-0 text-muted-foreground">
                 {g.detail}{g.gate === "gating" && <RestrictionLink outcomes={r.gate_outcomes} asin={r.product?.asin} />}
                 {r.product && (g.status === "fail" || g.tags?.includes("WAIVED")) && (
                   <WaiveControl waived={!!g.tags?.includes("WAIVED")}
@@ -700,11 +702,11 @@ function Detail({ r, fav, onNote, onWaive }: {
               </span>
             </li>
           ))}
-          {r.failed_gate && <li className="text-xs text-muted">Stopped at {GATE_LABELS[r.failed_gate]}; later gates didn&apos;t run.</li>}
+          {r.failed_gate && <li className="text-xs text-muted-foreground">Stopped at {GATE_LABELS[r.failed_gate]}; later gates didn&apos;t run.</li>}
         </ul>
         {r.inputs?.lookup && r.inputs.lookup.outcome !== "matched" && (
           <details className="mt-2 text-xs">
-            <summary className="cursor-pointer text-muted">
+            <summary className="cursor-pointer text-muted-foreground">
               Catalog lookup: {r.inputs.lookup.outcome === "search_miss" ? "search miss (Amazon answered, no items)" : "API error"}
             </summary>
             <ul className="num mt-1 space-y-0.5">
@@ -712,12 +714,12 @@ function Detail({ r, fav, onNote, onWaive }: {
                 <li key={i}>{a.identifiersType} {a.code}: {a.error ? <span className="text-fail">{a.error}</span> : `${a.items} item${a.items === 1 ? "" : "s"}${a.total != null ? ` of ${a.total} results` : ""}`}</li>
               ))}
             </ul>
-            {r.inputs.lookup.raw && <pre className="num mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-all rounded bg-surface p-2">{r.inputs.lookup.raw}</pre>}
+            {r.inputs.lookup.raw && <pre className="num mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-all rounded bg-card p-2">{r.inputs.lookup.raw}</pre>}
           </details>
         )}
       </div>
       <div>
-        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">Per unit at {gbp(r.sell_price)}</p>
+        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Per unit at {gbp(r.sell_price)}</p>
         {r.fees ? (
           <dl className="num grid grid-cols-[1fr_auto] gap-x-3 gap-y-0.5 text-xs">
             <dt>Referral ({r.fees.referralPct}%, {r.fees.referralCategory})</dt><dd className="text-right">{gbp(r.fees.referral)}</dd>
@@ -727,22 +729,22 @@ function Detail({ r, fav, onNote, onWaive }: {
             {r.fees.outputVat ? <><dt>Output VAT</dt><dd className="text-right">{gbp(r.fees.outputVat)}</dd></> : null}
             <dt>Landed cost</dt><dd className="text-right">{gbp(r.landed_cost)}</dd>
             <dt className="font-semibold">Profit</dt><dd className="text-right font-semibold">{gbp(r.profit)}</dd>
-            <dt className="col-span-2 mt-1 text-muted">
+            <dt className="col-span-2 mt-1 text-muted-foreground">
               {r.fees.source === "amazon" ? "Referral and FBA from Amazon's fee estimate" : "Fees from the rate card"}; DSF and VAT on fees included{r.fees.dimsEstimated ? "; size assumed (no dimensions)" : ""}. Price: {r.price_source}.
             </dt>
           </dl>
         ) : (
-          <p className="text-xs text-muted">No sell price yet.{r.hurdle_price != null ? ` Clears the floors at ${gbp(r.hurdle_price)}.` : ""}</p>
+          <p className="text-xs text-muted-foreground">No sell price yet.{r.hurdle_price != null ? ` Clears the floors at ${gbp(r.hurdle_price)}.` : ""}</p>
         )}
         {r.fees?.compare && <FeeCompare c={r.fees.compare} dimsSource={r.fees.dimsSource} />}
         {r.offer && (
-          <p className="mt-2 text-xs text-muted">
+          <p className="mt-2 text-xs text-muted-foreground">
             Quoted {r.offer.unit_cost} {r.offer.currency}/unit → {gbp(r.offer.unit_cost_gbp)} ex-VAT · MOQ {r.offer.moq ?? "—"} · {r.offer.source_ref}
           </p>
         )}
       </div>
       <div>
-        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">Score groups</p>
+        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Score groups</p>
         {r.group_scores ? (
           <ul className="space-y-1">
             {(Object.keys(GROUP_LABELS) as GroupId[]).map((g) => {
@@ -750,15 +752,15 @@ function Detail({ r, fav, onNote, onWaive }: {
               return (
                 <li key={g} className="flex items-center gap-2 text-xs">
                   <span className="w-20">{GROUP_LABELS[g]}</span>
-                  <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface">
-                    {v != null && <span className="block h-full rounded-full bg-accent" style={{ width: `${v}%` }} />}
+                  <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-card">
+                    {v != null && <span className="block h-full rounded-full bg-brand" style={{ width: `${v}%` }} />}
                   </span>
                   <span className="num w-7 text-right">{v ?? "—"}</span>
                 </li>
               );
             })}
           </ul>
-        ) : <p className="text-xs text-muted">Not scored.</p>}
+        ) : <p className="text-xs text-muted-foreground">Not scored.</p>}
         {r.product && (
           <div className="mt-3">
             <FavouriteNote note={fav?.note ?? null} starred={!!fav} onSave={(note) => onNote(r, fav, note)} />

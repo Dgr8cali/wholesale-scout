@@ -28,7 +28,7 @@ export function RestrictionLink({ outcomes, asin }: { outcomes: Outcome[]; asin:
     return (
       <a href={link.resource} target="_blank" rel="noreferrer noopener" onClick={(e) => e.stopPropagation()}
         title={link.title ?? "Request approval in Seller Central"}
-        className="ml-2 inline-flex items-center rounded border border-accent px-1.5 py-0.5 text-[11px] font-semibold text-accent hover:bg-accent-soft">
+        className="ml-2 inline-flex items-center rounded border border-brand px-1.5 py-0.5 text-2xs font-semibold text-brand hover:bg-brand-soft">
         Apply on Amazon ↗
       </a>
     );
@@ -37,7 +37,7 @@ export function RestrictionLink({ outcomes, asin }: { outcomes: Outcome[]; asin:
   return (
     <a href={approvalRequestUrl(asin)} target="_blank" rel="noreferrer noopener" onClick={(e) => e.stopPropagation()}
       title="Amazon returned no link; opens Seller Central's approval page for this ASIN"
-      className="ml-2 text-[11px] text-accent underline underline-offset-2 hover:text-ink">
+      className="ml-2 text-2xs text-brand underline underline-offset-2 hover:text-foreground">
       Check on Amazon ↗
     </a>
   );

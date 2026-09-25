@@ -1,5 +1,7 @@
 "use client";
 
+import { VerdictBadge } from "@/components/VerdictBadge";
+import { toast } from "sonner";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
@@ -13,6 +15,8 @@ import { api, gbp, pct, when } from "@/lib/ui/client";
 import { estSales } from "@/lib/ui/metrics";
 import { brandOf, toFilterRow, type ResultLike } from "@/lib/ui/resultRows";
 
+import { Button } from "@/components/ui/button";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 interface Latest extends ResultLike {
   id: string;
   score: number | null;
@@ -30,8 +34,7 @@ interface Item {
 
 type SortKey = "score" | "profit" | "roi" | "sales" | "landed" | "screened" | "title";
 
-const VERDICT_STYLE = { pass: "bg-pass-soft text-pass", warn: "bg-warn-soft text-warn", fail: "bg-fail-soft text-fail" } as const;
-const BAND_STYLE = { green: "bg-pass text-white", amber: "bg-warn text-white", grey: "bg-surface-2 text-muted" } as const;
+const BAND_STYLE = { green: "bg-pass text-white", amber: "bg-warn text-white", grey: "bg-muted text-muted-foreground" } as const;
 const STORAGE_KEY = "ws.filters.favourites";
 
 const titleOf = (i: Item) => i.latest?.product?.title ?? i.latest?.offer?.title ?? i.favourite.ean;
@@ -129,7 +132,7 @@ export default function FavouritesPage() {
       await api(`/api/favourites?id=${i.favourite.id}`, { method: "DELETE" });
       setItems((xs) => xs && xs.filter((x) => x.favourite.id !== i.favourite.id));
     } catch (e) {
-      setError((e as Error).message);
+      toast.error((e as Error).message);
     }
   }
 
@@ -138,7 +141,7 @@ export default function FavouritesPage() {
       await api("/api/favourites", { method: "PATCH", json: { id: i.favourite.id, note: text } });
       setItems((xs) => xs && xs.map((x) => (x.favourite.id === i.favourite.id ? { ...x, favourite: { ...x.favourite, note: text } } : x)));
     } catch (e) {
-      setError((e as Error).message);
+      toast.error((e as Error).message);
     }
   }
 
@@ -149,7 +152,7 @@ export default function FavouritesPage() {
       const r = await api<{ runId: string; count: number; skipped: number }>("/api/favourites/rescreen", { method: "POST", json: { profileId: profileId || undefined } });
       router.push(`/runs/${r.runId}`);
     } catch (e) {
-      setError((e as Error).message);
+      toast.error((e as Error).message);
       setBusy(false);
     }
   }
@@ -183,7 +186,7 @@ export default function FavouritesPage() {
   const th = (key: SortKey | null, label: ReactNode, right = false) => (
     <th className={`sticky-th px-2 py-2 align-bottom leading-tight ${right ? "text-right" : ""}`}>
       {key ? (
-        <button className={`uppercase hover:text-ink ${right ? "tracking-normal" : "tracking-wide"}`}
+        <button className={`uppercase hover:text-foreground ${right ? "tracking-normal" : "tracking-wide"}`}
           onClick={() => setSort((s) => ({ key, dir: s.key === key ? (s.dir === 1 ? -1 : 1) : key === "title" ? 1 : -1 }))}>
           {label}{sort.key === key ? (sort.dir === -1 ? " ↓" : " ↑") : ""}
         </button>
@@ -192,45 +195,45 @@ export default function FavouritesPage() {
   );
 
   if (error && !items) return <p className="rounded-md bg-fail-soft px-3 py-2 text-sm text-fail">{error}</p>;
-  if (!items) return <p className="text-sm text-muted">Loading…</p>;
+  if (!items) return <p className="text-sm text-muted-foreground">Loading…</p>;
   const outdated = all.filter((i) => i.outdated).length;
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="h1">Favourites</h1>
-          <p className="text-sm text-muted">
+          <h1 className="page-title">Favourites</h1>
+          <p className="text-sm text-muted-foreground">
             {all.length} product{all.length === 1 ? "" : "s"}, each with its latest result from any run
             {outdated > 0 && <> · <span className="text-warn">{outdated} outdated</span> (over 7 days old)</>}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <select className="input w-44" value={profileId} onChange={(e) => setProfileId(e.target.value)} aria-label="Profile to re-screen with">
-            <option value="">Default profile</option>
-            {profiles.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
-          <button className="btn btn-primary" onClick={rescreen} disabled={busy || !all.length}
+          <NativeSelect className="w-44" value={profileId} onChange={(e) => setProfileId(e.target.value)} aria-label="Profile to re-screen with">
+            <NativeSelectOption value="">Default profile</NativeSelectOption>
+            {profiles.map((p) => <NativeSelectOption key={p.id} value={p.id}>{p.name}</NativeSelectOption>)}
+          </NativeSelect>
+          <Button onClick={rescreen} disabled={busy || !all.length}
             title="New run with only these favourites, named 'Favourites <date>'">
             {busy ? "Starting…" : "Re-screen favourites"}
-          </button>
-          <button className="btn" onClick={exportXlsx} disabled={!rows.length}>Export {rows.length} to xlsx</button>
+          </Button>
+          <Button variant="outline" onClick={exportXlsx} disabled={!rows.length}>Export {rows.length} to xlsx</Button>
         </div>
       </div>
       {note && <p className="rounded-md bg-warn-soft px-3 py-2 text-sm text-warn">{note}</p>}
       {error && <p className="rounded-md bg-fail-soft px-3 py-2 text-sm text-fail">{error}</p>}
 
       {!all.length ? (
-        <div className="card px-6 py-10 text-center">
-          <p className="h2">No favourites yet</p>
-          <p className="mt-1 text-sm text-muted">Star a product on any run&apos;s results to keep it here.</p>
+        <div className="panel px-6 py-10 text-center">
+          <p className="section-title">No favourites yet</p>
+          <p className="mt-1 text-sm text-muted-foreground">Star a product on any run&apos;s results to keep it here.</p>
         </div>
       ) : (
         <>
           <FilterBar value={filters} onChange={setFilters} options={options} favouritesAvailable={false}
             matching={rows.length} total={all.length} unit="favourites" gateLabels={GATE_LABELS} />
           <div className="table-wrap">
-          <div className="card table-scroll" data-min="65">
+          <div className="panel table-scroll" data-min="65">
             <table className="w-full min-w-[65rem] table-fixed text-sm">
               <colgroup>
                 <col className="w-[3.5rem]" />
@@ -244,7 +247,7 @@ export default function FavouritesPage() {
                 <col className="w-[4.25rem]" />
                 <col />
               </colgroup>
-              <thead className="text-left text-xs text-muted">
+              <thead className="text-left text-xs text-muted-foreground">
                 <tr>
                   <th className="sticky-th px-1 py-2"><span className="sr-only">Image</span></th>
                   {th(null, "Verdict")}
@@ -264,7 +267,7 @@ export default function FavouritesPage() {
                   const s = estSales(l?.inputs?.market);
                   const isOpen = open.has(i.favourite.id);
                   return [
-                    <tr key={i.favourite.id} className="cursor-pointer border-b border-line align-top hover:bg-surface-2"
+                    <tr key={i.favourite.id} className="cursor-pointer border-b border-border align-top hover:bg-muted"
                       onClick={() => setOpen((x) => { const n = new Set(x); if (n.has(i.favourite.id)) n.delete(i.favourite.id); else n.add(i.favourite.id); return n; })}>
                       <td className="px-1 py-1.5">
                         <ProductThumb url={(l?.product as { image_url?: string | null } | null)?.image_url} asin={i.favourite.asin} title={titleOf(i)} brand={l ? brandOf(l) : null} />
@@ -272,41 +275,41 @@ export default function FavouritesPage() {
                       <td className="px-2 py-2">
                         <div className="flex items-center gap-1.5">
                         <FavouriteStar starred onToggle={() => unstar(i)} />
-                        {l?.status === "error" ? <span className="rounded-full bg-fail-soft px-2 py-0.5 text-xs font-semibold text-fail">error</span>
-                          : l?.verdict ? <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${VERDICT_STYLE[l.verdict]}`}>{l.verdict}</span>
-                          : <span className="text-xs text-muted">—</span>}
+                        {l?.status === "error" ? <VerdictBadge verdict={null} error />
+                          : l?.verdict ? <VerdictBadge verdict={l.verdict} />
+                          : <span className="text-xs text-muted-foreground">—</span>}
                         </div>
                       </td>
                       <td className="px-2 py-2 text-right">
                         {l?.score != null && l.band
                           ? <span className={`num inline-block min-w-9 rounded px-1.5 py-0.5 text-center text-xs font-semibold ${BAND_STYLE[l.band as keyof typeof BAND_STYLE]}`}>{Math.round(l.score)}</span>
-                          : <span className="text-muted">—</span>}
+                          : <span className="text-muted-foreground">—</span>}
                       </td>
                       <td className="px-2 py-2">
                         <div className="line-clamp-2 min-w-0 font-medium leading-snug break-words" title={titleOf(i)}>{titleOf(i)}</div>
-                        <div className="num truncate text-xs text-muted">
+                        <div className="num truncate text-xs text-muted-foreground">
                           {i.favourite.ean}
-                          {i.favourite.asin && <> · <a className="text-accent hover:underline" href={`https://www.amazon.co.uk/dp/${i.favourite.asin}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>{i.favourite.asin}</a></>}
+                          {i.favourite.asin && <> · <a className="text-brand hover:underline" href={`https://www.amazon.co.uk/dp/${i.favourite.asin}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>{i.favourite.asin}</a></>}
                         </div>
-                        {i.favourite.note && <div className="line-clamp-1 text-xs italic text-muted" title={i.favourite.note}>{i.favourite.note}</div>}
+                        {i.favourite.note && <div className="line-clamp-1 text-xs italic text-muted-foreground" title={i.favourite.note}>{i.favourite.note}</div>}
                       </td>
                       <td className="truncate px-2 py-2 text-xs" title={l?.offer?.supplier?.name ?? ""}>{l?.offer?.supplier?.name ?? "—"}</td>
-                      <td className="num px-2 py-2 text-right text-[13px]">{gbp(l?.landed_cost)}</td>
-                      <td className={`num px-2 py-2 text-right text-[13px] ${l?.profit != null && l.profit < 0 ? "text-fail" : ""}`}>{gbp(l?.profit)}</td>
-                      <td className="num px-2 py-2 text-right text-[13px]">{pct(l?.roi)}</td>
-                      <td className="num px-2 py-2 text-right text-[13px]" title={s.note}>{s.value == null ? <span className="text-muted">—</span> : Math.round(s.value).toLocaleString("en-GB")}</td>
+                      <td className="num px-2 py-2 text-right text-xs">{gbp(l?.landed_cost)}</td>
+                      <td className={`num px-2 py-2 text-right text-xs ${l?.profit != null && l.profit < 0 ? "text-fail" : ""}`}>{gbp(l?.profit)}</td>
+                      <td className="num px-2 py-2 text-right text-xs">{pct(l?.roi)}</td>
+                      <td className="num px-2 py-2 text-right text-xs" title={s.note}>{s.value == null ? <span className="text-muted-foreground">—</span> : Math.round(s.value).toLocaleString("en-GB")}</td>
                       <td className="px-2 py-2 text-xs">
                         {l ? (
                           <>
                             <span>{when(l.updated_at)}</span>
-                            {i.outdated && <span className="ml-1.5 rounded bg-warn-soft px-1.5 py-0.5 text-[11px] font-semibold text-warn">outdated</span>}
-                            {l.run && <div className="truncate"><Link className="text-accent hover:underline" href={`/runs/${l.run.id}`} onClick={(e) => e.stopPropagation()}>{l.run.name}</Link></div>}
+                            {i.outdated && <span className="ml-1.5 rounded bg-warn-soft px-1.5 py-0.5 text-2xs font-semibold text-warn">outdated</span>}
+                            {l.run && <div className="truncate"><Link className="text-brand hover:underline" href={`/runs/${l.run.id}`} onClick={(e) => e.stopPropagation()}>{l.run.name}</Link></div>}
                           </>
                         ) : <span className="text-warn">Not screened yet</span>}
                       </td>
                     </tr>,
                     isOpen && (
-                      <tr key={`${i.favourite.id}-d`} className="border-b border-line bg-surface-2/50">
+                      <tr key={`${i.favourite.id}-d`} className="border-b border-border bg-muted/50">
                         <td colSpan={10} className="px-4 py-3">
                           <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
                             <p className="text-xs leading-snug">{l?.status === "error" ? l.error : l?.why ?? "No result yet: re-screen favourites to screen it."}</p>
@@ -317,7 +320,7 @@ export default function FavouritesPage() {
                     ),
                   ];
                 })}
-                {!rows.length && <tr><td colSpan={10} className="px-4 py-8 text-center text-sm text-muted">Nothing matches these filters.</td></tr>}
+                {!rows.length && <tr><td colSpan={10} className="px-4 py-8 text-center text-sm text-muted-foreground">Nothing matches these filters.</td></tr>}
               </tbody>
             </table>
           </div>

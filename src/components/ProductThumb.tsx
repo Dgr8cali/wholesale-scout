@@ -13,7 +13,7 @@ export function amazonImage(url: string, px: number): string {
 
 function Placeholder({ size }: { size: number }) {
   return (
-    <span className="flex items-center justify-center rounded border border-line bg-surface-2 text-muted" style={{ width: size, height: size }} aria-hidden="true">
+    <span className="flex items-center justify-center rounded border border-border bg-muted text-muted-foreground" style={{ width: size, height: size }} aria-hidden="true">
       <svg width={size * 0.5} height={size * 0.5} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round">
         <path d="M3 7.5L12 3l9 4.5v9L12 21l-9-4.5v-9z" />
         <path d="M3 7.5L12 12l9-4.5M12 12v9" />
@@ -44,17 +44,17 @@ export function ProductThumb({ url, asin, title, brand }: { url: string | null |
     // Plain <img>: Amazon's CDN serves the sizes; no need to route thumbnails through image optimisation.
     // eslint-disable-next-line @next/next/no-img-element
     <img src={amazonImage(url!, 80)} alt="" width={40} height={40} loading="lazy" decoding="async"
-      onError={() => setFailed(true)} className="h-10 w-10 rounded border border-line bg-white object-contain" />
+      onError={() => setFailed(true)} className="h-10 w-10 rounded border border-border bg-white object-contain" />
   ) : <Placeholder size={40} />;
 
   const card = preview && typeof document !== "undefined" && createPortal(
-    <div role="tooltip" className="pointer-events-none fixed z-50 w-[316px] rounded-lg border border-line bg-surface p-2 shadow-xl" style={{ left: preview.x, top: preview.y }}>
+    <div role="tooltip" className="pointer-events-none fixed z-50 w-[316px] rounded-lg border border-border bg-card p-2 shadow-xl" style={{ left: preview.x, top: preview.y }}>
       {hasImage ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={amazonImage(url!, 600)} alt="" width={300} height={300} className="h-[300px] w-[300px] rounded bg-white object-contain" />
       ) : <Placeholder size={300} />}
       <p className="mt-2 line-clamp-3 text-sm font-medium leading-snug">{title ?? "Untitled"}</p>
-      <p className="mt-0.5 text-xs text-muted">{[brand, asin].filter(Boolean).join(" · ") || "No ASIN"}</p>
+      <p className="mt-0.5 text-xs text-muted-foreground">{[brand, asin].filter(Boolean).join(" · ") || "No ASIN"}</p>
     </div>,
     document.body,
   );
