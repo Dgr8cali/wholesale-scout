@@ -16,6 +16,7 @@ import { PURCHASE_STATUSES, type PurchaseStatus } from "@/lib/tracker";
 import { api, gbp } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
 import { PackageIcon } from "lucide-react";
+import { SyncStatus } from "@/components/product/SyncStatus";
 
 type Row = Purchase & { actuals?: Actuals | null };
 const label = (s: PurchaseStatus) => PURCHASE_STATUSES.find((x) => x.id === s)?.label ?? s;
@@ -41,11 +42,12 @@ export default function TrackerPage() {
   const [rows, setRows] = useState<Row[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [show, setShow] = useState<"open" | "all">("open");
+  const [nonce, setNonce] = useState(0);
   useEffect(() => {
     api<{ purchases: Row[] }>("/api/purchases?actuals=1")
       .then((r) => setRows(r.purchases))
       .catch((e: Error) => setError(e.message));
-  }, []);
+  }, [nonce]);
   const shown = useMemo(() => (rows ?? []).filter((p) => show === "all" || p.status !== "closed"), [rows, show]);
 
   if (error) return <ErrorState title="Couldn't load the tracker" message={error} />;
@@ -66,6 +68,7 @@ export default function TrackerPage() {
           <h1 className="page-title">Tracker</h1>
           <p className="text-sm text-muted-foreground">What you&apos;ve bought, the app&apos;s prediction when you bought it, and what Amazon says actually happened.</p>
         </div>
+        <SyncStatus onSynced={() => setNonce((n) => n + 1)} />
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

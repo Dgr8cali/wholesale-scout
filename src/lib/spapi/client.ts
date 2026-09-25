@@ -56,6 +56,10 @@ const RATE_LIMITS: Record<string, { rate: number; burst: number }> = {
   restrictions: { rate: 5, burst: 10 }, // getListingsRestrictions
   pricing: { rate: 0.5, burst: 1 }, // getCompetitivePricing (20 per request)
   offersBatch: { rate: 0.1, burst: 1 }, // getItemOffersBatch (20 per request)
+  createReport: { rate: 0.0167, burst: 15 },
+  getReport: { rate: 2, burst: 15 },
+  getReportDocument: { rate: 0.0167, burst: 15 },
+  inventory: { rate: 2, burst: 2 }, // getInventorySummaries
 };
 
 interface Bucket {
@@ -170,6 +174,55 @@ export class SpApiClient {
       }
       await this.sleep(2 ** attempt * 1000);
     }
+  }
+
+  /** Ask Amazon for a report over [start, end]; it's generated in the background (see getReport). */
+  async createReport(reportType: string, start: Date, end: Date, options?: Record<string, string>): Promise<string> {
+    const r = await this.request<{ reportId: string }>("createReport", "POST", "/reports/2021-06-30/reports", {
+      body: { reportType, marketplaceIds: [this.config.marketplaceId], dataStartTime: start.toISOString(), dataEndTime: end.toISOString(), ...(options ? { reportOptions: options } : {}) },
+    });
+    return r.reportId;
+  }
+
+  /** A report's progress: IN_QUEUE, IN_PROGRESS, DONE (with its document), CANCELLED (no data) or FATAL. */
+  async getReport(reportId: string): Promise<{ status: string; documentId: string | null }> {
+    const r = await this.request<{ processingStatus: string; reportDocumentId?: string }>("getReport", "GET", `/reports/2021-06-30/reports/${reportId}`);
+    return { status: r.processingStatus, documentId: r.reportDocumentId ?? null };
+  }
+
+  /** A finished report's text (downloaded from Amazon's short-lived link, unzipped when it's gzipped). */
+  async reportText(documentId: string): Promise<string> {
+    const d = await this.request<{ url: string; compressionAlgorithm?: string }>("getReportDocument", "GET", `/reports/2021-06-30/documents/${documentId}`);
+    const res = await this.fetchImpl(d.url);
+    if (!res.ok) throw new SpApiError(`Report download ${res.status}`, res.status, undefined);
+    const buf = Buffer.from(await res.arrayBuffer());
+    const { gunzipSync } = await import("node:zlib");
+    // Amazon's flat files are Latin-1 (Windows-1252) for the UK.
+    return (d.compressionAlgorithm === "GZIP" ? gunzipSync(buf) : buf).toString("latin1");
+  }
+
+  /** Your FBA stock per SKU (fulfillable, inbound, reserved, unsellable), every page. */
+  async fbaInventory(): Promise<{ sku: string; asin: string; fulfillable: number; inbound: number; reserved: number; unsellable: number; total: number }[]> {
+    const out: { sku: string; asin: string; fulfillable: number; inbound: number; reserved: number; unsellable: number; total: number }[] = [];
+    let next: string | undefined;
+    do {
+      type Summary = { asin: string; sellerSku: string; totalQuantity?: number; inventoryDetails?: {
+        fulfillableQuantity?: number; inboundWorkingQuantity?: number; inboundShippedQuantity?: number; inboundReceivingQuantity?: number;
+        reservedQuantity?: { totalReservedQuantity?: number }; unfulfillableQuantity?: { totalUnfulfillableQuantity?: number } } };
+      const r = await this.request<{ payload?: { inventorySummaries?: Summary[] }; pagination?: { nextToken?: string } }>("inventory", "GET", "/fba/inventory/v1/summaries", {
+        query: { details: "true", granularityType: "Marketplace", granularityId: this.config.marketplaceId, marketplaceIds: this.config.marketplaceId, ...(next ? { nextToken: next } : {}) },
+      });
+      for (const s of r.payload?.inventorySummaries ?? []) {
+        const d = s.inventoryDetails ?? {};
+        out.push({
+          sku: s.sellerSku, asin: s.asin, fulfillable: d.fulfillableQuantity ?? 0,
+          inbound: (d.inboundWorkingQuantity ?? 0) + (d.inboundShippedQuantity ?? 0) + (d.inboundReceivingQuantity ?? 0),
+          reserved: d.reservedQuantity?.totalReservedQuantity ?? 0, unsellable: d.unfulfillableQuantity?.totalUnfulfillableQuantity ?? 0, total: s.totalQuantity ?? 0,
+        });
+      }
+      next = r.pagination?.nextToken;
+    } while (next);
+    return out;
   }
 
   /** Catalog lookup by EAN. Every ASIN an EAN maps to is returned. */
