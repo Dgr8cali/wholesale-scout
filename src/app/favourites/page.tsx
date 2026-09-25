@@ -39,7 +39,7 @@ const titleOf = (i: Item) => i.latest?.product?.title ?? i.latest?.offer?.title 
 function filterRow(i: Item): FilterRow {
   if (i.latest) return toFilterRow(i.latest, new Set());
   return {
-    verdict: null, band: null, failedGate: null, brand: null, supplier: null, amazon: null, approval: null, favourite: true,
+    verdict: null, band: null, failedGate: null, brand: null, supplier: null, amazon: null, approval: null, favourite: true, waived: false,
     values: { sales: null, sellers: null, profit: null, roi: null, margin: null, sell: null },
     text: [i.favourite.ean, i.favourite.asin, i.favourite.note].filter(Boolean).join(" "),
   };

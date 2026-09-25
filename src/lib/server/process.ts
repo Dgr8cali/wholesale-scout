@@ -10,6 +10,7 @@ import type { CategoryRule } from "../screening/rules";
 import { winScore } from "../screening/score";
 import { getSpApi, type CatalogMatch, type CompetitivePrice, type LookupTrace } from "../spapi/client";
 import { activeRateCard, chunks, db, loadProfile, loadRules, must } from "./db";
+import { productKey, waiversFor } from "./overrides";
 
 const DAY = 86_400_000;
 const CATALOG_TTL = 7 * DAY;
@@ -90,6 +91,8 @@ interface Row {
   amazonFees: StoredInputs["amazonFees"];
   lookup: LookupTrace | null;
   sellers: SellerView[] | null;
+  /** Gates waived for this product. */
+  waivers: Map<GateId, string | null>;
   /** Lookup notes that belong to the row's data (kept across re-screens). */
   dataNotes: string[];
   /** Notes about this screening pass only. */
@@ -176,6 +179,7 @@ function context(row: Row, card: RateCard, rules: CategoryRule[], cfg: ProfileCo
       hazmat: row.hazmat,
     },
     sellers: row.sellers ?? undefined,
+    waivers: row.waivers,
     market: row.market,
     restriction: row.restriction,
     amazonFees: feesAt(row, cfg),
@@ -495,6 +499,7 @@ async function loadRows(results: PendingRow[]): Promise<Row[]> {
 
   // A Keepa snapshot under 24 hours old beats stored market data without history.
   const keepaFresh = await freshSnapshots(products.map((p) => p.asin).filter((a): a is string => !!a));
+  const waivers = await waiversFor(products.map((p) => p.ean));
 
   return results.map((r) => {
     const offer = O.get(r.offer_id)!;
@@ -513,6 +518,8 @@ async function loadRows(results: PendingRow[]): Promise<Row[]> {
       amazonFees: i?.amazonFees ?? null,
       lookup: i?.lookup ?? null,
       sellers: i?.sellers ?? null,
+      // A waiver made before the ASIN was known (EAN only) covers every ASIN of that EAN.
+      waivers: new Map([...(waivers.get(productKey(product.ean, null)) ?? []), ...(waivers.get(productKey(product.ean, product.asin)) ?? [])]),
       dataNotes: i?.notes ?? [],
       notes: [],
     };
@@ -525,7 +532,11 @@ async function loadRows(results: PendingRow[]): Promise<Row[]> {
  * data a gate now needs (they stopped early last time, or were screened before inputs
  * were stored) go back to pending, and the processor fetches only what they lack.
  */
-export async function rescreenRun(runId: string, profileId?: string | null): Promise<{ rescored: number; requeued: number }> {
+export async function rescreenRun(
+  runId: string,
+  profileId?: string | null,
+  opts: { resultIds?: string[] } = {},
+): Promise<{ rescored: number; requeued: number }> {
   const d = db();
   const runRow = must(await d.from("runs").select("id, profile_id").eq("id", runId).single(), "run") as { id: string; profile_id: string | null };
   const profile = await loadProfile(profileId || runRow.profile_id);
@@ -538,7 +549,7 @@ export async function rescreenRun(runId: string, profileId?: string | null): Pro
       await d.from("results").select("id, product_id, offer_id, inputs, status").eq("run_id", runId).range(from, from + 999),
       "results",
     ) as (PendingRow & { status: string })[];
-    all.push(...page);
+    all.push(...page.filter((r) => !opts.resultIds || opts.resultIds.includes(r.id)));
     if (page.length < 1000) break;
   }
 
@@ -572,12 +583,13 @@ export async function rescreenRun(runId: string, profileId?: string | null): Pro
   for (const c of chunks(requeue)) {
     must(await d.from("results").update({ status: "pending", updated_at: new Date().toISOString() }).in("id", c), "requeue");
   }
-  const done = requeue.length === 0;
+  // Counts for the whole run (a partial re-screen touches only some rows).
+  const p = await runProgress(runId);
   must(
     await d.from("runs").update({
-      processed_count: all.length - requeue.length,
-      row_count: all.length,
-      ...(done ? { status: "done", finished_at: new Date().toISOString() } : {}),
+      processed_count: p.processed,
+      row_count: p.total,
+      ...(p.done ? { status: "done", finished_at: new Date().toISOString() } : {}),
     }).eq("id", runId),
     "run progress",
   );

@@ -108,6 +108,8 @@ export interface ScreenContext {
   };
   /** Top Buy Box sellers' profiles, looked up for rows that pass every gate. */
   sellers?: SellerView[];
+  /** Gates you've waived for this product, with your reason: a fail becomes a warn. */
+  waivers?: Map<GateId, string | null>;
   market: MarketData | null;
   /** A brand you've recorded as approved on the Brands page, with the date. */
   brandApproval?: { status: "approved"; date: string | null } | null;
@@ -209,7 +211,11 @@ const EVALUATORS: Record<GateId, Evaluator> = {
     const moq = Math.max(1, ctx.offer.moq ?? 1);
     const order = moq * landed;
     const cap = (p.budget * g.maxLineSharePct) / 100;
-    if (order > cap) return { status: failAs(g.mode), detail: `MOQ ${moq} × ${money(landed)} = ${money(order)}, over the ${money(cap)} line cap` };
+    if (order > cap) {
+      const fit = Math.floor(cap / landed);
+      const fits = fit > 0 ? `${fit.toLocaleString("en-GB")} unit${fit === 1 ? "" : "s"} fit` : "not one unit fits";
+      return { status: failAs(g.mode), detail: `MOQ ${moq} × ${money(landed)} = ${money(order)}, over the ${money(cap)} line cap; ${fits}` };
+    }
     if (ctx.offer.supplierMovGbp != null && ctx.offer.supplierMovGbp > p.budget) {
       return { status: failAs(g.mode), detail: `Supplier minimum order ${money(ctx.offer.supplierMovGbp)} is over the ${money(p.budget)} budget` };
     }
@@ -397,7 +403,12 @@ export function runGates(ctx: ScreenContext, p: ProfileConfig, only?: GateId[]):
       run.outcomes.push({ gate: id, label: GATE_LABELS[id], status: "off", detail: "Gate off in this profile" });
       continue;
     }
-    const r = EVALUATORS[id](ctx, p, run);
+    let r = EVALUATORS[id](ctx, p, run);
+    // Waived for this product: the fail stays visible as a warn, and later gates still run.
+    if (r.status === "fail" && ctx.waivers?.has(id)) {
+      const why = ctx.waivers.get(id);
+      r = { ...r, status: "warn", detail: `${r.detail} (waived by you${why ? `: ${why}` : ""})`, tags: [...(r.tags ?? []), "WAIVED"] };
+    }
     run.outcomes.push({ gate: id, label: GATE_LABELS[id], ...r });
     if (r.status === "fail") {
       run.failedGate = id;

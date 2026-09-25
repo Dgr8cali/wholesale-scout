@@ -10,7 +10,8 @@ import { EditableName } from "@/components/EditableName";
 import { FilterBar, type FilterOptions } from "@/components/FilterBar";
 import { EMPTY_FILTERS, matches, normalizeFilters, type FilterSet } from "@/lib/filters";
 import { groupRows } from "@/lib/ui/group";
-import { brandOf, favKey, toFilterRow } from "@/lib/ui/resultRows";
+import { brandOf, favKey, isWaived, toFilterRow } from "@/lib/ui/resultRows";
+import { WaiveControl } from "@/components/WaiveControl";
 import { FavouriteNote, FavouriteStar } from "@/components/FavouriteStar";
 import { RestrictionLink } from "@/lib/ui/RestrictionLink";
 import { buyBox, estSales, sellers, type Figure, type StoredMarket } from "@/lib/ui/metrics";
@@ -148,6 +149,20 @@ export default function RunPage() {
       setError((e as Error).message);
     }
   }
+  /** Waive or un-waive a gate for this product; its rows in this run are re-screened now. */
+  async function waive(r: Result, gate: GateId, action: "waive" | "unwaive", reason?: string) {
+    if (!r.product) return;
+    const res = await api<{ requeued: number }>("/api/overrides", {
+      method: "POST",
+      json: { items: [{ ean: r.product.ean, asin: r.product.asin }], gate, action, reason, runId: id },
+    });
+    apply(await fetchRun());
+    if (res.requeued) {
+      setNotice(`${GATE_LABELS[gate]} ${action === "waive" ? "waived" : "un-waived"}; fetching the data later gates need for this product.`);
+      setNonce((n) => n + 1);
+    }
+  }
+
   /** Save a note; on a product not yet starred, the note stars it. */
   async function saveNote(r: Result, f: Fav | undefined, note: string) {
     try {
@@ -464,6 +479,7 @@ export default function RunPage() {
                           ? <span className="rounded-full bg-fail-soft px-2 py-0.5 text-xs font-semibold text-fail">error</span>
                           : r.verdict && <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${VERDICT_STYLE[r.verdict]}`}>{r.verdict}</span>}
                       </div>
+                      {isWaived(r) && <span className="ml-[22px] mt-1 inline-block rounded bg-accent-soft px-1.5 text-[10px] font-semibold text-accent" title="A gate on this row is waived by you">waived</span>}
                     </td>
                     <td className="px-2 py-2 text-right">
                       {r.score != null && r.band
@@ -501,7 +517,7 @@ export default function RunPage() {
                   {isOpen && (
                     <tr className="border-b border-line bg-surface-2/50">
                       <td colSpan={13} className="px-4 py-3">
-                        <Detail r={r} fav={r.product ? favs.get(favKey(r.product.ean, r.product.asin)) : undefined} onNote={saveNote} />
+                        <Detail r={r} fav={r.product ? favs.get(favKey(r.product.ean, r.product.asin)) : undefined} onNote={saveNote} onWaive={waive} />
                       </td>
                     </tr>
                   )}
@@ -578,7 +594,12 @@ function FigureCell({ f, money }: { f: Figure; money?: boolean }) {
   );
 }
 
-function Detail({ r, fav, onNote }: { r: Result; fav?: Fav; onNote: (r: Result, f: Fav | undefined, note: string) => void }) {
+function Detail({ r, fav, onNote, onWaive }: {
+  r: Result;
+  fav?: Fav;
+  onNote: (r: Result, f: Fav | undefined, note: string) => void;
+  onWaive: (r: Result, gate: GateId, action: "waive" | "unwaive", reason?: string) => Promise<void>;
+}) {
   return (
     <div className="grid gap-4 lg:grid-cols-[2fr_1fr_1fr]">
       <div>
@@ -588,7 +609,14 @@ function Detail({ r, fav, onNote }: { r: Result; fav?: Fav; onNote: (r: Result, 
             <li key={g.gate} className="flex gap-2 text-xs">
               <span className={`flex h-4 w-4 flex-none items-center justify-center rounded-full text-[10px] font-bold text-white ${STATUS_STYLE[g.status]}`}>{STATUS_ICON[g.status]}</span>
               <span className="w-40 flex-none font-medium">{g.label}</span>
-              <span className="text-muted">{g.detail}{g.gate === "gating" && <RestrictionLink outcomes={r.gate_outcomes} asin={r.product?.asin} />}</span>
+              <span className="min-w-0 text-muted">
+                {g.detail}{g.gate === "gating" && <RestrictionLink outcomes={r.gate_outcomes} asin={r.product?.asin} />}
+                {r.product && (g.status === "fail" || g.tags?.includes("WAIVED")) && (
+                  <WaiveControl waived={!!g.tags?.includes("WAIVED")}
+                    onWaive={(reason) => onWaive(r, g.gate as GateId, "waive", reason)}
+                    onUnwaive={() => onWaive(r, g.gate as GateId, "unwaive")} />
+                )}
+              </span>
             </li>
           ))}
           {r.failed_gate && <li className="text-xs text-muted">Stopped at {GATE_LABELS[r.failed_gate]}; later gates didn&apos;t run.</li>}

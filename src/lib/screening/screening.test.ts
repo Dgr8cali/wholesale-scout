@@ -298,3 +298,32 @@ describe("config validation", () => {
     expect(invalidNumbers(bad)).toEqual(expect.arrayContaining(["gates.priceBand.min", "score.scales.roi.points[1][0]", "fees.inboundPerUnit"]));
   });
 });
+
+describe("gate waivers", () => {
+  it("turns a fail into a warn tagged 'waived by you' and lets later gates run", () => {
+    const c = ctx({ market: market({ amazonLastSeenDays: 30 }) });
+    expect(runGates(c, DEFAULT_PROFILE).failedGate).toBe("amazonPresence");
+    const waived = ctx({ ...c, waivers: new Map([["amazonPresence", "Amazon out of stock for months"]]) });
+    const run = runGates(waived, DEFAULT_PROFILE);
+    expect(run.failedGate).toBeNull();
+    const g = run.outcomes.find((o) => o.gate === "amazonPresence")!;
+    expect(g).toMatchObject({ status: "warn", tags: expect.arrayContaining(["AMAZON", "WAIVED"]) });
+    expect(g.detail).toBe("Amazon sold 30 days ago (waived by you: Amazon out of stock for months)");
+    expect(run.outcomes.at(-1)!.gate).toBe("fees"); // later gates ran
+    const w = winScore(waived, run, DEFAULT_PROFILE, fit);
+    expect(w.score).not.toBeNull();
+    expect(w.why).toContain("Watch: Amazon sold 30 days ago (waived by you");
+  });
+
+  it("doesn't touch a gate that passed, or other gates", () => {
+    const c = ctx({ waivers: new Map([["fees", null]]), market: market({ amazonLastSeenDays: 30 }) });
+    expect(runGates(c, DEFAULT_PROFILE).failedGate).toBe("amazonPresence");
+  });
+
+  it("says how many units fit the budget", () => {
+    // Test order caps a line at 30% of £1,000 = £300. MOQ 300 at £6.45 landed = £1,935.
+    const c = ctx({ offer: { unitCostGbp: 5, moq: 300, goodsVatRatePct: 20, supplierMovGbp: null } });
+    const run = runGates(c, profiles["Test order"]);
+    expect(run.outcomes.find((o) => o.gate === "budgetFit")!.detail).toBe("MOQ 300 × £6.45 = £1935.00, over the £300.00 line cap; 46 units fit");
+  });
+});

@@ -4,7 +4,7 @@ import { favKey, toFilterRow, type ResultLike } from "./ui/resultRows";
 
 const row = (over: Partial<FilterRow> = {}): FilterRow => ({
   verdict: "warn", band: "amber", failedGate: null, brand: "Bioderma", supplier: "Pharmazon", amazon: "no", approval: "open",
-  favourite: false, values: { sales: 200, sellers: 5, profit: 6.4, roi: 84, margin: 30, sell: 22.9 }, text: "Bioderma Sebium gel 3401399277092", ...over,
+  favourite: false, waived: false, values: { sales: 200, sellers: 5, profit: 6.4, roi: 84, margin: 30, sell: 22.9 }, text: "Bioderma Sebium gel 3401399277092", ...over,
 });
 const f = (over: Partial<FilterSet>): FilterSet => ({ ...EMPTY_FILTERS, ...over });
 
@@ -27,6 +27,8 @@ describe("filters combine with AND", () => {
     expect(matches(row(), f({ favouritesOnly: true }))).toBe(false);
     expect(matches(row({ favourite: true }), f({ favouritesOnly: true }))).toBe(true);
     expect(matches(row(), f({ q: "sebium" }))).toBe(true);
+    expect(matches(row(), f({ waivedOnly: true }))).toBe(false);
+    expect(matches(row({ waived: true }), f({ waivedOnly: true }))).toBe(true);
   });
 
   it("takes numeric ranges inclusively, and drops rows with no value once a range is set", () => {

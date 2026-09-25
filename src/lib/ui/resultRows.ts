@@ -31,6 +31,9 @@ function amazonOnListing(r: ResultLike): "yes" | "no" | null {
   return null;
 }
 
+/** A gate on this row was waived by you. */
+export const isWaived = (r: Pick<ResultLike, "gate_outcomes">) => !!r.gate_outcomes?.some((o) => o.tags?.includes("WAIVED"));
+
 function approvalOf(r: ResultLike): Approval | null {
   const g = r.gate_outcomes?.find((o) => o.gate === "gating");
   if (g?.tags?.includes("BRAND_APPROVED")) return "open";
@@ -49,6 +52,7 @@ export function toFilterRow(r: ResultLike, favourites: Set<string>): FilterRow {
     amazon: amazonOnListing(r),
     approval: approvalOf(r),
     favourite: !!r.product && favourites.has(favKey(r.product.ean, r.product.asin)),
+    waived: isWaived(r),
     values: {
       sales: estSales(m).value,
       sellers: sellers(m).value,

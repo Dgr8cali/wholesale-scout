@@ -359,3 +359,55 @@ describe("favourites", () => {
     expect((await favouritesWithLatest())[0].outdated).toBe(true);
   });
 });
+
+describe("gate overrides", () => {
+  it("waiving a failed gate re-screens the product's row: warn, later gates run, fees and score", async () => {
+    const fake = new FakeDb();
+    __setDbForTests(fake);
+    const { addOverride, removeOverride } = await import("./overrides");
+    const { resultIdsFor } = await import("./runRows");
+    const f = file("p.xlsx", [["EAN", "Name", "Price", "MOQ"], ["5000000000035", "Cheap widget", "6.00", 10]],
+      { name: "P", vatBasis: "ex_vat", vatRate: 20, currency: "GBP" });
+    const { runId } = await ingest({ files: [f] });
+    while (!(await processRun(runId)).done);
+    const row = () => fake.tables.results.find((r) => r.run_id === runId)!;
+    expect(row().failed_gate).toBe("fees");
+
+    // Waive the price band? It passed. Waive the fee gate: the row still can't pass fees, but it's scored.
+    await addOverride("5000000000035", "B0CHEAP001", "fees", "Supplier will drop to £4");
+    const ids = await resultIdsFor(runId, [{ ean: "5000000000035", asin: "B0CHEAP001" }]);
+    await rescreenRun(runId, null, { resultIds: ids });
+    const fee = (row().gate_outcomes as { gate: string; status: string; detail: string; tags: string[] }[]).find((g) => g.gate === "fees")!;
+    expect(row().failed_gate).toBeNull();
+    expect(row().verdict).toBe("warn");
+    expect(fee.status).toBe("warn");
+    expect(fee.detail).toMatch(/\(waived by you: Supplier will drop to £4\)$/);
+    expect(row().why).toMatch(/waived by you/);
+
+    await removeOverride({ ean: "5000000000035", asin: "B0CHEAP001", gate: "fees" });
+    await rescreenRun(runId, null, { resultIds: ids });
+    expect(row().failed_gate).toBe("fees");
+  });
+
+  it("a waived early gate sends the row back for the data it never fetched", async () => {
+    const fake = new FakeDb();
+    __setDbForTests(fake);
+    const { addOverride } = await import("./overrides");
+    await import("./db").then((m) => m.ensureSeed());
+    const strict = fake.tables.profiles.find((p) => p.name === "Strict")!;
+    const f = file("p.xlsx", [["EAN", "Name", "Price", "MOQ"], ["4006381333931", "Walker Tape 25mm Eau de Toilette", "5.00", 12]],
+      { name: "P", vatBasis: "ex_vat", vatRate: 20, currency: "GBP" });
+    const { runId } = await ingest({ profileId: strict.id as string, files: [f] });
+    while (!(await processRun(runId)).done);
+    expect(fake.tables.results[0].failed_gate).toBe("compliance");
+    await addOverride("4006381333931", null, "compliance", "Not actually a fragrance");
+    const r = await rescreenRun(runId, null, { resultIds: [fake.tables.results[0].id as string] });
+    expect(r.requeued).toBe(1);
+    while (!(await processRun(runId)).done);
+    expect(fake.tables.results[0].failed_gate).not.toBe("compliance");
+    // Now the ASIN is known; the EAN-only waiver still applies on the next re-screen.
+    expect(fake.tables.products[0].asin).toBe("B0TAPE0001");
+    await rescreenRun(runId);
+    expect(fake.tables.results[0].failed_gate).not.toBe("compliance");
+  });
+});

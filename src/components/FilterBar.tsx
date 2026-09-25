@@ -173,6 +173,10 @@ export function FilterBar({ value, onChange, options, favouritesAvailable, match
             ★ Favourites only
           </label>
         )}
+        <button onClick={() => set({ waivedOnly: !value.waivedOnly })} aria-pressed={value.waivedOnly}
+          className={`rounded-full px-2.5 py-1 text-xs ${value.waivedOnly ? "bg-accent-soft font-semibold text-accent ring-1 ring-accent" : "bg-surface-2 text-muted"}`}>
+          Waived
+        </button>
         <Popover label={<>Ranges{rangeCount ? ` (${rangeCount})` : ""}</>} active={rangeCount > 0} wide>
           <div className="grid grid-cols-[1fr_4.5rem_4.5rem] items-center gap-x-2 gap-y-1.5 text-xs">
             <span />

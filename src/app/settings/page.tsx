@@ -62,18 +62,19 @@ function ModeSelect({ value, onChange, allowOff = true }: { value: GateMode; onC
 }
 
 export default function SettingsPage() {
-  const [tab, setTab] = useState<"profiles" | "rules" | "rates">("profiles");
+  const [tab, setTab] = useState<"profiles" | "rules" | "rates" | "waived">("profiles");
   return (
     <div className="space-y-5">
       <h1 className="h1">Settings</h1>
       <div className="flex gap-1 border-b border-line">
-        {([["profiles", "Profiles"], ["rules", "Compliance rules"], ["rates", "Rate card"]] as const).map(([k, l]) => (
+        {([["profiles", "Profiles"], ["rules", "Compliance rules"], ["rates", "Rate card"], ["waived", "Waived gates"]] as const).map(([k, l]) => (
           <button key={k} onClick={() => setTab(k)} className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium ${tab === k ? "border-accent text-ink" : "border-transparent text-muted hover:text-ink"}`}>{l}</button>
         ))}
       </div>
       {tab === "profiles" && <Profiles />}
       {tab === "rules" && <Rules />}
       {tab === "rates" && <Rates />}
+      {tab === "waived" && <Waived />}
     </div>
   );
 }
@@ -468,6 +469,65 @@ function Rates() {
         <button className="btn btn-primary" onClick={save}>Save as new version</button>
         {msg && <span className={`text-sm ${msg.ok ? "text-pass" : "text-fail"}`}>{msg.text}</span>}
       </div>
+    </div>
+  );
+}
+
+interface Override { id: string; ean: string; asin: string | null; gate: GateId; reason: string | null; created_at: string; title: string | null }
+
+/** Every gate you've waived, per product; removing one takes effect on the next screen or re-screen. */
+function Waived() {
+  const [items, setItems] = useState<Override[] | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  useEffect(() => {
+    api<{ overrides: Override[]; unavailable?: string }>("/api/overrides")
+      .then((r) => {
+        setItems(r.overrides);
+        if (r.unavailable) setMsg(r.unavailable);
+      })
+      .catch((e) => setMsg(e.message));
+  }, []);
+  if (!items) return msg ? <p className="text-sm text-fail">{msg}</p> : <p className="text-sm text-muted">Loading…</p>;
+  const remove = async (o: Override) => {
+    try {
+      await api(`/api/overrides?id=${o.id}`, { method: "DELETE" });
+      setItems((xs) => xs && xs.filter((x) => x.id !== o.id));
+    } catch (e) {
+      setMsg((e as Error).message);
+    }
+  };
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-muted">
+        A waived gate turns that product&apos;s fail into a warning in every run, so later gates, fees and the score still run.
+        Waive or un-waive from a result&apos;s expanded row; removing one here applies the next time a run is screened or re-screened.
+      </p>
+      {msg && <p className="rounded-md bg-warn-soft px-3 py-2 text-sm text-warn">{msg}</p>}
+      {!items.length ? (
+        <div className="card px-6 py-8 text-center text-sm text-muted">No gates waived.</div>
+      ) : (
+        <div className="card overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="text-left text-xs uppercase tracking-wide text-muted">
+              <tr><th className="px-4 py-2">Product</th><th className="px-4 py-2">Gate</th><th className="px-4 py-2">Reason</th><th className="px-4 py-2">Since</th><th className="px-4 py-2" /></tr>
+            </thead>
+            <tbody>
+              {items.map((o) => (
+                <tr key={o.id} className="border-t border-line align-top">
+                  <td className="px-4 py-2">
+                    <div className="font-medium">{o.title ?? "—"}</div>
+                    <div className="num text-xs text-muted">{o.ean}{o.asin ? ` · ${o.asin}` : " · any ASIN"}</div>
+                  </td>
+                  <td className="px-4 py-2">{GATE_LABELS[o.gate] ?? o.gate}</td>
+                  <td className="px-4 py-2 text-muted">{o.reason ?? "—"}</td>
+                  <td className="px-4 py-2 whitespace-nowrap">{new Date(o.created_at).toLocaleDateString("en-GB")}</td>
+                  <td className="px-4 py-2 text-right"><button className="btn px-2 py-0.5 text-xs text-fail" onClick={() => remove(o)}>Remove</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

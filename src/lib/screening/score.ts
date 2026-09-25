@@ -189,7 +189,7 @@ export function whyLine(ctx: ScreenContext, run: GateRun, score: number | null, 
     .slice(0, 2)
     .map((g) => phrase(g, ctx, run, false))
     .filter(Boolean);
-  const warns = run.outcomes.filter((o) => o.status === "warn" && o.tags?.some((t) => ["APPROVAL", "SPIKE", "EROSION", "MULTI_ASIN", "BRAND_DISTRIBUTOR"].includes(t)));
+  const warns = run.outcomes.filter((o) => o.status === "warn" && o.tags?.some((t) => ["APPROVAL", "SPIKE", "EROSION", "MULTI_ASIN", "BRAND_DISTRIBUTOR", "WAIVED"].includes(t)));
   const clash = run.outcomes.some((o) => o.tags?.includes("TIER_MISMATCH")) ? tierDisagreement(ctx) : null;
 
   if (score == null) {

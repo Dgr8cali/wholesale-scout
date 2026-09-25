@@ -33,12 +33,14 @@ export interface FilterSet {
   amazon: "any" | "yes" | "no";
   approval: Approval[];
   favouritesOnly: boolean;
+  /** Only rows with a gate you've waived. */
+  waivedOnly: boolean;
   ranges: Partial<Record<RangeKey, Range>>;
   q: string;
 }
 
 export const EMPTY_FILTERS: FilterSet = {
-  verdicts: [], bands: [], gates: [], brands: [], supplier: null, amazon: "any", approval: [], favouritesOnly: false, ranges: {}, q: "",
+  verdicts: [], bands: [], gates: [], brands: [], supplier: null, amazon: "any", approval: [], favouritesOnly: false, waivedOnly: false, ranges: {}, q: "",
 };
 
 /** What a filter needs to know about a row. */
@@ -52,6 +54,8 @@ export interface FilterRow {
   amazon: "yes" | "no" | null;
   approval: Approval | null;
   favourite: boolean;
+  /** A gate on this row is waived. */
+  waived: boolean;
   values: Record<RangeKey, number | null>;
   /** Searchable text: name, brand, EAN, ASIN, supplier, why. */
   text: string;
@@ -69,6 +73,7 @@ export function matches(row: FilterRow, f: FilterSet): boolean {
   if (f.amazon !== "any" && row.amazon !== f.amazon) return false;
   if (f.approval.length && (!row.approval || !f.approval.includes(row.approval))) return false;
   if (f.favouritesOnly && !row.favourite) return false;
+  if (f.waivedOnly && !row.waived) return false;
   for (const k of RANGE_KEYS) if (!inRange(row.values[k], f.ranges[k])) return false;
   const q = f.q.trim().toLowerCase();
   if (q && !row.text.toLowerCase().includes(q)) return false;
@@ -104,6 +109,7 @@ export function activeChips(f: FilterSet, gateLabels: Record<string, string>): C
   if (f.amazon !== "any") chips.push({ id: "a", label: `Amazon on listing: ${f.amazon}`, remove: (s) => ({ ...s, amazon: "any" }) });
   for (const a of f.approval) chips.push({ id: `ap:${a}`, label: APPROVAL_LABELS[a], remove: (s) => ({ ...s, approval: without(s.approval, a) }) });
   if (f.favouritesOnly) chips.push({ id: "fav", label: "Favourites only", remove: (s) => ({ ...s, favouritesOnly: false }) });
+  if (f.waivedOnly) chips.push({ id: "waived", label: "Waived", remove: (s) => ({ ...s, waivedOnly: false }) });
   for (const k of RANGE_KEYS) {
     const r = f.ranges[k];
     if (!r || (r.min == null && r.max == null)) continue;
