@@ -88,7 +88,7 @@ export interface KeepaProduct {
 
 /** What Keepa said about one request: its own token figures, logged and recorded as they arrive. */
 export interface KeepaResponseMeta {
-  kind: "asin" | "code" | "seller";
+  kind: "asin" | "code" | "seller" | "finder" | "category";
   /** The request included Buy Box data (buybox=1): 3 tokens a product instead of 1. */
   buyBox?: boolean;
   /** ASINs or codes asked for. */

@@ -136,18 +136,16 @@ export async function scanPreview(sellerId: string, opts: { lookup: boolean; pro
 }
 
 /**
- * Scan a seller: its storefront's ASINs (up to 2,000) become a run exactly like Check ASINs
- * with no cost. Products are created by ASIN; the catalog is read as the run goes.
+ * ASINs as a run with no cost, exactly like Check ASINs: one product per ASIN (an existing one,
+ * any EAN, else one known by its ASIN only); the catalog is read as the run goes. `tokens`
+ * already spent finding the ASINs are put on the run, so the Keepa totals include them.
  */
-export async function startScan(sellerId: string, profileId?: string | null): Promise<{ runId: string; asins: number; more: number }> {
-  const sf = await storefront(sellerId, true);
-  const s = sf!.seller;
-  const list = s.asin_list ?? [];
-  if (!list.length) throw new Error(`Keepa lists no ASINs on ${s.name ?? sellerId}'s storefront`);
-  const asins = list.slice(0, SCAN_CAP);
+export async function startAsinRun(opts: {
+  asins: string[]; name: string; stats: Partial<RunStats>; profileId?: string | null;
+  tokens?: { count: number; stage: "lookup" | "sellers" };
+}): Promise<{ runId: string }> {
+  const { asins, name } = opts;
   const d = db();
-
-  // One product per ASIN: an existing one (any EAN), else one known by its ASIN only.
   const products = new Map<string, { id: string; ean: string; title: string | null }>();
   for (const c of chunks(asins, 200)) {
     const rows = must(await d.from("products").select("id, ean, asin, title").in("asin", c), "products") as { id: string; ean: string; asin: string; title: string | null }[];
@@ -158,7 +156,6 @@ export async function startScan(sellerId: string, profileId?: string | null): Pr
     const rows = must(await d.from("products").insert(c.map((a) => ({ ean: a, asin: a }))).select("id, ean, asin, title"), "insert products") as { id: string; ean: string; asin: string; title: string | null }[];
     for (const r of rows) products.set(r.asin, r);
   }
-
   const rows: NormalizedRow[] = asins.map((a, i) => {
     const p = products.get(a)!;
     return {
@@ -167,12 +164,10 @@ export async function startScan(sellerId: string, profileId?: string | null): Pr
       title: p.title, brand: null, category: null, sourceRow: i + 1, eanValid: true,
     };
   });
-  const name = `Seller scan · ${s.name ?? sellerId}`;
-  const scan: NonNullable<RunStats["scan"]> = { sellerId, sellerName: s.name, asins: asins.length, more: list.length - asins.length };
   const { runId } = await ingest({
-    profileId,
+    profileId: opts.profileId,
     name,
-    stats: { scan },
+    stats: opts.stats,
     files: [{
       fileName: name,
       supplier: { name: "Manual", vatBasis: "ex_vat", vatRate: 20, currency: "GBP" },
@@ -185,18 +180,36 @@ export async function startScan(sellerId: string, profileId?: string | null): Pr
       rows,
     }],
   });
-
-  // The storefront lookup's tokens go on this run, so the Keepa totals include them.
-  const unbilled = s.storefront_unbilled_tokens ?? 0;
-  if (unbilled > 0) {
+  const spent = opts.tokens?.count ?? 0;
+  if (spent > 0) {
     const run = must(await d.from("runs").select("token_cost, stats").eq("id", runId).single(), "run") as { token_cost: number; stats: RunStats };
     const stages = { history: 0, buyBox: 0, lookup: 0, sellers: 0, ...(run.stats.keepaStages ?? {}) };
-    stages.sellers += unbilled;
+    stages[opts.tokens!.stage] += spent;
     must(await d.from("runs").update({
-      token_cost: (run.token_cost ?? 0) + unbilled,
-      stats: { ...run.stats, keepaByDay: addDailyTokens(run.stats.keepaByDay, unbilled), keepaStages: stages },
+      token_cost: (run.token_cost ?? 0) + spent,
+      stats: { ...run.stats, keepaByDay: addDailyTokens(run.stats.keepaByDay, spent), keepaStages: stages },
     }).eq("id", runId), "run tokens");
   }
+  return { runId };
+}
+
+/**
+ * Scan a seller: its storefront's ASINs (up to 2,000) become a run exactly like Check ASINs
+ * with no cost. Products are created by ASIN; the catalog is read as the run goes.
+ */
+export async function startScan(sellerId: string, profileId?: string | null): Promise<{ runId: string; asins: number; more: number }> {
+  const sf = await storefront(sellerId, true);
+  const s = sf!.seller;
+  const list = s.asin_list ?? [];
+  if (!list.length) throw new Error(`Keepa lists no ASINs on ${s.name ?? sellerId}'s storefront`);
+  const asins = list.slice(0, SCAN_CAP);
+  const d = db();
+  const scan: NonNullable<RunStats["scan"]> = { sellerId, sellerName: s.name, asins: asins.length, more: list.length - asins.length };
+  // The storefront lookup's tokens go on this run, so the Keepa totals include them.
+  const { runId } = await startAsinRun({
+    asins, name: `Seller scan · ${s.name ?? sellerId}`, stats: { scan }, profileId,
+    tokens: { count: s.storefront_unbilled_tokens ?? 0, stage: "sellers" },
+  });
   must(await d.from("keepa_sellers").update({ last_scan_run_id: runId, last_scan_at: new Date().toISOString(), storefront_unbilled_tokens: 0 }).eq("seller_id", sellerId), "seller");
   return { runId, asins: asins.length, more: scan.more };
 }

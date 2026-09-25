@@ -18,6 +18,7 @@ import { useState } from "react";
 import Link from "next/link";
 import type { Fav, Result, Seller } from "./types";
 import { WatchEditor } from "./WatchEditor";
+import { FindOnQogita } from "./FindOnQogita";
 import { Checked } from "@/components/check/Checked";
 import { useHelp } from "@/components/help/HelpPanel";
 import { amazonLastSeen, isStale, stamp } from "@/lib/ui/when";
@@ -199,6 +200,10 @@ export function Detail({ r, fav, onNote, onWaive, onWatch, stacked = false, budg
           <p className="text-xs text-muted-foreground">No sell price yet.{r.hurdle_price != null ? ` Clears the floors at ${gbp(r.hurdle_price)}.` : ""}</p>
         )}
         {r.fees?.compare && <FeeCompare c={r.fees.compare} dimsSource={r.fees.dimsSource} />}
+        {/* Found without a supplier (a hunt, a seller scan, a check with no cost): look on Qogita. */}
+        {r.offer?.cost_known === false && (r.verdict === "pass" || r.verdict === "warn") && r.product?.ean && /^\d{8,14}$/.test(r.product.ean) && (
+          <FindOnQogita ean={r.product.ean} />
+        )}
         {r.offer?.supplier && (
           <p className="mt-2 text-xs">
             <span className="text-muted-foreground">Source: </span>

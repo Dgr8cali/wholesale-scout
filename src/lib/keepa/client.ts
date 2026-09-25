@@ -300,6 +300,30 @@ export class HttpKeepaClient implements KeepaClient {
     return out;
   }
 
+  /** Product Finder: ASINs matching a selection (Keepa's query JSON), sorted as it says. */
+  async productFinder(selection: Record<string, unknown>): Promise<FinderResult> {
+    const url = new URL("https://api.keepa.com/query");
+    url.search = new URLSearchParams({ key: this.key, domain: "2", selection: JSON.stringify(selection) }).toString();
+    const res = await this.fetchImpl(url);
+    const body = (await res.json().catch(() => ({}))) as KeepaBody & { asinList?: string[] | null; totalResults?: number };
+    this.log(`[keepa] finder http=${res.status} results=${body.asinList?.length ?? 0}/${body.totalResults ?? "?"} tokensConsumed=${body.tokensConsumed ?? 0} tokensLeft=${body.tokensLeft}`);
+    if (!res.ok || body.error) throw new Error(`Keepa Product Finder ${res.status}: ${body.error?.message ?? body.error?.type ?? "request failed"}`);
+    return { asins: body.asinList ?? [], total: body.totalResults ?? body.asinList?.length ?? 0, tokensUsed: body.tokensConsumed ?? 0, tokensLeft: body.tokensLeft ?? null };
+  }
+
+  /** Amazon UK's top-level categories (Keepa's /category with category=0): 1 token. */
+  async rootCategories(): Promise<{ categories: { id: number; name: string; products: number | null }[]; tokensUsed: number }> {
+    const url = new URL("https://api.keepa.com/category");
+    url.search = new URLSearchParams({ key: this.key, domain: "2", category: "0", parents: "0" }).toString();
+    const res = await this.fetchImpl(url);
+    const body = (await res.json().catch(() => ({}))) as KeepaBody & { categories?: Record<string, { catId: number; name: string; productCount?: number }> };
+    this.log(`[keepa] categories http=${res.status} n=${Object.keys(body.categories ?? {}).length} tokensConsumed=${body.tokensConsumed ?? 0}`);
+    if (!res.ok || body.error) throw new Error(`Keepa categories ${res.status}: ${body.error?.message ?? body.error?.type ?? "request failed"}`);
+    const categories = Object.values(body.categories ?? {}).map((c) => ({ id: c.catId, name: c.name, products: c.productCount ?? null }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    return { categories, tokensUsed: body.tokensConsumed ?? 0 };
+  }
+
   async lookupByAsins(asins: string[], onResponse?: OnKeepaResponse, opts: { buyBox?: boolean } = {}): Promise<KeepaLookup> {
     return this.run("asin", asins, onResponse, (p, _chunk, out) => {
       out.byAsin.set(p.asin, p);
@@ -317,6 +341,16 @@ export class HttpKeepaClient implements KeepaClient {
     }, opts.buyBox ?? true);
   }
 }
+
+export interface FinderResult { asins: string[]; total: number; tokensUsed: number; tokensLeft: number | null }
+
+/** Keepa's Product Finder (/query) and category list, on the HTTP client only. */
+export interface KeepaFinder {
+  productFinder(selection: Record<string, unknown>): Promise<FinderResult>;
+  rootCategories(): Promise<{ categories: { id: number; name: string; products: number | null }[]; tokensUsed: number }>;
+}
+
+export const hasFinder = (k: KeepaClient): k is KeepaClient & KeepaFinder => typeof (k as Partial<KeepaFinder>).productFinder === "function";
 
 /** Stub unless KEEPA_API_KEY looks like a real key (64 alphanumerics). */
 export function getKeepa(env: NodeJS.ProcessEnv = process.env): KeepaClient {

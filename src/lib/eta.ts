@@ -10,6 +10,8 @@ export interface RunStats {
   watch?: { startedAt: string; evaluatedAt?: string | null; alerts?: number; emailed?: boolean } | null;
   /** A seller scan: whose storefront this run screens (rows mark whether it holds the Buy Box). */
   scan?: { sellerId: string; sellerName: string | null; asins: number; more: number } | null;
+  /** A hunt: the Product Finder shape it ran with, how many matched, and what the finder cost. */
+  hunt?: { shape: import("./hunt").HuntShape; total: number; taken: number; finderTokens: number } | null;
   /** Rows leaving the Amazon queue per minute, measured on this run (smoothed across batches). */
   amazonPerMin?: number | null;
   /** Keepa's own figures, as last read by the Keepa stage. */
