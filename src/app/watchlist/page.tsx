@@ -141,7 +141,7 @@ export default function WatchlistPage() {
                   return (
                     <TableRow key={f.id} data-verdict={i.latest?.verdict ?? "empty"}>
                       <TableCell className="max-w-96 pl-4 whitespace-normal">
-                        <p className="line-clamp-2 text-sm">{i.latest?.product?.title ?? f.asin ?? f.ean}</p>
+                        <p className="line-clamp-2 text-sm">{f.asin ? <Link className="hover:text-brand hover:underline" href={`/products/${f.asin}`}>{i.latest?.product?.title ?? f.asin}</Link> : i.latest?.product?.title ?? f.ean}</p>
                         <p className="num text-2xs text-muted-foreground">
                           {f.ean}{f.asin && <> · <a className="text-brand hover:underline" href={`https://www.amazon.co.uk/dp/${f.asin}`} target="_blank" rel="noreferrer">{f.asin}</a></>}
                           {f.note && <span className="font-sans"> · {f.note}</span>}

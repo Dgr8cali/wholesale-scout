@@ -8,6 +8,7 @@ import { CrumbsProvider, useCrumbs } from "@/components/Crumbs";
 import { QogitaCartButton, QogitaCartProvider } from "@/components/QogitaCart";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { HelpButton } from "@/components/help/HelpButton";
+import { ProductSearch } from "@/components/product/ProductSearch";
 import { HelpProvider } from "@/components/help/HelpPanel";
 import {
   Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator,
@@ -175,6 +176,7 @@ export function AppShell({ defaultOpen, qogita, children }: { defaultOpen: boole
             <SidebarTrigger className="-ml-1" />
             <Crumbs />
             <div className="ml-auto flex items-center gap-3">
+              <ProductSearch />
               <StatusBar />
               <QogitaCartButton />
               <HelpButton />

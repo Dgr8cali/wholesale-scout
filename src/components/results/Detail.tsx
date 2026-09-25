@@ -40,13 +40,13 @@ function FeeCompare({ c, dimsSource }: { c: NonNullable<NonNullable<Result["fees
     <div className="mt-3">
       <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Fees by source (ex-VAT)</p>
       <table className="num w-full text-xs">
-        <thead className="text-muted-foreground"><tr><th className="text-left font-normal">Source</th><th className="text-right font-normal">Referral</th><th className="text-right font-normal">FBA</th></tr></thead>
+        <thead className="text-muted-foreground"><tr><th className="text-left font-normal">Source</th><th className="pl-3 text-right font-normal">Referral</th><th className="pl-3 text-right font-normal">FBA</th></tr></thead>
         <tbody>
           {rows.map(([label, v]) => (
             <tr key={label}>
               <td className="pr-2">{label}</td>
-              <td className="text-right">{v?.referral != null ? gbp(v.referral) : <span className="text-muted-foreground">—</span>}</td>
-              <td className="text-right">{v?.fba != null ? gbp(v.fba) : <span className="text-muted-foreground">—</span>}</td>
+              <td className="pl-3 text-right">{v?.referral != null ? gbp(v.referral) : <span className="text-muted-foreground">—</span>}</td>
+              <td className="pl-3 text-right">{v?.fba != null ? gbp(v.fba) : <span className="text-muted-foreground">—</span>}</td>
             </tr>
           ))}
         </tbody>
@@ -143,7 +143,12 @@ export function Detail({ r, fav, onNote, onWaive, onWatch, stacked = false, budg
     : null;
   return (
     <div className="space-y-4">
-    {r.status === "done" && <Checked at={r.updated_at} recheck={recheck} />}
+    {(r.status === "done" || asin) && (
+      <div className="flex flex-wrap items-center gap-x-3">
+        {r.status === "done" && <Checked at={r.updated_at} recheck={recheck} />}
+        {asin && <Link className="text-xs font-medium text-brand hover:underline" href={`/products/${asin}`} onClick={(e) => e.stopPropagation()}>Product page →</Link>}
+      </div>
+    )}
     <div className={cn("grid gap-4", !stacked && "lg:grid-cols-[2fr_1fr_1fr]")}>
       <div>
         <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Gates</p>

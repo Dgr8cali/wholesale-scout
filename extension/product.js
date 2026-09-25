@@ -168,7 +168,7 @@
     panel.append(ws.h("div", { class: "row", style: "margin-top:8px;flex-wrap:wrap" }, [
       ws.h("button", { class: "b", text: "☆ Star", disabled: !card, onclick: () => act("POST", "/api/extension/star", "Starred") }),
       ws.h("button", { class: "b", text: "Watch", title: "Add to the watchlist with the condition suggested from what blocked it", disabled: !card, onclick: () => act("POST", "/api/extension/watch", "On the watchlist") }),
-      ws.h("button", { class: "b", text: "Open in app", disabled: !card, onclick: () => ws.send({ type: "open", url: `${settings.appUrl}${card.runUrl}` }) }),
+      ws.h("button", { class: "b", text: "Open in app", title: "The product's page in the app: every run, supplier and reading", disabled: !card, onclick: () => ws.send({ type: "open", url: `${settings.appUrl}/products/${asin}` }) }),
       !card?.checkedAt || card.pending ? ws.h("button", { class: "b", text: "Re-check", title: "Screen again now instead of reusing today's check", onclick: () => load(true) }) : null,
     ]));
     if (message) panel.append(ws.h("p", { class: message.isError ? "err" : "muted", text: message.text }));

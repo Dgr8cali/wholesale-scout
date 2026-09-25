@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { ChevronDownIcon, ChevronUpIcon, XIcon } from "lucide-react";
 import { useEffect, useRef, type ReactNode } from "react";
 import { ProductThumb } from "@/components/ProductThumb";
@@ -66,7 +67,9 @@ export function DetailDrawer({ r, index, count, sparks, onStep, onClose, childre
         <div className="flex gap-3">
           <ProductThumb url={r.product?.image_url} asin={r.product?.asin} title={titleOf(r)} brand={brandOf(r)} size={72} />
           <div className="min-w-0">
-            <h2 className="section-title leading-snug">{titleOf(r)}</h2>
+            <h2 className="section-title leading-snug">
+              {r.product?.asin ? <Link className="hover:text-brand hover:underline" href={`/products/${r.product.asin}`}>{titleOf(r)}</Link> : titleOf(r)}
+            </h2>
             <p className="num mt-0.5 text-xs text-muted-foreground">
               {[brandOf(r), r.product?.ean].filter(Boolean).join(" · ")}
               {r.product?.asin && <> · <a className="text-brand hover:underline" href={`https://www.amazon.co.uk/dp/${r.product.asin}`} target="_blank" rel="noreferrer">{r.product.asin}</a></>}

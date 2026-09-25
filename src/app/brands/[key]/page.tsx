@@ -178,7 +178,7 @@ export default function BrandPage() {
                       <div className="flex gap-2.5">
                         <ProductThumb url={p.image_url} asin={p.asin} title={p.title ?? p.ean} brand={b.brand} size={36} />
                         <div className="min-w-0">
-                          <p className="line-clamp-2 text-sm">{p.title ?? p.ean}</p>
+                          <p className="line-clamp-2 text-sm">{p.asin ? <Link className="hover:text-brand hover:underline" href={`/products/${p.asin}`}>{p.title ?? p.ean}</Link> : p.title ?? p.ean}</p>
                           <p className="num text-2xs text-muted-foreground">
                             {p.ean !== p.asin ? p.ean : ""}
                             {p.asin && <> · <a className="text-brand hover:underline" href={`https://www.amazon.co.uk/dp/${p.asin}`} target="_blank" rel="noreferrer">{p.asin}</a></>}
