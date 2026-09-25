@@ -114,6 +114,8 @@ export interface ResultsTableProps {
   maxMonths: number;
   /** A seller scan: rows where this seller holds the Buy Box now are marked. */
   scanSellerId?: string | null;
+  /** A line under a product (Favourites: when it was last screened, and where). */
+  rowNote?: (r: Result) => ReactNode;
 }
 
 export function ResultsTable(props: ResultsTableProps) {
@@ -360,6 +362,7 @@ function Cell({ id, d, props, compact, isOpen }: { id: string; d: DisplayRow; pr
               {r.product?.asin && <> · <a className="text-brand hover:underline" href={`https://www.amazon.co.uk/dp/${r.product.asin}`} target="_blank" rel="noreferrer" onClick={stop}>{r.product.asin}</a></>}
               {r.offer?.supplier && <> · {r.offer.supplier.name}{r.offer_count > 1 ? ` (+${r.offer_count - 1})` : ""}</>}
             </div>
+            {props.rowNote?.(r)}
             {props.scanSellerId && r.inputs?.market?.buyBoxSellerId != null && (
               r.inputs.market.buyBoxSellerId === props.scanSellerId
                 ? <span className="mt-0.5 inline-block rounded bg-brand-soft px-1 text-2xs font-semibold text-brand" title="This seller holds the Buy Box now">Holds Buy Box</span>

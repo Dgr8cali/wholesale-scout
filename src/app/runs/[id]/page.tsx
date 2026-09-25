@@ -14,9 +14,10 @@ import { FilterBar, type FilterOptions } from "@/components/FilterBar";
 import { Detail } from "@/components/results/Detail";
 import { DetailDrawer } from "@/components/results/DetailDrawer";
 import { ResultsTable, type DisplayRow } from "@/components/results/ResultsTable";
-import { eanOf, figure, listingMoq, titleOf, type Fav, type Progress, type Result, type Run, type SortKey } from "@/components/results/types";
+import { eanOf, type Fav, type Progress, type Result, type Run, type SortKey } from "@/components/results/types";
 import { useSparks } from "@/components/results/useSparks";
 import { downloadXlsx, exportRows } from "@/components/results/exportXlsx";
+import { compareResults } from "@/components/results/sort";
 import { ErrorState } from "@/components/States";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -29,7 +30,6 @@ import { api, when } from "@/lib/ui/client";
 import { favouriteSync, favStore, type FavStore } from "@/lib/ui/favouriteSync";
 import { conditionLabel, type WatchCondition } from "@/lib/watch";
 import { storefrontUrl } from "@/lib/check/seller";
-import { firstOrderFigures } from "@/lib/ui/metrics";
 import { groupRows } from "@/lib/ui/group";
 import { brandOf, dormantOf, favKey, toFilterRow } from "@/lib/ui/resultRows";
 import { cn } from "@/lib/utils";
@@ -300,19 +300,7 @@ export default function RunPage() {
   }, [run?.profile_snapshot]);
   const rows = useMemo(() => {
     const filtered = done.filter((r) => matches(toFilterRow(r, favourites), filters));
-    const val = (r: Result): number | string | null =>
-      sort.key === "title" ? titleOf(r).toLowerCase()
-        : sort.key === "verdict" ? ({ pass: 0, warn: 1, fail: 2 }[r.verdict ?? "fail"])
-        : sort.key === "sales" || sort.key === "sellers" || sort.key === "buybox" || sort.key === "share" || sort.key === "profitMo" ? figure(r, sort.key).value
-        : sort.key === "orderQty" || sort.key === "months" ? (r.score == null ? null : firstOrderFigures(r.inputs?.market, r.landed_cost, listingMoq(r), lineBudget)[sort.key === "orderQty" ? "qty" : "months"].value)
-        : (r[sort.key] as number | null);
-    const order = (a: Result, b: Result) => {
-      const x = val(a), y = val(b);
-      if (x == null && y == null) return 0;
-      if (x == null) return 1;
-      if (y == null) return -1;
-      return (x < y ? -1 : x > y ? 1 : 0) * sort.dir;
-    };
+    const order = compareResults(sort.key, sort.dir, lineBudget);
     // One line per EAN: its best ASIN leads, the others sit collapsed beneath it.
     return groupRows(filtered, eanOf, order);
   }, [done, filters, favourites, sort, lineBudget]);

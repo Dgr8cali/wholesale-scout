@@ -152,9 +152,9 @@ export const favouritesRunName = (d = new Date()) =>
  * A new run with just the favourites, each on its latest offer, named "Favourites <date>".
  * Returns the run id; the caller starts processing.
  */
-export async function rescreenFavourites(profileId?: string | null, opts: { name?: string; source?: (n: number) => string } = {}): Promise<{ runId: string; count: number; skipped: number }> {
+export async function rescreenFavourites(profileId?: string | null, opts: { name?: string; source?: (n: number) => string; ids?: string[] } = {}): Promise<{ runId: string; count: number; skipped: number }> {
   const d = db();
-  const views = await favouritesWithLatest();
+  const views = (await favouritesWithLatest()).filter((v) => !opts.ids || opts.ids.includes(v.favourite.id));
   const profile = await loadProfile(profileId);
   const picks: { productId: string; offerId: string }[] = [];
   let skipped = 0;

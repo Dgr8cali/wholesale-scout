@@ -20,13 +20,14 @@ export function BulkBar({ count, stashed, onReselect, onClear, onStar, onUnstar,
   stashed: number;
   onReselect: () => void;
   onClear: () => void;
-  onStar: () => Promise<void>;
-  onUnstar: () => Promise<void>;
-  onWaive: (gate: GateId, reason: string) => Promise<void>;
-  onUnwaive: (gate: GateId) => Promise<void>;
-  onRescreen: () => Promise<void>;
-  onExport: () => void;
-  onRemove: () => Promise<void>;
+  /** Each action shows only where the page offers it. */
+  onStar?: () => Promise<void>;
+  onUnstar?: () => Promise<void>;
+  onWaive?: (gate: GateId, reason: string) => Promise<void>;
+  onUnwaive?: (gate: GateId) => Promise<void>;
+  onRescreen?: () => Promise<void>;
+  onExport?: () => void;
+  onRemove?: () => Promise<void>;
 }) {
   const [gate, setGate] = useState<GateId>("budgetFit");
   const [reason, setReason] = useState("");
@@ -62,15 +63,16 @@ export function BulkBar({ count, stashed, onReselect, onClear, onStar, onUnstar,
       confirmLabel: "Remove",
       destructive: true,
     });
-    if (ok) await act("remove", onRemove, `Removed ${count}`);
+    if (ok && onRemove) await act("remove", onRemove, `Removed ${count}`);
   };
   return (
     <div className="panel sticky top-14 z-20 flex flex-wrap items-center gap-2 border-brand px-3 py-2 shadow-md" role="toolbar" aria-label="Actions on selected rows">
       <span className="text-sm font-semibold"><span className="num">{count}</span> selected</span>
       {sep}
-      <Button variant="outline" size="xs" disabled={!!busy} onClick={() => act("star", onStar, `Starred ${count}`)}><StarIcon /> Star</Button>
-      <Button variant="outline" size="xs" disabled={!!busy} onClick={() => act("unstar", onUnstar, `Un-starred ${count}`)}><StarOffIcon /> Unstar</Button>
-      {sep}
+      {onStar && <Button variant="outline" size="xs" disabled={!!busy} onClick={() => act("star", onStar, `Starred ${count}`)}><StarIcon /> Star</Button>}
+      {onUnstar && <Button variant="outline" size="xs" disabled={!!busy} onClick={() => act("unstar", onUnstar, `Un-starred ${count}`)}><StarOffIcon /> Unstar</Button>}
+      {(onStar || onUnstar) && sep}
+      {onWaive && onUnwaive && <>
       <NativeSelect size="sm" className="w-44" value={gate} onChange={(e) => setGate(e.target.value as GateId)} aria-label="Gate to waive or un-waive">
         {GATE_ORDER.map((g) => <NativeSelectOption key={g} value={g}>{GATE_LABELS[g]}</NativeSelectOption>)}
       </NativeSelect>
@@ -83,11 +85,14 @@ export function BulkBar({ count, stashed, onReselect, onClear, onStar, onUnstar,
         {busy === "unwaive" ? "…" : "Un-waive"}
       </Button>
       {sep}
-      <Button variant="outline" size="xs" disabled={!!busy} onClick={() => act("rescreen", onRescreen)}>{busy === "rescreen" ? "Starting…" : "Re-screen selected"}</Button>
-      <Button variant="outline" size="xs" disabled={!!busy} onClick={onExport}>Export selected</Button>
-      <Button variant="outline" size="xs" className="text-fail hover:text-fail" disabled={!!busy} onClick={remove}>
-        Remove from run
-      </Button>
+      </>}
+      {onRescreen && <Button variant="outline" size="xs" disabled={!!busy} onClick={() => act("rescreen", onRescreen)}>{busy === "rescreen" ? "Starting…" : "Re-screen selected"}</Button>}
+      {onExport && <Button variant="outline" size="xs" disabled={!!busy} onClick={onExport}>Export selected</Button>}
+      {onRemove && (
+        <Button variant="outline" size="xs" className="text-fail hover:text-fail" disabled={!!busy} onClick={remove}>
+          Remove from run
+        </Button>
+      )}
       <Button variant="ghost" size="xs" className="ml-auto text-muted-foreground" onClick={onClear}><XIcon /> Clear selection</Button>
     </div>
   );
