@@ -1,94 +1,132 @@
 # Wholesale Scout
 
-Amazon UK wholesale research: supplier price lists in, a screened and scored shortlist out.
-Phase 1 of the build plan: upload with a remembered column mapper, the twelve screening gates,
-the six-group win score, the July 2026 UK fee engine, SP-API fees and gating, and every
-threshold editable in Settings.
+Amazon UK wholesale research: supplier price lists, Qogita pulls, ASIN checks, seller scans and
+Keepa hunts in; a screened, scored shortlist and an order out.
 
-Stack: Next.js 16 (app router), TypeScript, Tailwind 4, Supabase Postgres, Vercel.
+Next.js 16 (app router), TypeScript, Tailwind 4, Supabase Postgres + Storage, Vercel. How to use
+the app is in the app itself: **Help** in the sidebar (articles in `content/help/`). This file is
+the setup guide for a fresh clone.
 
-## Setup
+## 1. Services you need
 
-1. **Database.** Run each file in `supabase/migrations/` in the Supabase SQL editor, oldest first
-   (or `supabase db push` with the CLI linked to the project). The app seeds the three default
-   profiles, the compliance rules and the rate card on first use.
-2. **Environment variables** (Vercel → Settings → Environment Variables):
+| Service | For | Required |
+| --- | --- | --- |
+| Supabase project | Database (Postgres), file storage (documents) | yes |
+| Vercel project | Hosting, crons | yes (or any Node host for local use) |
+| Amazon SP-API app (UK) | Catalog match, Buy Box, offers, fees, gating | yes, for real screening |
+| Keepa API key | Sales history, Product Finder (Hunt), seller storefronts | recommended |
+| Qogita buyer account | Qogita pulls, cart, Find on Qogita | optional |
+| Resend | Watchlist email digest | optional |
 
-   | Variable | Needed for |
-   | --- | --- |
-   | `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` | Everything. The anon key isn't used: RLS is on with no policies, so only the service key (server-side) can read or write. |
-   | `APP_PASSWORD` | Opening the app. Production returns 503 without it, because the app can call your seller account. The browser asks once; any username. |
-   | `SPAPI_CLIENT_ID`, `SPAPI_CLIENT_SECRET`, `SPAPI_REFRESH_TOKEN` | Catalog match by EAN, current Buy Box, Amazon's fee estimate. |
-   | `SPAPI_MARKETPLACE_ID` | Defaults to `A1F83G8C2ARO7P` (UK). |
-   | `SPAPI_SELLER_ID` | Gating checks (`getListingsRestrictions`). Your merchant token, from Seller Central → Settings → Account Info → Merchant Token. |
-   | `KEEPA_API_KEY` | History-based gates. Anything that isn't a 64-character key keeps the stub; `KEEPA_MODE=stub` forces it. |
-
-3. **Local development.** `vercel env pull .env.local` brings down the Development variables;
-   the current ones are set for Production and Preview only, so add them to Development too (or
-   use a separate Supabase project for local work). Then `npm run dev`.
-
-## Commands
+## 2. Clone and install
 
 ```
-npm run dev        # local app
-npm test           # unit + pipeline tests (Vitest)
+git clone <repo> && cd wholesale-scout
+npm ci            # versions are pinned (package.json + package-lock.json, .npmrc save-exact)
+cp .env.example .env.local   # then fill it in (see below)
+```
+
+Node 20 or later.
+
+## 3. Environment variables
+
+Set these in Vercel → Settings → Environment Variables (Production, and Preview if you use it),
+and in `.env.local` for local work (`vercel env pull .env.local` fetches the Development ones).
+After changing one in Vercel, redeploy. Never commit `.env.local`.
+
+| Variable | What it's for | Required |
+| --- | --- | --- |
+| `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` | Every database and storage call. Only the service key is used, server-side: RLS is on with no policies. | yes |
+| `DATABASE_URL` | `npm run migrate` and the schema backup (Supabase → Connect → Session pooler URI). Local only; the app doesn't use it. | for migrations |
+| `APP_PASSWORD` | The password gate (browser asks once, any username; scripts and the extension send `Authorization: Bearer <password>`). Production refuses to serve without it. | yes |
+| `SPAPI_CLIENT_ID`, `SPAPI_CLIENT_SECRET`, `SPAPI_REFRESH_TOKEN` | SP-API (LWA app credentials and the refresh token from authorising it on your seller account). | yes |
+| `SPAPI_SELLER_ID` | Gating checks: your merchant token (Seller Central → Settings → Account Info). | for gating |
+| `SPAPI_MARKETPLACE_ID`, `SPAPI_ENDPOINT` | Override the UK marketplace (`A1F83G8C2ARO7P`) and EU endpoint. | no |
+| `KEEPA_API_KEY` | Keepa (64 characters). Anything else keeps the stub, where history gates say "not checked"; `KEEPA_MODE=stub` forces it. | recommended |
+| `QOGITA_EMAIL`, `QOGITA_PASSWORD` | Qogita pulls, the cart, Find on Qogita. | optional |
+| `RESEND_API_KEY`, `ALERT_EMAIL_TO` | Watchlist digest email. | optional |
+| `ALERT_EMAIL_FROM`, `APP_URL` | Sender and the link base in that email (defaults: Resend's test sender, the Vercel production URL). | no |
+| `CRON_SECRET` | Vercel sends it to the crons (`/api/cron/*`). Vercel sets it when you add one; the routes refuse other callers. | for crons |
+| `WATCHDOG_SECRET` | The Supabase watchdog's bearer token (see 5). | for the watchdog |
+
+The help article **Add an environment variable** lists the same with more detail.
+
+## 4. Database
+
+```
+npm run migrate                    # applies supabase/migrations/*.sql in order, each once
+npm run migrate -- --status        # what's applied and pending
+```
+
+Every migration is safe to re-run. On first use the app seeds the four profiles (First order is
+the default), the compliance rules and the July 2026 rate card. Migrations also create the
+private Storage bucket `documents`.
+
+Back up the schema with `npm run schema:backup`: it writes `supabase/schema.sql` (tables,
+constraints, indexes, functions, triggers, RLS, the storage bucket, the watchdog schedule and the
+applied migrations; no data, no secrets). `npm run schema:restore -- --check` proves the dump
+rebuilds every table in an empty scratch schema and rolls back. To restore, point
+`RESTORE_DATABASE_URL` (or `DATABASE_URL`) at the target and run `npm run schema:restore`: one
+transaction, it only creates what's missing and asks first. Data backups are Supabase's (daily
+on paid plans; Database → Backups).
+
+## 5. Crons and the watchdog
+
+- **Vercel crons** (`vercel.json`): Qogita nightly re-pulls at 03:00 UTC, the watchlist re-check on
+  Sundays at 06:00 UTC. They need `CRON_SECRET`.
+- **Watchdog** (Supabase `pg_cron`, every minute, created by a migration): restarts a run whose
+  processing chain has died, so runs finish with no browser open. It reads two Supabase Vault
+  secrets; add them once in the SQL editor:
+
+  ```sql
+  select vault.create_secret('https://<your-app>/api/cron/watchdog', 'watchdog_url');
+  select vault.create_secret('<same value as WATCHDOG_SECRET>', 'watchdog_secret');
+  ```
+
+  Without them the job does nothing.
+
+Functions run in Dublin (`dub1`, `vercel.json`), next to a Supabase project in eu-west-1. If your
+project is elsewhere, set `regions` to the Vercel region nearest to it.
+
+## 6. The Chrome extension
+
+`extension/` is a Manifest V3 extension, loaded unpacked: `chrome://extensions` → Developer mode
+→ Load unpacked → the `extension/` folder. In its popup set the app URL and `APP_PASSWORD`, Save,
+then Test connection. Details in `extension/README.md` and the help article **Set up the Chrome
+extension**.
+
+## Rate limits
+
+`src/proxy.ts` and `src/lib/server/rateLimit.ts`: 10 wrong passwords from one address in 15
+minutes block it for 15 minutes (counted in the database table `auth_failures`, so every
+instance sees it; the right password is refused while blocked). The extension API allows 60 checks
+and 120 other requests a minute per address (counted per server instance).
+
+## 7. Commands
+
+```
+npm run dev              # local app on http://localhost:3000
+npm test                 # unit and pipeline tests (Vitest)
 npm run typecheck
 npm run lint
-npm run build
+npm run build            # runs the help-centre check first: every page and gate needs an article
+npm run migrate          # apply pending migrations
+npm run schema:backup    # dump the schema to supabase/schema.sql
+npm run schema:restore   # apply supabase/schema.sql to an empty database (asks first)
 ```
 
-## How a run works
-
-1. **Upload** (`/upload`). xlsx/csv, up to 10 MB per file and 5,000 rows per upload, parsed in the browser. The header row is detected and the
-   layout fingerprinted; a known layout maps itself, a new one gets the mapping screen. VAT basis,
-   VAT rate and currency are saved on the supplier. Non-GBP prices convert at ingest using ECB
-   rates (editable), and every offer stores its rate and date. Costs are stored per unit, GBP, ex-VAT.
-2. **Ingest** stores suppliers, mappings, products (one per EAN–ASIN pair) and offers, then opens a
-   run with one row per product, using the cheapest landed offer across all uploaded files.
-3. **Process**, in the background: it starts when the rows are stored and carries on with the page
-   closed. Each call holds a lease on the run, works for ~45 s, parks what's left and hands on to
-   the next call; the run page resumes it if the chain stops. Three stages run side by side, each
-   on its own rate limits:
-   - *lookup*: compliance and budget first (no API call), then SP-API catalog by EAN (20 per
-     request; truncated batches and GTIN/UPC variants retried in batches), current Buy Box (20 per
-     request), then no-match and a price-band check that fails only when certain (a Buy Box under
-     the floor can't pass under the "lower of current and median" rule) — before any Keepa token;
-   - *keepa*: history by ASIN (up to 100 per request) for rows still standing, as many as Keepa's
-     token balance covers (read free from /token); the rest wait for the refill;
-   - *account*: listings restrictions in parallel (token bucket at Amazon's 5/s, burst 10, backoff
-     on 429), Amazon's fee estimates 20 per request, seller profiles, final score.
-   The run page shows how many rows are waiting on Amazon and on Keepa tokens.
-4. **Re-screen** (button on a run): re-runs gates and score with a profile's current settings from
-   the data stored on each result (match, Buy Box, gating, Amazon's fee and its price), with no
-   re-upload and no new Amazon or Keepa calls. Rows that never fetched data a gate now needs are
-   re-queued and looked up once. Amazon's fee is reused only at the price it was quoted for.
-5. **Results** (`/runs/[id]`): verdict, score, landed cost, sell price, profit, ROI, margin, hurdle
-   and why; sort by any column, filter by verdict, band, the gate that failed, or text; expand a row
-   for each gate's outcome, the fee breakdown and the group scores; export the filtered view to xlsx.
-
-While Keepa is a stub, the history gates (borrowed rank, Amazon presence, price regime, price drift)
-report "not checked" rather than failing. Demand and price come from SP-API's current rank and Buy
-Box, and no row goes green on that snapshot alone: it's held at amber until there's history.
-
-## Where things live
+## 8. Where things live
 
 | Path | What |
 | --- | --- |
-| `src/lib/fees/` | Rate card (data) and fee engine: tiers, dimensional weight, low-price FBA, referral bands, DSF, VAT, storage, landed cost, hurdle price |
-| `src/lib/screening/` | Profile config and defaults, compliance rules, the twelve gates, the win score |
-| `src/lib/spapi/` | LWA auth and the SP-API calls, with response parsers |
-| `src/lib/keepa/` | Keepa interface, stub, HTTP client and history summary |
-| `src/lib/ingest/` | Header detection, fingerprint, mapping, money and EAN parsing |
-| `src/lib/server/` | Supabase access, seeding, ingest and the run processor |
-| `supabase/migrations/` | Schema |
-
-## Known limits
-
-- The Keepa HTTP client follows Keepa's documented format but hasn't been run against a live key.
-  Try it on a short list first and compare a few rows with Keepa Pro.
-- SP-API calls are tested against recorded response shapes, not live. The fee parser treats each
-  fee's `FinalFee` less `TaxAmount` as ex-VAT, then adds DSF and VAT the same way as the rate card.
-- The rate card is Gatekeeper's July 2026 table. Peak surcharges beyond the small parcel and
-  oversize per-kg rounding follow Gatekeeper and should be checked against the PDF.
-- Not in Phase 1: ASIN paste entry, Qogita pull, watchlist and alerts, the supplier ledger UI, and
-  Supabase Auth (the password gate stands in for it).
+| `src/app/` | Pages and API routes (`api/`) |
+| `src/components/` | UI; `ui/` is the shadcn kit |
+| `src/lib/screening/` | Profiles and defaults, compliance rules, the twelve gates, the score |
+| `src/lib/fees/` | Rate card and fee engine |
+| `src/lib/spapi/`, `src/lib/keepa/`, `src/lib/qogita/` | API clients and their parsers |
+| `src/lib/server/` | Database access, ingest, the run processor, everything server-only |
+| `src/proxy.ts` | The password gate and rate limits |
+| `content/help/` | Help centre articles (markdown) |
+| `supabase/migrations/` | Schema, in order |
+| `scripts/` | Migrations, schema backup and restore |
+| `extension/` | The Chrome extension |

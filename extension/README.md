@@ -42,6 +42,10 @@ Each seller shows when it was read ("read 25 Sept 21:14"); a reading over 7 days
 
 Seller Central's pages can't be read reliably, so the bar suggests hazmat / not hazmat / unknown from the page's text ("not dangerous goods" beats a mention of dangerous goods) and shows the words it read. You choose and click **Save to the app**. The look-up is remembered for 15 minutes.
 
+## Limits
+
+The app allows the extension 60 checks and 120 other requests a minute from one address; past that it answers 429 with the time to try again. Ten wrong passwords in 15 minutes block the address for 15 minutes.
+
 ## Files
 
 | File | What it does |

@@ -1,12 +1,13 @@
 import { waitUntil } from "@vercel/functions";
 import type { NextRequest } from "next/server";
 import { handle } from "@/lib/server/http";
+import { bearerIs } from "@/lib/server/secrets";
 import { scheduleNext } from "@/lib/server/kick";
 import { nightlyStep } from "@/lib/server/qogitaNightly";
 
 export const maxDuration = 60;
 
-const authorised = (req: NextRequest) => !!process.env.CRON_SECRET && req.headers.get("authorization") === `Bearer ${process.env.CRON_SECRET}`;
+const authorised = (req: NextRequest) => bearerIs(req.headers.get("authorization"), process.env.CRON_SECRET);
 
 /**
  * Nightly Qogita re-pull (Vercel Cron, see vercel.json). Each call re-pulls one due preset
