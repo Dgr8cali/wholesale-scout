@@ -9,6 +9,12 @@ import { cn } from "@/lib/utils";
 import { lastSeenLabel } from "@/lib/screening/dormant";
 import { dormantOf } from "@/lib/ui/resultRows";
 import type { QogitaOffers } from "@/lib/qogita/offers";
+import { quantityForBudget } from "@/lib/qogita/cart";
+import { useQogitaCart } from "@/components/QogitaCart";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { ShoppingCartIcon } from "lucide-react";
+import { useState } from "react";
 import type { Fav, Result, Seller } from "./types";
 
 const STATUS_ICON: Record<string, string> = { pass: "✓", warn: "!", fail: "✕", skipped: "–", off: "·" };
@@ -65,8 +71,10 @@ function Sellers({ sellers, flaggedText }: { sellers: Seller[]; flaggedText: str
 }
 
 /** Everything about one result: gates (with waive), per-unit money, fee sources, score groups, note, sellers. */
-export function Detail({ r, fav, onNote, onWaive, stacked = false }: {
+export function Detail({ r, fav, onNote, onWaive, stacked = false, budgetGbp }: {
   stacked?: boolean;
+  /** The profile's budget for one line (budget × max line share), for the cart quantity. */
+  budgetGbp?: number;
   r: Result;
   fav?: Fav;
   onNote: (r: Result, f: Fav | undefined, note: string) => void;
@@ -163,6 +171,7 @@ export function Detail({ r, fav, onNote, onWaive, stacked = false }: {
       </div>
     </div>
     {r.inputs?.qogita && <QogitaOfferList q={r.inputs.qogita} stacked={stacked} />}
+    {r.inputs?.qogita && <AddToCart r={r} budgetGbp={budgetGbp} />}
     </div>
   );
 }
@@ -236,6 +245,37 @@ function QogitaOfferList({ q, stacked }: { q: QogitaOffers; stacked: boolean }) 
           </table>
         </div>
       )}
+    </div>
+  );
+}
+
+/** "Add to Qogita cart" for a row that passed, with the chosen supplier's offer. */
+function AddToCart({ r, budgetGbp }: { r: Result; budgetGbp?: number }) {
+  const cart = useQogitaCart();
+  const q = r.inputs?.qogita;
+  const offer = q?.offers.find((o) => o.qid === q.chosen);
+  const passed = r.status === "done" && (r.verdict === "pass" || r.verdict === "warn") && !r.failed_gate;
+  const suggested = offer ? quantityForBudget(budgetGbp ?? 0, r.landed_cost, offer.unit, offer.inventory) : 0;
+  const [qty, setQty] = useState(String(suggested));
+  const [busy, setBusy] = useState(false);
+  if (!cart || !offer || !passed) return null;
+  const n = Number(qty);
+  const bad = !Number.isInteger(n) || n <= 0 || n % offer.unit !== 0;
+  const cost = Number.isFinite(n) ? n * offer.basePrice : 0;
+  return (
+    <div className="flex flex-wrap items-end gap-3 rounded-md border bg-card p-3" onClick={(e) => e.stopPropagation()}>
+      <div className="space-y-1">
+        <label htmlFor={`qty-${r.id}`} className="field-label">Quantity{offer.unit > 1 ? ` (cases of ${offer.unit})` : ""}</label>
+        <Input id={`qty-${r.id}`} className="num h-8 w-28" type="number" min={offer.unit} step={offer.unit} value={qty} onChange={(e) => setQty(e.target.value)} />
+      </div>
+      <p className="num pb-1.5 text-xs text-muted-foreground">
+        ≈ {q!.currency === "EUR" ? "€" : `${q!.currency} `}{cost.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} from {offer.seller}
+        {budgetGbp ? <> · {suggested.toLocaleString("en-GB")} is the most your {gbp(budgetGbp)} line budget buys</> : null}
+      </p>
+      <Button size="sm" className="ml-auto" disabled={bad || busy} onClick={async () => { setBusy(true); await cart.add(offer.qid, n, offer.unit, r.product?.title ?? offer.seller); setBusy(false); }}>
+        <ShoppingCartIcon /> {busy ? "Adding…" : "Add to Qogita cart"}
+      </Button>
+      {bad && <p className="w-full text-xs text-warn">Order whole cases of {offer.unit}.</p>}
     </div>
   );
 }

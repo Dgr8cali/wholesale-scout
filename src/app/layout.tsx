@@ -21,7 +21,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
     <html lang="en-GB" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`} suppressHydrationWarning>
       <body className="min-h-full font-sans">
         <Providers>
-          <AppShell defaultOpen={sidebarOpen}>{children}</AppShell>
+          <AppShell defaultOpen={sidebarOpen} qogita={!!(process.env.QOGITA_EMAIL && process.env.QOGITA_PASSWORD)}>{children}</AppShell>
         </Providers>
       </body>
     </html>

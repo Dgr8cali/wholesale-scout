@@ -42,6 +42,7 @@ export interface Result {
 export interface Run {
   id: string; name?: string | null; source: string; status: string; started_at: string; finished_at: string | null;
   row_count: number; processed_count: number; token_cost: number; profile: { name: string } | null; error: string | null;
+  profile_snapshot?: Partial<import("@/lib/screening/config").ProfileConfig> | null;
 }
 
 export interface Seller {

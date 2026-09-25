@@ -10,5 +10,6 @@ export async function GET() {
     spapiSellerId: !!sp?.sellerId,
     keepa: getKeepa().available,
     password: !!process.env.APP_PASSWORD,
+    qogita: !!(process.env.QOGITA_EMAIL && process.env.QOGITA_PASSWORD),
   });
 }

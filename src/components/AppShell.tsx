@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Fragment, useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { CrumbsProvider, useCrumbs } from "@/components/Crumbs";
+import { QogitaCartButton, QogitaCartProvider } from "@/components/QogitaCart";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import {
   Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator,
@@ -152,8 +153,9 @@ function Crumbs() {
 }
 
 /** Collapsible left sidebar, top bar with status and breadcrumbs, and the page. */
-export function AppShell({ defaultOpen, children }: { defaultOpen: boolean; children: ReactNode }) {
+export function AppShell({ defaultOpen, qogita, children }: { defaultOpen: boolean; qogita: boolean; children: ReactNode }) {
   return (
+    <QogitaCartProvider enabled={qogita}>
     <CrumbsProvider>
       <SidebarProvider defaultOpen={defaultOpen} style={{ "--sidebar-width": "13rem" } as CSSProperties}>
         <AppSidebar />
@@ -163,6 +165,7 @@ export function AppShell({ defaultOpen, children }: { defaultOpen: boolean; chil
             <Crumbs />
             <div className="ml-auto flex items-center gap-3">
               <StatusBar />
+              <QogitaCartButton />
               <ThemeToggle />
             </div>
           </header>
@@ -170,5 +173,6 @@ export function AppShell({ defaultOpen, children }: { defaultOpen: boolean; chil
         </SidebarInset>
       </SidebarProvider>
     </CrumbsProvider>
+    </QogitaCartProvider>
   );
 }
