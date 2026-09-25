@@ -2,6 +2,7 @@
  * The twelve screening gates. Pure: each reads a ScreenContext and returns an outcome.
  * A gate whose data isn't available (no Keepa yet, no price) is "skipped", never failed.
  */
+import { salesPerMonth } from "./sales";
 import {
   economics,
   hurdlePrice,
@@ -283,17 +284,19 @@ const EVALUATORS: Record<GateId, Evaluator> = {
   demand(ctx, p) {
     const g = p.gates.demand;
     const m = ctx.market;
-    const rank = m?.avgRank90d ?? m?.rankNow ?? null;
-    if (!m || (m.rankDrops30d == null && rank == null)) return skipped("No rank data");
+    // Both must hold: enough sales in the last 30 days AND a good 90-day average rank. Sales
+    // come from the Keepa history (the same figure as the Sales / mo column), so without
+    // history there's nothing to count: skip rather than pass on the current rank alone.
+    if (!m?.hasHistory) return skipped(m?.rankNow != null ? `Needs Keepa history to count sales (current rank ${m.rankNow.toLocaleString("en-GB")})` : "Needs Keepa history");
+    const sales = salesPerMonth(m).value ?? 0;
+    const rank = m.avgRank90d ?? m.rankNow ?? null;
+    const rankLabel = m.avgRank90d != null ? "90-day average rank" : "current rank";
     const reasons: string[] = [];
-    if (m.rankDrops30d != null && m.rankDrops30d < g.minRankDrops30d) reasons.push(`${m.rankDrops30d} rank drops in 30 days, under ${g.minRankDrops30d}`);
-    if (rank != null && rank > g.maxAvgRank90d) reasons.push(`${m.avgRank90d != null ? "90-day average" : "current"} rank ${rank.toLocaleString("en-GB")}, over ${g.maxAvgRank90d.toLocaleString("en-GB")}`);
+    if (sales < g.minRankDrops30d) reasons.push(`${sales} sales in 30 days, under ${g.minRankDrops30d}`);
+    if (rank == null) reasons.push("no rank in the last 90 days");
+    else if (rank > g.maxAvgRank90d) reasons.push(`${rankLabel} ${rank.toLocaleString("en-GB")}, over ${g.maxAvgRank90d.toLocaleString("en-GB")}`);
     if (reasons.length) return { status: failAs(g.mode), detail: reasons.join("; ") };
-    const parts = [
-      m.rankDrops30d != null ? `${m.rankDrops30d} drops/30d` : null,
-      rank != null ? `${m.avgRank90d != null ? "avg" : "current"} rank ${rank.toLocaleString("en-GB")}` : null,
-    ].filter(Boolean);
-    return { status: "pass", detail: parts.join(", ") + (m.hasHistory ? "" : " (no history: current rank only)") };
+    return { status: "pass", detail: `${sales} sales/mo, ${m.avgRank90d != null ? "avg" : "current"} rank ${rank!.toLocaleString("en-GB")}` };
   },
 
   priceRegime(ctx, p) {

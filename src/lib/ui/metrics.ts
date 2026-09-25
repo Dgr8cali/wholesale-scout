@@ -1,3 +1,5 @@
+import { salesPerMonth } from "../screening/sales";
+
 /** Figures for the results table, read from the market data stored on a result. */
 
 export interface StoredMarket {
@@ -23,16 +25,10 @@ export interface Figure {
  */
 export function estSales(m: StoredMarket | null | undefined): Figure {
   if (!m?.hasHistory) return { value: null, note: "Needs Keepa history" };
-  const sources = [
-    { label: "rank drops in 30 days (from the history)", value: m.rankDrops30d ?? null },
-    { label: "Keepa's 30-day rank-drop count", value: m.keepaRankDrops30 ?? null },
-    { label: `Amazon "bought in past month" (via Keepa)`, value: m.monthlySold ?? null, plus: true },
-  ];
-  const known = sources.filter((s) => s.value != null);
-  if (!known.length) return { value: null, note: "Keepa has no rank drops or bought-in-past-month figure" };
-  const best = known.reduce((a, b) => (b.value! > a.value! ? b : a));
-  const lines = sources.map((s) => `${s === best ? "▶ " : "  "}${s.label}: ${s.value == null ? "—" : `${s.value}${s.plus ? "+" : ""}`}`);
-  return { value: best.value, note: `Highest of:\n${lines.join("\n")}` };
+  const f = salesPerMonth(m);
+  if (f.sources.every((s) => s.value == null)) return { value: 0, note: "Keepa history shows no rank drops and no bought-in-past-month figure" };
+  const lines = f.sources.map((s) => `${s.best ? "▶ " : "  "}${s.label}: ${s.value == null ? "—" : `${s.value}${s.plus ? "+" : ""}`}`);
+  return { value: f.value, note: `Highest of:\n${lines.join("\n")}` };
 }
 
 /** FBA sellers from Keepa; until then all new offers from SP-API, said so. */

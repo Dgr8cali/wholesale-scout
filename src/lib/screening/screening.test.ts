@@ -190,6 +190,38 @@ describe("gates", () => {
     expect(w.band).not.toBe("green");
   });
 
+  describe("Demand needs sales AND rank", () => {
+    const demand = (m: MarketData) => runGates(ctx({ market: m }), DEFAULT_PROFILE).outcomes.find((o) => o.gate === "demand")!;
+
+    it("fails 0 rank drops in 30 days even with a good 90-day rank", () => {
+      const d = demand(market({ rankDrops30d: 0, keepaRankDrops30: 0, monthlySold: null, avgRank90d: 1200 }));
+      expect(d.status).toBe("fail");
+      expect(d.detail).toMatch(/0 sales in 30 days, under 30/);
+      expect(d.detail).not.toMatch(/rank/);
+    });
+
+    it("fails a good sales count with a poor 90-day rank", () => {
+      expect(demand(market({ rankDrops30d: 90, avgRank90d: 120_000 })).status).toBe("fail");
+    });
+
+    it("fails history with no recorded sales at all, rather than skipping the count", () => {
+      const d = demand(market({ rankDrops30d: null, keepaRankDrops30: null, monthlySold: null }));
+      expect(d.status).toBe("fail");
+      expect(d.detail).toMatch(/^0 sales/);
+    });
+
+    it("counts sales the way the Sales / mo column does (the highest source)", () => {
+      expect(demand(market({ rankDrops30d: null, keepaRankDrops30: 45, avgRank90d: 8000 })).status).toBe("pass");
+      expect(demand(market({ rankDrops30d: 5, monthlySold: 100, avgRank90d: 8000 })).detail).toMatch(/^100 sales\/mo/);
+    });
+
+    it("never passes on a current rank alone: without history it is skipped", () => {
+      const d = demand(market({ hasHistory: false, rankDrops30d: null, avgRank90d: null, rankNow: 1500 }));
+      expect(d.status).toBe("skipped");
+      expect(d.detail).toMatch(/current rank 1,500/);
+    });
+  });
+
   it("runs only the cheap row gates in the pre-screen", () => {
     const run = runGates(ctx({ market: null, match: null }), DEFAULT_PROFILE, ["compliance", "budgetFit"]);
     expect(run.outcomes.map((o) => o.gate)).toEqual(["compliance", "budgetFit"]);
