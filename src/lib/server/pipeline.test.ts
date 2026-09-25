@@ -29,7 +29,9 @@ const CATALOG: Record<string, CatalogMatch[]> = {
   "4006381333931": [cat("B0TAPE0001", "4006381333931")],
   "5000000000011": [cat("B0FRAG0001", "5000000000011")],
   "5000000000035": [cat("B0CHEAP001", "5000000000035")],
-  "5000000000042": [cat("B0MULTIA01", "5000000000042", { title: "Two-listing thing, single" }), cat("B0MULTIB01", "5000000000042", { title: "Two-listing thing, twin pack" })],
+  "5000000000042": [cat("B0MULTIA01", "5000000000042", { title: "Two-listing thing, single" }), cat("B0MULTIB01", "5000000000042", { title: "Two-listing thing, large" })],
+  "5000000000066": [cat("B0PACK0003", "5000000000066", { title: "Brite Scouring Pads (Pack of 3)", pack: { itemPackageQuantity: 3, numberOfItems: 3 } })],
+  "5000000000073": [cat("B0PACKMIS1", "5000000000073", { title: "Brite Sponge Cloth Twin Pack", pack: { itemPackageQuantity: 1, numberOfItems: 1 } })],
 };
 
 const PRICES: Record<string, { buyBox: number; offers: number }> = {
@@ -40,6 +42,8 @@ const PRICES: Record<string, { buyBox: number; offers: number }> = {
   B0MULTIB01: { buyBox: 22, offers: 4 },
   B0060OMXUA: { buyBox: 21.5, offers: 5 },
   B076HZHD2X: { buyBox: 23, offers: 3 },
+  B0PACK0003: { buyBox: 24, offers: 4 },
+  B0PACKMIS1: { buyBox: 20, offers: 4 },
 };
 
 vi.mock("../spapi/client", async (orig) => {
@@ -100,6 +104,47 @@ describe("ingest → process", () => {
     __setDbForTests(fake);
     catalogCalls.length = 0;
     Object.assign(calls, { catalog: 0, pricing: 0, restrictions: 0, fees: 0 });
+  });
+
+  it("scales a single's cost to a multipack listing and flags a pack mismatch", async () => {
+    const f = file("packs.xlsx", [
+      ["EAN", "Name", "Price", "MOQ"],
+      ["5000000000066", "Brite Scouring Pads", "4.00", 12],
+      ["5000000000073", "Brite Sponge Cloth", "3.00", 12],
+    ], { name: "Suds Ltd", vatBasis: "ex_vat", vatRate: 20, currency: "GBP" });
+    await import("./db").then((m) => m.ensureSeed());
+    const profile = fake.tables.profiles.find((p) => p.name === "Balanced") ?? fake.tables.profiles[0];
+    const { runId } = await ingest({ profileId: profile.id as string, files: [f] });
+    let guard = 0;
+    while (!(await processRun(runId)).done) if (++guard > 20) throw new Error("run never finished");
+    const results = fake.tables.results.filter((r) => r.run_id === runId);
+    const productOf = (r: Record<string, unknown>) => fake.tables.products.find((p) => p.id === r.product_id)!;
+    const byAsin = (asin: string) => results.find((r) => productOf(r).asin === asin)!;
+
+    const three = byAsin("B0PACK0003");
+    expect(productOf(three)).toMatchObject({ pack_count: 3, pack_attrs: { itemPackageQuantity: 3, numberOfItems: 3 } });
+    // Three of the supplier's £4.00 items per listing; prep and inbound once per listing.
+    const m = String(three.why).match(/Listing is a 3-pack: landed £(\d+\.\d\d) for 3 × £4\.00 \(plus [a-z, ]+\)\./i);
+    expect(m, String(three.why)).toBeTruthy();
+    expect(Number(three.landed_cost)).toBeCloseTo(Number(m![1]), 1);
+    expect(Number(three.landed_cost)).toBeGreaterThan(12);
+    expect((three.inputs as { pack: unknown }).pack).toEqual({ listing: 3, supplier: 1, ratio: 3 });
+    expect((three.gate_outcomes as { gate: string; status: string }[]).find((g) => g.gate === "matchQuality")!.status).toBe("pass");
+
+    // Title says twin, the catalog says single: scaled by the title, and flagged.
+    const twin = byAsin("B0PACKMIS1");
+    const mq = (twin.gate_outcomes as { gate: string; status: string; detail: string; tags?: string[] }[]).find((g) => g.gate === "matchQuality")!;
+    expect(mq).toMatchObject({ status: "warn", tags: ["PACK_MISMATCH"] });
+    expect(mq.detail).toBe("pack mismatch, check: title says 2, Amazon's attributes say 1");
+    expect(twin.why).toContain("Listing is a 2-pack");
+
+    // Re-screen reads the stored product: correcting the attributes clears the flag, no fetching.
+    Object.assign(productOf(twin), { pack_attrs: { itemPackageQuantity: 2, numberOfItems: 2 } });
+    const before = { ...calls };
+    while ((await rescreenRun(runId)).remaining) if (++guard > 40) throw new Error("rescreen never finished");
+    expect(calls).toEqual(before);
+    const again = fake.tables.results.find((r) => r.id === twin.id)!;
+    expect((again.gate_outcomes as { gate: string; status: string }[]).find((g) => g.gate === "matchQuality")!.status).toBe("pass");
   });
 
   it("screens a combined upload in cost order and scores the survivors", async () => {

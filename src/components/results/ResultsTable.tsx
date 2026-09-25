@@ -23,7 +23,7 @@ import { brandOf, dormantOf, favKey, isWaived } from "@/lib/ui/resultRows";
 import { cn } from "@/lib/utils";
 import { Sparkline } from "./Sparkline";
 import { loadPrefs, normalizePrefs, savePrefs, type Density, type TablePrefs } from "./tablePrefs";
-import { figure, titleOf, type Result, type SortKey } from "./types";
+import { figure, listingMoq, titleOf, type Result, type SortKey } from "./types";
 
 /** One line of the table: a listing, and whether it's an alternative ASIN under its EAN's lead. */
 export interface DisplayRow { r: Result; alt: boolean; groupKey: string; others: number }
@@ -367,7 +367,7 @@ function Cell({ id, d, props, compact, isOpen }: { id: string; d: DisplayRow; pr
     case "orderQty":
     case "months": {
       if (r.score == null) return <span className={num}><span className="text-muted-foreground">—</span></span>;
-      const f = firstOrderFigures(r.inputs?.market, r.landed_cost, r.offer?.moq, props.lineCapGbp);
+      const f = firstOrderFigures(r.inputs?.market, r.landed_cost, listingMoq(r), props.lineCapGbp);
       if (id === "orderQty") {
         return (
           <span className={num} title={f.qty.note}>

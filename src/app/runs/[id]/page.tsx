@@ -12,7 +12,7 @@ import { FilterBar, type FilterOptions } from "@/components/FilterBar";
 import { Detail } from "@/components/results/Detail";
 import { DetailDrawer } from "@/components/results/DetailDrawer";
 import { ResultsTable, type DisplayRow } from "@/components/results/ResultsTable";
-import { eanOf, figure, titleOf, type Fav, type Progress, type Result, type Run, type SortKey } from "@/components/results/types";
+import { eanOf, figure, listingMoq, titleOf, type Fav, type Progress, type Result, type Run, type SortKey } from "@/components/results/types";
 import { useSparks } from "@/components/results/useSparks";
 import { downloadXlsx, exportRows } from "@/components/results/exportXlsx";
 import { ErrorState } from "@/components/States";
@@ -283,7 +283,7 @@ export default function RunPage() {
       sort.key === "title" ? titleOf(r).toLowerCase()
         : sort.key === "verdict" ? ({ pass: 0, warn: 1, fail: 2 }[r.verdict ?? "fail"])
         : sort.key === "sales" || sort.key === "sellers" || sort.key === "buybox" || sort.key === "share" || sort.key === "profitMo" ? figure(r, sort.key).value
-        : sort.key === "orderQty" || sort.key === "months" ? (r.score == null ? null : firstOrderFigures(r.inputs?.market, r.landed_cost, r.offer?.moq, lineBudget)[sort.key === "orderQty" ? "qty" : "months"].value)
+        : sort.key === "orderQty" || sort.key === "months" ? (r.score == null ? null : firstOrderFigures(r.inputs?.market, r.landed_cost, listingMoq(r), lineBudget)[sort.key === "orderQty" ? "qty" : "months"].value)
         : (r[sort.key] as number | null);
     const order = (a: Result, b: Result) => {
       const x = val(a), y = val(b);

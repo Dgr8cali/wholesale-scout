@@ -141,6 +141,12 @@ export function Detail({ r, fav, onNote, onWaive, stacked = false, budgetGbp }: 
             Quoted {r.offer.unit_cost} {r.offer.currency}/unit → {gbp(r.offer.unit_cost_gbp)} ex-VAT · MOQ {r.offer.moq ?? "—"} · {r.offer.source_ref}
           </p>
         )}
+        {r.inputs?.pack && (
+          <p className="mt-1 text-xs font-medium text-warn">
+            Listing is a {r.inputs.pack.listing === 1 ? "single" : `${r.inputs.pack.listing}-pack`}
+            {r.inputs.pack.supplier > 1 ? `, the supplier's item a ${r.inputs.pack.supplier}-pack` : ""}: costs are for {+r.inputs.pack.ratio.toFixed(2)} of the supplier&apos;s items per listing.
+          </p>
+        )}
       </div>
       <div>
         <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Score groups</p>

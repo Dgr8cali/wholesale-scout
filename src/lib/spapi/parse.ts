@@ -1,5 +1,5 @@
 /** Response parsers for SP-API — kept separate from I/O so they can be tested on fixtures. */
-import type { CatalogMatch, CompetitivePrice, FeesEstimate, Restriction, RestrictionLink, RestrictionStatus } from "./types";
+import type { AmazonDg, CatalogMatch, CompetitivePrice, FeesEstimate, Restriction, RestrictionLink, RestrictionStatus } from "./types";
 
 type Json = Record<string, unknown>;
 const obj = (v: unknown): Json => (v && typeof v === "object" ? (v as Json) : {});
@@ -56,6 +56,11 @@ export function parseCatalogItem(raw: unknown, marketplaceId: string): CatalogMa
   const batteries = arr(attrs.batteries_required).some((x) => obj(x).value === true) ||
     arr(attrs.batteries_included).some((x) => obj(x).value === true);
 
+  const intAttr = (k: string) => {
+    const v = num(obj(arr(attrs[k])[0]).value);
+    return v != null && Number.isInteger(v) && v > 0 ? v : null;
+  };
+
   const images = arr(forMarketplace(item.images, marketplaceId).images).map(obj);
   const main = images.filter((i) => i.variant === "MAIN" && str(i.link)).sort((a, b) => (num(b.height) ?? 0) - (num(a.height) ?? 0))[0];
 
@@ -75,7 +80,28 @@ export function parseCatalogItem(raw: unknown, marketplaceId: string): CatalogMa
     variationCount: variation ? arr(variation.childAsins).length || null : null,
     hazmat,
     batteries,
+    pack: { itemPackageQuantity: intAttr("item_package_quantity"), numberOfItems: intAttr("number_of_items") },
+    dg: parseDg(attrs, hazmat),
   };
+}
+
+/** Amazon's dangerous-goods attributes (see AmazonDg); null when none say anything. */
+export function parseDg(attrs: Json, declared: string[]): AmazonDg | null {
+  const aspects = new Map<string, string>();
+  for (const x of arr(attrs.hazmat).map(obj)) {
+    const a = str(x.aspect), v = str(x.value) ?? (typeof x.value === "number" ? String(x.value) : null);
+    if (a && v && !aspects.has(a)) aspects.set(a, v.trim());
+  }
+  const un = aspects.get("united_nations_regulatory_id") ?? null;
+  const name = aspects.get("proper_shipping_name") ?? null;
+  const cls = aspects.get("transportation_regulatory_class") ?? null;
+  // Class "0" (and no UN number or shipping name) is Amazon saying "not regulated".
+  const regulated = !!un || !!name || (!!cls && !/^(0|none|not[_ ]?applicable)$/i.test(cls));
+  const ghs = arr(attrs.ghs).map(obj).flatMap((g) => arr(g.classification)).map((c) => str(obj(c).class))
+    .filter((c): c is string => !!c && !/no_label|not_applicable|unknown|^none$/i.test(c));
+  const heatSensitive = arr(attrs.is_heat_sensitive).some((x) => obj(x).value === true);
+  const dg: AmazonDg = { hazmat: regulated ? { un, name, class: cls } : null, ghs: [...new Set(ghs)], declared, heatSensitive };
+  return dg.hazmat || dg.ghs.length || dg.declared.length || dg.heatSensitive ? dg : null;
 }
 
 const r1 = (n: number) => Math.round(n * 10) / 10;

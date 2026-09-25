@@ -98,7 +98,13 @@ export interface ScreenContext {
   sheet?: Listing;
   listing?: Listing;
   amazonCategory: string | null;
+  /**
+   * Multipack: the listing's pack against the supplier row's. When they differ, `offer`
+   * is already per listing (cost × ratio, MOQ in listings) and `pieceCostGbp` is the row's own.
+   */
+  pack?: { listing: number; supplier: number; ratio: number; pieceCostGbp: number; mismatch: string | null } | null;
   offer: {
+    /** Per Amazon listing (a supplier single scaled to the listing's pack). */
     unitCostGbp: number;
     moq: number | null;
     goodsVatRatePct: number;
@@ -179,6 +185,22 @@ export function resolveScoringPrice(m: MarketData | null, p: ProfileConfig): { p
 }
 
 /** "size tier disagreement: SP-API catalog says Small parcel, Keepa says Standard parcel", or null. */
+/**
+ * "Listing is a 3-pack: landed £14.85 for 3 × £4.00 (plus VAT, prep and inbound)", or null
+ * when the packs match. £4.00 is the supplier's ex-VAT price per item; prep and inbound
+ * are per listing unit, so they're counted once.
+ */
+export function packNote(ctx: ScreenContext, p: ProfileConfig): string | null {
+  const k = ctx.pack;
+  if (!k || k.ratio === 1) return null;
+  const l = landedCost(ctx.offer.unitCostGbp, { goodsVatRatePct: ctx.offer.goodsVatRatePct }, p.fees);
+  const extras = [l.goodsVat > 0 && "VAT", l.duty > 0 && "duty", l.prep > 0 && "prep", l.inbound > 0 && "inbound"].filter(Boolean) as string[];
+  const plus = extras.length ? ` (plus ${extras.length > 1 ? `${extras.slice(0, -1).join(", ")} and ${extras.at(-1)}` : extras[0]})` : "";
+  const what = `Listing is a ${k.listing === 1 ? "single" : `${k.listing}-pack`}` + (k.supplier > 1 ? `, the supplier's item a ${k.supplier}-pack` : "");
+  const n = Number.isInteger(k.ratio) ? String(k.ratio) : String(+k.ratio.toFixed(2));
+  return `${what}: landed ${money(l.total)} for ${n} × ${money(k.pieceCostGbp)}${plus}.`;
+}
+
 export function tierDisagreement(ctx: ScreenContext): string | null {
   const p = ctx.product;
   if (p.dimsSource !== "catalog" || !p.dimsCm || p.weightG == null || !p.keepaDims || p.keepaWeightG == null) return null;
@@ -263,7 +285,15 @@ const EVALUATORS: Record<GateId, Evaluator> = {
       // whatever the gate's mode (unless the gate is off).
       const doubt = ctx.sheet && ctx.listing ? doubtfulMatch(ctx.sheet, ctx.listing) : null;
       if (doubt) return { status: "fail", detail: `Doubtful match: ${doubt}`, tags: ["DOUBTFUL_MATCH", "MULTI_ASIN"] };
-      return { status: "warn", detail: `EAN maps to ${ctx.match.asinCount} ASINs; each is scored`, tags: ["MULTI_ASIN"] };
+    }
+    const multi = ctx.match.asinCount > 1 ? `EAN maps to ${ctx.match.asinCount} ASINs; each is scored` : null;
+    const pack = ctx.pack?.mismatch ? `pack mismatch, check: ${ctx.pack.mismatch}` : null;
+    if (multi || pack) {
+      return {
+        status: "warn",
+        detail: [multi, pack].filter(Boolean).join("; "),
+        tags: [...(multi ? ["MULTI_ASIN"] : []), ...(pack ? ["PACK_MISMATCH"] : [])],
+      };
     }
     return { status: "pass", detail: `Matched ${ctx.match.asin}` };
   },

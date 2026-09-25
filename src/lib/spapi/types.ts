@@ -24,8 +24,28 @@ export interface CatalogMatch {
   /** Declared dangerous-goods regulations, e.g. ["ghs", "transportation"]. */
   hazmat: string[];
   batteries: boolean;
+  /** Pack attributes: item_package_quantity and number_of_items, where given. */
+  pack?: { itemPackageQuantity: number | null; numberOfItems: number | null };
+  /** What Amazon's attributes say about dangerous goods and heat; null when it says nothing. */
+  dg?: AmazonDg | null;
   /** Largest MAIN image on Amazon's CDN, or null. */
   imageUrl: string | null;
+}
+
+/**
+ * Amazon's own dangerous-goods data for a listing: the `hazmat` attribute (UN number,
+ * shipping name, transport class), GHS classes, the declared regulations and
+ * is_heat_sensitive. Only what Amazon actually states is kept.
+ */
+export interface AmazonDg {
+  /** A regulated transport entry: e.g. { un: "UN1950", name: "AEROSOLS", class: "2.1" }. */
+  hazmat: { un: string | null; name: string | null; class: string | null } | null;
+  /** GHS hazard classes, less Amazon's "no label" placeholder. */
+  ghs: string[];
+  /** supplier_declared_dg_hz_regulation values other than not_applicable / unknown. */
+  declared: string[];
+  /** is_heat_sensitive: true (meltable). */
+  heatSensitive: boolean;
 }
 
 export interface FeesEstimate {

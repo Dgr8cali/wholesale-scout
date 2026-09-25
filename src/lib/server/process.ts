@@ -12,7 +12,8 @@ import { isDormant } from "../screening/dormant";
 import { getQogita, variantFid } from "../qogita/client";
 import { chooseOffer, toSupplierOffer, type QogitaOffers, type SupplierOffer } from "../qogita/offers";
 import { GATE_ORDER, withDefaults, type GateId, type ProfileConfig } from "../screening/config";
-import { resolveScoringPrice, runGates, verdictOf, type GateRun, type MarketData, type ScreenContext, type SellerView } from "../screening/gates";
+import { packNote, resolveScoringPrice, runGates, verdictOf, type GateRun, type MarketData, type ScreenContext, type SellerView } from "../screening/gates";
+import { listingPack, supplierPack, type PackAttrs } from "../screening/pack";
 import type { CategoryRule } from "../screening/rules";
 import { winScore } from "../screening/score";
 import { getSpApi, type CatalogMatch, type CompetitivePrice, type LookupTrace } from "../spapi/client";
@@ -42,6 +43,9 @@ interface Product {
   keepa_updated_at: string | null;
   /** Main image URL; '' when looked up and Amazon has none; null when not looked up. */
   image_url?: string | null;
+  /** Units in the Amazon listing (see screening/pack), and the catalog attributes behind it. */
+  pack_count?: number | null;
+  pack_attrs?: PackAttrs | null;
 }
 
 interface Offer {
@@ -90,6 +94,8 @@ export interface StoredInputs {
   sellers?: SellerView[] | null;
   /** Qogita supplier offers for a row that passed every gate (see qogita/offers). */
   qogita?: QogitaOffers | null;
+  /** The listing's pack against the supplier row's, when they differ (cost and MOQ scaled). */
+  pack?: { listing: number; supplier: number; ratio: number } | null;
   notes: string[];
 }
 
@@ -166,11 +172,37 @@ function feesAt(row: Row, cfg: ProfileConfig): ScreenContext["amazonFees"] {
   return price != null && Math.abs(price - f.price) < 0.005 ? { referral: f.referral, fba: f.fba } : null;
 }
 
+/** The matched listing's pack against the supplier row's, or null before a match. */
+function packFor(row: Row): { listing: number; supplier: number; ratio: number; mismatch: string | null } | null {
+  if (!row.match?.asin) return null;
+  const l = listingPack(row.product.title, row.product.pack_attrs);
+  const supplier = supplierPack(row.offer.title);
+  return { listing: l.count, supplier, ratio: l.count / supplier, mismatch: l.mismatch };
+}
+
 function context(row: Row, card: RateCard, rules: CategoryRule[], cfg: ProfileConfig, approved: Approved): ScreenContext {
   const p = row.product, o = row.offer, s = row.supplier;
   // Qogita: once the supplier offers are in, cost, case size and MOV are the chosen supplier's
   // (the cheapest whose MOV fits this profile's budget), not the headline price from the search.
   const q = row.qogita ? chooseOffer(row.qogita.offers, cfg.budget, row.qogita.fxRate).chosen : null;
+  const pack = packFor(row);
+  const offer = q ? {
+    unitCostGbp: q.basePrice * row.qogita!.fxRate,
+    moq: q.unit,
+    goodsVatRatePct: Number(s.vat_rate),
+    supplierMovGbp: q.baseMov * row.qogita!.fxRate,
+  } : {
+    unitCostGbp: Number(o.unit_cost_gbp),
+    moq: o.moq,
+    goodsVatRatePct: Number(s.vat_rate),
+    supplierMovGbp: s.mov == null ? null : Number(s.mov) * Number(o.fx_rate),
+  };
+  const piece = offer.unitCostGbp;
+  if (pack && pack.ratio !== 1) {
+    // Buy `ratio` of the supplier's items per listing; the MOQ becomes listings' worth.
+    offer.unitCostGbp = piece * pack.ratio;
+    if (offer.moq != null) offer.moq = Math.max(1, Math.ceil(offer.moq / pack.ratio));
+  }
   return {
     brandApproval: approved.get(brandKey(p.brand ?? o.brand)) ?? null,
     now: new Date(),
@@ -180,17 +212,8 @@ function context(row: Row, card: RateCard, rules: CategoryRule[], cfg: ProfileCo
     sheet: { brand: o.brand, title: o.title },
     listing: row.match?.asin ? { brand: p.brand, title: p.title } : undefined,
     amazonCategory: p.category,
-    offer: q ? {
-      unitCostGbp: q.basePrice * row.qogita!.fxRate,
-      moq: q.unit,
-      goodsVatRatePct: Number(s.vat_rate),
-      supplierMovGbp: q.baseMov * row.qogita!.fxRate,
-    } : {
-      unitCostGbp: Number(o.unit_cost_gbp),
-      moq: o.moq,
-      goodsVatRatePct: Number(s.vat_rate),
-      supplierMovGbp: s.mov == null ? null : Number(s.mov) * Number(o.fx_rate),
-    },
+    pack: pack ? { ...pack, pieceCostGbp: piece } : null,
+    offer,
     match: row.match,
     product: {
       brand: p.brand ?? o.brand,
@@ -236,15 +259,17 @@ function feeComparison(price: number, ctx: ScreenContext, cfg: ProfileConfig) {
 function resultFields(row: Row, run: GateRun, cfg: ProfileConfig, ctx: ScreenContext) {
   const w = winScore(ctx, run, cfg, { deliveryDays: row.supplier.delivery_days, supplierRating: row.supplier.rating });
   const e = run.economics;
-  const notes = [...row.dataNotes, ...row.notes];
+  const pn = packNote(ctx, cfg);
+  const notes = [...(pn ? [pn] : []), ...row.dataNotes, ...row.notes];
   if (row.amazonFees && !ctx.amazonFees && e && run.outcomes.some((o) => o.gate === "fees")) {
     notes.push(`Amazon's fee was quoted at £${row.amazonFees.price.toFixed(2)}; rate card used at £${e.price.toFixed(2)}.`);
   }
-  const why = notes.length ? `${w.why} ${notes.join(" ")}` : w.why;
+  const why = notes.length ? `${w.why}${/[.!?]$/.test(w.why) ? "" : "."} ${notes.join(" ")}` : w.why;
   const inputs: StoredInputs = {
     v: 1, stage: row.stage, match: row.match, market: row.market, hazmat: row.hazmat,
     restriction: row.restriction, amazonFees: row.amazonFees, lookup: row.lookup, sellers: row.sellers, notes: row.dataNotes,
     qogita: row.qogita ? { ...row.qogita, ...pick(row.qogita, cfg) } : null,
+    pack: ctx.pack && ctx.pack.ratio !== 1 ? { listing: ctx.pack.listing, supplier: ctx.pack.supplier, ratio: ctx.pack.ratio } : null,
   };
   return {
       status: "done",
@@ -1445,6 +1470,7 @@ async function resolveRow(
       dims_cm: c.dimsCm ?? p.dims_cm, weight_g: c.weightG ?? p.weight_g, sales_rank: c.salesRank,
       parent_asin: c.parentAsin, variation_count: c.variationCount, catalog_updated_at: new Date().toISOString(),
       image_url: c.imageUrl ?? p.image_url ?? "",
+      pack_attrs: c.pack ?? p.pack_attrs ?? null,
     });
     row.hazmat = [...c.hazmat, ...(c.batteries ? ["batteries"] : [])];
   }
@@ -1458,6 +1484,7 @@ async function resolveRow(
       image_url: update.image_url || k.imageUrl || p.image_url || "",
     });
   }
+  update.pack_count = listingPack((update.title ?? p.title) as string | null, (update.pack_attrs ?? p.pack_attrs) as PackAttrs | null).count;
   update.referral_category = referralCategoryFor((update.category ?? p.category) as string | null, x.card);
   must(await d.from("products").update(update).eq("id", p.id), "update product");
   row.product = { ...p, ...update } as Product;

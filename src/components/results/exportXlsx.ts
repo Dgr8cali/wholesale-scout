@@ -2,12 +2,12 @@ import * as XLSX from "xlsx";
 import { GATE_LABELS } from "@/lib/screening/config";
 import { groupRows } from "@/lib/ui/group";
 import { firstOrderFigures } from "@/lib/ui/metrics";
-import { eanOf, figure, titleOf, type Result } from "./types";
+import { eanOf, figure, listingMoq, titleOf, type Result } from "./types";
 
 /** One spreadsheet row per listing, as the run page exports it. */
 export function exportRows(flat: { r: Result; listing: string }[], lineBudget: number) {
   return flat.map(({ r, listing }) => {
-    const plan = r.score == null ? null : firstOrderFigures(r.inputs?.market, r.landed_cost, r.offer?.moq, lineBudget);
+    const plan = r.score == null ? null : firstOrderFigures(r.inputs?.market, r.landed_cost, listingMoq(r), lineBudget);
     return {
       Listing: listing,
       Verdict: r.status === "error" ? "error" : r.verdict,
