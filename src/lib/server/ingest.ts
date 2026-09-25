@@ -2,6 +2,7 @@ import "server-only";
 import type { ColumnMapping, Fx, NormalizedRow } from "../ingest/mapping";
 import { CURRENCIES, MAX_ROWS } from "../ingest/mapping";
 import { chunks, db, loadProfile, must } from "./db";
+import { checkNewOffers } from "./watchlist";
 
 export interface IngestFile {
   fileName: string;
@@ -160,6 +161,16 @@ export async function ingest(payload: IngestPayload): Promise<{ runId: string; r
       await d.from("results").insert(c.map(([productId, b]) => ({ run_id: run.id, product_id: productId, offer_id: b.offerId, offer_count: b.count }))),
       "results",
     );
+  }
+  // A watched product with no supplier yet, now offered at or under its max landed cost: alert now.
+  try {
+    // Uploads and Qogita pulls only: a Check ASINs cost or a seller scan isn't a supplier's offer.
+    await checkNewOffers(run.id, payload.files.filter((f) => !f.keepSupplier).flatMap((f) => f.rows.map((r) => ({
+      ean: r.ean, unitCostGbp: r.unitCostGbp, vatRatePct: supplierIds.get(f.fileName)?.vatRate ?? f.supplier.vatRate,
+      supplier: f.supplier.name.trim(), costKnown: r.costKnown !== false,
+    }))), profile.config.fees);
+  } catch (e) {
+    console.error(`[watchlist] checking new offers: ${(e as Error).message}`);
   }
   return { runId: run.id, rowCount: best.size, offerCount: offers.length };
 }

@@ -1,6 +1,7 @@
 import "server-only";
 import { chunks, db, loadProfile, must } from "./db";
 import { createRunFrom } from "./runs";
+import type { WatchCondition } from "../watch";
 
 const DAY = 86_400_000;
 /** A favourite whose latest result is older than this is marked outdated. */
@@ -12,21 +13,26 @@ export interface Favourite {
   asin: string | null;
   note: string | null;
   created_at: string;
+  /** Watchlist: the flip condition (null: re-check weekly), and no supplier known yet. */
+  condition?: WatchCondition | null;
+  no_supplier?: boolean;
 }
 
 type Row = Record<string, unknown>;
+
+const FAV_COLS = "id, ean, asin, note, created_at, condition, no_supplier";
 
 export const FAVOURITES_MIGRATION = "Run migration 20260926000700_favourites.sql to use favourites";
 export const schemaMissing = (m: string) => /does not exist|schema cache/i.test(m);
 
 export async function listFavourites(): Promise<Favourite[]> {
-  const res = await db().from("favourites").select("id, ean, asin, note, created_at").order("created_at", { ascending: false });
+  const res = await db().from("favourites").select(FAV_COLS).order("created_at", { ascending: false });
   if (res.error && schemaMissing(res.error.message)) throw new Error(FAVOURITES_MIGRATION);
   return must(res, "favourites") as Favourite[];
 }
 
 async function findFavourite(ean: string, asin: string | null): Promise<Favourite | null> {
-  const q = db().from("favourites").select("id, ean, asin, note, created_at").eq("ean", ean);
+  const q = db().from("favourites").select(FAV_COLS).eq("ean", ean);
   const res = asin ? await q.eq("asin", asin) : await q.is("asin", null);
   if (res.error && schemaMissing(res.error.message)) throw new Error(FAVOURITES_MIGRATION);
   return ((must(res, "favourite") as Favourite[])[0]) ?? null;
@@ -52,7 +58,7 @@ export async function bulkFavourites(items: { ean: string; asin: string | null }
  */
 export async function addFavourite(ean: string, asin: string | null, note?: string | null): Promise<Favourite> {
   const d = db();
-  const cols = "id, ean, asin, note, created_at";
+  const cols = FAV_COLS;
   if (note === undefined) {
     const res = await d.from("favourites").upsert({ ean, asin }, { onConflict: "ean,asin", ignoreDuplicates: true });
     if (res.error && schemaMissing(res.error.message)) throw new Error(FAVOURITES_MIGRATION);
@@ -146,7 +152,7 @@ export const favouritesRunName = (d = new Date()) =>
  * A new run with just the favourites, each on its latest offer, named "Favourites <date>".
  * Returns the run id; the caller starts processing.
  */
-export async function rescreenFavourites(profileId?: string | null): Promise<{ runId: string; count: number; skipped: number }> {
+export async function rescreenFavourites(profileId?: string | null, opts: { name?: string; source?: (n: number) => string } = {}): Promise<{ runId: string; count: number; skipped: number }> {
   const d = db();
   const views = await favouritesWithLatest();
   const profile = await loadProfile(profileId);
@@ -168,6 +174,6 @@ export async function rescreenFavourites(profileId?: string | null): Promise<{ r
     else skipped++;
   }
   if (!picks.length) throw new Error("No favourites with an offer to screen");
-  const runId = await createRunFrom(picks, { name: favouritesRunName(), source: `Favourites (${picks.length})`, profileId: profile.id });
+  const runId = await createRunFrom(picks, { name: opts.name ?? favouritesRunName(), source: opts.source?.(picks.length) ?? `Favourites (${picks.length})`, profileId: profile.id });
   return { runId, count: picks.length, skipped };
 }

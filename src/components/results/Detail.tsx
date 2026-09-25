@@ -17,6 +17,8 @@ import { ShoppingCartIcon } from "lucide-react";
 import { useState } from "react";
 import Link from "next/link";
 import type { Fav, Result, Seller } from "./types";
+import { WatchEditor } from "./WatchEditor";
+import type { WatchCondition } from "@/lib/watch";
 
 const STATUS_ICON: Record<string, string> = { pass: "✓", warn: "!", fail: "✕", skipped: "–", off: "·" };
 const STATUS_STYLE: Record<string, string> = { pass: "bg-pass", warn: "bg-warn", fail: "bg-fail", skipped: "bg-muted-foreground/40", off: "bg-border" };
@@ -74,7 +76,7 @@ function Sellers({ sellers, flaggedText }: { sellers: Seller[]; flaggedText: str
 }
 
 /** Everything about one result: gates (with waive), per-unit money, fee sources, score groups, note, sellers. */
-export function Detail({ r, fav, onNote, onWaive, stacked = false, budgetGbp }: {
+export function Detail({ r, fav, onNote, onWaive, onWatch, stacked = false, budgetGbp }: {
   stacked?: boolean;
   /** The profile's budget for one line (budget × max line share), for the cart quantity. */
   budgetGbp?: number;
@@ -82,6 +84,8 @@ export function Detail({ r, fav, onNote, onWaive, stacked = false, budgetGbp }: 
   fav?: Fav;
   onNote: (r: Result, f: Fav | undefined, note: string) => void;
   onWaive: (r: Result, gate: GateId, action: "waive" | "unwaive", reason?: string) => Promise<void>;
+  /** Put it on the watchlist with a flip condition (absent where there's no watchlist). */
+  onWatch?: (r: Result, condition: WatchCondition | null, noSupplier: boolean) => Promise<void>;
 }) {
   return (
     <div className="space-y-4">
@@ -172,6 +176,7 @@ export function Detail({ r, fav, onNote, onWaive, stacked = false, budgetGbp }: 
         {r.product && (
           <div className="mt-3">
             <FavouriteNote note={fav?.note ?? null} starred={!!fav} onSave={(note) => onNote(r, fav, note)} />
+            {onWatch && <div className="mt-2"><WatchEditor key={`${fav?.id ?? "new"}-${JSON.stringify(fav?.condition ?? null)}`} r={r} fav={fav} onWatch={onWatch} /></div>}
           </div>
         )}
         {r.inputs?.sellers && r.inputs.sellers.length > 0 && (

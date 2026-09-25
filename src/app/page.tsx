@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangleIcon, ArrowRightIcon, BuildingIcon, CoinsIcon, RefreshCwIcon, StarIcon, UploadIcon } from "lucide-react";
+import { AlertTriangleIcon, ArrowRightIcon, BellIcon, BuildingIcon, CoinsIcon, RefreshCwIcon, StarIcon, UploadIcon } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 import { VerdictBar } from "@/components/VerdictBar";
@@ -77,6 +77,7 @@ export default function HomePage() {
   const dash = useLoad<Dashboard>("/api/dashboard", (d) => (d.runs.some((r) => r.counts.pending > 0) ? 15_000 : null));
   const keepa = useLoad<KeepaBalance>("/api/keepa", () => 60_000);
   const favs = useLoad<{ items: FavItem[]; unavailable?: string }>("/api/favourites");
+  const alerts = useLoad<{ count: number }>("/api/watchlist/alerts", () => 300_000);
   const brands = useLoad<{ brands: BrandSummary[]; updating: boolean; awaiting: { brands: number; passing: number } }>("/api/brands?chase=5");
 
   return (
@@ -89,7 +90,7 @@ export default function HomePage() {
         <Button asChild size="lg"><Link href="/upload"><UploadIcon /> Upload price list</Link></Button>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <Section load={keepa} skeleton={<StatSkeleton />}>
           {(k) => (
             <Stat icon={<CoinsIcon />} label="Keepa tokens available"
@@ -105,6 +106,10 @@ export default function HomePage() {
                 <SpendBars days={d.keepa.last7} />
               </>} />
           )}
+        </Section>
+        <Section load={alerts} skeleton={<StatSkeleton />}>
+          {(a) => <Stat icon={<BellIcon />} label="Watchlist: now passes" href="/watchlist" value={a.count}
+            hint={a.count ? "passed, met a condition or found a supplier" : "nothing new in the last 14 days"} />}
         </Section>
         <Section load={favs} skeleton={<StatSkeleton />}>
           {(f) => <Stat icon={<StarIcon />} label="Favourites needing refresh" href="/favourites"

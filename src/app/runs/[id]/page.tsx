@@ -27,6 +27,7 @@ import { EMPTY_FILTERS, matches, normalizeFilters, type FilterSet } from "@/lib/
 import { GATE_LABELS, GATE_ORDER, withDefaults, type GateId } from "@/lib/screening/config";
 import { api, when } from "@/lib/ui/client";
 import { favouriteSync, favStore, type FavStore } from "@/lib/ui/favouriteSync";
+import { conditionLabel, type WatchCondition } from "@/lib/watch";
 import { storefrontUrl } from "@/lib/check/seller";
 import { firstOrderFigures } from "@/lib/ui/metrics";
 import { groupRows } from "@/lib/ui/group";
@@ -148,6 +149,18 @@ export default function RunPage() {
     await api(`/api/runs/${id}/selection`, { method: "DELETE", json: { resultIds: [...selected] } });
     setSelected(new Set());
     apply(await fetchRun());
+  }
+
+  /** Put a row on the watchlist (starring it) with its flip condition. */
+  async function watch(r: Result, condition: WatchCondition | null, noSupplier: boolean) {
+    if (!r.product) return;
+    try {
+      const { favourite } = await api<{ favourite: Fav }>("/api/watchlist", { method: "PUT", json: { ean: r.product.ean, asin: r.product.asin, condition, noSupplier } });
+      favMap.set(favKey(favourite.ean, favourite.asin), favourite);
+      toast.success(`Watching: ${conditionLabel(condition)}`);
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
   }
 
   /** Save a note; on a product not yet starred, the note stars it (shown at once). */
@@ -472,14 +485,14 @@ export default function RunPage() {
         favourites={favourites} onStar={toggleFavourite} scanSellerId={run.stats?.scan?.sellerId ?? null}
         sort={sort} onSort={(key) => setSort((s) => ({ key, dir: s.key === key ? (s.dir === 1 ? -1 : 1) : key === "title" ? 1 : -1 }))}
         sparks={sparks} observeSparks={observeSparks}
-        renderDetail={(r) => <Detail r={r} fav={favOf(r)} onNote={saveNote} onWaive={waive} budgetGbp={lineBudget} />}
+        renderDetail={(r) => <Detail r={r} fav={favOf(r)} onNote={saveNote} onWaive={waive} onWatch={watch} budgetGbp={lineBudget} />}
         empty={done.length ? "Nothing matches these filters." : "Rows appear here as they're screened."}
         lineCapGbp={lineBudget} maxMonths={withDefaults(run.profile_snapshot ?? null).gates.demand.maxMonthsToSell} />
 
       {active && (
         <DetailDrawer r={active} index={activeIndex} count={displayRows.length} sparks={active.product?.asin ? sparks[active.product.asin] : null}
           onStep={step} onClose={closeDrawer}>
-          <Detail r={active} fav={favOf(active)} onNote={saveNote} onWaive={waive} stacked budgetGbp={lineBudget} />
+          <Detail r={active} fav={favOf(active)} onNote={saveNote} onWaive={waive} onWatch={watch} stacked budgetGbp={lineBudget} />
         </DetailDrawer>
       )}
     </div>

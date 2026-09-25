@@ -4,6 +4,8 @@
  */
 
 export interface RunStats {
+  /** A watchlist re-check: when it started, and when its conditions were evaluated (alerts sent). */
+  watch?: { startedAt: string; evaluatedAt?: string | null; alerts?: number; emailed?: boolean } | null;
   /** A seller scan: whose storefront this run screens (rows mark whether it holds the Buy Box). */
   scan?: { sellerId: string; sellerName: string | null; asins: number; more: number } | null;
   /** Rows leaving the Amazon queue per minute, measured on this run (smoothed across batches). */

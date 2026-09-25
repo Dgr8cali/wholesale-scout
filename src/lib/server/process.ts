@@ -5,6 +5,7 @@ import type { RateCard } from "../fees/rateCard";
 import { estimateEta, type Eta, type RunStats } from "../eta";
 import { addDailyTokens } from "../keepaLedger";
 import { keepaOwner } from "./keepaTurn";
+import { finishWatchRun } from "./watchlist";
 import { getKeepa, type KeepaProduct, type KeepaResponseMeta, type KeepaSummary, type KeepaTokens, type OnKeepaResponse, type SellerProfile } from "../keepa/client";
 import { dormancy, trimSeries, type Dormancy } from "../keepa/summarize";
 import type { Point } from "../keepa/types";
@@ -295,7 +296,8 @@ function resultFields(row: Row, run: GateRun, cfg: ProfileConfig, ctx: ScreenCon
     v: 1, stage: row.stage, match: row.match, market: row.market, hazmat: row.hazmat,
     restriction: row.restriction, amazonFees: row.amazonFees, lookup: row.lookup, sellers: row.sellers, notes: row.dataNotes,
     qogita: row.qogita ? { ...row.qogita, ...pick(row.qogita, cfg) } : null,
-    maxLandedGbp: ctx.offer.costKnown === false ? run.maxLandedGbp ?? maxLandedFor(ctx, run, cfg) : undefined,
+    // The most it can cost landed at its sell price: the hurdle with no cost, and a watch condition's value.
+    maxLandedGbp: run.maxLandedGbp ?? maxLandedFor(ctx, run, cfg),
     pack: ctx.pack && ctx.pack.ratio !== 1 ? { listing: ctx.pack.listing, supplier: ctx.pack.supplier, ratio: ctx.pack.ratio } : null,
   };
   return {
@@ -1093,6 +1095,8 @@ export async function processRun(runId: string, opts: { budgetMs?: number } = {}
     await mapLimit([...q.lookup, ...q.keepa, ...q.account], 10, (row) => safely(row, () => park(row)));
   } finally {
     const p = await runProgress(runId);
+    // A watchlist re-check that just finished: record the conditions and send the digest (once).
+    const finishWatch = p.done && !!stats.watch && !stats.watch.evaluatedAt;
     await updateRun(
       runId,
       {
@@ -1106,6 +1110,7 @@ export async function processRun(runId: string, opts: { budgetMs?: number } = {}
         ...(progressed ? { last_progress_at: new Date().toISOString() } : {}),
       },
     );
+    if (finishWatch) await finishWatchRun(runId).catch((e) => console.error(`[watchlist] evaluating ${runId}: ${(e as Error).message}`));
   }
   return runProgress(runId, { progressed, leased: lease === true });
 }
