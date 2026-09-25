@@ -462,6 +462,10 @@ function ProfilesTab({ editor: e }: { editor: Editor }) {
         <div className="max-w-xs"><NumberField label="Budget" unit="£" value={draft.budget} step={50} onChange={(n) => setDraft({ ...draft, budget: n })} /></div>
       </Section>
 
+      <Section title="Keepa history" note="A Keepa snapshot fetched by any run within this many days is reused instead of fetching again (no tokens). Re-screens never fetch history a snapshot this fresh already covers.">
+        <div className="max-w-xs"><NumberField label="Keepa history max age" unit="days" value={draft.keepaMaxAgeDays} step={1} onChange={(n) => setDraft({ ...draft, keepaMaxAgeDays: n })} /></div>
+      </Section>
+
       <Section title="Seller profiles" note="For rows that pass every gate, look up the top Buy Box sellers on Keepa (1 token each, reused for 7 days) and flag a likely brand distributor.">
         <label className="flex items-center gap-2 text-sm">
           <Switch checked={draft.sellerLookup.enabled} onCheckedChange={(on) => setDraft({ ...draft, sellerLookup: { ...draft.sellerLookup, enabled: on } })} />

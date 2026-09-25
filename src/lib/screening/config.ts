@@ -52,6 +52,8 @@ export interface ProfileConfig {
   scoringPrice: "current" | "median" | "lower";
   sellerLookup: SellerLookupConfig;
   budget: number;
+  /** Reuse a Keepa snapshot up to this many days old (any run's) instead of fetching again. */
+  keepaMaxAgeDays: number;
   fees: FeeAssumptions;
   gates: GateConfigs;
   score: ScoreConfig;
@@ -168,6 +170,7 @@ export const DEFAULT_PROFILE: ProfileConfig = {
   scoringPrice: "lower",
   sellerLookup: { enabled: true, topN: 3, distributorBrandSharePct: 50 },
   budget: 1000,
+  keepaMaxAgeDays: 7,
   fees: DEFAULT_FEE_ASSUMPTIONS,
   gates: DEFAULT_GATES,
   score: {
@@ -217,6 +220,7 @@ export function withDefaults(cfg: Partial<ProfileConfig> | null | undefined): Pr
     scoringPrice: c.scoringPrice ?? DEFAULT_PROFILE.scoringPrice,
     sellerLookup: { ...DEFAULT_PROFILE.sellerLookup, ...(c.sellerLookup ?? {}) },
     budget: c.budget ?? DEFAULT_PROFILE.budget,
+    keepaMaxAgeDays: c.keepaMaxAgeDays ?? DEFAULT_PROFILE.keepaMaxAgeDays,
     fees: { ...DEFAULT_FEE_ASSUMPTIONS, ...(c.fees ?? {}), missingDims: { ...DEFAULT_FEE_ASSUMPTIONS.missingDims, ...(c.fees?.missingDims ?? {}) } },
     gates,
     score: {

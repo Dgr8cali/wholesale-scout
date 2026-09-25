@@ -212,6 +212,24 @@ describe("Keepa path", () => {
     expect(fake.tables.keepa_sellers).toHaveLength(3);
   });
 
+  it("reuses any run's snapshot within the profile's Keepa max age (7 days by default), and fetches past it", async () => {
+    const { runId } = await ingest({ files: [upload()] });
+    await until(runId);
+    const calls = k.asinCalls.length + k.bbCalls.length;
+    // Three days on: a new upload of the same products reuses the snapshots.
+    for (const s of fake.tables.keepa_snapshots) s.fetched_at = new Date(Date.now() - 3 * 86_400_000).toISOString();
+    const second = await ingest({ files: [upload()] });
+    await until(second.runId);
+    expect(k.asinCalls.length + k.bbCalls.length).toBe(calls);
+    expect(tokens(second.runId)).toBe(0);
+    // Eight days on: too old, fetched again.
+    for (const s of fake.tables.keepa_snapshots) s.fetched_at = new Date(Date.now() - 8 * 86_400_000).toISOString();
+    const third = await ingest({ files: [upload()] });
+    await until(third.runId);
+    expect(k.asinCalls.length + k.bbCalls.length).toBeGreaterThan(calls);
+    expect(tokens(third.runId)).toBeGreaterThan(0);
+  });
+
   it("never re-fetches a snapshot under 24 hours old", async () => {
     const { runId } = await ingest({ files: [upload()] });
     await until(runId);

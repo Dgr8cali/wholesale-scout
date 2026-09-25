@@ -318,7 +318,7 @@ async function approvedBrands(): Promise<Approved> {
 }
 
 /** How old a Keepa snapshot may be and still be used instead of fetching. */
-const maxAgeMs = (cfg: ProfileConfig) => (void cfg, KEEPA_TTL);
+const maxAgeMs = (cfg: ProfileConfig) => Math.max(0, cfg.keepaMaxAgeDays ?? 7) * DAY;
 
 /** Latest Keepa summary per ASIN fetched within `maxAge`. */
 async function freshSnapshots(asins: string[], maxAge: number = KEEPA_TTL): Promise<Map<string, KeepaSummary>> {
@@ -329,7 +329,11 @@ async function freshSnapshots(asins: string[], maxAge: number = KEEPA_TTL): Prom
       await db().from("keepa_snapshots").select("asin, fetched_at, summary").in("asin", c).gte("fetched_at", since).order("fetched_at", { ascending: false }),
       "snapshots",
     ) as { asin: string; summary: KeepaSummary }[];
-    for (const x of snaps) if (!out.has(x.asin)) out.set(x.asin, x.summary);
+    // Newest first; a snapshot with the Buy Box data beats a newer history-only one (it has everything).
+    for (const x of snaps) {
+      const cur = out.get(x.asin);
+      if (!cur || (cur.buyBoxFetched === false && x.summary.buyBoxFetched !== false)) out.set(x.asin, x.summary);
+    }
   }
   return out;
 }
@@ -392,7 +396,7 @@ async function attachKeepa(
   const asins = [...new Set(withAsin.map((r) => r.match!.asin!))];
   const summaries = await freshSnapshots(asins, opts.maxAgeMs);
   // Stage 2 needs a snapshot with the Buy Box data; a history-only one doesn't count.
-  if (opts.buyBox) for (const [a, s] of summaries) if (s.buyBoxFetched === false) summaries.delete(a);
+  if (opts.buyBox) for (const [a, snap] of summaries) if (snap.buyBoxFetched === false) summaries.delete(a);
   const products = new Map<string, KeepaProduct>();
   for (const [asin, k] of alreadyFetched) if (!summaries.has(asin)) products.set(asin, k);
 
@@ -533,7 +537,7 @@ interface PendingRow {
 }
 
 /** Build rows from results, with their product, offer, supplier and any stored inputs. */
-async function loadRows(results: PendingRow[]): Promise<Row[]> {
+async function loadRows(results: PendingRow[], maxAge: number = KEEPA_TTL): Promise<Row[]> {
   const d = db();
   const byId = <T extends { id: string }>(xs: T[]) => new Map(xs.map((x) => [x.id, x]));
   const products: Product[] = [], offers: Offer[] = [], suppliers: Supplier[] = [];
@@ -557,8 +561,8 @@ async function loadRows(results: PendingRow[]): Promise<Row[]> {
     for (const x of rows) if (x.asin) siblings.set(x.ean, (siblings.get(x.ean) ?? 0) + 1);
   }
 
-  // A Keepa snapshot under 24 hours old beats stored market data without history.
-  const keepaFresh = await freshSnapshots(products.map((p) => p.asin).filter((a): a is string => !!a));
+  // A Keepa snapshot within the profile's max age (any run's) beats stored market data without history.
+  const keepaFresh = await freshSnapshots(products.map((p) => p.asin).filter((a): a is string => !!a), maxAge);
   const waivers = await waiversFor(products.map((p) => p.ean));
 
   const rows = results.map((r) => {
@@ -677,7 +681,7 @@ export async function rescreenRun(
   const left = await todo();
   while (left.length && Date.now() < deadline) {
     const batch = left.splice(0, 250);
-    const rows = await loadRows(batch);
+    const rows = await loadRows(batch, maxAgeMs(cfg));
     const requeue: string[] = [];
     // Stored-data-only and nothing stored to re-screen from: marked seen, left as it is.
     const untouched: string[] = [];
@@ -694,7 +698,7 @@ export async function rescreenRun(
         const pre = runGates(ctx, cfg, ["compliance", "budgetFit"]);
         if (pre.failedGate) return false;
         if (STAGE_RANK[row.stage] < STAGE_RANK.enriched) return true;
-        // Keepa is live and this listing has no history yet (and none under 24h to read): fetch it once.
+        // Keepa is live and this listing has no history yet (and no snapshot within the max age): fetch it once.
         if (keepaLive && row.match?.asin && !row.market?.hasHistory) return true;
         if (runGates(ctx, cfg, middle).failedGate) return false;
         if (STAGE_RANK[row.stage] < STAGE_RANK.account || needsRestrictionCheck(row)) return true;
@@ -910,7 +914,7 @@ export async function processRun(runId: string, opts: { budgetMs?: number } = {}
       if (page.length < 1000) break;
     }
     const q: Queues = { lookup: [], keepa: [], account: [] };
-    for (const row of await loadRows(pending)) route(row, q, env);
+    for (const row of await loadRows(pending, maxAgeMs(cfg))) route(row, q, env);
 
     while (Date.now() < deadline - margin) {
       const a = q.lookup.splice(0, BATCH.lookup);
@@ -1092,8 +1096,8 @@ async function stageLookup(rows: Row[], env: StageEnv): Promise<StageOut & { add
   }));
   live = resolved;
 
-  // History already on hand (a snapshot under 24h, or found by EAN just now), else SP-API pricing.
-  const cached = await freshSnapshots(live.map((r) => r.match?.asin).filter((a): a is string => !!a));
+  // History already on hand (a snapshot within the max age, or found by EAN just now), else SP-API pricing.
+  const cached = await freshSnapshots(live.map((r) => r.match?.asin).filter((a): a is string => !!a), maxAgeMs(cfg));
   for (const [asin, k] of fetched) {
     try {
       await saveSnapshot(k);
@@ -1161,7 +1165,7 @@ async function stageLookup(rows: Row[], env: StageEnv): Promise<StageOut & { add
 
   const finished = await finishAll(done, cfg);
   const added = addedIds.length
-    ? await loadRows(must(await d.from("results").select("id, product_id, offer_id, inputs").in("id", addedIds), "added") as PendingRow[])
+    ? await loadRows(must(await d.from("results").select("id, product_id, offer_id, inputs").in("id", addedIds), "added") as PendingRow[], maxAgeMs(cfg))
     : [];
   return { finished, next, added };
 }
