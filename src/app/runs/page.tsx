@@ -239,9 +239,9 @@ export default function RunsPage() {
         <TableCell className="text-sm">{s?.suppliers.length ? s.suppliers.join(", ") : <span className="text-muted-foreground">—</span>}</TableCell>
         <TableCell className="text-sm text-muted-foreground">{when(r.started_at)}</TableCell>
         <TableCell className="num text-right">{r.row_count.toLocaleString("en-GB")}</TableCell>
-        <TableCell className="w-40">
-          {s ? <VerdictBar counts={s} legend={false} /> : <Skeleton className="h-2" />}
-          {s && <p className="num mt-1 text-2xs text-muted-foreground">{s.pass} pass · {s.warn} warn · {s.fail} fail</p>}
+        <TableCell className="w-52 min-w-44">
+          {/* The same bar as Home: pass / warn / fail (and errors, rows still to screen), with counts. */}
+          {s ? <VerdictBar counts={s} /> : <Skeleton className="h-2" />}
         </TableCell>
         <TableCell className="w-44">
           {done ? <Badge variant="pass">Done</Badge> : r.status === "error" ? <Badge variant="fail">Error</Badge> : r.paused_at ? (
