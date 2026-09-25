@@ -29,6 +29,26 @@ const product = (asin: string, s: KeepaSummary): KeepaProduct => ({
   summary: s, buyBoxSellers: [], series: { rank: [[Date.now() - 86_400_000, 5000]], buyBox: [], newPrice: [], offerCount: [], amazon: [], reviewCount: [] },
 });
 
+const qg = vi.hoisted(() => ({
+  offers: [] as unknown[], calls: [] as { fid: string; maxMov?: number | null }[], gtinCalls: [] as string[],
+}));
+vi.mock("../qogita/client", async (orig) => {
+  const real = await orig<typeof import("../qogita/client")>();
+  return {
+    ...real,
+    getQogita: () => ({
+      async variantOffers(fid: string, f: { maxMov?: number | null }) {
+        qg.calls.push({ fid, maxMov: f.maxMov });
+        return { offers: qg.offers, excluded: 1 };
+      },
+      async *products(q: { gtin?: string }) {
+        qg.gtinCalls.push(q.gtin ?? "");
+        yield { count: 1, results: [{ productUrl: `https://www.qogita.com/products/${"b".repeat(32)}/x/` }] };
+      },
+    }),
+  };
+});
+
 vi.mock("../keepa/client", async (orig) => {
   const real = await orig<typeof import("../keepa/client")>();
   const fake = {
@@ -92,6 +112,16 @@ vi.mock("../spapi/client", async (orig) => {
     }),
   };
 });
+
+const tier = (price: number, mov: number) => ({ tierPrice: { amount: price.toFixed(2), currency: "EUR" }, tierMov: { amount: mov.toFixed(2), currency: "EUR" } });
+const qOffer = (seller: string, tiers: [number, number][], over: object = {}) => ({ qid: `q-${seller}`, unit: 6, inventory: 600, seller, estimatedDeliveryTime: 1, tieredPrices: tiers.map(([p, m]) => tier(p, m)), ...over });
+
+function qogitaUpload() {
+  const u = upload();
+  const fx = { rate: 0.86, date: "2026-09-25" };
+  const supplier = { name: "Qogita", vatBasis: "ex_vat" as const, vatRate: 20, currency: "EUR" };
+  return { ...u, fileName: "Qogita · test", supplier, fx, rows: applyMapping([u.headers, ["3401399277092", "Bioderma Sébium Purifying and Foaming Cleansing Gel 500 ml", "Bioderma", "6.00", 6]], u.mapping, supplier, fx).rows.map((r) => ({ ...r, externalRef: `https://www.qogita.com/products/${"a".repeat(32)}/bioderma/` })) };
+}
 
 function upload() {
   const sheet: Cell[][] = [
@@ -255,6 +285,32 @@ describe("Keepa path", () => {
     const stats = fake.tables.runs.find((r) => r.id === runId)!.stats as { keepaByDay: Record<string, number> };
     expect(tokens(runId)).toBeGreaterThan(0);
     expect(stats.keepaByDay).toEqual({ [ukDay()]: tokens(runId) });
+  });
+
+  it("Qogita rows that pass every gate get their supplier offers; the budget gate uses the chosen supplier's real MOV", async () => {
+    qg.calls.length = 0;
+    // A: cheapest but €15,000 MOV (over the £1,000 budget). B: €6.20 from €500 MOV, which fits.
+    qg.offers = [qOffer("A", [[5.9, 15000]]), qOffer("B", [[6.1, 1500], [6.2, 500]])];
+    const { runId } = await ingest({ files: [qogitaUpload()] });
+    await until(runId);
+    const r = results(runId)[0];
+    expect(qg.calls).toEqual([{ fid: "a".repeat(32), maxMov: null }]);
+    const q = (r.inputs as { qogita: { offers: { seller: string; basePrice: number; baseMov: number }[]; chosen: string; reason: string; excluded: number } }).qogita;
+    expect(q.offers.map((o) => [o.seller, o.basePrice, o.baseMov])).toEqual([["A", 5.9, 15000], ["B", 6.2, 500]]);
+    expect(q.chosen).toBe("q-B");
+    expect(q.reason).toMatch(/Cheapest offer whose MOV fits the budget/);
+    expect(q.excluded).toBe(1);
+    // Cost is the chosen supplier's entry price: €6.20 × 0.86.
+    expect(r.landed_cost).toBeGreaterThan(6.2 * 0.86);
+    expect(gate(r, "budgetFit")!.status).toBe("pass");
+
+    // Nobody's MOV fits: the cheapest is kept and the budget gate fails on its MOV.
+    qg.offers = [qOffer("A", [[5.9, 15000]]), qOffer("C", [[6.5, 5000]])];
+    const second = await ingest({ files: [qogitaUpload()] });
+    await until(second.runId);
+    const r2 = results(second.runId)[0];
+    expect(r2.failed_gate).toBe("budgetFit");
+    expect(gate(r2, "budgetFit")!.detail).toMatch(/Supplier minimum order £12,900\.00 is over the £1,000\.00 budget|Supplier minimum order £12900\.00 is over the £1000\.00 budget/);
   });
 
   it("lets one worker hold a run at a time", async () => {

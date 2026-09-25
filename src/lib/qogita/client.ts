@@ -181,12 +181,13 @@ export class QogitaClient {
     }
   }
 
-  async variantOffers(fid: string, f: { maxMov?: number | null; maxWeeks?: number | null } = {}): Promise<QogitaOffer[]> {
+  /** Every offer for a variant, and how many Qogita left out for the MOV or delivery limit. */
+  async variantOffers(fid: string, f: { maxMov?: number | null; maxWeeks?: number | null } = {}): Promise<{ offers: QogitaOffer[]; excluded: number }> {
     const p = new URLSearchParams();
     if (f.maxMov != null) p.set("max_mov_filter", String(f.maxMov));
     if (f.maxWeeks != null) p.set("max_estimated_delivery_time_filter", String(f.maxWeeks));
-    const body: { offers: QogitaOffer[] } = await this.request(`/buyers/variants/${fid}/offers/${p.size ? `?${p}` : ""}`);
-    return body.offers ?? [];
+    const body: { offers: QogitaOffer[]; numberOfExcludedOffers?: number } = await this.request(`/buyers/variants/${fid}/offers/${p.size ? `?${p}` : ""}`);
+    return { offers: body.offers ?? [], excluded: body.numberOfExcludedOffers ?? 0 };
   }
 
   // Cart: allocations (one per supplier) hold allocation lines.

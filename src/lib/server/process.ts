@@ -8,6 +8,8 @@ import { getKeepa, type KeepaProduct, type KeepaResponseMeta, type KeepaSummary,
 import { dormancy, trimSeries, type Dormancy } from "../keepa/summarize";
 import type { Point } from "../keepa/types";
 import { isDormant } from "../screening/dormant";
+import { getQogita, variantFid } from "../qogita/client";
+import { chooseOffer, toSupplierOffer, type QogitaOffers, type SupplierOffer } from "../qogita/offers";
 import { GATE_ORDER, withDefaults, type GateId, type ProfileConfig } from "../screening/config";
 import { resolveScoringPrice, runGates, verdictOf, type GateRun, type MarketData, type ScreenContext, type SellerView } from "../screening/gates";
 import type { CategoryRule } from "../screening/rules";
@@ -50,6 +52,8 @@ interface Offer {
   title: string | null;
   brand: string | null;
   category: string | null;
+  /** Qogita: the product link (the variant FID is in it). */
+  external_ref?: string | null;
   [k: string]: unknown;
 }
 
@@ -81,6 +85,8 @@ export interface StoredInputs {
   lookup?: LookupTrace | null;
   /** Top Buy Box sellers with their Keepa profiles (rows that passed every gate). */
   sellers?: SellerView[] | null;
+  /** Qogita supplier offers for a row that passed every gate (see qogita/offers). */
+  qogita?: QogitaOffers | null;
   notes: string[];
 }
 
@@ -97,6 +103,7 @@ interface Row {
   amazonFees: StoredInputs["amazonFees"];
   lookup: LookupTrace | null;
   sellers: SellerView[] | null;
+  qogita: QogitaOffers | null;
   /** Gates waived for this product. */
   waivers: Map<GateId, string | null>;
   /** Lookup notes that belong to the row's data (kept across re-screens). */
@@ -158,6 +165,9 @@ function feesAt(row: Row, cfg: ProfileConfig): ScreenContext["amazonFees"] {
 
 function context(row: Row, card: RateCard, rules: CategoryRule[], cfg: ProfileConfig, approved: Approved): ScreenContext {
   const p = row.product, o = row.offer, s = row.supplier;
+  // Qogita: once the supplier offers are in, cost, case size and MOV are the chosen supplier's
+  // (the cheapest whose MOV fits this profile's budget), not the headline price from the search.
+  const q = row.qogita ? chooseOffer(row.qogita.offers, cfg.budget, row.qogita.fxRate).chosen : null;
   return {
     brandApproval: approved.get(brandKey(p.brand ?? o.brand)) ?? null,
     now: new Date(),
@@ -167,7 +177,12 @@ function context(row: Row, card: RateCard, rules: CategoryRule[], cfg: ProfileCo
     sheet: { brand: o.brand, title: o.title },
     listing: row.match?.asin ? { brand: p.brand, title: p.title } : undefined,
     amazonCategory: p.category,
-    offer: {
+    offer: q ? {
+      unitCostGbp: q.basePrice * row.qogita!.fxRate,
+      moq: q.unit,
+      goodsVatRatePct: Number(s.vat_rate),
+      supplierMovGbp: q.baseMov * row.qogita!.fxRate,
+    } : {
       unitCostGbp: Number(o.unit_cost_gbp),
       moq: o.moq,
       goodsVatRatePct: Number(s.vat_rate),
@@ -225,6 +240,7 @@ async function finalize(row: Row, run: GateRun, cfg: ProfileConfig, ctx: ScreenC
   const inputs: StoredInputs = {
     v: 1, stage: row.stage, match: row.match, market: row.market, hazmat: row.hazmat,
     restriction: row.restriction, amazonFees: row.amazonFees, lookup: row.lookup, sellers: row.sellers, notes: row.dataNotes,
+    qogita: row.qogita ? { ...row.qogita, ...pick(row.qogita, cfg) } : null,
   };
   must(
     await db().from("results").update({
@@ -532,6 +548,7 @@ async function loadRows(results: PendingRow[]): Promise<Row[]> {
       amazonFees: i?.amazonFees ?? null,
       lookup: i?.lookup ?? null,
       sellers: i?.sellers ?? null,
+      qogita: i?.qogita ?? null,
       // A waiver made before the ASIN was known (EAN only) covers every ASIN of that EAN.
       waivers: new Map([...(waivers.get(productKey(product.ean, null)) ?? []), ...(waivers.get(productKey(product.ean, product.asin)) ?? [])]),
       dataNotes: i?.notes ?? [],
@@ -1056,6 +1073,54 @@ async function stageKeepa(rows: Row[], env: StageEnv): Promise<StageOut & { defe
 }
 
 /** Stage 3: your account — gating in parallel, Amazon's fees 20 at a time, sellers, verdict. */
+const isQogita = (row: Row) => row.supplier.name === "Qogita";
+
+/** The chosen offer and why, for the stored inputs (the expanded row highlights it). */
+function pick(q: QogitaOffers, cfg: ProfileConfig): Pick<QogitaOffers, "chosen" | "reason"> {
+  const c = chooseOffer(q.offers, cfg.budget, q.fxRate);
+  return { chosen: c.chosen?.qid ?? null, reason: c.reason };
+}
+
+/** The MOV and delivery limits of the Qogita pull that made this run (none before the migration). */
+async function pullLimits(runId: string): Promise<{ movLimit: number | null; maxWeeks: number | null }> {
+  const res = await db().from("qogita_pulls").select("preset:qogita_presets(filters)").eq("run_id", runId).limit(1);
+  const f = (res.data?.[0] as { preset?: { filters?: { movLimit?: number | null; maxDeliveryWeeks?: number | null } } } | undefined)?.preset?.filters;
+  return { movLimit: f?.movLimit ?? null, maxWeeks: f?.maxDeliveryWeeks ?? null };
+}
+
+/**
+ * Qogita rows that passed every gate: fetch every supplier's offer for the variant (within the
+ * pull's MOV and delivery limits) so the budget gate can use the chosen supplier's real MOV.
+ */
+async function attachQogitaOffers(rows: Row[], env: StageEnv): Promise<void> {
+  if (!rows.length) return;
+  const q = getQogita();
+  if (!q) {
+    for (const row of rows) row.notes.push("Qogita offers not checked: QOGITA_EMAIL / QOGITA_PASSWORD not set.");
+    return;
+  }
+  const limits = await pullLimits(env.runId).catch(() => ({ movLimit: null, maxWeeks: null }));
+  await mapLimit(rows, 3, async (row) => {
+    try {
+      let fid = variantFid(row.offer.external_ref);
+      if (!fid) {
+        // Before the migration the link isn't stored: find the variant by its GTIN.
+        for await (const page of q.products({ gtin: row.product.ean })) { fid = variantFid(page.results[0]?.productUrl); break; }
+      }
+      if (!fid) throw new Error("no Qogita product for this EAN");
+      const raw = await q.variantOffers(fid, { maxMov: limits.movLimit, maxWeeks: limits.maxWeeks });
+      const offers = raw.offers.map(toSupplierOffer).filter((o): o is SupplierOffer => !!o);
+      const base: QogitaOffers = {
+        fid, currency: String(row.offer.currency ?? "EUR"), fxRate: Number(row.offer.fx_rate), fetchedAt: new Date().toISOString(),
+        movLimit: limits.movLimit, offers, chosen: null, reason: "", excluded: raw.excluded,
+      };
+      row.qogita = { ...base, ...pick(base, env.cfg) };
+    } catch (e) {
+      row.notes.push(`Qogita offers not checked: ${(e as Error).message}.`);
+    }
+  });
+}
+
 async function stageAccount(rows: Row[], env: StageEnv): Promise<StageOut> {
   const { cfg, card, rules, approved, spapi, keepa } = env;
   if (!rows.length) return { finished: 0, next: [] };
@@ -1098,6 +1163,7 @@ async function stageAccount(rows: Row[], env: StageEnv): Promise<StageOut> {
       if (row.sellers.some((s) => !s.name && s.storefrontSize == null)) row.sellers = null;
     }
   }
+  await attachQogitaOffers(rows.filter((row) => isQogita(row) && !row.qogita && !runGates(context(row, card, rules, cfg, approved), cfg).failedGate), env);
   const done = rows.map((row) => {
     row.stage = "account";
     const ctx = context(row, card, rules, cfg, approved);

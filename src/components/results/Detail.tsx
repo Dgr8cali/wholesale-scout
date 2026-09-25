@@ -8,6 +8,7 @@ import { gbp } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
 import { lastSeenLabel } from "@/lib/screening/dormant";
 import { dormantOf } from "@/lib/ui/resultRows";
+import type { QogitaOffers } from "@/lib/qogita/offers";
 import type { Fav, Result, Seller } from "./types";
 
 const STATUS_ICON: Record<string, string> = { pass: "✓", warn: "!", fail: "✕", skipped: "–", off: "·" };
@@ -72,6 +73,7 @@ export function Detail({ r, fav, onNote, onWaive, stacked = false }: {
   onWaive: (r: Result, gate: GateId, action: "waive" | "unwaive", reason?: string) => Promise<void>;
 }) {
   return (
+    <div className="space-y-4">
     <div className={cn("grid gap-4", !stacked && "lg:grid-cols-[2fr_1fr_1fr]")}>
       <div>
         <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Gates</p>
@@ -160,6 +162,8 @@ export function Detail({ r, fav, onNote, onWaive, stacked = false }: {
         )}
       </div>
     </div>
+    {r.inputs?.qogita && <QogitaOfferList q={r.inputs.qogita} stacked={stacked} />}
+    </div>
   );
 }
 
@@ -178,5 +182,60 @@ function SellerGap({ r }: { r: Result }) {
         <><dt className="text-muted-foreground">Last Buy Box</dt><dd className="num text-right text-muted-foreground">{lastSeenLabel(m.lastBuyBox12m, m.lastBuyBoxAt)}</dd></>
       )}
     </dl>
+  );
+}
+
+/** Every Qogita supplier's offer for the product, the one that fits the budget highlighted. */
+function QogitaOfferList({ q, stacked }: { q: QogitaOffers; stacked: boolean }) {
+  const cur = q.currency === "EUR" ? "€" : `${q.currency} `;
+  const m = (n: number) => `${cur}${n.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const sorted = [...q.offers].sort((a, b) => a.basePrice - b.basePrice);
+  return (
+    <div className="space-y-1.5">
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Qogita offers ({q.offers.length})</p>
+        <p className="text-xs text-muted-foreground">
+          {q.reason}{q.excluded ? ` · ${q.excluded} left out by the ${q.movLimit != null ? `${m(q.movLimit)} MOV` : "MOV or delivery"} limit` : ""} · checked {new Date(q.fetchedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+        </p>
+      </div>
+      {!sorted.length ? <p className="text-xs text-muted-foreground">No supplier offers within the limits.</p> : (
+        <div className="overflow-x-auto rounded-md border bg-card">
+          <table className="num w-full text-xs">
+            <thead className="text-left text-muted-foreground">
+              <tr className="border-b">
+                <th className="px-2 py-1.5 font-medium">Supplier</th>
+                <th className="px-2 py-1.5 text-right font-medium">Price / piece</th>
+                <th className="px-2 py-1.5 text-right font-medium">≈ GBP</th>
+                <th className="px-2 py-1.5 text-right font-medium">MOV</th>
+                {!stacked && <th className="px-2 py-1.5 text-right font-medium">Tiers</th>}
+                <th className="px-2 py-1.5 text-right font-medium">Case</th>
+                <th className="px-2 py-1.5 text-right font-medium">In stock</th>
+                <th className="px-2 py-1.5 text-right font-medium">Delivery</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map((o) => {
+                const chosen = o.qid === q.chosen;
+                return (
+                  <tr key={o.qid} className={cn("border-b last:border-0", chosen && "bg-pass-soft")}>
+                    <td className="px-2 py-1.5 font-sans">
+                      <span className={cn(chosen && "font-semibold")}>{o.seller}</span>
+                      {chosen && <span className="ml-1.5 rounded bg-pass px-1 py-px text-2xs font-semibold text-white">fits the budget</span>}
+                    </td>
+                    <td className="px-2 py-1.5 text-right">{m(o.basePrice)}</td>
+                    <td className="px-2 py-1.5 text-right text-muted-foreground">{gbp(o.basePrice * q.fxRate)}</td>
+                    <td className="px-2 py-1.5 text-right">{m(o.baseMov)}</td>
+                    {!stacked && <td className="px-2 py-1.5 text-right text-muted-foreground" title={o.tiers.map((t) => `${m(t.price)} from ${m(t.mov)}`).join("\n")}>{o.tiers.length > 1 ? `${o.tiers.length} (to ${m(Math.min(...o.tiers.map((t) => t.price)))})` : "—"}</td>}
+                    <td className="px-2 py-1.5 text-right">{o.unit}</td>
+                    <td className="px-2 py-1.5 text-right">{o.inventory.toLocaleString("en-GB")}</td>
+                    <td className="px-2 py-1.5 text-right">{o.deliveryWeeks != null ? `${o.deliveryWeeks} wk` : "—"}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
   );
 }

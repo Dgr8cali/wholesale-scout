@@ -1,4 +1,5 @@
 import type { Eta } from "@/lib/eta";
+import type { QogitaOffers } from "@/lib/qogita/offers";
 import type { GateId, GroupId } from "@/lib/screening/config";
 import type { GateOutcome } from "@/lib/screening/gates";
 import { buyBox, estSales, profitMonth, sellers, share, type Figure, type StoredMarket } from "@/lib/ui/metrics";
@@ -33,7 +34,7 @@ export interface Result {
   band: "green" | "amber" | "grey" | null;
   offer_count: number;
   error: string | null;
-  inputs: { market?: StoredMarket | null; sellers?: Seller[] | null; lookup?: { outcome: string; attempts: { identifiersType: string; code: string; items: number; total?: number; error?: string }[]; raw?: string } | null } | null;
+  inputs: { market?: StoredMarket | null; sellers?: Seller[] | null; qogita?: QogitaOffers | null; lookup?: { outcome: string; attempts: { identifiersType: string; code: string; items: number; total?: number; error?: string }[]; raw?: string } | null } | null;
   product: { ean: string; asin: string | null; title: string | null; brand: string | null; category: string | null; image_url?: string | null } | null;
   offer: { unit_cost: number; currency: string; unit_cost_gbp: number; moq: number | null; pack_units: number; title: string | null; source_ref: string | null; supplier: { name: string } | null } | null;
 }
