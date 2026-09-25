@@ -119,7 +119,7 @@ export default function CheckPage() {
       </form>
 
       <section className="space-y-2">
-        <h2 className="text-sm font-semibold">Recent checks</h2>
+        <h2 className="section-label">Recent checks</h2>
         {recent == null ? <p className="text-sm text-muted-foreground">Loading…</p> : !recent.length ? (
           <p className="text-sm text-muted-foreground">Your last 20 checks will be here to re-run.</p>
         ) : (

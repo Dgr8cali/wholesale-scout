@@ -76,7 +76,7 @@ export default function WatchlistPage() {
     </div>
   );
   if (error) return <div className="space-y-5">{header}<ErrorState title="Couldn't load the watchlist" message={error} onRetry={load} /></div>;
-  if (!data) return <div className="space-y-5">{header}<Skeleton className="h-40 rounded-xl" /><Skeleton className="h-64 rounded-xl" /></div>;
+  if (!data) return <div className="space-y-5">{header}<Skeleton className="h-40 rounded-lg" /><Skeleton className="h-64 rounded-lg" /></div>;
 
   return (
     <div className="space-y-6">
@@ -139,7 +139,7 @@ export default function WatchlistPage() {
                   const c = i.lastCheck;
                   const f = i.favourite;
                   return (
-                    <TableRow key={f.id}>
+                    <TableRow key={f.id} data-verdict={i.latest?.verdict ?? "empty"}>
                       <TableCell className="max-w-96 pl-4 whitespace-normal">
                         <p className="line-clamp-2 text-sm">{i.latest?.product?.title ?? f.asin ?? f.ean}</p>
                         <p className="num text-2xs text-muted-foreground">

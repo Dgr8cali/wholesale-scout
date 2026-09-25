@@ -511,7 +511,7 @@ function RunSkeleton() {
     <div className="space-y-4" aria-busy="true" aria-label="Loading run">
       <div className="space-y-2"><Skeleton className="h-7 w-2/3" /><Skeleton className="h-4 w-1/3" /></div>
       <div className="flex gap-2">{[240, 100, 200, 80].map((w, i) => <Skeleton key={i} className="h-9" style={{ width: w }} />)}</div>
-      <Skeleton className="h-28 rounded-xl" />
+      <Skeleton className="h-28 rounded-lg" />
       <div className="panel space-y-0 overflow-hidden">
         <Skeleton className="h-10 rounded-none" />
         {Array.from({ length: 8 }, (_, i) => (

@@ -79,7 +79,7 @@ export function QogitaCartProvider({ enabled, children }: { enabled: boolean; ch
                 <Button variant="outline" size="sm" onClick={refresh}>Try again</Button>
               </div>
             ) : !allocations ? (
-              <div className="space-y-3">{[0, 1].map((i) => <Skeleton key={i} className="h-40 rounded-xl" />)}</div>
+              <div className="space-y-3">{[0, 1].map((i) => <Skeleton key={i} className="h-40 rounded-lg" />)}</div>
             ) : !allocations.length ? (
               <p className="py-10 text-center text-sm text-muted-foreground">The cart is empty. Add a passing Qogita product from its details.</p>
             ) : allocations.map((a) => <Allocation key={a.qid} a={a} onChanged={refresh} />)}

@@ -137,7 +137,7 @@ export default function SupplierPage() {
 
       <div className="grid gap-4 lg:grid-cols-3">
         <section className="min-w-0 space-y-2 lg:col-span-2" aria-label="Best products">
-          <h2 className="text-sm font-semibold">Best products <span className="font-normal text-muted-foreground">· pass or warn, most room under the max landed cost</span></h2>
+          <h2 className="section-label">Best products <span className="font-normal text-muted-foreground">· pass or warn, most room under the max landed cost</span></h2>
           {!data.best.length ? <p className="panel px-4 py-6 text-center text-sm text-muted-foreground">None of its costed products pass or warn on your default profile.</p> : (
             <div className="panel overflow-x-auto">
               <Table>
@@ -153,7 +153,7 @@ export default function SupplierPage() {
                 </TableHeader>
                 <TableBody>
                   {data.best.map((b) => (
-                    <TableRow key={b.productId}>
+                    <TableRow key={b.productId} data-verdict={b.verdict}>
                       <TableCell className="max-w-80 pl-4 whitespace-normal">
                         <p className="line-clamp-2 text-sm">{b.title ?? b.ean}</p>
                         <p className="num text-2xs text-muted-foreground">{b.brand} · {b.asin ? <a className="text-brand hover:underline" href={`https://www.amazon.co.uk/dp/${b.asin}`} target="_blank" rel="noreferrer">{b.asin}</a> : b.ean}</p>
@@ -172,14 +172,14 @@ export default function SupplierPage() {
         </section>
         <div className="space-y-4">
           <section className="panel space-y-2 p-4" aria-label="Brands carried">
-            <h2 className="text-sm font-semibold">Brands carried <span className="font-normal text-muted-foreground">{data.stats.brands.length}</span></h2>
+            <h2 className="section-label">Brands carried <span className="font-normal text-muted-foreground">{data.stats.brands.length}</span></h2>
             <div className="flex flex-wrap gap-1">
               {data.stats.brands.slice(0, 30).map((b) => <Badge key={b.brand} variant="outline" className="font-normal">{b.brand} <span className="num text-muted-foreground">{b.count}</span></Badge>)}
               {!data.stats.brands.length && <span className="text-sm text-muted-foreground">—</span>}
             </div>
           </section>
           <section className="panel space-y-2 p-4" aria-label="Runs">
-            <h2 className="text-sm font-semibold">Runs</h2>
+            <h2 className="section-label">Runs</h2>
             <ul className="space-y-1 text-sm">
               {data.runs.map((r) => (
                 <li key={r.id} className="flex items-baseline justify-between gap-2">

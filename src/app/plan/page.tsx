@@ -124,7 +124,7 @@ export default function PlanPage() {
     </div>
   );
   if (error) return <div className="space-y-5">{header}<ErrorState title="Couldn't build the plan" message={error} onRetry={() => window.location.reload()} /></div>;
-  if (!data || !plan) return <div className="space-y-5">{header}<Skeleton className="h-24 rounded-xl" /><Skeleton className="h-72 rounded-xl" /></div>;
+  if (!data || !plan) return <div className="space-y-5">{header}<Skeleton className="h-24 rounded-lg" /><Skeleton className="h-72 rounded-lg" /></div>;
 
   const l = data.limits;
   const over = plan.total > l.budget + 0.005;
@@ -197,7 +197,7 @@ export default function PlanPage() {
 
       {approval.length > 0 && (
         <section className="space-y-2" aria-label="Approval needed">
-          <h2 className="text-sm font-semibold">If approved <span className="font-normal text-muted-foreground">· warn only for brand approval; pin one to plan it</span></h2>
+          <h2 className="section-label">If approved <span className="font-normal text-muted-foreground">· warn only for brand approval; pin one to plan it</span></h2>
           <CandidateList items={approval} pinned={pinned} onPin={(k) => toggle(pinned, setPinned, k)} />
         </section>
       )}
@@ -230,7 +230,7 @@ function Total({ label, value, note, good, bad }: { label: string; value: string
   return (
     <div>
       <p className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className={cn("num text-lg font-semibold", good && "text-pass", bad && "text-fail")}>{value}</p>
+      <p className={cn("stat-value", good && "text-pass", bad && "text-fail")}>{value}</p>
       <p className="text-xs text-muted-foreground">{note}</p>
     </div>
   );

@@ -84,14 +84,14 @@ export function IpRiskTab() {
   }), [list, q, unverified]);
 
   if (error) return <ErrorState title="Couldn't load the IP-risk list" message={error} onRetry={load} />;
-  if (!list) return <div className="space-y-4"><Skeleton className="h-40 rounded-xl" /><Skeleton className="h-64 rounded-xl" /></div>;
+  if (!list) return <div className="space-y-4"><Skeleton className="h-40 rounded-lg" /><Skeleton className="h-64 rounded-lg" /></div>;
   const seeds = list.filter((x) => /unverified/i.test(x.source ?? "")).length;
 
   return (
     <div className="space-y-5">
       <section className="panel space-y-4 p-4 sm:p-5">
         <div className="space-y-1">
-          <h2 className="section-title">IP-risk brands</h2>
+          <h2 className="section-label">IP-risk brands</h2>
           <p className="max-w-3xl text-sm text-muted-foreground">
             Brands known to file IP or counterfeit complaints against resellers. A product whose brand (or an alias) is here gets the
             compliance rule <b>IP-risk brand</b>: a warning by default; set that rule to fail on the Gates tab to drop high-risk brands
@@ -182,7 +182,7 @@ export function IpRiskTab() {
 
       <section className="panel space-y-3 p-4 sm:p-5">
         <div className="space-y-1">
-          <h2 className="section-title">Import a list</h2>
+          <h2 className="section-label">Import a list</h2>
           <p className="max-w-3xl text-sm text-muted-foreground">
             Paste a CSV: a header naming <code>brand</code>, <code>level</code>, <code>note</code>, <code>source</code>, <code>date</code>, <code>aliases</code> in any
             order, or just one brand per line. Aliases are separated by ; and a missing level is medium. Brands already listed are updated; blank cells keep what&apos;s there.
@@ -195,7 +195,7 @@ export function IpRiskTab() {
             <Label htmlFor="csv-source">Source for rows without one</Label>
             <Input id="csv-source" className="w-72" placeholder="e.g. community list, Sept 2026" value={csvSource} onChange={(e) => setCsvSource(e.target.value)} />
           </div>
-          <Button onClick={importCsv} disabled={!preview?.rows.length}><UploadIcon /> Import {preview?.rows.length ? preview.rows.length : ""}</Button>
+          <Button variant="outline" onClick={importCsv} disabled={!preview?.rows.length}><UploadIcon /> Import {preview?.rows.length ? preview.rows.length : ""}</Button>
           {preview && (
             <p className="text-xs text-muted-foreground" aria-live="polite">
               {preview.rows.length} to import

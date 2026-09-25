@@ -46,7 +46,7 @@ export function HelpHome({ docs, sections }: { docs: SearchDoc[]; sections: stri
             if (!list.length) return null;
             return (
               <section key={s} className="space-y-2">
-                <h2 className="section-title">{s}</h2>
+                <h2 className="section-label">{s}</h2>
                 <ul className="space-y-1.5">
                   {list.map((d) => (
                     <li key={d.slug}>

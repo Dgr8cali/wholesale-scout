@@ -240,9 +240,9 @@ export default function QogitaPage() {
         </section>
 
         <aside className="space-y-3">
-          <h2 className="section-title">Saved pulls</h2>
+          <h2 className="section-label">Saved pulls</h2>
           {presetNote && <p className="rounded-md bg-warn-soft px-3 py-2 text-sm text-warn">{presetNote}</p>}
-          {!presets ? <Skeleton className="h-32 rounded-xl" />
+          {!presets ? <Skeleton className="h-32 rounded-lg" />
             : !presets.length ? <p className="rounded-lg border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">Each pull is saved here by name, to run again or re-pull nightly.</p>
             : presets.map((p) => (
               <div key={p.id} className="panel space-y-2 p-3">

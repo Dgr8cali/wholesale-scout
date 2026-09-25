@@ -6,97 +6,94 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * Colour tokens: shadcn's neutral theme, plus the app's own
- *   brand — the teal used for links, focus and the primary call to action
- *   pass / warn / fail (+ -soft backgrounds) — verdicts, gate outcomes and statuses
+ * Colour tokens: the Gatekeeper design system, mapped onto shadcn's variables so every component
+ * follows it. Named roles (ground, surface, line, ink, accent, pass/warn/fail/empty with soft
+ * tints) are kept as their own variables too; brand is the accent.
  */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.52 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
-
-  --brand: oklch(0.56 0.1 205);
-  --brand-foreground: oklch(0.99 0 0);
-  --brand-soft: oklch(0.95 0.03 205);
-  --pass: oklch(0.55 0.13 155);
-  --pass-soft: oklch(0.95 0.04 155);
-  --warn: oklch(0.6 0.14 70);
-  --warn-soft: oklch(0.95 0.05 80);
-  --fail: oklch(0.56 0.18 27);
-  --fail-soft: oklch(0.95 0.03 25);
+  --ground: #F4F6F7;
+  --surface: #FFFFFF;
+  --surface-2: #EDF1F3;
+  --line: #D6DEE3;
+  --line-strong: #B9C5CC;
+  --ink: #1C2534;
+  --ink-2: #3E4B58;
+  --muted-ink: #6B7883;
+  --accent-strong: #0B8CA0;
+  --accent-ink: #FFFFFF;
+  --accent-soft: #DDF1F4;
+  --pass: #1E8E5A;
+  --pass-soft: #DDF3E7;
+  --warn: #B86E00;
+  --warn-soft: #FCEBCF;
+  --fail: #C2382F;
+  --fail-soft: #F9DEDB;
+  --empty: #8A97A2;
+  --empty-soft: #E9EDF0;
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.72 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.72 0.1 205);
-  --sidebar-primary-foreground: oklch(0.145 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --ground: #111820;
+  --surface: #18212B;
+  --surface-2: #1F2A36;
+  --line: #2C3946;
+  --line-strong: #3D4C5B;
+  --ink: #E7ECF0;
+  --ink-2: #C2CCD5;
+  --muted-ink: #8E9CAA;
+  --accent-strong: #2FB3C7;
+  --accent-ink: #0B1418;
+  --accent-soft: #163A42;
+  --pass: #3FC07E;
+  --pass-soft: #153826;
+  --warn: #E39A2E;
+  --warn-soft: #3E2B0C;
+  --fail: #EF6B62;
+  --fail-soft: #44201D;
+  --empty: #7C8894;
+  --empty-soft: #232E39;
+}
 
-  --brand: oklch(0.74 0.11 205);
-  --brand-foreground: oklch(0.16 0 0);
-  --brand-soft: oklch(0.3 0.05 205);
-  --pass: oklch(0.74 0.15 155);
-  --pass-soft: oklch(0.3 0.06 155);
-  --warn: oklch(0.78 0.14 75);
-  --warn-soft: oklch(0.32 0.06 70);
-  --fail: oklch(0.72 0.16 25);
-  --fail-soft: oklch(0.32 0.07 25);
+/* shadcn's variables, from the roles above (both themes). */
+:root, .dark {
+  --background: var(--ground);
+  --foreground: var(--ink);
+  --card: var(--surface);
+  --card-foreground: var(--ink);
+  --popover: var(--surface);
+  --popover-foreground: var(--ink);
+  /* The one primary action per page: accent-filled. */
+  --primary: var(--accent-strong);
+  --primary-foreground: var(--accent-ink);
+  --secondary: var(--surface-2);
+  --secondary-foreground: var(--ink);
+  --muted: var(--surface-2);
+  --muted-foreground: var(--muted-ink);
+  /* shadcn's "accent" is the hover and selected background, not the brand colour. */
+  --accent: var(--surface-2);
+  --accent-foreground: var(--ink);
+  --destructive: var(--fail);
+  --border: var(--line);
+  --input: var(--line-strong);
+  --ring: var(--accent-strong);
+  --chart-1: var(--accent-strong);
+  --chart-2: var(--pass);
+  --chart-3: var(--warn);
+  --chart-4: var(--fail);
+  --chart-5: var(--empty);
+  --radius: 0.625rem;
+  --sidebar: var(--surface);
+  --sidebar-foreground: var(--ink-2);
+  --sidebar-primary: var(--accent-strong);
+  --sidebar-primary-foreground: var(--accent-ink);
+  --sidebar-accent: var(--accent-soft);
+  --sidebar-accent-foreground: var(--ink);
+  --sidebar-border: var(--line);
+  --sidebar-ring: var(--accent-strong);
+
+  --brand: var(--accent-strong);
+  --brand-foreground: var(--accent-ink);
+  --brand-soft: var(--accent-soft);
 }
 
 @theme inline {
@@ -141,10 +138,15 @@
   --color-warn-soft: var(--warn-soft);
   --color-fail: var(--fail);
   --color-fail-soft: var(--fail-soft);
+  --color-empty: var(--empty);
+  --color-empty-soft: var(--empty-soft);
+  --color-surface-2: var(--surface-2);
+  --color-line-strong: var(--line-strong);
+  --color-ink-2: var(--ink-2);
 
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-geist-sans);
+  --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
+  --font-heading: var(--font-bricolage), var(--font-plex-sans), ui-sans-serif, sans-serif;
 
   /*
    * Type scale: Tailwind's steps (xs 12, sm 14, base 16, lg 18, xl 20, 2xl 24) plus one below
@@ -152,6 +154,8 @@
    */
   --text-2xs: 0.6875rem;
   --text-2xs--line-height: 1rem;
+  /* Body: 14px at 1.45. */
+  --text-sm--line-height: 1.45;
 
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
@@ -171,24 +175,41 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-size: 14px;
+    line-height: 1.45;
+  }
+  h1, h2, h3 {
+    font-family: var(--font-heading);
   }
 }
 
 /* Page and section headings, one size each everywhere. */
 @utility page-title {
-  @apply text-xl font-semibold tracking-tight;
+  @apply font-heading text-2xl font-bold tracking-tight;
 }
+/* A title inside a card or panel (a product in the drawer, an empty state). */
 @utility section-title {
-  @apply text-base font-semibold;
+  @apply font-heading text-base font-semibold;
+}
+/* Section headings: a small caps-tracked muted label; a trailing note (a span) stays as written. */
+@utility section-label {
+  @apply font-sans text-xs font-semibold tracking-[0.08em] text-muted-foreground uppercase;
+  & > span {
+    @apply font-normal tracking-normal normal-case;
+  }
+}
+/* A stat tile's value (Home tiles, a brand's figures, the check card): Bricolage 22px bold. */
+@utility stat-value {
+  @apply font-heading text-[22px] leading-tight font-bold tabular-nums;
 }
 /* Small uppercase label above a group (e.g. "Gates", "Score groups"). */
 @utility eyebrow {
-  @apply text-2xs font-semibold tracking-wide text-muted-foreground uppercase;
+  @apply text-2xs font-semibold tracking-[0.08em] text-muted-foreground uppercase;
 }
 
 /* Figures: tabular, monospaced digits so columns line up. */
 .num {
-  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
 
@@ -237,7 +258,8 @@
   overscroll-behavior-x: contain;
 }
 .rt-row { --row-bg: var(--card); }
-.rt-row[data-alt] { --row-bg: color-mix(in oklab, var(--muted) 45%, var(--card)); }
+/* Hairline dividers between rows, no stripes. */
+.rt-row[data-alt] { --row-bg: var(--card); }
 .rt-row[data-selected] { --row-bg: color-mix(in oklab, var(--brand-soft) 60%, var(--card)); }
 .rt-row:hover { --row-bg: var(--muted); }
 .rt-row[data-active] { --row-bg: var(--brand-soft); }
@@ -245,9 +267,17 @@
 /* The last pinned column's edge, drawn as a shadow because borders don't travel with sticky cells. */
 .rt-edge { box-shadow: inset -1px 0 0 var(--border), 6px 0 8px -6px oklch(0 0 0 / 0.12); }
 
+/* Any table row with data-verdict: a 4px verdict-coloured edge on its first cell. */
+tr[data-verdict] > td:first-child { box-shadow: inset 4px 0 0 var(--empty); }
+tr[data-verdict="pass"] > td:first-child { box-shadow: inset 4px 0 0 var(--pass); }
+tr[data-verdict="warn"] > td:first-child { box-shadow: inset 4px 0 0 var(--warn); }
+tr[data-verdict="fail"] > td:first-child { box-shadow: inset 4px 0 0 var(--fail); }
+tr[data-verdict] > td:first-child { padding-left: 0.75rem; }
+
 /* Framed content areas (filter bar, tables, forms). */
+/* Cards: surface, a 1px line border, 10px radius, no shadow. */
 @utility panel {
-  @apply rounded-xl border bg-card text-card-foreground;
+  @apply rounded-lg border border-border bg-card text-card-foreground;
 }
 /* A form field's label. */
 @utility field-label {
@@ -266,7 +296,7 @@
 .help-prose ul { @apply list-disc space-y-1 pl-5; }
 .help-prose ol { @apply list-decimal space-y-1 pl-5; }
 .help-prose li > ul, .help-prose li > ol { @apply mt-1; }
-.help-prose code { @apply rounded bg-muted px-1 py-0.5 text-xs; font-family: var(--font-geist-mono), ui-monospace, monospace; }
+.help-prose code { @apply rounded bg-muted px-1 py-0.5 text-xs; font-family: var(--font-mono); }
 .help-prose pre { @apply overflow-x-auto rounded-md bg-muted p-3 text-xs; }
 .help-prose pre code { @apply bg-transparent p-0; }
 .help-prose blockquote { @apply border-l-2 pl-3 text-muted-foreground; }

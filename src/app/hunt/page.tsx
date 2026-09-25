@@ -141,7 +141,7 @@ export default function HuntPage() {
       </section>
 
       <section className="panel space-y-3 p-4" aria-label="Cost">
-        <p className="section-title">Cost before you run it</p>
+        <p className="section-label">Cost before you run it</p>
         <ul className="space-y-1 text-sm">
           <li><b className="num">{finder}</b> tokens for the Product Finder (10, plus 1 per 100 results).</li>
           <li>

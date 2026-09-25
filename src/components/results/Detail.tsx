@@ -379,7 +379,7 @@ function AddToCart({ r, budgetGbp }: { r: Result; budgetGbp?: number }) {
         ≈ {q!.currency === "EUR" ? "€" : `${q!.currency} `}{cost.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} from {offer.seller}
         {budgetGbp ? <> · {suggested.toLocaleString("en-GB")} is the most your {gbp(budgetGbp)} line budget buys</> : null}
       </p>
-      <Button size="sm" className="ml-auto" disabled={bad || busy} onClick={async () => { setBusy(true); await cart.add(offer.qid, n, offer.unit, r.product?.title ?? offer.seller); setBusy(false); }}>
+      <Button size="sm" variant="outline" className="ml-auto" disabled={bad || busy} onClick={async () => { setBusy(true); await cart.add(offer.qid, n, offer.unit, r.product?.title ?? offer.seller); setBusy(false); }}>
         <ShoppingCartIcon /> {busy ? "Adding…" : "Add to Qogita cart"}
       </Button>
       {bad && <p className="w-full text-xs text-warn">Order whole cases of {offer.unit}.</p>}

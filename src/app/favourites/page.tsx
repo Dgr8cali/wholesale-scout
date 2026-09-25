@@ -215,7 +215,7 @@ export default function FavouritesPage() {
   );
 
   if (error && !items) return <div className="space-y-4">{header}<ErrorState title="Couldn't load favourites" message={error} onRetry={load} /></div>;
-  if (!items) return <div className="space-y-4">{header}<Skeleton className="h-24 rounded-xl" /><Skeleton className="h-72 rounded-xl" /></div>;
+  if (!items) return <div className="space-y-4">{header}<Skeleton className="h-24 rounded-lg" /><Skeleton className="h-72 rounded-lg" /></div>;
 
   return (
     <div className="space-y-4">

@@ -346,7 +346,7 @@ function Cell({ id, d, props, compact, isOpen }: { id: string; d: DisplayRow; pr
     case "select": {
       const edge = r.status === "error" ? VERDICT_EDGE.fail : r.verdict ? VERDICT_EDGE[r.verdict] : "transparent";
       return (
-        <div className={cn("flex items-center gap-0.5 pl-2.5", compact ? "h-full py-1" : "py-2")} style={{ boxShadow: `inset 3px 0 0 ${edge}` }} onClick={stop}>
+        <div className={cn("flex items-center gap-0.5 pl-2.5", compact ? "h-full py-1" : "py-2")} style={{ boxShadow: `inset 4px 0 0 ${edge}` }} onClick={stop}>
           <Checkbox aria-label={`Select ${titleOf(r)}`} checked={props.selected.has(r.id)} onCheckedChange={() => props.onToggleSelect(r.id)} />
           <Button variant="ghost" size="icon-xs" aria-expanded={isOpen} aria-label={isOpen ? "Collapse details" : "Expand details"}
             className="text-muted-foreground" onClick={() => props.onToggleOpen(r.id)}>

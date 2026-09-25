@@ -306,7 +306,7 @@ export default function UploadPage() {
           <StepNav>
             {allRemembered && <span className="text-sm text-muted-foreground">Every layout is remembered: you can go straight to Review.</span>}
             <Button variant={allRemembered ? "outline" : "default"} disabled={!canReach(1)} onClick={() => next(1)}>Map columns</Button>
-            {allRemembered && <Button onClick={() => next(2)}>Review</Button>}
+            {allRemembered && <Button variant="outline" onClick={() => next(2)}>Review</Button>}
           </StepNav>
         </div>
       )}
@@ -405,7 +405,7 @@ export default function UploadPage() {
       {step === 3 && (
         <div className="space-y-4">
           <section className="panel space-y-4 p-5">
-            <h2 className="section-title">Screen against Amazon UK</h2>
+            <h2 className="section-label">Screen against Amazon UK</h2>
             <p className="text-sm text-muted-foreground">
               <span className="num font-medium text-foreground">{totalRows.toLocaleString("en-GB")}</span> rows from {files.length} file{files.length > 1 ? "s" : ""}.
               The same EAN across files becomes one product; the cheapest offer is scored. Screening runs in the background: you can leave the page.
@@ -458,7 +458,7 @@ function MapFile({ f, suppliers, problems, onUpdate, onCurrency, onSupplier, onS
     <div className="space-y-4">
       <section className="panel space-y-3 p-4">
         <div className="flex flex-wrap items-center gap-2">
-          <h2 className="section-title">Supplier</h2>
+          <h2 className="section-label">Supplier</h2>
           {f.remembered ? <Badge variant="pass">Layout remembered: {f.remembered}</Badge> : <Badge variant="warn">New layout: check the mapping</Badge>}
           {f.sheetNames.length > 1 && (
             <NativeSelect size="sm" className="ml-auto w-auto" aria-label="Sheet" value={f.sheet} onChange={(e) => onSheet(e.target.value)}>
@@ -503,7 +503,7 @@ function MapFile({ f, suppliers, problems, onUpdate, onCurrency, onSupplier, onS
 
       <section className="panel overflow-hidden">
         <div className="flex flex-wrap items-center gap-3 border-b px-4 py-3">
-          <h2 className="section-title">Columns</h2>
+          <h2 className="section-label">Columns</h2>
           <div className="ml-auto flex items-center gap-2">
             <Label htmlFor={`hdr-${f.key}`} className="field-label">Header row</Label>
             <Input id={`hdr-${f.key}`} className="num h-8 w-16" type="number" min={1} value={f.mapping.headerRow + 1}

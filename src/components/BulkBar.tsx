@@ -66,7 +66,7 @@ export function BulkBar({ count, stashed, onReselect, onClear, onStar, onUnstar,
     if (ok && onRemove) await act("remove", onRemove, `Removed ${count}`);
   };
   return (
-    <div className="panel sticky top-14 z-20 flex flex-wrap items-center gap-2 border-brand px-3 py-2 shadow-md" role="toolbar" aria-label="Actions on selected rows">
+    <div className="panel sticky top-14 z-20 flex flex-wrap items-center gap-2 border-brand px-3 py-2" role="toolbar" aria-label="Actions on selected rows">
       <span className="text-sm font-semibold"><span className="num">{count}</span> selected</span>
       {sep}
       {onStar && <Button variant="outline" size="xs" disabled={!!busy} onClick={() => act("star", onStar, `Starred ${count}`)}><StarIcon /> Star</Button>}

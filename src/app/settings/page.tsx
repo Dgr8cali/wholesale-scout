@@ -97,7 +97,7 @@ function Section({ title, note, actions, children, className }: { title: ReactNo
     <section className={cn("panel space-y-4 p-4 sm:p-5", className)}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
-          <h2 className="section-title">{title}</h2>
+          <h2 className="section-label">{title}</h2>
           {note && <p className="max-w-3xl text-sm text-muted-foreground">{note}</p>}
         </div>
         {actions}
@@ -107,7 +107,7 @@ function Section({ title, note, actions, children, className }: { title: ReactNo
   );
 }
 
-const LoadingBlocks = () => <div className="space-y-4"><Skeleton className="h-16 rounded-xl" /><Skeleton className="h-64 rounded-xl" /><Skeleton className="h-40 rounded-xl" /></div>;
+const LoadingBlocks = () => <div className="space-y-4"><Skeleton className="h-16 rounded-lg" /><Skeleton className="h-64 rounded-lg" /><Skeleton className="h-40 rounded-lg" /></div>;
 const LoadError = ({ message }: { message: string }) => <ErrorState title="Couldn't load settings" message={message} onRetry={() => window.location.reload()} />;
 
 export default function SettingsPage() {
@@ -234,7 +234,7 @@ type Editor = ReturnType<typeof useProfileEditor>;
 function ProfileBar({ editor: e, manage }: { editor: Editor; manage: boolean }) {
   if (!e.ready) return null;
   return (
-    <div className="panel sticky top-14 z-10 flex flex-wrap items-center gap-2 p-3 shadow-xs">
+    <div className="panel sticky top-14 z-10 flex flex-wrap items-center gap-2 p-3">
       <span className="field-label">Editing</span>
       <NativeSelect className="w-56" aria-label="Profile" value={e.id} onChange={(ev) => e.select(ev.target.value)}>
         {e.profiles.map((p) => <NativeSelectOption key={p.id} value={p.id}>{p.name}{p.is_default ? " (default)" : ""}</NativeSelectOption>)}
@@ -560,7 +560,7 @@ function Rules() {
   useEffect(() => {
     api<{ rules: CategoryRule[] }>("/api/rules").then((r) => setRules(r.rules)).catch((e) => setMsg({ ok: false, text: e.message }));
   }, []);
-  if (!rules) return msg ? <LoadError message={msg.text} /> : <Skeleton className="h-40 rounded-xl" />;
+  if (!rules) return msg ? <LoadError message={msg.text} /> : <Skeleton className="h-40 rounded-lg" />;
 
   const set = (i: number, patch: Partial<CategoryRule>) => setRules(rules.map((r, j) => (j === i ? { ...r, ...patch } : r)));
   const list = (s: string) => s.split(/\n|,(?![^/]*\/)/).map((x) => x.trim()).filter(Boolean);
@@ -575,7 +575,7 @@ function Rules() {
 
   return (
     <Section title="Compliance rules" note={<>Shared by every profile; each profile sets each rule to off, warn or fail above. Keywords match whole words or phrases; write /pattern/ for a regular expression. These run on the row&apos;s own text before any API call.</>}
-      actions={<Button onClick={save}>Save rules</Button>}>
+      actions={<Button variant="outline" onClick={save}>Save rules</Button>}>
       {rules.map((r, i) => (
         <div key={i} className="grid gap-3 rounded-lg border p-4 lg:grid-cols-2">
           <div className="grid grid-cols-2 gap-3">
@@ -638,7 +638,7 @@ function Rates() {
 
   return (
     <Section title="Rate card" note="Shared by every profile. Fee amounts are GBP ex-VAT and ex-DSF. Tiers: max sorted dimensions in cm and [max grams, fee] bands; parcel tiers bill on the greater of actual and L×W×H ÷ divisor. Referral bands apply their rate to the whole price. Saving keeps the previous card for comparison."
-      actions={<Button onClick={save}>Save as new version</Button>}>
+      actions={<Button variant="outline" onClick={save}>Save as new version</Button>}>
       {!cards ? <Skeleton className="h-24 rounded-lg" /> : (
         <div className="overflow-hidden rounded-lg border">
           <Table>

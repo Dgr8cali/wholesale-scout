@@ -20,11 +20,11 @@ const GATING: Record<string, { label: string; variant: "pass" | "warn" | "fail" 
   unknown: { label: "Unknown", variant: "muted" },
 };
 
-function Stat({ label, children, note, strong, text }: { label: string; children: ReactNode; note?: ReactNode; strong?: boolean; text?: boolean }) {
+function Stat({ label, children, note, text }: { label: string; children: ReactNode; note?: ReactNode; text?: boolean }) {
   return (
     <div className="min-w-0">
       <p className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className={cn("truncate text-sm", !text && "num", strong && "text-base font-semibold")}>{children}</p>
+      <p className={cn("truncate", text ? "text-sm" : "stat-value")}>{children}</p>
       {note && <p className="line-clamp-2 text-2xs text-muted-foreground">{note}</p>}
     </div>
   );
@@ -70,11 +70,11 @@ export function VerdictCard({ card, onFetchAnyway }: { card: Card; onFetchAnyway
       </div>
 
       <div className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-4 lg:grid-cols-8">
-        <Stat label={card.costKnown ? `Profit at ${gbp(card.landed)}` : "Profit"} strong
+        <Stat label={card.costKnown ? `Profit at ${gbp(card.landed)}` : "Profit"} 
           note={card.costKnown ? (card.roi != null ? `${pct(card.roi)} ROI · ${pct(card.margin)} margin` : undefined) : "no cost given"}>
           {card.costKnown ? gbp(card.profit) : "—"}
         </Stat>
-        <Stat label={card.hurdle.kind === "landed" ? "Max landed" : "Hurdle"} strong
+        <Stat label={card.hurdle.kind === "landed" ? "Max landed" : "Hurdle"} 
           note={card.hurdle.kind === "landed" ? "clears the floors at or under" : "sell price that clears the floors"}>
           {gbp(card.hurdle.value)}
         </Stat>

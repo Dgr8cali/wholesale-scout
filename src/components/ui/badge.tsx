@@ -19,11 +19,11 @@ const badgeVariants = cva(
           "hover:bg-muted hover:text-muted-foreground dark:hover:bg-muted/50",
         link: "text-primary underline-offset-4 hover:underline",
         // App: verdicts and statuses.
-        pass: "bg-pass-soft text-pass",
-        warn: "bg-warn-soft text-warn",
-        fail: "bg-fail-soft text-fail",
+        pass: "bg-pass-soft font-heading font-semibold text-pass",
+        warn: "bg-warn-soft font-heading font-semibold text-warn",
+        fail: "bg-fail-soft font-heading font-semibold text-fail",
         brand: "bg-brand-soft text-brand",
-        muted: "bg-muted text-muted-foreground",
+        muted: "bg-empty-soft text-empty",
       },
     },
     defaultVariants: {

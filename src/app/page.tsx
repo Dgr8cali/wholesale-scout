@@ -58,16 +58,16 @@ function Stat({ icon, label, value, hint, href }: { icon: ReactNode; label: stri
         <span className="flex size-8 flex-none items-center justify-center rounded-lg bg-muted text-muted-foreground [&_svg]:size-4">{icon}</span>
         <div className="min-w-0">
           <p className="text-xs text-muted-foreground">{label}</p>
-          <p className="num text-xl font-semibold tracking-tight">{value}</p>
+          <p className="stat-value">{value}</p>
           {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
         </div>
       </CardContent>
     </Card>
   );
-  return href ? <Link href={href} className="block rounded-xl focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none">{body}</Link> : body;
+  return href ? <Link href={href} className="block rounded-lg focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none">{body}</Link> : body;
 }
 
-const StatSkeleton = () => <Skeleton className="h-[88px] rounded-xl" />;
+const StatSkeleton = () => <Skeleton className="h-[88px] rounded-lg" />;
 const ListSkeleton = ({ rows = 4 }: { rows?: number }) => (
   <div className="space-y-4">{Array.from({ length: rows }, (_, i) => <div key={i} className="space-y-2"><Skeleton className="h-4 w-2/3" /><Skeleton className="h-2 w-full" /></div>)}</div>
 );

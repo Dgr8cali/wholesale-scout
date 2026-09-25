@@ -40,7 +40,7 @@ export default function SuppliersPage() {
     </div>
   );
   if (error) return <div className="space-y-5">{header}<ErrorState title="Couldn't load suppliers" message={error} onRetry={() => window.location.reload()} /></div>;
-  if (!rows) return <div className="space-y-5">{header}<Skeleton className="h-64 rounded-xl" /></div>;
+  if (!rows) return <div className="space-y-5">{header}<Skeleton className="h-64 rounded-lg" /></div>;
 
   return (
     <div className="space-y-5">

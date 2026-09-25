@@ -99,7 +99,7 @@ export function Documents({ brand, supplier, suppliers = [] }: {
 
   return (
     <section className="panel space-y-3 p-4" aria-label="Documents">
-      <h2 className="text-sm font-semibold">Documents <span className="font-normal text-muted-foreground">· invoices, SDS, brand letters: shown when you apply for approval</span></h2>
+      <h2 className="section-label">Documents <span className="font-normal text-muted-foreground">· invoices, SDS, brand letters: shown when you apply for approval</span></h2>
       {docs == null ? <p className="text-sm text-muted-foreground">Loading…</p>
         : docs.length ? <ul className="space-y-1.5">{docs.map((d) => <DocumentLine key={d.id} d={d} onDelete={() => remove(d)} />)}</ul>
         : <p className="text-sm text-muted-foreground">None yet.</p>}

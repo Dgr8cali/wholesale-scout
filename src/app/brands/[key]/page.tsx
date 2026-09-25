@@ -33,7 +33,7 @@ function Stat({ label, value, hint }: { label: string; value: React.ReactNode; h
   return (
     <div title={hint}>
       <p className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="num text-base font-semibold">{value}</p>
+      <p className="stat-value">{value}</p>
     </div>
   );
 }
@@ -121,7 +121,7 @@ export default function BrandPage() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <section className="panel space-y-3 p-4" aria-label="Approval">
-          <h2 className="text-sm font-semibold">Your approval</h2>
+          <h2 className="section-label">Your approval</h2>
           <div className="grid gap-3 sm:grid-cols-[10rem_1fr_10rem]">
             <NativeSelect value={approval?.status ?? "not_applied"} aria-label="Status" onChange={(e) => saveApproval({ status: e.target.value as ApprovalStatus })}>
               {APPROVAL_STATUSES.map((s) => <NativeSelectOption key={s} value={s}>{STATUS_LABELS[s]}</NativeSelectOption>)}
@@ -132,7 +132,7 @@ export default function BrandPage() {
           </div>
         </section>
         <section className="panel space-y-2 p-4" aria-label="Top sellers">
-          <h2 className="text-sm font-semibold">Top sellers of this brand</h2>
+          <h2 className="section-label">Top sellers of this brand</h2>
           {!topSellers.length ? <p className="text-sm text-muted-foreground">No Buy Box sellers known yet: they&apos;re looked up for products that pass every gate.</p> : (
             <ul className="space-y-1.5">
               {topSellers.map((s) => (
@@ -154,7 +154,7 @@ export default function BrandPage() {
       <Documents brand={{ name: b.brand }} />
 
       <section className="space-y-2">
-        <h2 className="text-sm font-semibold">Products across all runs <span className="font-normal text-muted-foreground">· best offer per EAN</span></h2>
+        <h2 className="section-label">Products across all runs <span className="font-normal text-muted-foreground">· best offer per EAN</span></h2>
         <div className="panel overflow-x-auto">
           <Table>
             <TableHeader>
@@ -173,7 +173,7 @@ export default function BrandPage() {
               {data.products.map((p) => {
                 const r = p.restriction ? RESTRICTION[p.restriction] : undefined;
                 return (
-                  <TableRow key={p.product_id}>
+                  <TableRow key={p.product_id} data-verdict={p.priced && p.verdict ? p.verdict : "empty"}>
                     <TableCell className="max-w-96 pl-4 whitespace-normal">
                       <div className="flex gap-2.5">
                         <ProductThumb url={p.image_url} asin={p.asin} title={p.title ?? p.ean} brand={b.brand} size={36} />
