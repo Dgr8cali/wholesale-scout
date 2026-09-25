@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { EditableName } from "@/components/EditableName";
 import { api, when } from "@/lib/ui/client";
 
 interface Run {
   id: string;
+  name?: string | null;
   source: string;
   status: string;
   started_at: string;
@@ -85,7 +87,15 @@ export default function Home() {
             <tbody>
               {runs.map((r) => (
                 <tr key={r.id} className="border-b border-line last:border-0 hover:bg-surface-2">
-                  <td className="px-4 py-2"><Link href={`/runs/${r.id}`} className="font-medium text-accent hover:underline">{r.source}</Link></td>
+                  <td className="px-4 py-2">
+                    <EditableName value={r.name || r.source} inputClassName="py-1"
+                      display={<Link href={`/runs/${r.id}`} className="font-medium text-accent hover:underline">{r.name || r.source}</Link>}
+                      onSave={async (name) => {
+                        await api(`/api/runs/${r.id}`, { method: "PATCH", json: { name } });
+                        setRuns((rs) => rs && rs.map((x) => (x.id === r.id ? { ...x, name } : x)));
+                      }} />
+                    {r.name && r.name !== r.source && <div className="truncate text-xs text-muted">{r.source}</div>}
+                  </td>
                   <td className="px-4 py-2">{r.profile?.name ?? "—"}</td>
                   <td className="px-4 py-2">{when(r.started_at)}</td>
                   <td className="num px-4 py-2 text-right">{r.row_count}</td>

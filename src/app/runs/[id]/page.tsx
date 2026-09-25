@@ -6,6 +6,7 @@ import * as XLSX from "xlsx";
 import { GATE_LABELS, GATE_ORDER, GROUP_LABELS, type GateId, type GroupId } from "@/lib/screening/config";
 import type { GateOutcome } from "@/lib/screening/gates";
 import { api, gbp, pct, when } from "@/lib/ui/client";
+import { EditableName } from "@/components/EditableName";
 import { groupRows } from "@/lib/ui/group";
 import { RestrictionLink } from "@/lib/ui/RestrictionLink";
 import { buyBox, estSales, sellers, type Figure, type StoredMarket } from "@/lib/ui/metrics";
@@ -45,7 +46,7 @@ interface Result {
 }
 
 interface Run {
-  id: string; source: string; status: string; started_at: string; finished_at: string | null;
+  id: string; name?: string | null; source: string; status: string; started_at: string; finished_at: string | null;
   row_count: number; processed_count: number; token_cost: number; profile: { name: string } | null; error: string | null;
 }
 
@@ -262,7 +263,7 @@ export default function RunPage() {
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Shortlist");
-    XLSX.writeFile(wb, `wholesale-scout-${(run?.source ?? "run").replace(/[^\w-]+/g, "_").slice(0, 40)}.xlsx`);
+    XLSX.writeFile(wb, `wholesale-scout-${(run?.name || run?.source || "run").replace(/[^\w-]+/g, "_").slice(0, 40)}.xlsx`);
   }
 
   const th = (key: SortKey, label: ReactNode, right = false, hint?: string) => (
@@ -283,7 +284,14 @@ export default function RunPage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="h1">{run.source}</h1>
+          <h1 className="h1">
+            <EditableName value={run.name || run.source} inputClassName="text-lg font-semibold"
+              onSave={async (name) => {
+                await api(`/api/runs/${id}`, { method: "PATCH", json: { name } });
+                setRun((r) => r && { ...r, name });
+              }} />
+          </h1>
+          {run.name && run.name !== run.source && <p className="text-xs text-muted">{run.source}</p>}
           <p className="text-sm text-muted">
             {run.profile?.name ?? "Profile"} · started {when(run.started_at)} · {products.length || total} products ({total} listings) · {run.token_cost} Keepa tokens
           </p>

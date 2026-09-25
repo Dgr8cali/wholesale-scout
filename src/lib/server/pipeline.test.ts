@@ -295,3 +295,16 @@ describe("upload limits", () => {
     await expect(ingest({ files: [f] })).rejects.toThrow(/5,001 rows is over the 5,000-row limit/);
   });
 });
+
+describe("run names", () => {
+  it("names a run after its files unless given a name", async () => {
+    const fake = new FakeDb();
+    __setDbForTests(fake);
+    const f = file("pharmazon-sept.xlsx", [["EAN", "Name", "Price", "MOQ"], ["4006381333931", "Walker Tape 25mm", "5.00", 12]],
+      { name: "Pharmazon", vatBasis: "ex_vat", vatRate: 20, currency: "GBP" });
+    const a = await ingest({ files: [f] });
+    const b = await ingest({ files: [f], name: "Pharmazon September" });
+    expect(fake.tables.runs.find((r) => r.id === a.runId)!.name).toBe("pharmazon-sept.xlsx");
+    expect(fake.tables.runs.find((r) => r.id === b.runId)!.name).toBe("Pharmazon September");
+  });
+});

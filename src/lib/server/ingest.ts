@@ -15,6 +15,8 @@ export interface IngestFile {
 
 export interface IngestPayload {
   profileId?: string | null;
+  /** Run name; defaults to the file names. */
+  name?: string | null;
   files: IngestFile[];
 }
 
@@ -126,16 +128,14 @@ export async function ingest(payload: IngestPayload): Promise<{ runId: string; r
     else best.set(o.product_id, cost < cur.cost ? { offerId: o.id, cost, count: cur.count + 1 } : { ...cur, count: cur.count + 1 });
   }
 
-  const run = must(
-    await d.from("runs").insert({
-      profile_id: profile.id,
-      profile_snapshot: profile.config,
-      source: payload.files.map((f) => f.fileName).join(", "),
-      status: "pending",
-      row_count: best.size,
-    }).select("id").single(),
-    "run",
-  ) as { id: string };
+  const source = payload.files.map((f) => f.fileName).join(", ");
+  const runFields = { profile_id: profile.id, profile_snapshot: profile.config, source, status: "pending", row_count: best.size };
+  let inserted = await d.from("runs").insert({ ...runFields, name: payload.name?.trim() || source }).select("id").single();
+  // Before the run-names migration there's no name column: the file names still show.
+  if (inserted.error && /name/.test(inserted.error.message) && /column|schema cache/i.test(inserted.error.message)) {
+    inserted = await d.from("runs").insert(runFields).select("id").single();
+  }
+  const run = must(inserted, "run") as { id: string };
 
   for (const c of chunks([...best.entries()], 500)) {
     must(
