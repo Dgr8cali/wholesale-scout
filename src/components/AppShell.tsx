@@ -1,12 +1,14 @@
 "use client";
 
-import { BuildingIcon, DownloadCloudIcon, HomeIcon, ListChecksIcon, ScanSearchIcon, SettingsIcon, StarIcon, StoreIcon, UploadIcon, EyeIcon, TruckIcon, ClipboardListIcon } from "lucide-react";
+import { BuildingIcon, CircleHelpIcon, DownloadCloudIcon, HomeIcon, ListChecksIcon, ScanSearchIcon, SettingsIcon, StarIcon, StoreIcon, UploadIcon, EyeIcon, TruckIcon, ClipboardListIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Fragment, useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { CrumbsProvider, useCrumbs } from "@/components/Crumbs";
 import { QogitaCartButton, QogitaCartProvider } from "@/components/QogitaCart";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { HelpButton } from "@/components/help/HelpButton";
+import { HelpProvider } from "@/components/help/HelpPanel";
 import {
   Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
@@ -32,6 +34,7 @@ const NAV = [
   { href: "/plan", label: "Plan", icon: ClipboardListIcon },
   { href: "/brands", label: "Brands", icon: BuildingIcon },
   { href: "/settings", label: "Settings", icon: SettingsIcon },
+  { href: "/help", label: "Help", icon: CircleHelpIcon },
 ];
 
 const isActive = (href: string, path: string) => (href === "/" ? path === "/" : path === href || path.startsWith(`${href}/`));
@@ -123,10 +126,11 @@ function StatusBar() {
             <span className="flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs whitespace-nowrap" tabIndex={0}>
               <span className="text-muted-foreground">Keepa</span>
               <span className="num font-medium">{t ? t.tokensLeft.toLocaleString("en-GB") : "—"}</span>
-              <span className="text-muted-foreground">tokens</span>
+              {/* Phones: just "Keepa 1,260", so the breadcrumbs keep their room. */}
+              <span className="hidden text-muted-foreground sm:inline">tokens</span>
             </span>
           </TooltipTrigger>
-          <TooltipContent>{t ? `Refills ${t.refillRate}/min; 3 tokens per product` : "Keepa didn't report a balance"}</TooltipContent>
+          <TooltipContent>{t ? `Refills ${t.refillRate}/min; a product costs 1 token for its history, 3 more for Buy Box data if it gets that far` : "Keepa didn't report a balance"}</TooltipContent>
         </Tooltip>
       )}
     </div>
@@ -139,7 +143,7 @@ function Crumbs() {
   return (
     <>
     <Separator orientation="vertical" className="mx-1 data-vertical:h-4 data-vertical:self-center" />
-    <Breadcrumb className="min-w-0">
+    <Breadcrumb className="min-w-0 overflow-hidden">
       <BreadcrumbList className="flex-nowrap">
         {crumbs.map((c, i) => (
           <Fragment key={i}>
@@ -162,6 +166,7 @@ export function AppShell({ defaultOpen, qogita, children }: { defaultOpen: boole
   return (
     <QogitaCartProvider enabled={qogita}>
     <CrumbsProvider>
+    <HelpProvider>
       <SidebarProvider defaultOpen={defaultOpen} style={{ "--sidebar-width": "13rem" } as CSSProperties}>
         <AppSidebar />
         <SidebarInset className="min-w-0">
@@ -171,12 +176,14 @@ export function AppShell({ defaultOpen, qogita, children }: { defaultOpen: boole
             <div className="ml-auto flex items-center gap-3">
               <StatusBar />
               <QogitaCartButton />
+              <HelpButton />
               <ThemeToggle />
             </div>
           </header>
           <div className="mx-auto w-full max-w-[1400px] min-w-0 flex-1 px-4 py-6 lg:px-6">{children}</div>
         </SidebarInset>
       </SidebarProvider>
+    </HelpProvider>
     </CrumbsProvider>
     </QogitaCartProvider>
   );

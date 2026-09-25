@@ -391,7 +391,7 @@ export default function RunPage() {
             {profiles.filter((p) => p.name !== run.profile?.name).map((p) => <NativeSelectOption key={p.id} value={p.id}>{p.name}</NativeSelectOption>)}
           </NativeSelect>
           <Button variant="outline" onClick={rescreen} disabled={rescreening || processing}
-            title="Re-run gates and score with the profile's current settings, using the data already fetched. No re-upload, no new Amazon or Keepa calls.">
+            title="Re-run gates and score with the profile's current settings, using the data already fetched. No re-upload; only rows that now need data they never had are looked up (which can spend Keepa tokens).">
             {rescreening ? "Re-screening…" : "Re-screen"}
           </Button>
           {processing && (progress?.paused

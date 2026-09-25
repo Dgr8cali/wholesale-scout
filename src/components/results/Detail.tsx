@@ -19,6 +19,7 @@ import Link from "next/link";
 import type { Fav, Result, Seller } from "./types";
 import { WatchEditor } from "./WatchEditor";
 import { Checked } from "@/components/check/Checked";
+import { useHelp } from "@/components/help/HelpPanel";
 import { amazonLastSeen, isStale, stamp } from "@/lib/ui/when";
 import type { WatchCondition } from "@/lib/watch";
 
@@ -131,6 +132,7 @@ export function Detail({ r, fav, onNote, onWaive, onWatch, stacked = false, budg
   /** Put it on the watchlist with a flip condition (absent where there's no watchlist). */
   onWatch?: (r: Result, condition: WatchCondition | null, noSupplier: boolean) => Promise<void>;
 }) {
+  const help = useHelp();
   const asin = r.product?.asin;
   const costKnown = r.offer?.cost_known !== false && r.landed_cost != null;
   const recheck = asin && r.status === "done"
@@ -146,7 +148,10 @@ export function Detail({ r, fav, onNote, onWaive, onWatch, stacked = false, budg
           {r.gate_outcomes.map((g) => (
             <li key={g.gate} className="flex gap-2 text-xs">
               <span className={`flex h-4 w-4 flex-none items-center justify-center rounded-full text-2xs font-bold text-white ${STATUS_STYLE[g.status]}`}>{STATUS_ICON[g.status]}</span>
-              <span className={cn("flex-none font-medium", stacked ? "w-32" : "w-40")}>{g.label}</span>
+              <button type="button" title={`What ${g.label} checks`} onClick={(e) => { e.stopPropagation(); help.open(`gates/${g.gate}`); }}
+                className={cn("flex-none text-left font-medium underline decoration-dotted decoration-muted-foreground/50 underline-offset-2 hover:text-brand", stacked ? "w-32" : "w-40")}>
+                {g.label}
+              </button>
               <span className="min-w-0 text-muted-foreground">
                 {g.detail}{g.gate === "gating" && <RestrictionLink outcomes={r.gate_outcomes} asin={r.product?.asin} />}
                 {r.product && (g.status === "fail" || g.tags?.includes("WAIVED")) && (

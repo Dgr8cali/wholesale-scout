@@ -253,3 +253,24 @@
 @utility field-label {
   @apply text-xs font-medium text-muted-foreground;
 }
+
+/* Help articles: markdown rendered to HTML (src/lib/help). */
+.help-prose {
+  @apply text-sm leading-relaxed;
+}
+.help-prose > * + * { margin-top: 0.75rem; }
+.help-prose h2 { @apply mt-6 scroll-mt-16 text-base font-semibold; }
+.help-prose h3 { @apply mt-5 scroll-mt-16 text-sm font-semibold; }
+.help-prose h4 { @apply mt-4 scroll-mt-16 text-sm font-medium; }
+.help-prose a { @apply font-medium text-brand underline-offset-2 hover:underline; }
+.help-prose ul { @apply list-disc space-y-1 pl-5; }
+.help-prose ol { @apply list-decimal space-y-1 pl-5; }
+.help-prose li > ul, .help-prose li > ol { @apply mt-1; }
+.help-prose code { @apply rounded bg-muted px-1 py-0.5 text-xs; font-family: var(--font-geist-mono), ui-monospace, monospace; }
+.help-prose pre { @apply overflow-x-auto rounded-md bg-muted p-3 text-xs; }
+.help-prose pre code { @apply bg-transparent p-0; }
+.help-prose blockquote { @apply border-l-2 pl-3 text-muted-foreground; }
+.help-prose table { @apply block w-full overflow-x-auto text-xs; border-collapse: collapse; }
+.help-prose th, .help-prose td { @apply border px-2 py-1 text-left align-top; }
+.help-prose th { @apply bg-muted/60 font-semibold; }
+.help-prose hr { @apply my-6; }
