@@ -6,6 +6,7 @@ import * as XLSX from "xlsx";
 import { GATE_LABELS, GATE_ORDER, GROUP_LABELS, type GateId, type GroupId } from "@/lib/screening/config";
 import type { GateOutcome } from "@/lib/screening/gates";
 import { api, gbp, pct, when } from "@/lib/ui/client";
+import { groupRows } from "@/lib/ui/group";
 
 interface Result {
   id: string;
@@ -49,6 +50,7 @@ const STATUS_ICON: Record<string, string> = { pass: "✓", warn: "!", fail: "✕
 const STATUS_STYLE: Record<string, string> = { pass: "bg-pass", warn: "bg-warn", fail: "bg-fail", skipped: "bg-muted", off: "bg-line" };
 
 const titleOf = (r: Result) => r.product?.title ?? r.offer?.title ?? r.product?.ean ?? "";
+const eanOf = (r: Result) => r.product?.ean ?? r.id;
 
 export default function RunPage() {
   const { id } = useParams<{ id: string }>();
@@ -58,6 +60,8 @@ export default function RunPage() {
   const [error, setError] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
   const [open, setOpen] = useState<Set<string>>(new Set());
+  // EANs whose other ASINs are shown.
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "score", dir: -1 });
   const [verdicts, setVerdicts] = useState<Set<string>>(new Set(["pass", "warn", "fail"]));
   const [band, setBand] = useState<string>("");
@@ -157,24 +161,31 @@ export default function RunPage() {
     );
     const val = (r: Result): number | string | null =>
       sort.key === "title" ? titleOf(r).toLowerCase() : sort.key === "verdict" ? ({ pass: 0, warn: 1, fail: 2 }[r.verdict ?? "fail"]) : (r[sort.key] as number | null);
-    return filtered.sort((a, b) => {
+    const order = (a: Result, b: Result) => {
       const x = val(a), y = val(b);
       if (x == null && y == null) return 0;
       if (x == null) return 1;
       if (y == null) return -1;
       return (x < y ? -1 : x > y ? 1 : 0) * sort.dir;
-    });
+    };
+    // One line per EAN: its best ASIN leads, the others sit collapsed beneath it.
+    return groupRows(filtered, eanOf, order);
   }, [done, verdicts, band, failedGate, q, sort]);
+  const listingCount = rows.reduce((a, g) => a + 1 + g.others.length, 0);
 
+  // Counted per product (EAN), by its best listing.
+  const products = useMemo(() => groupRows(done, eanOf, () => 0).map((g) => g.lead), [done]);
   const counts = {
-    pass: done.filter((r) => r.verdict === "pass").length,
-    warn: done.filter((r) => r.verdict === "warn").length,
-    fail: done.filter((r) => r.verdict === "fail" || r.status === "error").length,
-    green: done.filter((r) => r.band === "green").length,
+    pass: products.filter((r) => r.verdict === "pass").length,
+    warn: products.filter((r) => r.verdict === "warn").length,
+    fail: products.filter((r) => r.verdict === "fail" || r.status === "error").length,
+    green: products.filter((r) => r.band === "green").length,
   };
 
   function exportXlsx() {
-    const data = rows.map((r) => ({
+    const flat = rows.flatMap((g) => [{ r: g.lead, listing: g.others.length ? "best" : "only" }, ...g.others.map((r) => ({ r, listing: "alternative" }))]);
+    const data = flat.map(({ r, listing }) => ({
+      Listing: listing,
       Verdict: r.status === "error" ? "error" : r.verdict,
       Score: r.score,
       Band: r.band,
@@ -226,7 +237,7 @@ export default function RunPage() {
         <div>
           <h1 className="h1">{run.source}</h1>
           <p className="text-sm text-muted">
-            {run.profile?.name ?? "Profile"} · started {when(run.started_at)} · {total} products · {run.token_cost} Keepa tokens
+            {run.profile?.name ?? "Profile"} · started {when(run.started_at)} · {products.length || total} products ({total} listings) · {run.token_cost} Keepa tokens
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -238,7 +249,7 @@ export default function RunPage() {
             title="Re-run gates and score with the profile's current settings, using the data already fetched. No re-upload, no new Amazon or Keepa calls.">
             {rescreening ? "Re-screening…" : "Re-screen"}
           </button>
-          <button className="btn" onClick={exportXlsx} disabled={!rows.length}>Export {rows.length} to xlsx</button>
+          <button className="btn" onClick={exportXlsx} disabled={!rows.length}>Export {rows.length} products to xlsx</button>
           <button className="btn text-fail" onClick={async () => {
             if (!confirm("Delete this run and its results?")) return;
             cancel.current();
@@ -288,7 +299,7 @@ export default function RunPage() {
           <span className="label">Search</span>
           <input className="input" placeholder="Name, brand, EAN, ASIN, supplier, why" value={q} onChange={(e) => setQ(e.target.value)} />
         </label>
-        <span className="text-sm text-muted">{counts.green} green</span>
+        <span className="text-sm text-muted">{counts.green} green · showing {rows.length} products, {listingCount} listings</span>
       </div>
 
       <div className="card overflow-x-auto">
@@ -308,11 +319,14 @@ export default function RunPage() {
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => {
+            {rows.flatMap((g) => {
+              const showOthers = expanded.has(g.key);
+              return [g.lead, ...(showOthers ? g.others : [])].map((r, i) => ({ r, g, alt: i > 0 }));
+            }).map(({ r, g, alt }) => {
               const isOpen = open.has(r.id);
               return (
                 <Fragment key={r.id}>
-                  <tr className="cursor-pointer border-b border-line align-top hover:bg-surface-2"
+                  <tr className={`cursor-pointer border-b border-line align-top hover:bg-surface-2 ${alt ? "bg-surface-2/40 text-muted" : ""}`}
                     onClick={() => setOpen((s) => { const n = new Set(s); if (n.has(r.id)) n.delete(r.id); else n.add(r.id); return n; })}>
                     <td className="px-3 py-2">
                       {r.status === "error"
@@ -324,13 +338,19 @@ export default function RunPage() {
                         ? <span className={`num inline-block min-w-9 rounded px-1.5 py-0.5 text-center text-xs font-semibold ${BAND_STYLE[r.band]}`}>{Math.round(r.score)}</span>
                         : <span className="text-muted">—</span>}
                     </td>
-                    <td className="max-w-[340px] px-3 py-2">
-                      <div className="truncate font-medium" title={titleOf(r)}>{titleOf(r)}</div>
+                    <td className={`max-w-[340px] px-3 py-2 ${alt ? "pl-8" : ""}`}>
+                      <div className="truncate font-medium" title={titleOf(r)}>{alt ? "↳ " : ""}{titleOf(r)}</div>
                       <div className="num truncate text-xs text-muted">
                         {r.product?.ean}
                         {r.product?.asin && <> · <a className="text-accent hover:underline" href={`https://www.amazon.co.uk/dp/${r.product.asin}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>{r.product.asin}</a></>}
                         {r.offer?.supplier && <> · {r.offer.supplier.name}{r.offer_count > 1 ? ` (+${r.offer_count - 1})` : ""}</>}
                       </div>
+                      {!alt && g.others.length > 0 && (
+                        <button className="mt-1 text-xs font-medium text-accent hover:underline"
+                          onClick={(e) => { e.stopPropagation(); setExpanded((s) => { const n = new Set(s); if (n.has(g.key)) n.delete(g.key); else n.add(g.key); return n; }); }}>
+                          {expanded.has(g.key) ? "▾ Hide" : "▸"} {g.others.length} other ASIN{g.others.length > 1 ? "s" : ""} for this EAN
+                        </button>
+                      )}
                     </td>
                     <td className="num px-3 py-2 text-right">{gbp(r.landed_cost)}</td>
                     <td className="num px-3 py-2 text-right">{gbp(r.sell_price)}</td>
