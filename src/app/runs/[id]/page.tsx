@@ -7,6 +7,7 @@ import { GATE_LABELS, GATE_ORDER, GROUP_LABELS, type GateId, type GroupId } from
 import type { GateOutcome } from "@/lib/screening/gates";
 import { api, gbp, pct, when } from "@/lib/ui/client";
 import { groupRows } from "@/lib/ui/group";
+import { buyBox, estSales, sellers, type Figure, type StoredMarket } from "@/lib/ui/metrics";
 
 interface Result {
   id: string;
@@ -32,7 +33,7 @@ interface Result {
   band: "green" | "amber" | "grey" | null;
   offer_count: number;
   error: string | null;
-  inputs: { lookup?: { outcome: string; attempts: { identifiersType: string; code: string; items: number; total?: number; error?: string }[]; raw?: string } | null } | null;
+  inputs: { market?: StoredMarket | null; lookup?: { outcome: string; attempts: { identifiersType: string; code: string; items: number; total?: number; error?: string }[]; raw?: string } | null } | null;
   product: { ean: string; asin: string | null; title: string | null; brand: string | null; category: string | null } | null;
   offer: { unit_cost: number; currency: string; unit_cost_gbp: number; moq: number | null; pack_units: number; title: string | null; source_ref: string | null; supplier: { name: string } | null } | null;
 }
@@ -42,7 +43,11 @@ interface Run {
   row_count: number; processed_count: number; token_cost: number; profile: { name: string } | null; error: string | null;
 }
 
-type SortKey = "score" | "profit" | "roi" | "margin" | "sell_price" | "landed_cost" | "hurdle_price" | "title" | "verdict";
+type SortKey = "score" | "profit" | "roi" | "margin" | "sell_price" | "landed_cost" | "hurdle_price" | "title" | "verdict" | "sales" | "sellers" | "buybox";
+
+/** Figures computed from the stored market data, for display and sorting. */
+const FIGURES = { sales: estSales, sellers, buybox: buyBox } as const;
+const figure = (r: Result, k: keyof typeof FIGURES): Figure => FIGURES[k](r.inputs?.market);
 
 const VERDICT_STYLE = { pass: "bg-pass-soft text-pass", warn: "bg-warn-soft text-warn", fail: "bg-fail-soft text-fail" } as const;
 const BAND_STYLE = { green: "bg-pass text-white", amber: "bg-warn text-white", grey: "bg-surface-2 text-muted" } as const;
@@ -160,7 +165,10 @@ export default function RunPage() {
       (!needle || [titleOf(r), r.product?.brand, r.product?.ean, r.product?.asin, r.offer?.supplier?.name, r.why].some((x) => x?.toLowerCase().includes(needle))),
     );
     const val = (r: Result): number | string | null =>
-      sort.key === "title" ? titleOf(r).toLowerCase() : sort.key === "verdict" ? ({ pass: 0, warn: 1, fail: 2 }[r.verdict ?? "fail"]) : (r[sort.key] as number | null);
+      sort.key === "title" ? titleOf(r).toLowerCase()
+        : sort.key === "verdict" ? ({ pass: 0, warn: 1, fail: 2 }[r.verdict ?? "fail"])
+        : sort.key === "sales" || sort.key === "sellers" || sort.key === "buybox" ? figure(r, sort.key).value
+        : (r[sort.key] as number | null);
     const order = (a: Result, b: Result) => {
       const x = val(a), y = val(b);
       if (x == null && y == null) return 0;
@@ -197,6 +205,11 @@ export default function RunPage() {
       "Cost / unit (quoted)": r.offer?.unit_cost,
       Currency: r.offer?.currency,
       "Cost / unit (GBP ex-VAT)": r.offer?.unit_cost_gbp,
+      "Est. sales / month": figure(r, "sales").value,
+      "Est. sales source": figure(r, "sales").note,
+      Sellers: figure(r, "sellers").value,
+      "Sellers source": figure(r, "sellers").note,
+      "Buy Box": figure(r, "buybox").value,
       "Landed cost": r.landed_cost,
       "Sell price": r.sell_price,
       "Price source": r.price_source,
@@ -309,6 +322,9 @@ export default function RunPage() {
               {th("verdict", "Verdict")}
               {th("score", "Score", true)}
               {th("title", "Product")}
+              {th("sales", "Est. sales / mo", true)}
+              {th("sellers", "Sellers", true)}
+              {th("buybox", "Buy Box", true)}
               {th("landed_cost", "Landed", true)}
               {th("sell_price", "Sell", true)}
               {th("profit", "Profit", true)}
@@ -352,6 +368,9 @@ export default function RunPage() {
                         </button>
                       )}
                     </td>
+                    <FigureCell f={figure(r, "sales")} />
+                    <FigureCell f={figure(r, "sellers")} />
+                    <FigureCell f={figure(r, "buybox")} money />
                     <td className="num px-3 py-2 text-right">{gbp(r.landed_cost)}</td>
                     <td className="num px-3 py-2 text-right">{gbp(r.sell_price)}</td>
                     <td className={`num px-3 py-2 text-right ${r.profit != null && r.profit < 0 ? "text-fail" : ""}`}>{gbp(r.profit)}</td>
@@ -365,7 +384,7 @@ export default function RunPage() {
                   </tr>
                   {isOpen && (
                     <tr className="border-b border-line bg-surface-2/50">
-                      <td colSpan={10} className="px-4 py-3">
+                      <td colSpan={13} className="px-4 py-3">
                         <Detail r={r} />
                       </td>
                     </tr>
@@ -374,12 +393,21 @@ export default function RunPage() {
               );
             })}
             {!rows.length && (
-              <tr><td colSpan={10} className="px-4 py-8 text-center text-sm text-muted">{done.length ? "Nothing matches these filters." : "Rows appear here as they're screened."}</td></tr>
+              <tr><td colSpan={13} className="px-4 py-8 text-center text-sm text-muted">{done.length ? "Nothing matches these filters." : "Rows appear here as they're screened."}</td></tr>
             )}
           </tbody>
         </table>
       </div>
     </div>
+  );
+}
+
+/** A number with its source as a tooltip; "—" when there's nothing to show. */
+function FigureCell({ f, money }: { f: Figure; money?: boolean }) {
+  return (
+    <td className="num px-3 py-2 text-right" title={f.note}>
+      {f.value == null ? <span className="text-muted">—</span> : money ? gbp(f.value) : Math.round(f.value).toLocaleString("en-GB")}
+    </td>
   );
 }
 

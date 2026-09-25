@@ -40,6 +40,8 @@ interface RawKeepaProduct {
   csv?: (number[] | null)[];
   buyBoxSellerIdHistory?: string[] | null;
   stats?: { offerCountFBA?: number } | null;
+  /** Amazon's "bought in past month" (e.g. 200 for "200+"); absent or -1 when not shown. */
+  monthlySold?: number | null;
 }
 
 export function parseKeepaProduct(p: RawKeepaProduct, now = Date.now()): KeepaProduct {
@@ -76,6 +78,7 @@ export function parseKeepaProduct(p: RawKeepaProduct, now = Date.now()): KeepaPr
       ...series,
       fbaOfferCount: p.stats?.offerCountFBA ?? null,
       buyBoxSellers,
+      monthlySold: p.monthlySold ?? null,
     }),
   };
 }

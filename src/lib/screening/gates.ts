@@ -37,6 +37,7 @@ export interface MarketData {
   historyDays: number | null;
   rankNow: number | null;
   rankDrops30d: number | null;
+  monthlySold?: number | null;
   avgRank90d: number | null;
   rankTrendPct12m: number | null;
   currentBuyBox: number | null;

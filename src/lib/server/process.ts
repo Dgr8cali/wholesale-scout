@@ -104,6 +104,7 @@ function marketFromSpApi(p: CompetitivePrice | undefined, rank: number | null): 
     historyDays: null,
     rankNow: p?.salesRank ?? rank,
     rankDrops30d: null,
+    monthlySold: null,
     avgRank90d: null,
     rankTrendPct12m: null,
     currentBuyBox: p?.buyBox ?? null,

@@ -91,6 +91,10 @@ describe("clients", () => {
     expect(p.dimsCm).toEqual({ l: 12, w: 8, h: 5 });
     expect(p.weightG).toBe(210);
     expect(p.category).toBe("Health & Personal Care");
+    expect(p.summary.monthlySold).toBeNull();
+    const sold = parseKeepaProduct({ asin: "B2", csv: [], monthlySold: 200 }, NOW);
+    expect(sold.summary.monthlySold).toBe(200);
+    expect(parseKeepaProduct({ asin: "B3", csv: [], monthlySold: -1 }, NOW).summary.monthlySold).toBeNull();
   });
 
   it("looks up EANs in batches of 100 on domain 2 and matches by EAN", async () => {

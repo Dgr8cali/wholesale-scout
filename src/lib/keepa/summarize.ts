@@ -98,6 +98,8 @@ export interface SummaryInput {
   buyBoxSellers?: [number, string][];
   /** First data point of the variation parent, when this ASIN is a child. */
   parentFirstSeen?: number | null;
+  /** Amazon's "bought in past month", from Keepa's monthlySold. */
+  monthlySold?: number | null;
 }
 
 export function summarize(i: SummaryInput): KeepaSummary {
@@ -152,6 +154,7 @@ export function summarize(i: SummaryInput): KeepaSummary {
     historyDays,
     rankNow: valueAt(i.rank, now),
     rankDrops30d: valid(i.rank).length ? rankDrops(i.rank, now - 30 * DAY, now) : null,
+    monthlySold: i.monthlySold != null && i.monthlySold > 0 ? i.monthlySold : null,
     avgRank90d: avgRank90d == null ? null : Math.round(avgRank90d),
     rankTrendPct12m: avgRank90d != null && avgRank90dYearAgo ? ((avgRank90d - avgRank90dYearAgo) / avgRank90dYearAgo) * 100 : null,
     currentBuyBox: valueAt(i.buyBox, now),

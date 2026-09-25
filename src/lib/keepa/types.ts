@@ -6,6 +6,8 @@ export interface KeepaSummary {
   historyDays: number | null;
   rankNow: number | null;
   rankDrops30d: number | null;
+  /** Amazon's "bought in past month" figure (a floor: 200 means "200+"), when Amazon shows it. */
+  monthlySold: number | null;
   avgRank90d: number | null;
   /** % change in 90-day average rank, now vs a year ago. Negative = improving. */
   rankTrendPct12m: number | null;
