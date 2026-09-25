@@ -1,5 +1,6 @@
 import "server-only";
 import { chunks, db, loadProfile, must } from "./db";
+import { createRunFrom } from "./runs";
 
 const DAY = 86_400_000;
 /** A favourite whose latest result is older than this is marked outdated. */
@@ -29,6 +30,19 @@ async function findFavourite(ean: string, asin: string | null): Promise<Favourit
   const res = asin ? await q.eq("asin", asin) : await q.is("asin", null);
   if (res.error && schemaMissing(res.error.message)) throw new Error(FAVOURITES_MIGRATION);
   return ((must(res, "favourite") as Favourite[])[0]) ?? null;
+}
+
+/** Star or un-star several products at once. */
+export async function bulkFavourites(items: { ean: string; asin: string | null }[], action: "star" | "unstar"): Promise<Favourite[]> {
+  const out: Favourite[] = [];
+  for (const i of items) {
+    if (action === "star") out.push(await addFavourite(i.ean, i.asin));
+    else {
+      const f = await findFavourite(i.ean, i.asin);
+      if (f) await removeFavourite(f.id);
+    }
+  }
+  return out;
 }
 
 /** Star a product (idempotent); a note, when given, replaces the current one. */
@@ -142,13 +156,6 @@ export async function rescreenFavourites(profileId?: string | null): Promise<{ r
     else skipped++;
   }
   if (!picks.length) throw new Error("No favourites with an offer to screen");
-  const name = favouritesRunName();
-  const fields = { profile_id: profile.id, profile_snapshot: profile.config, source: `Favourites (${picks.length})`, status: "pending", row_count: picks.length };
-  let res = await d.from("runs").insert({ ...fields, name }).select("id").single();
-  if (res.error && /column|schema cache/i.test(res.error.message)) res = await d.from("runs").insert(fields).select("id").single();
-  const run = must(res, "run") as { id: string };
-  for (const c of chunks(picks, 500)) {
-    must(await d.from("results").insert(c.map((p) => ({ run_id: run.id, product_id: p.productId, offer_id: p.offerId, offer_count: 1 }))), "results");
-  }
-  return { runId: run.id, count: picks.length, skipped };
+  const runId = await createRunFrom(picks, { name: favouritesRunName(), source: `Favourites (${picks.length})`, profileId: profile.id });
+  return { runId, count: picks.length, skipped };
 }

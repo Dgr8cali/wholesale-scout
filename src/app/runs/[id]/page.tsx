@@ -12,6 +12,7 @@ import { EMPTY_FILTERS, matches, normalizeFilters, type FilterSet } from "@/lib/
 import { groupRows } from "@/lib/ui/group";
 import { brandOf, favKey, isWaived, toFilterRow } from "@/lib/ui/resultRows";
 import { WaiveControl } from "@/components/WaiveControl";
+import { BulkBar } from "@/components/BulkBar";
 import { FavouriteNote, FavouriteStar } from "@/components/FavouriteStar";
 import { RestrictionLink } from "@/lib/ui/RestrictionLink";
 import { buyBox, estSales, sellers, type Figure, type StoredMarket } from "@/lib/ui/metrics";
@@ -117,7 +118,14 @@ export default function RunPage() {
       return EMPTY_FILTERS;
     }
   });
+  // Selected result ids. Kept while scrolling; cleared when the filters change, with "Reselect".
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [stash, setStash] = useState<Set<string> | null>(null);
   const setFilters = (f: FilterSet) => {
+    if (selected.size) {
+      setStash(selected);
+      setSelected(new Set());
+    }
     setFiltersState(f);
     try {
       window.localStorage.setItem(storageKey, JSON.stringify(f));
@@ -161,6 +169,34 @@ export default function RunPage() {
       setNotice(`${GATE_LABELS[gate]} ${action === "waive" ? "waived" : "un-waived"}; fetching the data later gates need for this product.`);
       setNonce((n) => n + 1);
     }
+  }
+
+  // Bulk actions on the selection.
+  const selectedRows = () => results.filter((r) => selected.has(r.id));
+  const itemsOf = (rs: Result[]) => [...new Map(rs.filter((r) => r.product).map((r) => [favKey(r.product!.ean, r.product!.asin), { ean: r.product!.ean, asin: r.product!.asin }])).values()];
+  async function bulkStar(action: "star" | "unstar") {
+    const items = itemsOf(selectedRows());
+    const res = await api<{ favourites: Fav[] }>("/api/favourites/bulk", { method: "POST", json: { items, action } });
+    setFavs((m) => {
+      const n = new Map(m);
+      if (action === "star") for (const f of res.favourites) n.set(favKey(f.ean, f.asin), f);
+      else for (const i of items) n.delete(favKey(i.ean, i.asin));
+      return n;
+    });
+  }
+  async function bulkWaive(gate: GateId, action: "waive" | "unwaive", reason?: string) {
+    const res = await api<{ requeued: number }>("/api/overrides", { method: "POST", json: { items: itemsOf(selectedRows()), gate, action, reason, runId: id } });
+    apply(await fetchRun());
+    if (res.requeued) setNonce((n) => n + 1);
+  }
+  async function bulkRescreen() {
+    const r = await api<{ runId: string }>(`/api/runs/${id}/selection`, { method: "POST", json: { resultIds: [...selected] } });
+    router.push(`/runs/${r.runId}`);
+  }
+  async function bulkRemove() {
+    await api(`/api/runs/${id}/selection`, { method: "DELETE", json: { resultIds: [...selected] } });
+    setSelected(new Set());
+    apply(await fetchRun());
   }
 
   /** Save a note; on a product not yet starred, the note stars it. */
@@ -288,6 +324,8 @@ export default function RunPage() {
     return groupRows(filtered, eanOf, order);
   }, [done, filters, favourites, sort]);
   const listingCount = rows.reduce((a, g) => a + 1 + g.others.length, 0);
+  // The current filtered set, every listing (collapsed alternatives included), for select-all.
+  const visibleIds = useMemo(() => rows.flatMap((g) => [g.lead.id, ...g.others.map((r) => r.id)]), [rows]);
 
   // Counted per product (EAN), by its best listing.
   const products = useMemo(() => groupRows(done, eanOf, () => 0).map((g) => g.lead), [done]);
@@ -306,8 +344,10 @@ export default function RunPage() {
     };
   }, [done, products, failedGates]);
 
-  function exportXlsx() {
-    const flat = rows.flatMap((g) => [{ r: g.lead, listing: g.others.length ? "best" : "only" }, ...g.others.map((r) => ({ r, listing: "alternative" }))]);
+  function exportXlsx(only?: Set<string>) {
+    const all = rows.flatMap((g) => [{ r: g.lead, listing: g.others.length ? "best" : "only" }, ...g.others.map((r) => ({ r, listing: "alternative" }))]);
+    // A selection may include rows the current filters hide (after "Reselect"): export them all.
+    const flat = only ? done.filter((r) => only.has(r.id)).map((r) => ({ r, listing: all.find((x) => x.r.id === r.id)?.listing ?? "selected" })) : all;
     const data = flat.map(({ r, listing }) => ({
       Listing: listing,
       Verdict: r.status === "error" ? "error" : r.verdict,
@@ -386,7 +426,7 @@ export default function RunPage() {
             title="Re-run gates and score with the profile's current settings, using the data already fetched. No re-upload, no new Amazon or Keepa calls.">
             {rescreening ? "Re-screening…" : "Re-screen"}
           </button>
-          <button className="btn" onClick={exportXlsx} disabled={!rows.length}>Export {rows.length} products to xlsx</button>
+          <button className="btn" onClick={() => exportXlsx()} disabled={!rows.length}>Export {rows.length} products to xlsx</button>
           <button className="btn text-fail" onClick={async () => {
             if (!confirm("Delete this run and its results?")) return;
             cancel.current();
@@ -420,15 +460,23 @@ export default function RunPage() {
       {error && <p className="rounded-md bg-fail-soft px-3 py-2 text-sm text-fail">{error}</p>}
       {notice && <p className="rounded-md bg-accent-soft px-3 py-2 text-sm">{notice}</p>}
 
+      <BulkBar count={selected.size} stashed={stash?.size ?? 0}
+        onReselect={() => { if (stash) setSelected(new Set([...stash].filter((x) => results.some((r) => r.id === x)))); setStash(null); }}
+        onClear={() => { setSelected(new Set()); setStash(null); }}
+        onStar={() => bulkStar("star")} onUnstar={() => bulkStar("unstar")}
+        onWaive={(gate, reason) => bulkWaive(gate, "waive", reason)} onUnwaive={(gate) => bulkWaive(gate, "unwaive")}
+        onRescreen={bulkRescreen} onExport={() => exportXlsx(selected)} onRemove={bulkRemove} />
+
       <FilterBar value={filters} onChange={setFilters} options={filterOptions} favouritesAvailable={favourites.size > 0}
         matching={rows.length} total={products.length} unit={`products (${listingCount} listings shown)`} gateLabels={GATE_LABELS} />
 
       {/* Fixed layout: numeric columns compact, product capped, why takes the rest and wraps.
           Scrolls sideways inside the card only below the table's minimum width. */}
       <div className="table-wrap">
-      <div className="card table-scroll" data-min="70">
-        <table className="w-full min-w-[70rem] table-fixed text-sm">
+      <div className="card table-scroll" data-min="72">
+        <table className="w-full min-w-[72rem] table-fixed text-sm">
           <colgroup>
+            <col className="w-[2.25rem]" />{/* select */}
             <col className="w-[5.5rem]" />{/* star + verdict */}
             <col className="w-[3.25rem]" />{/* score */}
             <col className="w-[13rem]" />{/* product */}
@@ -445,6 +493,9 @@ export default function RunPage() {
           </colgroup>
           <thead className="text-left text-xs text-muted">
             <tr>
+              <th className="sticky-th px-2 py-2 align-bottom">
+                <SelectAll visible={visibleIds} selected={selected} onChange={setSelected} />
+              </th>
               {th("verdict", "Verdict")}
               {th("score", "Score", true)}
               {th("title", "Product")}
@@ -470,6 +521,10 @@ export default function RunPage() {
                 <Fragment key={r.id}>
                   <tr className={`cursor-pointer border-b border-line align-top hover:bg-surface-2 ${alt ? "bg-surface-2/40 text-muted" : ""}`}
                     onClick={() => setOpen((s) => { const n = new Set(s); if (n.has(r.id)) n.delete(r.id); else n.add(r.id); return n; })}>
+                    <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
+                      <input type="checkbox" className="mt-0.5 cursor-pointer" aria-label={`Select ${titleOf(r)}`} checked={selected.has(r.id)}
+                        onChange={() => setSelected((s) => { const n = new Set(s); if (n.has(r.id)) n.delete(r.id); else n.add(r.id); return n; })} />
+                    </td>
                     <td className="px-2 py-2">
                       <div className="flex items-center gap-1.5">
                         {r.product
@@ -516,7 +571,7 @@ export default function RunPage() {
                   </tr>
                   {isOpen && (
                     <tr className="border-b border-line bg-surface-2/50">
-                      <td colSpan={13} className="px-4 py-3">
+                      <td colSpan={14} className="px-4 py-3">
                         <Detail r={r} fav={r.product ? favs.get(favKey(r.product.ean, r.product.asin)) : undefined} onNote={saveNote} onWaive={waive} />
                       </td>
                     </tr>
@@ -525,7 +580,7 @@ export default function RunPage() {
               );
             })}
             {!rows.length && (
-              <tr><td colSpan={13} className="px-4 py-8 text-center text-sm text-muted">{done.length ? "Nothing matches these filters." : "Rows appear here as they're screened."}</td></tr>
+              <tr><td colSpan={14} className="px-4 py-8 text-center text-sm text-muted">{done.length ? "Nothing matches these filters." : "Rows appear here as they're screened."}</td></tr>
             )}
           </tbody>
         </table>
@@ -582,6 +637,23 @@ function Sellers({ sellers, flaggedText }: { sellers: Seller[]; flaggedText: str
         ))}
       </ul>
     </div>
+  );
+}
+
+/** Select-all for the filtered set: checked when all are selected, dash when some are. */
+function SelectAll({ visible, selected, onChange }: { visible: string[]; selected: Set<string>; onChange: (s: Set<string>) => void }) {
+  const n = visible.filter((x) => selected.has(x)).length;
+  const all = n > 0 && n === visible.length;
+  return (
+    <input type="checkbox" className="cursor-pointer" aria-label={all ? "Clear selection" : `Select all ${visible.length} shown`}
+      title={all ? "Clear selection" : `Select all ${visible.length} rows matching the filters`}
+      checked={all} ref={(el) => { if (el) el.indeterminate = n > 0 && !all; }}
+      onChange={() => {
+        const next = new Set(selected);
+        if (all) for (const x of visible) next.delete(x);
+        else for (const x of visible) next.add(x);
+        onChange(next);
+      }} />
   );
 }
 

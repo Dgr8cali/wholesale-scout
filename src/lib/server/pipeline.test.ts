@@ -411,3 +411,36 @@ describe("gate overrides", () => {
     expect(fake.tables.results[0].failed_gate).not.toBe("compliance");
   });
 });
+
+describe("bulk actions", () => {
+  it("re-screens a selection as a new run, removes rows from a run, and stars in bulk", async () => {
+    const fake = new FakeDb();
+    __setDbForTests(fake);
+    const { runFromSelection, removeFromRun } = await import("./runs");
+    const { bulkFavourites, listFavourites } = await import("./favourites");
+    const f = file("pharmazon-sept.xlsx", [
+      ["EAN", "Name", "Price", "MOQ"],
+      ["4006381333931", "Walker Tape 25mm", "5.00", 12],
+      ["5000000000035", "Cheap widget", "6.00", 10],
+      ["5000000000028", "Unlisted gadget", "4.00", 10],
+    ], { name: "Pharmazon", vatBasis: "ex_vat", vatRate: 20, currency: "GBP" });
+    const { runId } = await ingest({ files: [f], name: "Pharmazon September" });
+    while (!(await processRun(runId)).done);
+    const ids = fake.tables.results.filter((r) => r.run_id === runId).map((r) => r.id as string);
+
+    const sel = await runFromSelection(runId, ids.slice(0, 2));
+    expect(sel.count).toBe(2);
+    const newRun = fake.tables.runs.find((r) => r.id === sel.runId)!;
+    expect(newRun.name).toBe("Pharmazon September — 2 selected");
+    expect(fake.tables.results.filter((r) => r.run_id === sel.runId)).toHaveLength(2);
+
+    expect(await removeFromRun(runId, [ids[2]])).toBe(1);
+    expect(fake.tables.results.filter((r) => r.run_id === runId)).toHaveLength(2);
+    expect(fake.tables.runs.find((r) => r.id === runId)!.row_count).toBe(2);
+
+    await bulkFavourites([{ ean: "4006381333931", asin: "B0TAPE0001" }, { ean: "5000000000035", asin: "B0CHEAP001" }], "star");
+    expect(await listFavourites()).toHaveLength(2);
+    await bulkFavourites([{ ean: "4006381333931", asin: "B0TAPE0001" }], "unstar");
+    expect((await listFavourites()).map((x) => x.ean)).toEqual(["5000000000035"]);
+  });
+});

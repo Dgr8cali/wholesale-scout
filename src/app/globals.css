@@ -88,8 +88,8 @@ body {
   overflow: auto;
   max-height: calc(100dvh - 1rem);
 }
-@container (min-width: 70rem) {
-  .table-scroll[data-min="70"] { overflow: visible; max-height: none; }
+@container (min-width: 72rem) {
+  .table-scroll[data-min="72"] { overflow: visible; max-height: none; }
 }
 @container (min-width: 62rem) {
   .table-scroll[data-min="62"] { overflow: visible; max-height: none; }
