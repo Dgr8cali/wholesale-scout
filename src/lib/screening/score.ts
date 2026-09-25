@@ -206,6 +206,9 @@ export function whyLine(ctx: ScreenContext, run: GateRun, score: number | null, 
     .filter(Boolean);
   const warns = run.outcomes.filter((o) => o.status === "warn" && o.tags?.some((t) => ["APPROVAL", "SPIKE", "EROSION", "MULTI_ASIN", "BRAND_DISTRIBUTOR", "WAIVED", "PACK_MISMATCH", "AMAZON_DG"].includes(t)));
   const clash = run.outcomes.some((o) => o.tags?.includes("TIER_MISMATCH")) ? tierDisagreement(ctx) : null;
+  // An IP-risk brand is always worth a line of its own, even among other compliance warnings.
+  const ip = run.outcomes.find((o) => o.gate === "compliance" && o.status === "warn" && o.tags?.includes("IP_RISK"))
+    ? run.ruleMatches.find((m) => m.key === "ipRisk")?.hit ?? null : null;
 
   if (score == null) {
     const noCost = ctx.offer.costKnown === false;
@@ -214,12 +217,13 @@ export function whyLine(ctx: ScreenContext, run: GateRun, score: number | null, 
     if (run.hurdlePrice != null) t += `. Clears the profit floors at ${money(run.hurdlePrice)} or more`;
     if (noCost && run.maxLandedGbp != null) t += `. Clears the floors at ${money(run.maxLandedGbp)} landed or less`;
     const w = run.outcomes.filter((o) => o.status === "warn").map((o) => o.detail);
+    if (ip && !w.some((x) => x.includes(ip))) w.unshift(ip);
     if (w.length) t += `. Watch: ${w.join("; ")}`;
     return t + ".";
   }
   const head = String(Math.round(score));
   let s = `${head} — ${top.length ? top.join(", ") : "nothing stands out"}`;
-  const watch = [...weak, ...warns.map((w) => w.detail), ...(clash ? [clash] : [])];
+  const watch = [...(ip ? [ip] : []), ...weak, ...warns.map((w) => w.detail), ...(clash ? [clash] : [])];
   if (watch.length) s += `. Watch: ${watch.join("; ")}`;
   if (!ctx.market?.hasHistory) s += ". No Keepa history yet: mirage, Amazon and price-trend gates not checked";
   return s + ".";

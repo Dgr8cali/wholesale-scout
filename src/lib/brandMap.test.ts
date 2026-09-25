@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { aggregateBrands, brandGating, brandsToChase, median, wholesaleScore, type BrandProduct } from "./brandMap";
 import type { BrandApproval } from "./brands";
+import { ipIndex } from "./ipRisk";
 
 let n = 0;
 const row = (brand: string, over: Partial<BrandProduct> = {}): BrandProduct => ({
@@ -46,6 +47,9 @@ describe("brand map", () => {
     expect(wholesaleScore({ ...best, amazonSharePct: 100 })).toBe(75);
     expect(wholesaleScore({ ...best, avgSellers: 20 })).toBe(84);
     expect(wholesaleScore({ ...best, pass: 0, warn: 0 })).toBe(75);
+    // High IP risk halves it; medium doesn't change it.
+    expect(wholesaleScore({ ...best, ipRisk: { brand: "X", level: "high", note: null, source: null } })).toBe(50);
+    expect(wholesaleScore({ ...best, ipRisk: { brand: "X", level: "medium", note: null, source: null } })).toBe(100);
   });
 
   it("lists brands to chase: best score, not approved, not blocked or unbranded", () => {
@@ -58,6 +62,16 @@ describe("brand map", () => {
     ];
     const approvals: BrandApproval[] = [{ brand_key: "approvedco", brand: "Approved Co", status: "approved", requirement: null, status_date: null }];
     expect(brandsToChase(aggregateBrands(rows, approvals)).map((b) => b.brand)).toEqual(["Chase Me"]);
+  });
+
+  it("marks IP-risk brands and halves a high one's score", () => {
+    const ip = ipIndex([{ brand: "Nike", aliases: ["Jordan"], level: "high", note: "Counterfeit complaints", source: "seed, unverified", reported_on: null }]);
+    const brands = aggregateBrands([row("NIKE", { verdict: "pass" }), row("Jordan", { verdict: "pass" }), row("Nuxe", { verdict: "pass" })], [], new Map(), ip);
+    const nike = brands.find((b) => b.key === "nike")!, jordan = brands.find((b) => b.key === "jordan")!, nuxe = brands.find((b) => b.key === "nuxe")!;
+    expect(nike.ipRisk).toMatchObject({ level: "high", note: "Counterfeit complaints" });
+    expect(jordan.ipRisk?.brand).toBe("Nike");
+    expect(nuxe.ipRisk).toBeNull();
+    expect(nike.score).toBe(Math.round(nuxe.score / 2));
   });
 
   it("median", () => {

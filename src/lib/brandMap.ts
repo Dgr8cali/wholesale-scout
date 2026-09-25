@@ -3,6 +3,7 @@
  * brand, with a "wholesale-friendly" score. Pure, so the server and tests share it.
  */
 import type { ApprovalStatus, BrandApproval } from "./brands";
+import { matchIpRisk, type IpIndex, type IpRiskMatch } from "./ipRisk";
 
 /** One product's row in the brand map (the brand_products table). */
 export interface BrandProduct {
@@ -62,8 +63,8 @@ export interface BrandSummary {
   /** Amazon's apply link, when approval is needed. */
   applyUrl: string | null;
   approval: BrandApproval | null;
-  /** Placeholder for the IP-complaint check that comes next. */
-  ipRisk: null;
+  /** On your IP-risk list (Settings → IP risk). */
+  ipRisk: IpRiskMatch | null;
   suppliers: { name: string; count: number }[];
   sellers: { id: string; name: string | null; count: number }[];
   score: number;
@@ -94,8 +95,9 @@ export function brandGating(rows: Pick<BrandProduct, "restriction">[], approval:
  * Wholesale-friendly, 0–100: high where you can list it (open, or approval you can apply
  * for), Amazon rarely sells it, 2–8 FBA sellers share it, and several ASINs pass.
  * Gating 30, Amazon 25, sellers 20, passing ASINs 25. Unknowns score in the middle.
+ * A high IP-risk brand scores half.
  */
-export function wholesaleScore(b: Pick<BrandSummary, "gating" | "applyUrl" | "amazonSharePct" | "avgSellers" | "pass" | "warn">): number {
+export function wholesaleScore(b: Pick<BrandSummary, "gating" | "applyUrl" | "amazonSharePct" | "avgSellers" | "pass" | "warn"> & { ipRisk?: IpRiskMatch | null }): number {
   const gating = ({
     open: 1, approved: 1, applied: 0.8, approval_needed: b.applyUrl ? 0.7 : 0.4, blocked: 0, unknown: 0.5,
   } as const)[b.gating];
@@ -104,11 +106,12 @@ export function wholesaleScore(b: Pick<BrandSummary, "gating" | "applyUrl" | "am
   const sellers = s == null ? 0.5 : s >= 2 && s <= 8 ? 1 : s < 2 ? (s >= 1 ? 0.5 : 0.3) : s <= 12 ? 0.5 : 0.2;
   const n = b.pass + b.warn;
   const passing = n >= 5 ? 1 : n >= 3 ? 0.8 : n === 2 ? 0.6 : n === 1 ? 0.4 : 0;
-  return Math.round(gating * 30 + amazon * 25 + sellers * 20 + passing * 25);
+  const score = gating * 30 + amazon * 25 + sellers * 20 + passing * 25;
+  return Math.round(b.ipRisk?.level === "high" ? score / 2 : score);
 }
 
 /** Roll the brand map up per brand. */
-export function aggregateBrands(rows: BrandProduct[], approvals: BrandApproval[], sellerNames: Map<string, string | null> = new Map()): BrandSummary[] {
+export function aggregateBrands(rows: BrandProduct[], approvals: BrandApproval[], sellerNames: Map<string, string | null> = new Map(), ip?: IpIndex): BrandSummary[] {
   const byKey = new Map(approvals.map((a) => [a.brand_key, a]));
   const groups = new Map<string, BrandProduct[]>();
   for (const r of rows) groups.set(r.brand_key, [...(groups.get(r.brand_key) ?? []), r]);
@@ -141,7 +144,7 @@ export function aggregateBrands(rows: BrandProduct[], approvals: BrandApproval[]
       gating,
       applyUrl: gating === "approval_needed" || gating === "applied" ? list.find((r) => r.apply_url)?.apply_url ?? null : null,
       approval,
-      ipRisk: null,
+      ipRisk: matchIpRisk(ip, ...new Set(list.map((r) => r.brand))),
       suppliers: [...suppliers].map(([name, n]) => ({ name, count: n })).sort((a, b) => b.count - a.count),
       sellers: [...sellerIds].map(([id, n]) => ({ id, name: names.get(id) ?? sellerNames.get(id) ?? null, count: n })).sort((a, b) => b.count - a.count),
       score: 0,

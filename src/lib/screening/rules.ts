@@ -116,6 +116,16 @@ export const DEFAULT_RULES: CategoryRule[] = [
     checklist: ["Check the meltable season before sending", "Plan to sell through or remove by April"],
     sort: 10,
   },
+  {
+    key: "ipRisk",
+    name: "IP-risk brand",
+    // Matched from your IP-risk list (Settings → IP risk) on the product's brand, not keywords.
+    keywords: [],
+    amazon_categories: [],
+    note: "The brand is on your IP-risk list (Settings → IP risk): it's known to file IP or counterfeit complaints against resellers. Set to fail to drop high-risk brands; medium and low only warn.",
+    checklist: ["Invoices from an authorised distributor", "Check the brand's reseller policy", "Consider a letter of authorisation"],
+    sort: 11,
+  },
 ];
 
 function keywordRegex(k: string): RegExp | null {
@@ -134,8 +144,10 @@ export interface RuleMatch {
   name: string;
   /** The text that matched (as written in the row), the matching category, or what Amazon says. */
   hit: string;
-  /** Amazon's own dangerous-goods data, a keyword in the row's text, or the Amazon category. */
-  source?: "amazon" | "keyword" | "category";
+  /** Amazon's own dangerous-goods data, a keyword in the row's text, the Amazon category, or your IP-risk list. */
+  source?: "amazon" | "keyword" | "category" | "ipRisk";
+  /** An IP-risk match: its level (the rule's fail mode applies to high only). */
+  level?: "low" | "medium" | "high";
 }
 
 /** How a match reads in the gate and the why line: "keyword match: aerosol". */

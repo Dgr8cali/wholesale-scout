@@ -80,6 +80,13 @@ export default function BrandPage() {
             <span className={cn("num rounded px-2 py-0.5 text-sm font-semibold", b.score >= 70 ? "bg-pass-soft text-pass" : b.score >= 50 ? "bg-warn-soft text-warn" : "bg-muted text-muted-foreground")}
               title="Wholesale-friendly score, 0–100">{b.score}</span>
           </h1>
+          {b.ipRisk && (
+            <p className={cn("mt-1 text-sm", b.ipRisk.level === "high" ? "text-fail" : "text-warn")}>
+              IP risk ({b.ipRisk.level}){b.ipRisk.note ? `: ${b.ipRisk.note}` : ""}{b.ipRisk.source ? ` (${b.ipRisk.source})` : ""}
+              {b.ipRisk.level === "high" && " · score halved"}
+              {" · "}<Link className="underline-offset-2 hover:underline" href="/settings?tab=ip">edit</Link>
+            </p>
+          )}
           <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
             <Badge variant={GATING_VARIANT[b.gating]}>{GATING_LABELS[b.gating]}</Badge>
             {b.suppliers.length ? `Carried by ${b.suppliers.map((s) => s.name).join(", ")}` : "No supplier offers it yet"}
@@ -102,7 +109,9 @@ export default function BrandPage() {
         <Stat label="Amazon" value={b.amazonSharePct == null ? "—" : `${b.amazonSharePct}%`} hint="Share of its listings Amazon sells or sold" />
         <Stat label="Avg Buy Box" value={gbp(b.avgBuyBox)} />
         <Stat label="Median max landed" value={gbp(b.medianMaxLanded)} hint="The most a unit can cost landed and clear the floors, median across its products" />
-        <Stat label="IP risk" value="—" hint="Coming next" />
+        <Stat label="IP risk" value={b.ipRisk
+          ? <span className={b.ipRisk.level === "high" ? "text-fail" : b.ipRisk.level === "medium" ? "text-warn" : ""}>{b.ipRisk.level}</span>
+          : "—"} hint={b.ipRisk ? [b.ipRisk.note, b.ipRisk.source && `Source: ${b.ipRisk.source}`].filter(Boolean).join(" · ") : "Not on your IP-risk list"} />
       </section>
 
       <div className="grid gap-4 lg:grid-cols-2">

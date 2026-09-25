@@ -21,6 +21,7 @@ import type { RestrictionLink, RestrictionStatus } from "../spapi/types";
 import { GATE_LABELS, GATE_ORDER, type GateId, type GateMode, type ProfileConfig } from "./config";
 import { doubtfulMatch, type Listing } from "./match";
 import { amazonRuleMatches, matchReason, matchRules, type CategoryRule, type DgFacts, type RuleMatch } from "./rules";
+import { ipRiskText, type IpRiskMatch } from "../ipRisk";
 
 export type GateStatus = "pass" | "warn" | "fail" | "skipped" | "off";
 
@@ -135,6 +136,8 @@ export interface ScreenContext {
     hazmat: string[];
     /** Amazon's dangerous-goods attributes for the listing, when read. */
     amazonDg?: DgFacts | null;
+    /** The brand is on your IP-risk list. */
+    ipRisk?: IpRiskMatch | null;
   };
   /** Top Buy Box sellers' profiles, looked up for rows that pass every gate. */
   sellers?: SellerView[];
@@ -247,6 +250,8 @@ const EVALUATORS: Record<GateId, Evaluator> = {
     // Amazon's own dangerous-goods data first; keywords only for rules it didn't trigger.
     const amazon = amazonRuleMatches(ctx.rules, ctx.product.amazonDg, ctx.product.amazonDg ? ctx.product.hazmat.filter((h) => h === "batteries") : ctx.product.hazmat);
     const matches = [...amazon, ...matchRules(ctx.rules, ctx.text, ctx.amazonCategory).filter((m) => !amazon.some((a) => a.key === m.key))];
+    const ip = ctx.product.ipRisk;
+    if (ip) matches.push({ key: "ipRisk", name: "IP-risk brand", hit: ipRiskText(ip), source: "ipRisk", level: ip.level });
     // Liquids: only above a volume when the profile says so (small bottles aren't worth a flag).
     if (g.liquidAboveMl != null) {
       const ml = volumeMl(ctx.text);
@@ -259,12 +264,17 @@ const EVALUATORS: Record<GateId, Evaluator> = {
     run.ruleMatches = matches;
     const active = matches.filter((m) => (g.rules[m.key] ?? "warn") !== "off");
     if (!active.length) return { status: "pass", detail: "No compliance rule matched" };
-    const worst = active.some((m) => g.rules[m.key] === "fail") ? "fail" : "warn";
+    // The IP-risk rule's fail mode drops high-risk brands; medium and low only warn.
+    const failsHere = (m: RuleMatch) => g.rules[m.key] === "fail" && (m.key !== "ipRisk" || m.level === "high");
+    const worst = active.some(failsHere) ? "fail" : "warn";
     const status: GateStatus = g.mode === "fail" && worst === "fail" ? "fail" : "warn";
     return {
       status,
-      detail: active.map((m) => `${m.name} (${matchReason(m)})`).join("; "),
-      tags: [...active.map((m) => m.key.toUpperCase()), ...(active.some((m) => m.source === "amazon") ? ["AMAZON_DG"] : [])],
+      detail: active.map((m) => (m.source === "ipRisk" ? m.hit : `${m.name} (${matchReason(m)})`)).join("; "),
+      tags: [
+        ...active.map((m) => (m.key === "ipRisk" ? "IP_RISK" : m.key.toUpperCase())),
+        ...(active.some((m) => m.source === "amazon") ? ["AMAZON_DG"] : []),
+      ],
     };
   },
 

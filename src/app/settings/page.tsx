@@ -1,7 +1,9 @@
 "use client";
 
-import { FilterIcon, GaugeIcon, ReceiptIcon, ShieldCheckIcon, SlidersHorizontalIcon, Trash2Icon, UndoIcon } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useSearchParams } from "next/navigation";
+import { IpRiskTab } from "@/components/settings/IpRiskTab";
+import { FilterIcon, GaugeIcon, ReceiptIcon, ShieldAlertIcon, ShieldCheckIcon, SlidersHorizontalIcon, Trash2Icon, UndoIcon } from "lucide-react";
+import { Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { activeChips, normalizeFilters, type FilterSet } from "@/lib/filters";
 import type { RateCard } from "@/lib/fees/rateCard";
 import {
@@ -78,12 +80,13 @@ function ModeSelect({ value, onChange, allowOff = true }: { value: GateMode; onC
 }
 
 type ProfileTab = "gates" | "score" | "fees" | "profiles";
-const TABS: { id: ProfileTab | "waived" | "filters"; label: string; icon: ReactNode }[] = [
+const TABS: { id: ProfileTab | "waived" | "filters" | "ip"; label: string; icon: ReactNode }[] = [
   { id: "gates", label: "Gates", icon: <ShieldCheckIcon /> },
   { id: "score", label: "Score", icon: <GaugeIcon /> },
   { id: "fees", label: "Fees", icon: <ReceiptIcon /> },
   { id: "profiles", label: "Profiles", icon: <SlidersHorizontalIcon /> },
   { id: "waived", label: "Waived", icon: <UndoIcon /> },
+  { id: "ip", label: "IP risk", icon: <ShieldAlertIcon /> },
   { id: "filters", label: "Filter sets", icon: <FilterIcon /> },
 ];
 
@@ -107,7 +110,13 @@ const LoadingBlocks = () => <div className="space-y-4"><Skeleton className="h-16
 const LoadError = ({ message }: { message: string }) => <ErrorState title="Couldn't load settings" message={message} onRetry={() => window.location.reload()} />;
 
 export default function SettingsPage() {
-  const [tab, setTab] = useState<string>("gates");
+  return <Suspense><Settings /></Suspense>;
+}
+
+function Settings() {
+  // ?tab=ip opens a tab directly (the Brands page links to the IP-risk list).
+  const params = useSearchParams();
+  const [tab, setTab] = useState<string>(() => (TABS.some((t) => t.id === params.get("tab")) ? params.get("tab")! : "gates"));
   const editor = useProfileEditor();
   const profileTab = tab === "gates" || tab === "score" || tab === "fees" || tab === "profiles";
   return (
@@ -126,6 +135,7 @@ export default function SettingsPage() {
         <TabsContent value="fees" className="space-y-5">{editor.ready ? <FeesTab editor={editor} /> : editor.error ? <LoadError message={editor.error} /> : <LoadingBlocks />}</TabsContent>
         <TabsContent value="profiles" className="space-y-5">{editor.ready ? <ProfilesTab editor={editor} /> : editor.error ? <LoadError message={editor.error} /> : <LoadingBlocks />}</TabsContent>
         <TabsContent value="waived"><Waived /></TabsContent>
+        <TabsContent value="ip"><IpRiskTab /></TabsContent>
         <TabsContent value="filters"><FilterSets /></TabsContent>
       </Tabs>
     </div>

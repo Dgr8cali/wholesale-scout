@@ -146,7 +146,7 @@ export const DEFAULT_SCALES: Record<string, Scale> = {
 };
 
 export const COMPLIANCE_RULE_KEYS = [
-  "fragrance", "liquid", "aerosol", "cosmetic", "supplement", "food", "electrical", "battery", "under3sToy", "chemical", "meltable",
+  "fragrance", "liquid", "aerosol", "cosmetic", "supplement", "food", "electrical", "battery", "under3sToy", "chemical", "meltable", "ipRisk",
 ] as const;
 
 const allRules = (mode: GateMode) => Object.fromEntries(COMPLIANCE_RULE_KEYS.map((k) => [k, mode])) as Record<string, GateMode>;

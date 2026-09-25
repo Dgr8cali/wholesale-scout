@@ -2,7 +2,8 @@ import "server-only";
 import { aggregateBrands, type BrandProduct, type BrandSummary } from "../brandMap";
 import { brandKey, type BrandApproval } from "../brands";
 import { applyLinks } from "../spapi/parse";
-import { chunks, db, loadProfile, must } from "./db";
+import { ipIndex } from "../ipRisk";
+import { chunks, db, loadIpRisk, loadProfile, must } from "./db";
 import { evaluateStored } from "./process";
 
 /** Products re-gated per batch; a refresh call stops starting batches near its budget. */
@@ -16,10 +17,14 @@ async function state(): Promise<State> {
     ?? { profile_version: null, refreshed_at: null, lease_until: null, remaining: 0 };
 }
 
-/** The default profile, and a version string that changes whenever it's saved. */
+/**
+ * The default profile, and a version string that changes whenever it's saved or the IP-risk
+ * list is edited (both change verdicts).
+ */
 async function defaultProfile() {
-  const p = await loadProfile(null);
-  return { profile: p, version: `${p.id}@${p.updated_at ?? ""}` };
+  const [p, ip] = await Promise.all([loadProfile(null), loadIpRisk()]);
+  const ipVersion = `${ip.length}:${ip.reduce((m, x) => ((x as { updated_at?: string }).updated_at ?? "") > m ? (x as { updated_at?: string }).updated_at ?? "" : m, "")}`;
+  return { profile: p, version: `${p.id}@${p.updated_at ?? ""}#ip${ipVersion}` };
 }
 
 /** Whether the map is behind: the default profile was saved, or a result changed, since the last refresh. */
@@ -167,7 +172,7 @@ export async function brandSummaries(): Promise<BrandSummary[]> {
   for (const c of chunks(holders, 200)) {
     for (const s of must(await d.from("keepa_sellers").select("seller_id, name").in("seller_id", c), "sellers") as { seller_id: string; name: string | null }[]) names.set(s.seller_id, s.name);
   }
-  return aggregateBrands(rows, approvals, names);
+  return aggregateBrands(rows, approvals, names, ipIndex(await loadIpRisk()));
 }
 
 const num = (v: unknown) => (v == null ? null : Number(v));
@@ -179,7 +184,7 @@ export async function brandDetail(key: string) {
     .map((r) => ({ ...r, sell_price: num(r.sell_price), buy_box: num(r.buy_box), max_landed: num(r.max_landed) }));
   if (!rows.length) return null;
   const approvals = must(await d.from("brand_approvals").select("brand_key, brand, status, requirement, status_date").eq("brand_key", key), "approvals") as BrandApproval[];
-  const [summary] = aggregateBrands(rows, approvals);
+  const [summary] = aggregateBrands(rows, approvals, new Map(), ipIndex(await loadIpRisk()));
 
   // Best offer per EAN: the lowest ex-VAT unit cost any supplier quoted for it (costed offers only).
   const eans = [...new Set(rows.map((r) => r.ean))];

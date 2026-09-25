@@ -17,7 +17,9 @@ import { GATING_LABELS, GATING_VARIANT, type BrandSummary } from "@/lib/brandMap
 import { api, gbp } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
 
-type SortKey = "score" | "brand" | "asins" | "passing" | "sellers" | "amazon" | "buyBox" | "maxLanded";
+type SortKey = "score" | "brand" | "asins" | "passing" | "sellers" | "amazon" | "buyBox" | "maxLanded" | "ipRisk";
+const IP_VARIANT = { high: "fail", medium: "warn", low: "muted" } as const;
+const IP_RANK = { high: 3, medium: 2, low: 1 } as const;
 const VALUE: Record<SortKey, (b: BrandSummary) => number | string | null> = {
   score: (b) => b.score,
   brand: (b) => b.brand.toLowerCase(),
@@ -27,6 +29,7 @@ const VALUE: Record<SortKey, (b: BrandSummary) => number | string | null> = {
   amazon: (b) => b.amazonSharePct,
   buyBox: (b) => b.avgBuyBox,
   maxLanded: (b) => b.medianMaxLanded,
+  ipRisk: (b) => (b.ipRisk ? IP_RANK[b.ipRisk.level] : null),
 };
 const PAGE = 200;
 
@@ -142,7 +145,7 @@ export default function BrandsPage() {
               {th("buyBox", "Buy Box", "text-right", "Average Buy Box")}
               {th("maxLanded", "Max landed", "text-right", "Median of the most each product can cost landed and clear the floors")}
               <TableHead>Gating</TableHead>
-              <TableHead title="IP-complaint risk: coming next">IP risk</TableHead>
+              {th("ipRisk", "IP risk", undefined, "On your IP-risk list (Settings → IP risk); high halves the score")}
               <TableHead className="pr-4">Carried by</TableHead>
             </TableRow>
           </TableHeader>
@@ -175,7 +178,13 @@ export default function BrandsPage() {
                     )}
                   </div>
                 </TableCell>
-                <TableCell className="text-muted-foreground" title="IP-complaint risk: coming next">—</TableCell>
+                <TableCell>
+                  {b.ipRisk ? (
+                    <Badge variant={IP_VARIANT[b.ipRisk.level]} title={[b.ipRisk.note, b.ipRisk.source && `Source: ${b.ipRisk.source}`].filter(Boolean).join(" · ")}>
+                      {b.ipRisk.level}{b.ipRisk.source?.includes("unverified") ? " ?" : ""}
+                    </Badge>
+                  ) : <span className="text-muted-foreground">—</span>}
+                </TableCell>
                 <TableCell className="max-w-64 pr-4 text-xs whitespace-normal text-muted-foreground">
                   {[
                     [...b.suppliers.slice(0, 2).map((s) => s.name), ...(b.suppliers.length > 2 ? [`+${b.suppliers.length - 2}`] : [])].join(", "),

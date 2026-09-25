@@ -15,10 +15,11 @@ import { GATE_ORDER, withDefaults, type GateId, type ProfileConfig } from "../sc
 import { packNote, resolveScoringPrice, runGates, verdictOf, type GateRun, type MarketData, type ScreenContext, type SellerView } from "../screening/gates";
 import { listingPack, supplierPack, type PackAttrs } from "../screening/pack";
 import type { CategoryRule, DgFacts } from "../screening/rules";
+import { ipIndex, matchIpRisk, type IpIndex } from "../ipRisk";
 import { winScore } from "../screening/score";
 import { getSpApi, type CatalogMatch, type CompetitivePrice, type LookupTrace } from "../spapi/client";
 import type { ListingOffers } from "../spapi/types";
-import { activeRateCard, chunks, db, loadProfile, loadRules, must } from "./db";
+import { activeRateCard, chunks, db, loadIpRisk, loadProfile, loadRules, must } from "./db";
 import { productKey, waiversFor } from "./overrides";
 
 const DAY = 86_400_000;
@@ -235,6 +236,7 @@ function context(row: Row, card: RateCard, rules: CategoryRule[], cfg: ProfileCo
       // Keepa knows the whole variation family; the catalog only lists a parent's children.
       variationCount: row.market?.variationCount ?? p.variation_count,
       hazmat: row.hazmat,
+      ipRisk: matchIpRisk(approved.ipRisk, p.brand, o.brand),
       // Stored with the product; null until read (then the older `hazmat` form counts).
       amazonDg: row.product.amazon_dg ?? null,
     },
@@ -359,13 +361,15 @@ async function saveResults(runId: string, items: { row: Row; run: GateRun; ctx: 
   await mapLimit(items.filter((x) => x.run.ruleMatches.length), 10, ({ row, run }) => saveFlags(row, run));
 }
 
-type Approved = Map<string, { status: "approved"; date: string | null }>;
+/** Brands recorded as approved on the Brands page, by normalised brand key; and your IP-risk list. */
+type Approved = Map<string, { status: "approved"; date: string | null }> & { ipRisk?: IpIndex };
 
-/** Brands recorded as approved on the Brands page, by normalised brand key. */
 async function approvedBrands(): Promise<Approved> {
   const rows = must(await db().from("brand_approvals").select("brand_key, status_date").eq("status", "approved"), "brand approvals") as
     { brand_key: string; status_date: string | null }[];
-  return new Map(rows.map((r) => [r.brand_key, { status: "approved", date: r.status_date }]));
+  const out: Approved = new Map(rows.map((r) => [r.brand_key, { status: "approved" as const, date: r.status_date }]));
+  out.ipRisk = ipIndex(await loadIpRisk());
+  return out;
 }
 
 /** How old a Keepa snapshot may be and still be used instead of fetching. */

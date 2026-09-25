@@ -1,4 +1,5 @@
 import "server-only";
+import type { IpRiskBrand } from "../ipRisk";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { UK_RATE_CARD_2026_07, type RateCard } from "../fees/rateCard";
 import { defaultProfiles, withDefaults, type ProfileConfig } from "../screening/config";
@@ -74,6 +75,16 @@ export async function loadRules(): Promise<CategoryRule[]> {
   await ensureSeed();
   const rows = must(await db().from("category_rules").select("*").order("sort"), "rules");
   return rows as CategoryRule[];
+}
+
+/** Your IP-risk brand list; empty before its migration. */
+export async function loadIpRisk(): Promise<IpRiskBrand[]> {
+  const res = await db().from("ip_risk_brands").select("id, brand, aliases, level, note, source, reported_on, updated_at").order("brand");
+  if (res.error) {
+    if (/does not exist|schema cache/i.test(res.error.message)) return [];
+    throw new Error(`IP-risk brands: ${res.error.message}`);
+  }
+  return (res.data ?? []) as IpRiskBrand[];
 }
 
 export async function loadProfile(id?: string | null): Promise<{ id: string; name: string; config: ProfileConfig; updated_at?: string | null }> {
