@@ -97,7 +97,8 @@ export async function saveCompetitorStock(asin: string, sellers: StockSeller[]) 
 
 /**
  * Seller Central's dangerous-goods classification, as you confirmed it on the page. Hazmat is
- * added to the product's Amazon DG data, so the compliance gate counts it on the next screening.
+ * added to the product's Amazon DG data, so the compliance gate counts it on the next screening;
+ * a later "not hazmat" or "unknown" takes that mark back.
  */
 export async function saveScDg(asin: string, input: { status: string; detail?: string | null; url?: string | null }) {
   const p = await productByAsin(asin);
@@ -109,6 +110,10 @@ export async function saveScDg(asin: string, input: { status: string; detail?: s
     const dg = (p.amazon_dg ?? { hazmat: null, ghs: [], declared: [], heatSensitive: false }) as { declared?: string[] };
     const mark = `Seller Central${detail ? `: ${detail.slice(0, 60)}` : ""}`;
     update.amazon_dg = { ...dg, declared: [...new Set([...(dg.declared ?? []).filter((x) => !x.startsWith("Seller Central")), mark])] };
+  } else if ((p.amazon_dg as { declared?: string[] } | null)?.declared?.some((x) => x.startsWith("Seller Central"))) {
+    // A newer reading that isn't hazmat takes back an earlier Seller Central hazmat mark.
+    const dg = p.amazon_dg as { declared: string[] };
+    update.amazon_dg = { ...dg, declared: dg.declared.filter((x) => !x.startsWith("Seller Central")) };
   }
   must(await db().from("products").update(update).eq("id", p.id), "save DG");
   return true;

@@ -161,6 +161,17 @@ export interface DgFacts {
   heatSensitive: boolean;
 }
 
+/**
+ * Amazon's DG data read again from the catalog, keeping a hazmat mark you saved from Seller
+ * Central (a "Seller Central…" entry in declared), which the catalog doesn't carry.
+ */
+export function keepSellerCentralMark(fresh: DgFacts | null | undefined, old: DgFacts | null | undefined): DgFacts | null {
+  const marks = (old?.declared ?? []).filter((x) => x.startsWith("Seller Central"));
+  if (!marks.length) return fresh ?? null;
+  const base = fresh ?? { hazmat: null, ghs: [], declared: [], heatSensitive: false };
+  return { ...base, declared: [...new Set([...(base.declared ?? []).filter((x) => !x.startsWith("Seller Central")), ...marks])] };
+}
+
 const cap = (s: string) => s.charAt(0) + s.slice(1).toLowerCase();
 
 /**

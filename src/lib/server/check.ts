@@ -4,6 +4,7 @@ import { economics, hurdlePrice, maxLandedCost, referralCategoryFor, unitCostFro
 import type { ProfileConfig } from "../screening/config";
 import type { ColumnMapping, NormalizedRow } from "../ingest/mapping";
 import { listingPack } from "../screening/pack";
+import { keepSellerCentralMark, type DgFacts } from "../screening/rules";
 import { applyLinks } from "../spapi/parse";
 import type { CatalogMatch, RestrictionLink } from "../spapi/types";
 import { getSpApi } from "../spapi/client";
@@ -126,12 +127,12 @@ function costOf(l: CheckLine, fees: Parameters<typeof unitCostFromLanded>[2]): {
 /** The product for an ASIN, created or refreshed from its catalog item. EAN: the listing's, else the ASIN. */
 async function upsertAsinProduct(asin: string, c: CatalogMatch | null, card: Awaited<ReturnType<typeof activeRateCard>>) {
   const d = db();
-  const existing = must(await d.from("products").select("id, ean, title").eq("asin", asin).limit(1), "product") as { id: string; ean: string; title: string | null }[];
+  const existing = must(await d.from("products").select("id, ean, title, amazon_dg").eq("asin", asin).limit(1), "product") as { id: string; ean: string; title: string | null; amazon_dg: DgFacts | null }[];
   const ean = existing[0]?.ean ?? c?.eans.find((e) => /^\d{13}$/.test(e)) ?? c?.eans[0] ?? asin;
   const fields = c ? {
     title: c.title, brand: c.brand, category: c.category, dims_cm: c.dimsCm, weight_g: c.weightG, sales_rank: c.salesRank,
     parent_asin: c.parentAsin, variation_count: c.variationCount, image_url: c.imageUrl ?? "",
-    pack_attrs: c.pack ?? null, pack_count: listingPack(c.title, c.pack).count, amazon_dg: c.dg ?? null,
+    pack_attrs: c.pack ?? null, pack_count: listingPack(c.title, c.pack).count, amazon_dg: keepSellerCentralMark(c.dg, existing[0]?.amazon_dg),
     referral_category: referralCategoryFor(c.category, card), catalog_updated_at: new Date().toISOString(),
   } : {};
   if (existing[0]) {

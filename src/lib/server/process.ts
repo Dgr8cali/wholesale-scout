@@ -15,7 +15,7 @@ import { chooseOffer, toSupplierOffer, type QogitaOffers, type SupplierOffer } f
 import { GATE_ORDER, withDefaults, type GateId, type ProfileConfig } from "../screening/config";
 import { effectiveMoq, packNote, resolveScoringPrice, runGates, verdictOf, type GateRun, type MarketData, type ScreenContext, type SellerView } from "../screening/gates";
 import { listingPack, supplierPack, type PackAttrs } from "../screening/pack";
-import type { CategoryRule, DgFacts } from "../screening/rules";
+import { keepSellerCentralMark, type CategoryRule, type DgFacts } from "../screening/rules";
 import { ipIndex, matchIpRisk, type IpIndex } from "../ipRisk";
 import { winScore } from "../screening/score";
 import { yourShare } from "../screening/sales";
@@ -1623,7 +1623,7 @@ async function resolveRow(
       parent_asin: c.parentAsin, variation_count: c.variationCount, catalog_updated_at: new Date().toISOString(),
       image_url: c.imageUrl ?? p.image_url ?? "",
       pack_attrs: c.pack ?? p.pack_attrs ?? null,
-      amazon_dg: c.dg ?? p.amazon_dg ?? null,
+      amazon_dg: c.dg ? keepSellerCentralMark(c.dg, p.amazon_dg) : p.amazon_dg ?? null,
     });
     row.hazmat = [...c.hazmat, ...(c.batteries ? ["batteries"] : [])];
   }
