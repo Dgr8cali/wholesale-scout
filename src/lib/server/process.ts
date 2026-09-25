@@ -761,7 +761,7 @@ export async function processRun(runId: string, opts: { budgetMs?: number } = {}
         }
         break;
       }
-      const started = Date.now();
+      const started = performance.now();
       const [la, kb, ac]: [Awaited<ReturnType<typeof stageLookup>>, Awaited<ReturnType<typeof stageKeepa>>, StageOut] =
         await Promise.all([stageLookup(a, env), stageKeepa(b, env), stageAccount(c, env)]);
       progressed += la.finished + kb.finished + ac.finished + la.next.length + kb.next.length;
@@ -769,7 +769,8 @@ export async function processRun(runId: string, opts: { budgetMs?: number } = {}
       // Throughput for the time-left estimate: rows that left the Amazon queue this batch
       // (finished, or handed to Keepa), per minute, smoothed across batches.
       const leftAmazon = la.finished + ac.finished + la.next.filter((r) => r.stage === "priced").length;
-      const minutes = (Date.now() - started) / 60_000;
+      // performance.now(): a fast batch can take under a millisecond, which Date.now() reads as 0.
+      const minutes = (performance.now() - started) / 60_000;
       if ((a.length || c.length) && minutes > 0) {
         const measured = leftAmazon / minutes;
         stats.amazonPerMin = stats.amazonPerMin ? 0.5 * stats.amazonPerMin + 0.5 * measured : measured;
