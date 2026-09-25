@@ -12,7 +12,7 @@ const market = (over: Partial<MarketData> = {}): MarketData => ({
   hasHistory: true,
   historyDays: 400,
   rankNow: 3000,
-  rankDrops30d: 140,
+  rankDrops30d: 400,
   avgRank90d: 3500,
   rankTrendPct12m: -10,
   currentBuyBox: 24.99,
@@ -45,6 +45,8 @@ const ctx = (over: Partial<ScreenContext> = {}): ScreenContext => ({
 });
 
 const fit = { deliveryDays: 3, supplierRating: 4 };
+/** The default profile without the months-to-sell limit, for tests about other demand rules. */
+const noMonths = withDefaults({ gates: { ...DEFAULT_PROFILE.gates, demand: { ...DEFAULT_PROFILE.gates.demand, maxMonthsToSell: 1000 } } });
 
 describe("gates", () => {
   it("passes a healthy row through all twelve and scores it green", () => {
@@ -192,7 +194,7 @@ describe("gates", () => {
   });
 
   describe("Demand needs sales AND rank", () => {
-    const demand = (m: MarketData) => runGates(ctx({ market: m }), DEFAULT_PROFILE).outcomes.find((o) => o.gate === "demand")!;
+    const demand = (m: MarketData) => runGates(ctx({ market: m }), noMonths).outcomes.find((o) => o.gate === "demand")!;
 
     it("fails 0 rank drops in 30 days even with a good 90-day rank", () => {
       const d = demand(market({ rankDrops30d: 0, keepaRankDrops30: 0, monthlySold: null, avgRank90d: 1200 }));
@@ -224,8 +226,8 @@ describe("gates", () => {
   });
 
   describe("your share", () => {
-    const demand = (m: MarketData, p = DEFAULT_PROFILE) => runGates(ctx({ market: m }), p).outcomes.find((o) => o.gate === "demand")!;
-    const lowTotal = withDefaults({ gates: { ...DEFAULT_PROFILE.gates, demand: { ...DEFAULT_PROFILE.gates.demand, minRankDrops30d: 10 } } });
+    const demand = (m: MarketData, p = noMonths) => runGates(ctx({ market: m }), p).outcomes.find((o) => o.gate === "demand")!;
+    const lowTotal = withDefaults({ gates: { ...noMonths.gates, demand: { ...noMonths.gates.demand, minRankDrops30d: 10 } } });
 
     it("divides sales by the FBA sellers plus you, with Amazon counted as three", () => {
       expect(yourShare(market({ rankDrops30d: 100, fbaOffers: 4, amazonLastSeenDays: 400 })).value).toBe(20);
@@ -240,7 +242,7 @@ describe("gates", () => {
       expect(demand(m).status).toBe("fail"); // 18 is under the default 30 total
       const d = demand(m, lowTotal);
       expect(d.status).toBe("pass");
-      expect(d.detail).toBe("18 sales/mo, your share 9/mo, avg rank 20,000");
+      expect(d.detail).toMatch(/^18 sales\/mo, your share 9\/mo, avg rank 20,000; order \d+ sells in /);
     });
 
     it("flags a high-volume product split twenty ways", () => {
@@ -253,8 +255,45 @@ describe("gates", () => {
       const c = ctx();
       const run = runGates(c, DEFAULT_PROFILE);
       const v = paramValues(c, run, DEFAULT_PROFILE, fit);
-      expect(v.profitPerMonth).toBeCloseTo(28 * run.economics!.profit!, 1); // 140 ÷ (4 + 1)
+      expect(v.profitPerMonth).toBeCloseTo(80 * run.economics!.profit!, 1); // 400 ÷ (4 + 1)
       expect(winScore(c, run, DEFAULT_PROFILE, fit).groups.margin.params.map((x) => x.key)).toContain("profitPerMonth");
+    });
+  });
+
+  describe("months to sell the first order", () => {
+    // £1,000 budget × 25% line cap = £250; landed cost ≈ £6.25 a unit, so the order is ~40 units.
+    const cap25 = (months: number) => withDefaults({ gates: { ...DEFAULT_PROFILE.gates, budgetFit: { mode: "fail", maxLineSharePct: 25 }, demand: { ...DEFAULT_PROFILE.gates.demand, minRankDrops30d: 5, minSharePerMonth: 1, maxMonthsToSell: months } } });
+    const slow = market({ rankDrops30d: 10, keepaRankDrops30: null, monthlySold: null, fbaOffers: 1, avgRank90d: 20000 }); // your share 5/mo
+
+    it("fails an order that takes longer than the limit to sell, and says the sum", () => {
+      const run = runGates(ctx({ market: slow }), cap25(3));
+      const d = run.outcomes.find((o) => o.gate === "demand")!;
+      expect(run.failedGate).toBe("demand");
+      expect(d.detail).toMatch(/^(\d+) units at 5\/mo = (\d+(\.\d)?) months, over 3$/);
+      const [, units, months] = d.detail.match(/^(\d+) units at 5\/mo = ([\d.]+) months/)!;
+      expect(Number(months)).toBeCloseTo(Number(units) / 5, 1);
+    });
+
+    it("passes when the order sells in time, and says how long", () => {
+      const d = runGates(ctx({ market: slow }), cap25(12)).outcomes.find((o) => o.gate === "demand")!;
+      expect(d.status).toBe("pass");
+      expect(d.detail).toMatch(/; order \d+ sells in [\d.]+ months$/);
+    });
+
+    it("orders the MOQ when it's over the line cap, and flags it", () => {
+      const d = runGates(ctx({ market: slow, offer: { unitCostGbp: 5, moq: 200, goodsVatRatePct: 20, supplierMovGbp: null } }), withDefaults({ ...cap25(3), gates: { ...cap25(3).gates, budgetFit: { mode: "off", maxLineSharePct: 25 } } })).outcomes.find((o) => o.gate === "demand")!;
+      expect(d.detail).toBe("200 units (MOQ) at 5/mo = 40 months, over 3");
+    });
+  });
+
+  describe("liquids above a volume", () => {
+    const liquidAbove = (ml: number | null) => withDefaults({ gates: { ...noMonths.gates, compliance: { mode: "fail", rules: { ...noMonths.gates.compliance.rules, liquid: "warn" }, liquidAboveMl: ml } } });
+    const comp = (text: string, ml: number | null) => runGates(ctx({ text }), liquidAbove(ml)).outcomes.find((o) => o.gate === "compliance")!;
+    it("flags only liquids over the volume, and says the volume", () => {
+      expect(comp("Bioderma Sensibio micellar water 250ml", 500)).toMatchObject({ status: "pass" });
+      expect(comp("Bioderma Sensibio micellar water 750ml", 500)).toMatchObject({ status: "warn", detail: "Liquid (750 ml, over 500 ml)" });
+      expect(comp("Shampoo", 500)).toMatchObject({ status: "pass" });
+      expect(comp("Bioderma Sensibio micellar water 250ml", null).status).toBe("warn");
     });
   });
 
@@ -268,13 +307,13 @@ describe("gates", () => {
     it("scores on the last Buy Box seen in 12 months and 12 months of rank drops", () => {
       const c = ctx({ market: dormant() });
       expect(resolveScoringPrice(c.market, DEFAULT_PROFILE)).toEqual({ price: 18.5, source: "last seen £18.50 on 3 Mar 2026" });
-      const run = runGates(c, DEFAULT_PROFILE);
+      const run = runGates(c, noMonths);
       const demand = run.outcomes.find((o) => o.gate === "demand")!;
       expect(demand.status).toBe("pass");
-      expect(demand.detail).toBe("dormant: 600 rank drops in 12 months (50/mo), 12-month average rank 9,000");
+      expect(demand.detail).toMatch(/^dormant: 600 rank drops in 12 months \(50\/mo\), 12-month average rank 9,000; order \d+ sells in /);
       expect(demand.tags).toContain("DORMANT");
       expect(run.outcomes.find((o) => o.gate === "competition")!.detail).toBe("dormant: no sellers now, none for 206 days");
-      const w = winScore(c, run, DEFAULT_PROFILE, fit);
+      const w = winScore(c, run, noMonths, fit);
       expect(w.score).not.toBeNull();
       expect(w.why).toMatch(/^Dormant: no seller for 206 days; priced on the last seen £18\.50 on 3 Mar 2026\. \d+ — /);
       expect(w.why).not.toMatch(/Not scored/);
@@ -303,7 +342,7 @@ describe("gates", () => {
   });
 
   it("respects a gate switched off", () => {
-    const p = withDefaults({ gates: { ...DEFAULT_PROFILE.gates, amazonPresence: { mode: "off", days: 365 } } });
+    const p = withDefaults({ gates: { ...noMonths.gates, amazonPresence: { mode: "off", days: 365 } } });
     const run = runGates(ctx({ market: market({ amazonLastSeenDays: 0 }) }), p);
     expect(run.outcomes.find((o) => o.gate === "amazonPresence")?.status).toBe("off");
     expect(run.failedGate).toBeNull();

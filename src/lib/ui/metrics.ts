@@ -1,3 +1,4 @@
+import { monthsLabel, orderPlan } from "../screening/order";
 import { profitPerMonth, salesPerMonth, yourShare } from "../screening/sales";
 
 /** Figures for the results table, read from the market data stored on a result. */
@@ -50,6 +51,19 @@ export function profitMonth(m: StoredMarket | null | undefined, profit: number |
   return v == null
     ? { value: null, note: f.value == null ? f.note : "Needs a profit per unit" }
     : { value: v, note: `${f.value}/mo your share × £${profit!.toFixed(2)} profit per unit` };
+}
+
+/** The first order under a line cap, and months to sell it at your share (see screening/order). */
+export function firstOrderFigures(m: StoredMarket | null | undefined, landed: number | null | undefined, moq: number | null | undefined, lineCapGbp: number) {
+  const share = yourShare(m).value;
+  const plan = orderPlan({ lineCapGbp, landedGbp: landed ?? null, moq: moq ?? null, sharePerMonth: share });
+  const qty: Figure & { moqOverCap: boolean } = plan
+    ? { value: plan.qty, moqOverCap: plan.moqOverCap, note: plan.moqOverCap ? `The MOQ (${plan.qty}) is more than the £${lineCapGbp.toFixed(0)} line cap buys (${plan.capUnits})` : `£${lineCapGbp.toFixed(0)} line cap ÷ £${landed!.toFixed(2)} landed` }
+    : { value: null, moqOverCap: false, note: "Needs a landed cost" };
+  const months: Figure = plan?.months != null
+    ? { value: Number.isFinite(plan.months) ? Math.round(plan.months * 10) / 10 : Infinity, note: `${plan.qty} units ÷ ${share}/mo your share = ${monthsLabel(plan.months)}` }
+    : { value: null, note: plan ? "Needs your share (Keepa history and a seller count)" : "Needs a landed cost" };
+  return { qty, months };
 }
 
 /** FBA sellers from Keepa; until then all new offers from SP-API, said so. */

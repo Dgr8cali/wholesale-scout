@@ -72,7 +72,7 @@ export interface Progress {
 }
 
 
-export type SortKey = "score" | "profit" | "roi" | "margin" | "sell_price" | "landed_cost" | "hurdle_price" | "title" | "verdict" | "sales" | "sellers" | "buybox" | "share" | "profitMo";
+export type SortKey = "score" | "profit" | "roi" | "margin" | "sell_price" | "landed_cost" | "hurdle_price" | "title" | "verdict" | "sales" | "sellers" | "buybox" | "share" | "profitMo" | "orderQty" | "months";
 
 /** Figures computed from the stored market data, for display and sorting. */
 const FIGURES = {

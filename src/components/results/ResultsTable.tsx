@@ -18,7 +18,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { Sparks } from "@/lib/sparkline";
 import { RestrictionLink } from "@/lib/ui/RestrictionLink";
 import { gbp, pct } from "@/lib/ui/client";
-import type { Figure } from "@/lib/ui/metrics";
+import { firstOrderFigures, type Figure } from "@/lib/ui/metrics";
 import { brandOf, dormantOf, favKey, isWaived } from "@/lib/ui/resultRows";
 import { cn } from "@/lib/utils";
 import { Sparkline } from "./Sparkline";
@@ -49,6 +49,8 @@ const COLS: ColSpec[] = [
   { id: "score", label: "Score", sort: "score", numeric: true, size: 68, min: 56, max: 120 },
   { id: "sales", label: "Sales / mo", header: <>Sales<br />/ mo</>, hint: "Est. sales / month", sort: "sales", numeric: true, size: 76, min: 60, max: 140 },
   { id: "share", label: "Your share / mo", header: <>Your share<br />/ mo</>, hint: "Sales / mo ÷ (FBA sellers + you), Amazon counted as 3 sellers", sort: "share", numeric: true, size: 84, min: 64, max: 140 },
+  { id: "orderQty", label: "Order qty", header: <>Order<br />qty</>, hint: "First order: the line cap ÷ landed cost, or the MOQ if that's more (flagged)", sort: "orderQty", numeric: true, size: 72, min: 56, max: 120 },
+  { id: "months", label: "Months to sell", header: <>Months<br />to sell</>, hint: "Order qty ÷ your share / mo", sort: "months", numeric: true, size: 76, min: 60, max: 120 },
   { id: "sellers", label: "Sellers", sort: "sellers", numeric: true, size: 72, min: 56, max: 120 },
   { id: "buybox", label: "Buy Box", header: <>Buy<br />Box</>, sort: "buybox", numeric: true, size: 80, min: 64, max: 140 },
   { id: "rank90", label: "Rank, 90 days", header: <>Rank<br />90 d</>, hint: "Sales rank over 90 days from the stored Keepa snapshot; up is a better rank", size: 92, min: 80, max: 220 },
@@ -105,6 +107,10 @@ export interface ResultsTableProps {
   observeSparks: (asin: string | null | undefined) => (el: Element | null) => void;
   renderDetail: (r: Result) => ReactNode;
   empty: ReactNode;
+  /** The profile's budget for one line (budget × max line share). */
+  lineCapGbp: number;
+  /** Max months to sell the order (Demand gate), to colour the figure. */
+  maxMonths: number;
 }
 
 export function ResultsTable(props: ResultsTableProps) {
@@ -358,6 +364,25 @@ function Cell({ id, d, props, compact, isOpen }: { id: string; d: DisplayRow; pr
     case "sales": return <FigureCell f={figure(r, "sales")} className={num} />;
     case "sellers": return <FigureCell f={figure(r, "sellers")} className={num} />;
     case "share": return <FigureCell f={figure(r, "share")} className={num} decimals />;
+    case "orderQty":
+    case "months": {
+      if (r.score == null) return <span className={num}><span className="text-muted-foreground">—</span></span>;
+      const f = firstOrderFigures(r.inputs?.market, r.landed_cost, r.offer?.moq, props.lineCapGbp);
+      if (id === "orderQty") {
+        return (
+          <span className={num} title={f.qty.note}>
+            {f.qty.value == null ? <span className="text-muted-foreground">—</span> : f.qty.value.toLocaleString("en-GB")}
+            {f.qty.moqOverCap && <span className="ml-1 rounded bg-warn-soft px-1 text-2xs font-semibold text-warn">MOQ</span>}
+          </span>
+        );
+      }
+      const v = f.months.value;
+      return (
+        <span className={cn(num, v != null && v > props.maxMonths && "text-fail")} title={f.months.note}>
+          {v == null ? <span className="text-muted-foreground">—</span> : !Number.isFinite(v) ? "∞" : v.toLocaleString("en-GB", { maximumFractionDigits: 1 })}
+        </span>
+      );
+    }
     case "profitMo": {
       const f = figure(r, "profitMo");
       return <FigureCell f={f} className={cn(num, f.value != null && f.value < 0 && "text-fail")} money />;

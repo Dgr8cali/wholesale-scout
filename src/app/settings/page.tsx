@@ -44,7 +44,7 @@ const GATE_PARAMS: Record<GateId, { key: string; label: string; unit?: string; s
   mirage: [{ key: "minHistoryDays", label: "Min rank history", unit: "days" }, { key: "maxReviewJumpPct", label: "Max one-day review jump", unit: "%" }],
   amazonPresence: [{ key: "days", label: "Amazon held an offer in the last", unit: "days" }],
   competition: [{ key: "minSellers", label: "Min FBA sellers" }, { key: "maxSellers", label: "Max FBA sellers" }, { key: "maxBbSharePct", label: "Max top-seller Buy Box share", unit: "%" }],
-  demand: [{ key: "minRankDrops30d", label: "Min sales / month (total)" }, { key: "minSharePerMonth", label: "Min your share", unit: "sales / month" }, { key: "maxAvgRank90d", label: "Max 90-day average rank", step: 1000 }],
+  demand: [{ key: "minRankDrops30d", label: "Min sales / month (total)" }, { key: "minSharePerMonth", label: "Min your share", unit: "sales / month" }, { key: "maxAvgRank90d", label: "Max 90-day average rank", step: 1000 }, { key: "maxMonthsToSell", label: "Max months to sell the order", step: 0.5 }],
   priceRegime: [{ key: "spikePct", label: "Spike tolerance over median", unit: "%" }],
   priceDrift: [{ key: "maxDeclinePctYr", label: "Max Buy Box decline", unit: "% / year" }],
   gating: [],
@@ -271,6 +271,15 @@ function GatesTab({ editor: e }: { editor: Editor }) {
                   <span>Approval needed counts as</span>
                   <ModeSelect value={draft.gates.gating.approvalRequired} onChange={(m) => setGate("gating", { approvalRequired: m })} />
                   <span className="text-xs text-muted-foreground">Blocked always uses the gate&apos;s mode</span>
+                </label>
+              )}
+              {g === "compliance" && (
+                <label className="flex flex-wrap items-center gap-2 text-sm">
+                  <span>Flag liquids only above</span>
+                  <Input className="num h-8 w-24" type="number" min={0} step={50} placeholder="any" aria-label="Flag liquids only above (ml)"
+                    value={draft.gates.compliance.liquidAboveMl ?? ""}
+                    onChange={(ev) => setGate("compliance", { liquidAboveMl: ev.target.value === "" ? null : Number(ev.target.value) })} />
+                  <span className="text-muted-foreground">ml (empty flags every liquid)</span>
                 </label>
               )}
               {g === "compliance" && (

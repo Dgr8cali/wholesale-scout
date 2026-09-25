@@ -23,6 +23,7 @@ import { etaLabel } from "@/lib/eta";
 import { EMPTY_FILTERS, matches, normalizeFilters, type FilterSet } from "@/lib/filters";
 import { GATE_LABELS, GATE_ORDER, withDefaults, type GateId } from "@/lib/screening/config";
 import { api, when } from "@/lib/ui/client";
+import { firstOrderFigures } from "@/lib/ui/metrics";
 import { groupRows } from "@/lib/ui/group";
 import { brandOf, dormantOf, favKey, toFilterRow } from "@/lib/ui/resultRows";
 import { cn } from "@/lib/utils";
@@ -256,12 +257,18 @@ export default function RunPage() {
     return GATE_ORDER.filter((g) => m.has(g)).map((g) => ({ gate: g, n: m.get(g)! }));
   }, [done]);
 
+  // One line's share of the budget, as the budget gate uses it: the most the cart suggests ordering.
+  const lineBudget = useMemo(() => {
+    const cfg = withDefaults(run?.profile_snapshot ?? null);
+    return (cfg.budget * cfg.gates.budgetFit.maxLineSharePct) / 100;
+  }, [run?.profile_snapshot]);
   const rows = useMemo(() => {
     const filtered = done.filter((r) => matches(toFilterRow(r, favourites), filters));
     const val = (r: Result): number | string | null =>
       sort.key === "title" ? titleOf(r).toLowerCase()
         : sort.key === "verdict" ? ({ pass: 0, warn: 1, fail: 2 }[r.verdict ?? "fail"])
         : sort.key === "sales" || sort.key === "sellers" || sort.key === "buybox" || sort.key === "share" || sort.key === "profitMo" ? figure(r, sort.key).value
+        : sort.key === "orderQty" || sort.key === "months" ? (r.score == null ? null : firstOrderFigures(r.inputs?.market, r.landed_cost, r.offer?.moq, lineBudget)[sort.key === "orderQty" ? "qty" : "months"].value)
         : (r[sort.key] as number | null);
     const order = (a: Result, b: Result) => {
       const x = val(a), y = val(b);
@@ -272,7 +279,7 @@ export default function RunPage() {
     };
     // One line per EAN: its best ASIN leads, the others sit collapsed beneath it.
     return groupRows(filtered, eanOf, order);
-  }, [done, filters, favourites, sort]);
+  }, [done, filters, favourites, sort, lineBudget]);
   const listingCount = rows.reduce((a, g) => a + 1 + g.others.length, 0);
   // What the table shows: each EAN's lead, plus its other ASINs when expanded.
   const displayRows = useMemo<DisplayRow[]>(() => rows.flatMap((g) => [
@@ -287,11 +294,6 @@ export default function RunPage() {
     if (i >= 0 && i < displayRows.length) setActiveId(displayRows[i].r.id);
   }, [activeIndex, displayRows]);
   const closeDrawer = useCallback(() => setActiveId(null), []);
-  // One line's share of the budget, as the budget gate uses it: the most the cart suggests ordering.
-  const lineBudget = useMemo(() => {
-    const cfg = withDefaults(run?.profile_snapshot ?? null);
-    return (cfg.budget * cfg.gates.budgetFit.maxLineSharePct) / 100;
-  }, [run?.profile_snapshot]);
   // The current filtered set, every listing (collapsed alternatives included), for select-all.
   const visibleIds = useMemo(() => rows.flatMap((g) => [g.lead.id, ...g.others.map((r) => r.id)]), [rows]);
 
@@ -335,6 +337,8 @@ export default function RunPage() {
       Sellers: figure(r, "sellers").value,
       "Your share / mo": figure(r, "share").value,
       "Your profit / mo": figure(r, "profitMo").value,
+      "Order qty": r.score == null ? null : firstOrderFigures(r.inputs?.market, r.landed_cost, r.offer?.moq, lineBudget).qty.value,
+      "Months to sell": r.score == null ? null : firstOrderFigures(r.inputs?.market, r.landed_cost, r.offer?.moq, lineBudget).months.value,
       "Sellers source": figure(r, "sellers").note,
       "Buy Box": figure(r, "buybox").value,
       "Landed cost": r.landed_cost,
@@ -452,7 +456,8 @@ export default function RunPage() {
         sort={sort} onSort={(key) => setSort((s) => ({ key, dir: s.key === key ? (s.dir === 1 ? -1 : 1) : key === "title" ? 1 : -1 }))}
         sparks={sparks} observeSparks={observeSparks}
         renderDetail={(r) => <Detail r={r} fav={favOf(r)} onNote={saveNote} onWaive={waive} budgetGbp={lineBudget} />}
-        empty={done.length ? "Nothing matches these filters." : "Rows appear here as they're screened."} />
+        empty={done.length ? "Nothing matches these filters." : "Rows appear here as they're screened."}
+        lineCapGbp={lineBudget} maxMonths={withDefaults(run.profile_snapshot ?? null).gates.demand.maxMonthsToSell} />
 
       {active && (
         <DetailDrawer r={active} index={activeIndex} count={displayRows.length} sparks={active.product?.asin ? sparks[active.product.asin] : null}

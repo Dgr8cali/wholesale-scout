@@ -6,7 +6,8 @@ import { landedCost } from "../fees/engine";
 import { GROUP_LABELS, SCALE_DEFS, type GroupId, type ProfileConfig, type Scale } from "./config";
 import { isDormant, lastSeenLabel } from "./dormant";
 import { profitPerMonth, yourShare } from "./sales";
-import { tierDisagreement, type GateRun, type ScreenContext } from "./gates";
+import { monthsLabel } from "./order";
+import { firstOrder, tierDisagreement, type GateRun, type ScreenContext } from "./gates";
 
 export interface FitData {
   deliveryDays: number | null;
@@ -123,6 +124,9 @@ export function winScore(ctx: ScreenContext, run: GateRun, p: ProfileConfig, fit
   let why = whyLine(ctx, run, score, groups);
   if (capped) why = why.replace(/\.$/, "; held at amber until there's history.");
   const m = ctx.market;
+  // Scored rows: the first order and how long it takes to sell at your share.
+  const plan = score != null ? firstOrder(ctx, p, yourShare(m).value) : null;
+  if (plan?.months != null) why = why.replace(/\.$/, `. First order ${plan.qty} units${plan.moqOverCap ? " (the MOQ, over the line cap)" : ""} sells in ${monthsLabel(plan.months)}.`);
   if (isDormant(m) && !run.failedGate) {
     const idle = m!.lastOfferDaysAgo != null ? `no seller for ${m!.lastOfferDaysAgo} days` : "no seller now";
     const priced = m!.lastBuyBox12m != null ? `; priced on the ${lastSeenLabel(m!.lastBuyBox12m, m!.lastBuyBoxAt)}` : "";

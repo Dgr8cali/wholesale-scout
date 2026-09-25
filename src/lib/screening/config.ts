@@ -9,13 +9,13 @@ export type GateMode = "off" | "warn" | "fail";
 export interface GateConfigs {
   priceBand: { mode: GateMode; min: number; max: number };
   /** `rules` gives each compliance rule its own mode; the gate's mode switches the whole gate. */
-  compliance: { mode: GateMode; rules: Record<string, GateMode> };
+  compliance: { mode: GateMode; rules: Record<string, GateMode>; /** Liquid rule: flag only above this volume (ml); null flags any liquid. */ liquidAboveMl?: number | null };
   budgetFit: { mode: GateMode; maxLineSharePct: number };
   matchQuality: { mode: GateMode };
   mirage: { mode: GateMode; minHistoryDays: number; maxReviewJumpPct: number };
   amazonPresence: { mode: GateMode; days: number };
   competition: { mode: GateMode; minSellers: number; maxSellers: number; maxBbSharePct: number };
-  demand: { mode: GateMode; minRankDrops30d: number; maxAvgRank90d: number; /** Your share: sales ÷ (sellers + you). */ minSharePerMonth: number };
+  demand: { mode: GateMode; minRankDrops30d: number; maxAvgRank90d: number; /** Your share: sales ÷ (sellers + you). */ minSharePerMonth: number; /** The first order must sell within this many months at your share. */ maxMonthsToSell: number };
   priceRegime: { mode: GateMode; spikePct: number };
   priceDrift: { mode: GateMode; maxDeclinePctYr: number };
   /** Blocked always takes the gate's mode; approval-required has its own (warn by default). */
@@ -157,7 +157,7 @@ export const DEFAULT_GATES: GateConfigs = {
   mirage: { mode: "warn", minHistoryDays: 90, maxReviewJumpPct: 50 },
   amazonPresence: { mode: "fail", days: 365 },
   competition: { mode: "warn", minSellers: 3, maxSellers: 12, maxBbSharePct: 70 },
-  demand: { mode: "fail", minRankDrops30d: 30, maxAvgRank90d: 50000, minSharePerMonth: 5 },
+  demand: { mode: "fail", minRankDrops30d: 30, maxAvgRank90d: 50000, minSharePerMonth: 5, maxMonthsToSell: 3 },
   priceRegime: { mode: "warn", spikePct: 15 },
   priceDrift: { mode: "warn", maxDeclinePctYr: 20 },
   gating: { mode: "fail", approvalRequired: "warn" },

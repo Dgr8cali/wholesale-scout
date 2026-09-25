@@ -3,6 +3,7 @@
  * A gate whose data isn't available (no Keepa yet, no price) is "skipped", never failed.
  */
 import { isDormant, lastSeenLabel } from "./dormant";
+import { monthsLabel, orderPlan, volumeMl, type OrderPlan } from "./order";
 import { salesPerMonth, yourShare } from "./sales";
 import {
   economics,
@@ -185,6 +186,12 @@ type Evaluator = (ctx: ScreenContext, p: ProfileConfig, run: GateRun) => Omit<Ga
 
 const skipped = (detail: string) => ({ status: "skipped" as const, detail });
 
+/** The first order for this row under the profile's line cap (see ./order). */
+export function firstOrder(ctx: ScreenContext, p: ProfileConfig, share: number | null): OrderPlan | null {
+  const landed = landedCost(ctx.offer.unitCostGbp, { goodsVatRatePct: ctx.offer.goodsVatRatePct }, p.fees).total;
+  return orderPlan({ lineCapGbp: (p.budget * p.gates.budgetFit.maxLineSharePct) / 100, landedGbp: landed, moq: ctx.offer.moq, sharePerMonth: share });
+}
+
 const EVALUATORS: Record<GateId, Evaluator> = {
   priceBand(ctx, p, run) {
     const g = p.gates.priceBand;
@@ -201,6 +208,15 @@ const EVALUATORS: Record<GateId, Evaluator> = {
     for (const h of ctx.product.hazmat) {
       if (!matches.some((m) => m.key === "fragrance" || m.key === "aerosol" || m.key === "chemical")) {
         matches.push({ key: "chemical", name: "Declared hazmat", hit: `Amazon lists ${h} regulation` });
+      }
+    }
+    // Liquids: only above a volume when the profile says so (small bottles aren't worth a flag).
+    if (g.liquidAboveMl != null) {
+      const ml = volumeMl(ctx.text);
+      const i = matches.findIndex((m) => m.key === "liquid");
+      if (i >= 0) {
+        if (ml == null || ml <= g.liquidAboveMl) matches.splice(i, 1);
+        else matches[i] = { ...matches[i], hit: `${ml} ml, over ${g.liquidAboveMl} ml` };
       }
     }
     run.ruleMatches = matches;
@@ -300,11 +316,17 @@ const EVALUATORS: Record<GateId, Evaluator> = {
     // skip rather than pass on the current rank alone.
     if (!m?.hasHistory) return skipped(m?.rankNow != null ? `Needs Keepa history to count sales (current rank ${m.rankNow.toLocaleString("en-GB")})` : "Needs Keepa history");
     const share = yourShare(m);
+    const plan = firstOrder(ctx, p, share.value);
     const shareCheck = (reasons: string[]) => {
       if (share.value != null && share.value < g.minSharePerMonth) {
         reasons.push(`your share ${share.value}/mo, under ${g.minSharePerMonth} (${share.sales} sales ÷ ${share.competitors} other seller${share.competitors === 1 ? "" : "s"}${share.amazon ? ", Amazon counted as 3" : ""} + you)`);
       }
+      // The first order has to sell through in time: "40 units at 5/mo = 8 months, over 3".
+      if (plan?.months != null && plan.months > g.maxMonthsToSell) {
+        reasons.push(`${plan.qty} units${plan.moqOverCap ? " (MOQ)" : ""} at ${share.value}/mo = ${monthsLabel(plan.months)}, over ${g.maxMonthsToSell}`);
+      }
     };
+    const orderText = plan?.months != null ? `; order ${plan.qty}${plan.moqOverCap ? " (MOQ)" : ""} sells in ${monthsLabel(plan.months)}` : "";
     const shareText = share.value != null ? `, your share ${share.value}/mo` : "";
     if (isDormant(m)) {
       // No rank now: judge the past year instead, as a monthly rate.
@@ -319,7 +341,7 @@ const EVALUATORS: Record<GateId, Evaluator> = {
       shareCheck(reasons);
       if (m.avgRank12m != null && m.avgRank12m > g.maxAvgRank90d) reasons.push(`12-month average rank ${m.avgRank12m.toLocaleString("en-GB")}, over ${g.maxAvgRank90d.toLocaleString("en-GB")}`);
       if (reasons.length) return { status: failAs(g.mode), detail: `dormant: ${reasons.join("; ")}`, tags: ["DORMANT"] };
-      return { status: "pass", detail: `dormant: ${drops} rank drops in 12 months (${perMonth}/mo)${m.avgRank12m != null ? `, 12-month average rank ${m.avgRank12m.toLocaleString("en-GB")}` : ""}`, tags: ["DORMANT"] };
+      return { status: "pass", detail: `dormant: ${drops} rank drops in 12 months (${perMonth}/mo)${m.avgRank12m != null ? `, 12-month average rank ${m.avgRank12m.toLocaleString("en-GB")}` : ""}${orderText}`, tags: ["DORMANT"] };
     }
     const sales = salesPerMonth(m).value ?? 0;
     const rank = m.avgRank90d ?? m.rankNow ?? null;
@@ -330,7 +352,7 @@ const EVALUATORS: Record<GateId, Evaluator> = {
     if (rank == null) reasons.push("no rank in the last 90 days");
     else if (rank > g.maxAvgRank90d) reasons.push(`${rankLabel} ${rank.toLocaleString("en-GB")}, over ${g.maxAvgRank90d.toLocaleString("en-GB")}`);
     if (reasons.length) return { status: failAs(g.mode), detail: reasons.join("; ") };
-    return { status: "pass", detail: `${sales} sales/mo${shareText}, ${m.avgRank90d != null ? "avg" : "current"} rank ${rank!.toLocaleString("en-GB")}` };
+    return { status: "pass", detail: `${sales} sales/mo${shareText}, ${m.avgRank90d != null ? "avg" : "current"} rank ${rank!.toLocaleString("en-GB")}${orderText}` };
   },
 
   priceRegime(ctx, p) {
