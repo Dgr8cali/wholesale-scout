@@ -1,0 +1,418 @@
+import "server-only";
+import { referralCategoryFor } from "../fees/engine";
+import type { RateCard } from "../fees/rateCard";
+import { getKeepa, type KeepaProduct, type KeepaSummary } from "../keepa/client";
+import { GATE_ORDER, withDefaults, type GateId, type ProfileConfig } from "../screening/config";
+import { resolveScoringPrice, runGates, verdictOf, type GateRun, type MarketData, type ScreenContext } from "../screening/gates";
+import type { CategoryRule } from "../screening/rules";
+import { winScore } from "../screening/score";
+import { getSpApi, type CatalogMatch, type CompetitivePrice } from "../spapi/client";
+import { activeRateCard, chunks, db, loadRules, must } from "./db";
+
+const DAY = 86_400_000;
+const CATALOG_TTL = 7 * DAY;
+const KEEPA_TTL = DAY;
+
+interface Product {
+  id: string;
+  ean: string;
+  asin: string | null;
+  title: string | null;
+  brand: string | null;
+  category: string | null;
+  referral_category: string | null;
+  dims_cm: { l: number; w: number; h: number } | null;
+  weight_g: number | null;
+  parent_asin: string | null;
+  variation_count: number | null;
+  sales_rank: number | null;
+  compliance_flags: unknown;
+  catalog_updated_at: string | null;
+  keepa_updated_at: string | null;
+}
+
+interface Offer {
+  id: string;
+  product_id: string;
+  supplier_id: string;
+  unit_cost_gbp: number;
+  fx_rate: number;
+  moq: number | null;
+  title: string | null;
+  brand: string | null;
+  category: string | null;
+  [k: string]: unknown;
+}
+
+interface Supplier {
+  id: string;
+  name: string;
+  vat_rate: number;
+  mov: number | null;
+  delivery_days: number | null;
+  rating: number | null;
+}
+
+interface Row {
+  resultId: string;
+  product: Product;
+  offer: Offer;
+  supplier: Supplier;
+  match: ScreenContext["match"];
+  market: MarketData | null;
+  hazmat: string[];
+  restriction: ScreenContext["restriction"];
+  amazonFees: ScreenContext["amazonFees"];
+  notes: string[];
+}
+
+const FRESH = (ts: string | null, ttl: number) => !!ts && Date.now() - Date.parse(ts) < ttl;
+
+function marketFromKeepa(s: KeepaSummary): MarketData {
+  return { hasHistory: true, ...s };
+}
+
+function marketFromSpApi(p: CompetitivePrice | undefined, rank: number | null): MarketData | null {
+  if (!p && rank == null) return null;
+  return {
+    hasHistory: false,
+    historyDays: null,
+    rankNow: p?.salesRank ?? rank,
+    rankDrops30d: null,
+    avgRank90d: null,
+    rankTrendPct12m: null,
+    currentBuyBox: p?.buyBox ?? null,
+    medianBuyBox12m: null,
+    bbSlopePctYr: null,
+    bbVolatilityPct: null,
+    offersNow: p?.newOffers ?? null,
+    offers90dAgo: null,
+    fbaOffers: null,
+    amazonLastSeenDays: null,
+    topSellerBbSharePct: null,
+    reviewJumpPct: null,
+    youngerThanParent: null,
+  };
+}
+
+function context(row: Row, card: RateCard, rules: CategoryRule[]): ScreenContext {
+  const p = row.product, o = row.offer, s = row.supplier;
+  return {
+    now: new Date(),
+    card,
+    rules,
+    text: [o.title, o.brand, o.category, p.title].filter(Boolean).join(" · "),
+    amazonCategory: p.category,
+    offer: {
+      unitCostGbp: Number(o.unit_cost_gbp),
+      moq: o.moq,
+      goodsVatRatePct: Number(s.vat_rate),
+      supplierMovGbp: s.mov == null ? null : Number(s.mov) * Number(o.fx_rate),
+    },
+    match: row.match,
+    product: {
+      referralCategory: p.referral_category ?? referralCategoryFor(p.category, card),
+      dimsCm: p.dims_cm,
+      weightG: p.weight_g == null ? null : Number(p.weight_g),
+      variationCount: p.variation_count,
+      hazmat: row.hazmat,
+    },
+    market: row.market,
+    restriction: row.restriction,
+    amazonFees: row.amazonFees,
+  };
+}
+
+const r2 = (n: number | null | undefined) => (n == null || !Number.isFinite(n) ? null : Math.round(n * 100) / 100);
+
+async function finalize(row: Row, run: GateRun, cfg: ProfileConfig, ctx: ScreenContext) {
+  const w = winScore(ctx, run, cfg, { deliveryDays: row.supplier.delivery_days, supplierRating: row.supplier.rating });
+  const e = run.economics;
+  const why = row.notes.length ? `${w.why} ${row.notes.join(" ")}` : w.why;
+  must(
+    await db().from("results").update({
+      status: "done",
+      verdict: verdictOf(run.outcomes),
+      failed_gate: run.failedGate,
+      gate_outcomes: run.outcomes,
+      fees: e ? {
+        source: e.fees.source,
+        referralCategory: e.fees.referralCategory,
+        referralPct: e.fees.referralPct,
+        referral: r2(e.fees.referral),
+        fba: r2(e.fees.fba),
+        storage: r2(e.fees.storage),
+        returns: r2(e.fees.returns),
+        total: r2(e.fees.totalFees),
+        tier: e.fees.tier?.name ?? null,
+        fbaSource: e.fees.fbaSource,
+        dimsEstimated: e.fees.dimsEstimated,
+        outputVat: r2(e.outputVat),
+      } : null,
+      sell_price: r2(run.scoringPrice),
+      price_source: run.priceSource,
+      landed_cost: e ? Math.round(e.landed.total * 10000) / 10000 : null,
+      profit: e?.profit ?? null,
+      roi: e?.roi ?? null,
+      margin: e?.margin ?? null,
+      hurdle_price: run.hurdlePrice,
+      score: w.score,
+      group_scores: Object.fromEntries(Object.entries(w.groups).map(([k, g]) => [k, g.score == null ? null : Math.round(g.score)])),
+      why,
+      band: w.band,
+      updated_at: new Date().toISOString(),
+    }).eq("id", row.resultId),
+    "save result",
+  );
+  if (run.ruleMatches.length) {
+    must(await db().from("products").update({ compliance_flags: run.ruleMatches }).eq("id", row.product.id), "flags");
+  }
+}
+
+/** Run `fn` for a row; if it throws, mark that result as an error so the run can finish. */
+async function safely(row: Row, fn: () => Promise<void>) {
+  try {
+    await fn();
+  } catch (e) {
+    await db().from("results").update({ status: "error", error: (e as Error).message, updated_at: new Date().toISOString() }).eq("id", row.resultId);
+  }
+}
+
+/** Screen the next `limit` pending rows of a run. The page calls this until `done`. */
+export async function processRun(runId: string, limit = 20): Promise<{ done: boolean; processed: number; total: number }> {
+  const d = db();
+  const runRow = must(await d.from("runs").select("*").eq("id", runId).single(), "run") as {
+    id: string; status: string; profile_snapshot: ProfileConfig; row_count: number; token_cost: number;
+  };
+  const counts = async () => {
+    const [{ count: total }, { count: pending }] = await Promise.all([
+      d.from("results").select("id", { count: "exact", head: true }).eq("run_id", runId),
+      d.from("results").select("id", { count: "exact", head: true }).eq("run_id", runId).eq("status", "pending"),
+    ]);
+    return { total: total ?? 0, pending: pending ?? 0 };
+  };
+  if (runRow.status === "done") {
+    const c = await counts();
+    return { done: true, processed: c.total - c.pending, total: c.total };
+  }
+  if (runRow.status === "pending") must(await d.from("runs").update({ status: "processing" }).eq("id", runId), "run status");
+
+  const cfg = withDefaults(runRow.profile_snapshot);
+  const [card, rules] = await Promise.all([activeRateCard(), loadRules()]);
+  const spapi = getSpApi();
+  const keepa = getKeepa();
+
+  const pending = must(
+    await d.from("results").select("id, product_id, offer_id").eq("run_id", runId).eq("status", "pending").limit(limit),
+    "pending",
+  ) as { id: string; product_id: string; offer_id: string }[];
+
+  if (pending.length) {
+    const products = must(await d.from("products").select("*").in("id", pending.map((r) => r.product_id)), "products") as Product[];
+    const offers = must(await d.from("offers").select("*").in("id", pending.map((r) => r.offer_id)), "offers") as Offer[];
+    const suppliers = must(await d.from("suppliers").select("*").in("id", [...new Set(offers.map((o) => o.supplier_id))]), "suppliers") as Supplier[];
+    const byId = <T extends { id: string }>(xs: T[]) => new Map(xs.map((x) => [x.id, x]));
+    const P = byId(products), O = byId(offers), S = byId(suppliers);
+
+    let rows: Row[] = pending.map((r) => {
+      const offer = O.get(r.offer_id)!;
+      const product = P.get(r.product_id)!;
+      return {
+        resultId: r.id, product, offer, supplier: S.get(offer.supplier_id)!,
+        match: product.asin ? { asin: product.asin, asinCount: 1, looked: true } : null,
+        market: null, hazmat: [], restriction: null, amazonFees: null, notes: [],
+      };
+    });
+
+    // Stage 1 — gates that need only the row: compliance and budget fit. No API calls yet.
+    const pre: GateId[] = ["compliance", "budgetFit"];
+    const survivors: Row[] = [];
+    for (const row of rows) {
+      await safely(row, async () => {
+        const ctx = context(row, card, rules);
+        const run = runGates(ctx, cfg, pre);
+        if (run.failedGate) await finalize(row, run, cfg, ctx);
+        else survivors.push(row);
+      });
+    }
+    rows = survivors;
+
+    // Stage 2 — match and enrich: SP-API catalog by EAN, Keepa history (24-hour cache).
+    const needCatalog = rows.filter((r) => !FRESH(r.product.catalog_updated_at, CATALOG_TTL));
+    let catalog = new Map<string, CatalogMatch[]>();
+    if (spapi && needCatalog.length) {
+      try {
+        catalog = await spapi.catalogByEans([...new Set(needCatalog.map((r) => r.product.ean))]);
+      } catch (e) {
+        for (const r of needCatalog) r.notes.push(`Catalog lookup failed: ${(e as Error).message}.`);
+      }
+    }
+
+    const snapshots = new Map<string, KeepaSummary>();
+    const knownAsins = rows.map((r) => r.product.asin).filter((a): a is string => !!a);
+    if (knownAsins.length) {
+      const snaps = must(
+        await d.from("keepa_snapshots").select("asin, fetched_at, summary").in("asin", knownAsins)
+          .gte("fetched_at", new Date(Date.now() - KEEPA_TTL).toISOString()).order("fetched_at", { ascending: false }),
+        "snapshots",
+      ) as { asin: string; summary: KeepaSummary }[];
+      for (const s of snaps) if (!snapshots.has(s.asin)) snapshots.set(s.asin, s.summary);
+    }
+    let keepaByEan = new Map<string, KeepaProduct[]>();
+    const needKeepa = rows.filter((r) => !r.product.asin || !snapshots.has(r.product.asin));
+    if (keepa.available && needKeepa.length) {
+      try {
+        const res = await keepa.lookupByEans([...new Set(needKeepa.map((r) => r.product.ean))]);
+        keepaByEan = res.byEan;
+        if (res.tokensUsed) must(await d.from("runs").update({ token_cost: runRow.token_cost + res.tokensUsed }).eq("id", runId), "tokens");
+        const snapRows = [...res.byEan.values()].flat().map((k) => ({
+          asin: k.asin,
+          rank_series: k.series.rank,
+          buybox_series: k.series.buyBox,
+          new_series: k.series.newPrice,
+          offer_count_series: k.series.offerCount,
+          amazon_series: k.series.amazon,
+          review_count_series: k.series.reviewCount,
+          summary: k.summary,
+        }));
+        if (snapRows.length) must(await d.from("keepa_snapshots").insert(snapRows), "save snapshots");
+        for (const k of [...res.byEan.values()].flat()) snapshots.set(k.asin, k.summary);
+      } catch (e) {
+        for (const r of needKeepa) r.notes.push(`Keepa lookup failed: ${(e as Error).message}.`);
+      }
+    }
+
+    // Resolve ASINs. An EAN that maps to several ASINs keeps them all: extra ones become
+    // new products with the same offer and join this run as pending rows.
+    const resolved: Row[] = [];
+    for (const row of rows) await safely(row, async () => {
+      const p = row.product;
+      const cat = catalog.get(p.ean) ?? [];
+      const kp = keepaByEan.get(p.ean) ?? [];
+      const looked = !!spapi || keepa.available;
+      resolved.push(row);
+      if (!looked) return;
+      const catalogChecked = needCatalog.includes(row) && spapi;
+      const asins = [...new Set([...cat.map((c) => c.asin), ...kp.map((k) => k.asin), ...(p.asin ? [p.asin] : [])])];
+      const primary = p.asin ?? asins[0] ?? null;
+      row.match = { asin: primary, asinCount: Math.max(1, asins.length), looked: true };
+      if (!primary) {
+        if (catalogChecked) must(await d.from("products").update({ catalog_updated_at: new Date().toISOString() }).eq("id", p.id), "product");
+        return;
+      }
+      const c = cat.find((x) => x.asin === primary);
+      const k = kp.find((x) => x.asin === primary);
+      const update: Partial<Product> & { updated_at: string } = { asin: primary, updated_at: new Date().toISOString() };
+      if (c) {
+        Object.assign(update, {
+          title: c.title ?? p.title, brand: c.brand ?? p.brand, category: c.category ?? p.category,
+          dims_cm: c.dimsCm ?? p.dims_cm, weight_g: c.weightG ?? p.weight_g, sales_rank: c.salesRank,
+          parent_asin: c.parentAsin, variation_count: c.variationCount, catalog_updated_at: new Date().toISOString(),
+        });
+        row.hazmat = [...c.hazmat, ...(c.batteries ? ["batteries"] : [])];
+      }
+      if (k) {
+        Object.assign(update, {
+          title: update.title ?? k.title ?? p.title, brand: update.brand ?? k.brand ?? p.brand,
+          category: update.category ?? k.category ?? p.category,
+          dims_cm: update.dims_cm ?? k.dimsCm ?? p.dims_cm, weight_g: update.weight_g ?? k.weightG ?? p.weight_g,
+          parent_asin: update.parent_asin ?? k.parentAsin, variation_count: update.variation_count ?? k.variationCount,
+          keepa_updated_at: new Date().toISOString(),
+        });
+      }
+      update.referral_category = referralCategoryFor((update.category ?? p.category) as string | null, card);
+      must(await d.from("products").update(update).eq("id", p.id), "update product");
+      row.product = { ...p, ...update } as Product;
+
+      for (const extra of asins.filter((a) => a !== primary)) {
+        const existing = must(await d.from("products").select("id").eq("ean", p.ean).eq("asin", extra).maybeSingle(), "product") as { id: string } | null;
+        const productId = existing?.id ?? (must(
+          await d.from("products").insert({ ean: p.ean, asin: extra, title: p.title, brand: p.brand }).select("id").single(),
+          "insert product",
+        ) as { id: string }).id;
+        const { id: _omit, ...offerCopy } = row.offer;
+        void _omit;
+        const newOffer = must(await d.from("offers").insert({ ...offerCopy, product_id: productId }).select("id").single(), "copy offer") as { id: string };
+        const inserted = await d.from("results").upsert(
+          { run_id: runId, product_id: productId, offer_id: newOffer.id },
+          { onConflict: "run_id,product_id", ignoreDuplicates: true },
+        );
+        if (inserted.error) throw new Error(`queue ASIN ${extra}: ${inserted.error.message}`);
+      }
+    });
+    rows = resolved;
+
+    // Market data: Keepa history, else SP-API's current Buy Box and offer count.
+    const noHistory = rows.filter((r) => r.match?.asin && !snapshots.has(r.match.asin));
+    let pricing = new Map<string, CompetitivePrice>();
+    if (spapi && noHistory.length) {
+      try {
+        pricing = await spapi.getCompetitivePricing([...new Set(noHistory.map((r) => r.match!.asin!))]);
+      } catch (e) {
+        for (const r of noHistory) r.notes.push(`Pricing lookup failed: ${(e as Error).message}.`);
+      }
+    }
+    for (const row of rows) {
+      const asin = row.match?.asin;
+      if (!asin) continue;
+      const snap = snapshots.get(asin);
+      row.market = snap ? marketFromKeepa(snap) : marketFromSpApi(pricing.get(asin), row.product.sales_rank);
+    }
+
+    // Stage 3 — every gate except gating and fees, on the enriched rows.
+    const middle = GATE_ORDER.filter((g) => g !== "gating" && g !== "fees");
+    const stage3: Row[] = [];
+    for (const row of rows) {
+      await safely(row, async () => {
+        const ctx = context(row, card, rules);
+        const run = runGates(ctx, cfg, middle);
+        if (run.failedGate) await finalize(row, run, cfg, ctx);
+        else stage3.push(row);
+      });
+    }
+
+    // Stage 4 — your account: gating, and Amazon's own fee at the scoring price.
+    if (spapi) {
+      for (const row of stage3) {
+        if (!row.match?.asin) continue;
+        try {
+          const r = await spapi.getListingsRestrictions(row.match.asin);
+          row.restriction = { status: r.status, message: r.reasons.map((x) => x.message).filter(Boolean).join(" ") };
+        } catch (e) {
+          row.restriction = { status: "unknown", message: `Restriction check failed: ${(e as Error).message}` };
+        }
+      }
+      const priced = stage3
+        .map((row) => ({ row, price: resolveScoringPrice(row.market, cfg).price }))
+        .filter((x): x is { row: Row; price: number } => !!x.row.match?.asin && x.price != null && x.row.restriction?.status !== "blocked");
+      for (const c of chunks(priced, 20)) {
+        try {
+          const est = await spapi.getMyFeesEstimates(c.map((x) => ({ asin: x.row.match!.asin!, price: x.price })));
+          est.forEach((f, i) => {
+            if (f.ok && f.referral != null && f.fba != null) c[i].row.amazonFees = { referral: f.referral, fba: f.fba };
+          });
+        } catch (e) {
+          for (const x of c) x.row.notes.push(`Amazon fee estimate failed, rate card used: ${(e as Error).message}.`);
+        }
+      }
+    }
+    for (const row of stage3) {
+      await safely(row, async () => {
+        const ctx = context(row, card, rules);
+        await finalize(row, runGates(ctx, cfg), cfg, ctx);
+      });
+    }
+  }
+
+  const c = await counts();
+  const done = c.pending === 0;
+  must(
+    await d.from("runs").update({
+      processed_count: c.total - c.pending,
+      row_count: c.total,
+      ...(done ? { status: "done", finished_at: new Date().toISOString() } : {}),
+    }).eq("id", runId),
+    "run progress",
+  );
+  return { done, processed: c.total - c.pending, total: c.total };
+}

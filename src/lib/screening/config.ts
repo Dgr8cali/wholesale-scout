@@ -213,3 +213,22 @@ export function withDefaults(cfg: Partial<ProfileConfig> | null | undefined): Pr
     },
   };
 }
+
+/** Paths in a config whose value should be a number but isn't (e.g. an emptied field). */
+export function invalidNumbers(cfg: ProfileConfig): string[] {
+  const bad: string[] = [];
+  const walk = (def: unknown, val: unknown, path: string) => {
+    if (typeof def === "number") {
+      if (typeof val !== "number" || !Number.isFinite(val)) bad.push(path);
+    } else if (Array.isArray(val)) {
+      val.forEach((v, i) => walk(Array.isArray(def) && def.length ? def[0] : def, v, `${path}[${i}]`));
+    } else if (def && typeof def === "object" && val && typeof val === "object") {
+      for (const k of Object.keys(val as object)) {
+        const d = (def as Record<string, unknown>)[k] ?? (path.endsWith("scales") ? DEFAULT_SCALES.rankDrops : undefined);
+        if (d !== undefined) walk(d, (val as Record<string, unknown>)[k], path ? `${path}.${k}` : k);
+      }
+    }
+  };
+  walk(DEFAULT_PROFILE, cfg, "");
+  return bad;
+}
