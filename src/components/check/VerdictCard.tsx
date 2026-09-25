@@ -8,7 +8,9 @@ import { Button } from "@/components/ui/button";
 import type { VerdictCard as Card } from "@/lib/server/check";
 import { monthsLabel } from "@/lib/screening/order";
 import { gbp, pct } from "@/lib/ui/client";
+import { amazonLastSeen } from "@/lib/ui/when";
 import { cn } from "@/lib/utils";
+import { Checked } from "./Checked";
 
 const GATING: Record<string, { label: string; variant: "pass" | "warn" | "fail" | "muted" }> = {
   open: { label: "Open", variant: "pass" },
@@ -33,6 +35,7 @@ export function VerdictCard({ card, onFetchAnyway }: { card: Card; onFetchAnyway
   const nf = card.notFetched ? `not fetched: failed at ${card.notFetched.label.toLowerCase()}` : null;
   const g = card.gating ? GATING[card.gating.status] ?? GATING.unknown : null;
   const verdict = card.verdict ?? (card.pending ? null : "fail");
+  const seen = card.amazon && !card.amazon.sellingNow ? amazonLastSeen(card.amazon.lastSeenDays, card.amazon.lastSeenAt, card.checkedAt) : null;
   return (
     <section className="panel space-y-3 p-4" aria-label="Verdict">
       <div className="flex flex-wrap items-start gap-3">
@@ -53,6 +56,7 @@ export function VerdictCard({ card, onFetchAnyway }: { card: Card; onFetchAnyway
             {card.asin}{card.ean ? ` · EAN ${card.ean}` : ""}
             {card.amazonUrl && <> · <a className="inline-flex items-center gap-0.5 underline-offset-2 hover:underline" href={card.amazonUrl} target="_blank" rel="noreferrer">Amazon <ExternalLinkIcon className="size-3" /></a></>}
           </p>
+          {!card.pending && <Checked at={card.checkedAt} recheck={card.recheck} />}
         </div>
         {card.gating?.applyUrl && (
           <Button asChild size="sm" variant="outline">
@@ -76,7 +80,7 @@ export function VerdictCard({ card, onFetchAnyway }: { card: Card; onFetchAnyway
         <Stat label="Months to sell" note={nf ?? (card.orderQty != null ? `first order ${card.orderQty}` : card.costKnown ? undefined : "needs a cost")}>
           {card.monthsToSell != null ? monthsLabel(card.monthsToSell) : "—"}
         </Stat>
-        <Stat label="Amazon" text note={card.amazon?.lastSeenDays != null && !card.amazon.sellingNow ? `last seen ${card.amazon.lastSeenDays} days ago` : undefined}>
+        <Stat label="Amazon" text note={seen?.label}>
           {!card.amazon ? "—" : card.amazon.sellingNow ? <span className="text-fail">selling now</span> : card.amazon.lastSeenDays == null && card.keepaHistory ? "never" : "not now"}
         </Stat>
         <Stat label="Gating" text note={card.fees?.total != null ? `fees ${gbp(card.fees.total)}` : undefined}>

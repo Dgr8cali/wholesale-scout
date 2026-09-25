@@ -7,6 +7,7 @@ import { listingPack } from "../screening/pack";
 import { applyLinks } from "../spapi/parse";
 import type { CatalogMatch, RestrictionLink } from "../spapi/types";
 import { getSpApi } from "../spapi/client";
+import { amazonLastSeen } from "../ui/when";
 import { getKeepa } from "../keepa/client";
 import type { RunStats } from "../eta";
 import { estSales, firstOrderFigures, share, type StoredMarket } from "../ui/metrics";
@@ -186,7 +187,14 @@ export interface VerdictCard {
   buyBox: number | null;
   salesPerMonth: number | null;
   sellers: number | null;
-  amazon: { sellingNow: boolean; lastSeenDays: number | null } | null;
+  /** lastSeenAt: when Amazon last held an offer (Keepa's date, else worked out from the days). */
+  amazon: { sellingNow: boolean; lastSeenDays: number | null; lastSeenAt: string | null } | null;
+  /** When this verdict was reached (the row last screened). */
+  checkedAt: string | null;
+  /** What to check again for Re-check: the check's own input. */
+  recheck: { text: string; supplier: string | null } | null;
+  /** Competitors' stock the extension last read for the product, each seller with its time. */
+  stock: { at: string; sellers: { sellerId: string; name: string | null; stock: number | null; limited: boolean; source: string | null; at: string }[] } | null;
   yourSharePerMonth: number | null;
   orderQty: number | null;
   monthsToSell: number | null;
@@ -202,30 +210,33 @@ export interface VerdictCard {
   runUrl: string;
 }
 
+type CompetitorStock = { at: string; sellers: { sellerId: string; name: string | null; stock: number | null; limited: boolean; source?: string | null; at?: string }[] };
+
 type ResultRow = {
   id: string; status: string; verdict: VerdictCard["verdict"]; failed_gate: string | null; score: number | null; band: string | null; why: string | null;
   landed_cost: number | null; profit: number | null; roi: number | null; margin: number | null; sell_price: number | null; price_source: string | null;
   hurdle_price: number | null; gate_outcomes: VerdictCard["gates"] | null;
   fees: { referral?: number | null; fba?: number | null; total?: number | null; source?: string | null } | null;
   inputs: { market?: (StoredMarket & { amazonNow?: boolean | null }) | null; maxLandedGbp?: number | null; restriction?: { status: string; message: string; links?: RestrictionLink[] } | null; pack?: { ratio: number } | null } | null;
-  product: { asin: string | null; ean: string; title: string | null; image_url: string | null } | null;
+  product: { asin: string | null; ean: string; title: string | null; image_url: string | null; competitor_stock?: CompetitorStock | null } | null;
+  updated_at?: string | null;
   offer: { moq: number | null; cost_known?: boolean; unit_cost_gbp?: number } | null;
 };
 
 /** The compact verdict for a check's (first) row: the card on the run page and the extension's JSON. */
 export async function verdictCard(runId: string): Promise<VerdictCard | null> {
   const d = db();
-  const run = must(await d.from("runs").select("id, status, profile_snapshot, stats").eq("id", runId).maybeSingle(), "run") as
-    { id: string; status: string; profile_snapshot: ProfileConfig; stats: RunStats | null } | null;
+  const run = must(await d.from("runs").select("id, status, profile_snapshot, stats, finished_at").eq("id", runId).maybeSingle(), "run") as
+    { id: string; status: string; profile_snapshot: ProfileConfig; stats: RunStats | null; finished_at: string | null } | null;
   if (!run) return null;
   const r = (must(
-    await d.from("results").select("id, status, verdict, failed_gate, score, band, why, landed_cost, profit, roi, margin, sell_price, price_source, hurdle_price, gate_outcomes, fees, inputs, product_id, offer_id")
+    await d.from("results").select("id, status, verdict, failed_gate, score, band, why, landed_cost, profit, roi, margin, sell_price, price_source, hurdle_price, gate_outcomes, fees, inputs, product_id, offer_id, updated_at")
       .eq("run_id", runId).order("score", { ascending: false, nullsFirst: false }).limit(1),
     "result",
   ) as unknown as (ResultRow & { product_id: string; offer_id: string })[])[0];
   if (r) {
     const [p, o] = await Promise.all([
-      d.from("products").select("asin, ean, title, image_url, dims_cm, weight_g, referral_category").eq("id", r.product_id).maybeSingle(),
+      d.from("products").select("asin, ean, title, image_url, dims_cm, weight_g, referral_category, competitor_stock").eq("id", r.product_id).maybeSingle(),
       d.from("offers").select("moq, cost_known, unit_cost_gbp").eq("id", r.offer_id).maybeSingle(),
     ]);
     r.product = p.data as ResultRow["product"];
@@ -240,6 +251,10 @@ export async function verdictCard(runId: string): Promise<VerdictCard | null> {
   const order = r && costKnown && r.score != null ? firstOrderFigures(m, r.landed_cost, moq, lineCap) : null;
   const restriction = r?.inputs?.restriction ?? null;
   const asin = r?.product?.asin ?? null;
+  const checkedAt = r?.status === "done" ? r.updated_at ?? run.finished_at : null;
+  const seen = m ? amazonLastSeen(m.amazonLastSeenDays, m.amazonLastSeenAt, checkedAt) : null;
+  const cs = r?.product?.competitor_stock;
+  const chk = (run.stats as { check?: CheckStats } | null)?.check;
   return {
     runId,
     resultId: r?.id ?? null,
@@ -265,7 +280,12 @@ export async function verdictCard(runId: string): Promise<VerdictCard | null> {
     buyBox: num(m?.currentBuyBox),
     salesPerMonth: estSales(m).value,
     sellers: m?.fbaOffers ?? m?.offersNow ?? null,
-    amazon: m ? { sellingNow: !!m.amazonNow || m.amazonLastSeenDays === 0, lastSeenDays: m.amazonLastSeenDays ?? null } : null,
+    amazon: m ? { sellingNow: !!m.amazonNow || m.amazonLastSeenDays === 0, lastSeenDays: m.amazonLastSeenDays ?? null, lastSeenAt: seen?.at || null } : null,
+    checkedAt,
+    recheck: chk ? { text: chk.input, supplier: chk.supplier ?? null } : null,
+    stock: cs?.sellers?.length
+      ? { at: cs.at, sellers: cs.sellers.map((s) => ({ sellerId: s.sellerId, name: s.name, stock: s.stock, limited: s.limited, source: s.source ?? null, at: s.at ?? cs.at })) }
+      : null,
     yourSharePerMonth: share(m).value,
     orderQty: order?.qty.value ?? null,
     monthsToSell: order?.months.value ?? null,

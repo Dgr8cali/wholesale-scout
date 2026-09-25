@@ -13,6 +13,7 @@ export interface StoredMarket {
   currentBuyBox?: number | null;
   rankNow?: number | null;
   amazonLastSeenDays?: number | null;
+  amazonLastSeenAt?: string | null;
   rankDrops12m?: number | null;
   lastOfferDaysAgo?: number | null;
   lastBuyBox12m?: number | null;

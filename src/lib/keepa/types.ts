@@ -22,6 +22,8 @@ export interface KeepaSummary {
   fbaOffers: number | null;
   /** Days since Amazon last held an offer; null when never seen in the history. */
   amazonLastSeenDays: number | null;
+  /** When Amazon last held an offer (now, while it does); null when never seen. */
+  amazonLastSeenAt?: string | null;
   /** Largest share of the year any single seller held the Buy Box, %. */
   topSellerBbSharePct: number | null;
   /** Largest one-day percentage jump in review count. */

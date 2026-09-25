@@ -120,9 +120,15 @@
         c.pending ? ws.h("span", { class: "muted", text: "pending: Keepa and gating still coming" }) : null,
       ]));
       if (c.title) panel.append(ws.h("div", { class: "muted", style: "margin-top:4px", text: c.title }));
+      if (c.checkedAt && !c.pending) {
+        panel.append(ws.h("div", { class: "muted", style: "margin-top:2px;font-size:11px" }, [
+          ws.h("span", { title: ws.stamp(c.checkedAt), text: `checked ${ws.ago(c.checkedAt)} · ` }),
+          ws.h("a", { href: "#", text: "Re-check", title: "Screen again now instead of reusing this check", onclick: (e) => { e.preventDefault(); load(true); } }),
+        ]));
+      }
       // Failed before Keepa: sales and share weren't fetched (Buy Box, sellers, Amazon are from current offers).
       const nf = c.notFetched ? ws.h("span", { class: "muted", title: `Failed at ${c.notFetched.label}: Keepa not fetched`, text: "not fetched" }) : null;
-      const amazon = !c.amazon ? "—" : c.amazon.sellingNow ? "selling now" : c.amazon.lastSeenDays != null ? `last seen ${c.amazon.lastSeenDays} days ago` : c.keepaHistory ? "never" : "not now";
+      const amazon = !c.amazon ? "—" : c.amazon.sellingNow ? "selling now" : ws.lastSeen(c.amazon.lastSeenDays, c.amazon.lastSeenAt) ?? (c.keepaHistory ? "never" : "not now");
       const gating = c.gating ? ({ open: "Open", approval_required: "Approval needed", blocked: "Blocked" }[c.gating.status] ?? c.gating.status) : "—";
       panel.append(ws.h("div", { class: "grid" }, [
         kv("Buy Box", ws.gbp(c.buyBox)),
@@ -163,7 +169,7 @@
       ws.h("button", { class: "b", text: "☆ Star", disabled: !card, onclick: () => act("POST", "/api/extension/star", "Starred") }),
       ws.h("button", { class: "b", text: "Watch", title: "Add to the watchlist with the condition suggested from what blocked it", disabled: !card, onclick: () => act("POST", "/api/extension/watch", "On the watchlist") }),
       ws.h("button", { class: "b", text: "Open in app", disabled: !card, onclick: () => ws.send({ type: "open", url: `${settings.appUrl}${card.runUrl}` }) }),
-      ws.h("button", { class: "b", text: "Re-check", title: "Screen again now instead of reusing today's check", onclick: () => load(true) }),
+      !card?.checkedAt || card.pending ? ws.h("button", { class: "b", text: "Re-check", title: "Screen again now instead of reusing today's check", onclick: () => load(true) }) : null,
     ]));
     if (message) panel.append(ws.h("p", { class: message.isError ? "err" : "muted", text: message.text }));
   }
@@ -177,11 +183,18 @@
       ]),
       ws.h("div", { class: "muted", text: "Adds 999 of each FBA seller's offer to your Amazon cart, one at a time, reads what Amazon allows, then removes it. Amazon's terms prohibit automated data gathering; use sparingly." }),
     ]);
-    if (stockRows) {
-      sec.append(ws.h("ul", {}, stockRows.map((s) => ws.h("li", {}, [
+    // This reading, else the last one saved to the app.
+    const rows = stockRows ?? card?.stock?.sellers ?? null;
+    if (!stockRows && rows) {
+      const stale = ws.isStale(card.stock.at);
+      sec.append(ws.h("div", { class: stale ? "err" : "muted", style: "font-size:11px;margin-top:4px", text: stale ? "Last reading is over 7 days old (stale): read again for today's stock." : "Last reading saved in the app:" }));
+    }
+    if (rows) {
+      sec.append(ws.h("ul", {}, rows.map((s) => ws.h("li", {}, [
         `${s.name ?? s.sellerId}: `,
         ws.h("b", { text: s.error ? "?" : s.stock == null ? "…" : ws.num(s.stock) }),
         s.limited ? " (per-customer limit, not stock)" : s.ambiguous ? " allowed (stock or a per-customer limit: Amazon didn't say)" : "",
+        s.at ? ws.h("div", { class: ws.isStale(s.at) ? "err" : "muted", style: "font-size:11px", text: `read ${ws.stamp(s.at)}${ws.isStale(s.at) ? " (stale)" : ""}` }) : "",
         s.source ? ws.h("div", { class: "muted", style: "font-size:11px", text: `from ${s.source}` }) : "",
         s.error ? ws.h("span", { class: "err", text: ` ${s.error}` }) : "",
       ]))));
@@ -256,9 +269,10 @@
         } catch (e) {
           stockRows[i].error = e.message;
         }
+        stockRows[i].at = new Date().toISOString();
         render();
       }
-      const saved = await ws.api("POST", "/api/extension/stock", { asin, sellers: stockRows.map((x) => ({ sellerId: x.sellerId, name: x.name, fba: x.fba, stock: x.stock, limited: x.limited, source: x.source ?? x.error ?? null })) });
+      const saved = await ws.api("POST", "/api/extension/stock", { asin, sellers: stockRows.map((x) => ({ sellerId: x.sellerId, name: x.name, fba: x.fba, stock: x.stock, limited: x.limited, source: x.source ?? x.error ?? null, at: x.at })) });
       status(saved.ok ? "Stock saved to the app." : saved.error, !saved.ok);
     } catch (e) {
       status(e.message, true);

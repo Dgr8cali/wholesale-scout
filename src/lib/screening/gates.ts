@@ -54,6 +54,7 @@ export interface MarketData {
   offers90dAgo: number | null;
   fbaOffers: number | null;
   amazonLastSeenDays: number | null;
+  amazonLastSeenAt?: string | null;
   topSellerBbSharePct: number | null;
   reviewJumpPct: number | null;
   youngerThanParent: boolean | null;

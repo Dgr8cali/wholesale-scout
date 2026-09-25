@@ -1,8 +1,11 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { QogitaCartProvider } from "@/components/QogitaCart";
 import { Detail } from "./Detail";
 import type { Result } from "./types";
+
+// Re-check navigates with the app router, which isn't mounted here.
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push() {} }) }));
 
 const offer = (seller: string, price: number, mov: number) => ({ qid: `q-${seller}`, seller, unit: 1, inventory: 500, deliveryWeeks: 1, basePrice: price, baseMov: mov, tiers: [{ price, mov }] });
 

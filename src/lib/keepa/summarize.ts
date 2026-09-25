@@ -192,11 +192,12 @@ export function summarize(i: SummaryInput): KeepaSummary {
   const avgRank90dYearAgo = mean(daily(i.rank, yearAgo - 90 * DAY, yearAgo));
 
   // Amazon holds an offer from each valid price point until the next point.
-  let amazonLastSeenDays: number | null = null;
+  let amazonLastSeenDays: number | null = null, amazonLastSeenAt: string | null = null;
   for (let k = i.amazon.length - 1; k >= 0; k--) {
     if (Number.isFinite(i.amazon[k][1])) {
       const until = k + 1 < i.amazon.length ? i.amazon[k + 1][0] : now;
       amazonLastSeenDays = Math.max(0, Math.floor((now - until) / DAY));
+      amazonLastSeenAt = new Date(Math.min(until, now)).toISOString();
       break;
     }
   }
@@ -248,6 +249,7 @@ export function summarize(i: SummaryInput): KeepaSummary {
     // Keepa uses negative numbers for "not collected".
     fbaOffers: i.fbaOfferCount != null && i.fbaOfferCount >= 0 ? i.fbaOfferCount : null,
     amazonLastSeenDays,
+    amazonLastSeenAt,
     topSellerBbSharePct,
     topSellers,
     buyBoxSellerNow,

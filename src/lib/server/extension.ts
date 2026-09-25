@@ -72,7 +72,12 @@ export async function watchAsin(asin: string, condition?: WatchCondition | null)
   return setWatch({ ean: p.ean, asin: p.asin, condition: c ?? null });
 }
 
-export interface StockSeller { sellerId: string; name: string | null; fba: boolean; stock: number | null; limited: boolean; source?: string | null }
+export interface StockSeller { sellerId: string; name: string | null; fba: boolean; stock: number | null; limited: boolean; source?: string | null; at?: string | null }
+
+const readAt = (at: unknown) => {
+  const t = typeof at === "string" ? Date.parse(at) : NaN;
+  return new Date(Number.isFinite(t) && t <= Date.now() + 60_000 ? t : Date.now()).toISOString();
+};
 
 /** Competitors' stock read on Amazon for this ASIN, kept on the product. */
 export async function saveCompetitorStock(asin: string, sellers: StockSeller[]) {
@@ -83,6 +88,8 @@ export async function saveCompetitorStock(asin: string, sellers: StockSeller[]) 
     stock: s.stock == null || !Number.isFinite(Number(s.stock)) ? null : Math.max(0, Math.round(Number(s.stock))), limited: !!s.limited,
     // Where the number came from ("basket line: “Only 2 left”"), or why there isn't one.
     source: s.source ? String(s.source).slice(0, 200) : null,
+    // When this seller was read (a reading of several sellers takes a while); now if not sent.
+    at: readAt(s.at),
   }));
   must(await db().from("products").update({ competitor_stock: { at: new Date().toISOString(), sellers: clean } }).eq("id", p.id), "save stock");
   return true;

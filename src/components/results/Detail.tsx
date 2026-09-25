@@ -18,6 +18,8 @@ import { useState } from "react";
 import Link from "next/link";
 import type { Fav, Result, Seller } from "./types";
 import { WatchEditor } from "./WatchEditor";
+import { Checked } from "@/components/check/Checked";
+import { amazonLastSeen, isStale, stamp } from "@/lib/ui/when";
 import type { WatchCondition } from "@/lib/watch";
 
 const STATUS_ICON: Record<string, string> = { pass: "✓", warn: "!", fail: "✕", skipped: "–", off: "·" };
@@ -81,6 +83,7 @@ function FromExtension({ r }: { r: Result }) {
   const dg = r.product?.sc_dg;
   if (!stock && !dg) return null;
   const day = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  const stale = stock ? isStale(stock.at) : false;
   return (
     <div className="mt-3 space-y-1 text-xs">
       <p className="font-semibold uppercase tracking-wide text-muted-foreground">From the extension</p>
@@ -94,15 +97,21 @@ function FromExtension({ r }: { r: Result }) {
       )}
       {stock && (
         <div>
-          <p className="text-muted-foreground">Competitors&apos; stock · {day(stock.at)}</p>
+          <p className="text-muted-foreground">
+            Competitors&apos; stock{stale && <span className="font-medium text-warn"> · stale (over 7 days old): read it again in the extension</span>}
+          </p>
           <ul className="space-y-0.5">
-            {stock.sellers.map((s) => (
-              <li key={s.sellerId}>
-                {s.name ?? s.sellerId}{s.fba ? " (FBA)" : ""}: <span className="num font-medium">{s.stock == null ? "?" : s.stock.toLocaleString("en-GB")}</span>
-                {s.limited && <span className="text-muted-foreground"> (a per-customer limit, not stock)</span>}
-                {s.source && <span className="text-muted-foreground"> · from {s.source}</span>}
-              </li>
-            ))}
+            {stock.sellers.map((s) => {
+              const at = s.at ?? stock.at;
+              return (
+                <li key={s.sellerId}>
+                  {s.name ?? s.sellerId}{s.fba ? " (FBA)" : ""}: <span className="num font-medium">{s.stock == null ? "?" : s.stock.toLocaleString("en-GB")}</span>
+                  {s.limited && <span className="text-muted-foreground"> (a per-customer limit, not stock)</span>}
+                  <span className={isStale(at) ? "text-warn" : "text-muted-foreground"}> · read {stamp(at)}{isStale(at) ? " (stale)" : ""}</span>
+                  {s.source && <span className="text-muted-foreground"> · from {s.source}</span>}
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}
@@ -122,8 +131,14 @@ export function Detail({ r, fav, onNote, onWaive, onWatch, stacked = false, budg
   /** Put it on the watchlist with a flip condition (absent where there's no watchlist). */
   onWatch?: (r: Result, condition: WatchCondition | null, noSupplier: boolean) => Promise<void>;
 }) {
+  const asin = r.product?.asin;
+  const costKnown = r.offer?.cost_known !== false && r.landed_cost != null;
+  const recheck = asin && r.status === "done"
+    ? { text: costKnown ? `${asin}, ${Number(r.landed_cost).toFixed(2)}` : asin, supplier: r.offer?.supplier?.name ?? null }
+    : null;
   return (
     <div className="space-y-4">
+    {r.status === "done" && <Checked at={r.updated_at} recheck={recheck} />}
     <div className={cn("grid gap-4", !stacked && "lg:grid-cols-[2fr_1fr_1fr]")}>
       <div>
         <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Gates</p>
@@ -160,6 +175,7 @@ export function Detail({ r, fav, onNote, onWaive, onWatch, stacked = false, budg
       </div>
       <div>
         <SellerGap r={r} />
+        <AmazonSeen r={r} />
         <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Per unit at {gbp(r.sell_price)}</p>
         {r.fees ? (
           <dl className="num grid grid-cols-[1fr_auto] gap-x-3 gap-y-0.5 text-xs">
@@ -231,6 +247,21 @@ export function Detail({ r, fav, onNote, onWaive, onWatch, stacked = false, budg
     {r.inputs?.qogita && <QogitaOfferList q={r.inputs.qogita} stacked={stacked} />}
     {r.inputs?.qogita && <AddToCart r={r} budgetGbp={budgetGbp} />}
     </div>
+  );
+}
+
+/** Amazon on the listing: selling now, or when it was last seen (the date and how long ago). */
+function AmazonSeen({ r }: { r: Result }) {
+  const m = r.inputs?.market as (NonNullable<NonNullable<Result["inputs"]>["market"]> & { amazonNow?: boolean | null }) | null | undefined;
+  if (!m) return null;
+  const now = !!m.amazonNow || m.amazonLastSeenDays === 0;
+  const seen = now ? null : amazonLastSeen(m.amazonLastSeenDays, m.amazonLastSeenAt, r.updated_at);
+  const text = now ? "selling now" : seen ? seen.label : m.hasHistory ? "never on the listing" : "not selling now (no history fetched)";
+  return (
+    <p className="mb-2 text-xs">
+      <span className="text-muted-foreground">Amazon: </span>
+      <span className={now ? "font-medium text-fail" : undefined}>{text}</span>
+    </p>
   );
 }
 
