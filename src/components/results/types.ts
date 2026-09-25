@@ -43,6 +43,7 @@ export interface Run {
   id: string; name?: string | null; source: string; status: string; started_at: string; finished_at: string | null;
   row_count: number; processed_count: number; token_cost: number; profile: { name: string } | null; error: string | null;
   profile_snapshot?: Partial<import("@/lib/screening/config").ProfileConfig> | null;
+  stats?: import("@/lib/eta").RunStats | null;
 }
 
 export interface Seller {
@@ -66,6 +67,8 @@ export interface Progress {
   eta?: Eta;
   working: boolean;
   tokenCost: number;
+  /** A re-screen in progress: rows it hasn't reached yet. */
+  rescreen?: { left: number; startedAt: string } | null;
 }
 
 

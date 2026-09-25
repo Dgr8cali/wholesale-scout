@@ -8,6 +8,10 @@ export interface RunStats {
   amazonPerMin?: number | null;
   /** Keepa's own figures, as last read by the Keepa stage. */
   keepa?: { tokensLeft: number; refillRate: number; refillInMs: number; at: string } | null;
+  /** The profile the run was last screened with: its name and when it was last saved. */
+  profile?: { id: string; name: string; savedAt: string | null; appliedAt: string } | null;
+  /** A re-screen in progress (or the last one): rows updated before startedAt still need it. */
+  rescreen?: { startedAt: string; finishedAt: string | null; storedOnly: boolean; resultIds?: string[] | null; rescored: number; requeued: number } | null;
   /** Keepa tokens this run spent per UK day (see keepaLedger). */
   keepaByDay?: Record<string, number> | null;
 }

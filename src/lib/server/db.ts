@@ -67,12 +67,12 @@ export async function loadRules(): Promise<CategoryRule[]> {
   return rows as CategoryRule[];
 }
 
-export async function loadProfile(id?: string | null): Promise<{ id: string; name: string; config: ProfileConfig }> {
+export async function loadProfile(id?: string | null): Promise<{ id: string; name: string; config: ProfileConfig; updated_at?: string | null }> {
   await ensureSeed();
-  const q = db().from("profiles").select("id, name, config");
+  const q = db().from("profiles").select("id, name, config, updated_at");
   const res = id ? await q.eq("id", id).maybeSingle() : await q.eq("is_default", true).maybeSingle();
   let row = must(res, "profile") as { id: string; name: string; config: ProfileConfig } | null;
-  if (!row) row = must(await db().from("profiles").select("id, name, config").limit(1).single(), "profile");
+  if (!row) row = must(await db().from("profiles").select("id, name, config, updated_at").limit(1).single(), "profile");
   return { ...row, config: withDefaults(row.config) };
 }
 

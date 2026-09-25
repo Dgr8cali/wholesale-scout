@@ -132,7 +132,11 @@ export async function ingest(payload: IngestPayload): Promise<{ runId: string; r
   }
 
   const source = payload.files.map((f) => f.fileName).join(", ");
-  const runFields = { profile_id: profile.id, profile_snapshot: profile.config, source, status: "pending", row_count: best.size };
+  const runFields = {
+    profile_id: profile.id, profile_snapshot: profile.config, source, status: "pending", row_count: best.size,
+    // Which version of the profile this run was screened with, for the run header.
+    stats: { profile: { id: profile.id, name: profile.name, savedAt: profile.updated_at ?? null, appliedAt: new Date().toISOString() } },
+  };
   let inserted = await d.from("runs").insert({ ...runFields, name: payload.name?.trim() || source }).select("id").single();
   // Before the run-names migration there's no name column: the file names still show.
   if (inserted.error && /name/.test(inserted.error.message) && /column|schema cache/i.test(inserted.error.message)) {

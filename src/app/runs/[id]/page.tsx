@@ -173,6 +173,9 @@ export default function RunPage() {
     let lastReload = 0;
     let lastKick = 0;
     let kicking = false;
+    // A re-screen carries itself on; if it stalls (no progress for a minute), resume it.
+    let lastLeft = -1;
+    let leftSince = Date.now();
     cancel.current = () => {
       stopped = true;
     };
@@ -181,14 +184,25 @@ export default function RunPage() {
         const p = await api<Progress>(`/api/runs/${id}/progress`);
         if (stopped) return;
         setProgress(p);
-        const changed = p.processed !== lastProcessed;
+        const left = p.rescreen?.left ?? 0;
+        if (left !== lastLeft) {
+          lastLeft = left;
+          leftSince = Date.now();
+        }
+        const changed = p.processed !== lastProcessed || (left > 0 && Date.now() - lastReload > 4_000) || (!left && lastLeft > 0);
         if (lastProcessed === -1 || (changed && Date.now() - lastReload > 4_000) || (p.done && changed)) {
           lastProcessed = p.processed;
           lastReload = Date.now();
           apply(await fetchRun());
         }
+        if (left > 0 && !kicking && Date.now() - leftSince > 60_000) {
+          leftSince = Date.now();
+          kicking = true;
+          fetch(`/api/runs/${id}/rescreen`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ continuing: true }) })
+            .catch(() => {}).finally(() => { kicking = false; });
+        }
         // Never overlap our own call; a worker holding the lease shows as working.
-        if (!p.done && !p.working && !kicking && Date.now() - lastKick > 15_000) {
+        if (!p.done && !left && !p.working && !kicking && Date.now() - lastKick > 15_000) {
           lastKick = Date.now();
           kicking = true;
           fetch(`/api/runs/${id}/process`, { method: "POST" }).catch(() => {}).finally(() => {
@@ -218,12 +232,13 @@ export default function RunPage() {
     setError(null);
     try {
       cancel.current();
-      const r = await api<{ rescored: number; requeued: number }>(`/api/runs/${id}/rescreen`, {
+      const r = await api<{ rescored: number; requeued: number; remaining: number; profile: { name: string } }>(`/api/runs/${id}/rescreen`, {
         method: "POST",
         json: { profileId: rescreenProfile || undefined },
       });
       toast.success(
-        `Re-screened ${r.rescored} rows from stored data` +
+        `Re-screening with ${r.profile.name} as saved now: ${r.rescored.toLocaleString("en-GB")} rows done` +
+          (r.remaining ? `, ${r.remaining.toLocaleString("en-GB")} more carrying on in the background` : "") +
           (r.requeued ? `; ${r.requeued} need data they never fetched and are being looked up now.` : "."),
       );
       setNonce((n) => n + 1);
@@ -369,7 +384,7 @@ export default function RunPage() {
           </h1>
           {run.name && run.name !== run.source && <p className="text-xs text-muted-foreground">{run.source}</p>}
           <p className="text-sm text-muted-foreground">
-            {run.profile?.name ?? "Profile"} · started {when(run.started_at)} · {products.length || total} products ({total} listings) · {run.token_cost} Keepa tokens
+            {run.profile?.name ?? "Profile"}{profileVersion(run)} · started {when(run.started_at)} · {products.length || total} products ({total} listings) · {run.token_cost} Keepa tokens
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -394,13 +409,15 @@ export default function RunPage() {
       {progress && !progress.done && (
         <div className="panel space-y-2 p-4">
           <div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
-            <span className="font-medium">Screening {progress.processed} of {progress.total}</span>
+            <span className="font-medium">
+              {progress.rescreen?.left ? `Re-screening: ${(progress.total - progress.rescreen.left).toLocaleString("en-GB")} of ${progress.total.toLocaleString("en-GB")} rows` : `Screening ${progress.processed} of ${progress.total}`}
+            </span>
             <span className="text-muted-foreground">
               {progress.working ? "Working in the background: you can close this page." : "Resuming…"}
             </span>
           </div>
           <div className="h-2 overflow-hidden rounded-full bg-muted">
-            <div className="h-full bg-brand transition-all" style={{ width: `${progress.total ? (progress.processed / progress.total) * 100 : 0}%` }} />
+            <div className="h-full bg-brand transition-all" style={{ width: `${progress.total ? ((progress.rescreen?.left ? progress.total - progress.rescreen.left : progress.processed) / progress.total) * 100 : 0}%` }} />
           </div>
           {progress.eta && <p className="text-sm font-medium" aria-live="polite">{etaLabel(progress.eta)[0].toUpperCase() + etaLabel(progress.eta).slice(1)}</p>}
           <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
@@ -466,4 +483,11 @@ function RunSkeleton() {
       </div>
     </div>
   );
+}
+
+/** " (saved 25 Sept, 12:31; applied 25 Sept, 13:05)": which version of the profile the rows reflect. */
+function profileVersion(run: Run): string {
+  const p = run.stats?.profile;
+  if (!p) return "";
+  return ` (${p.savedAt ? `version saved ${when(p.savedAt)}; ` : ""}applied ${when(p.appliedAt)})`;
 }

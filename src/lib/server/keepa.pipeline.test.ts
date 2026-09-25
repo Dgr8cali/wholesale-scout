@@ -212,16 +212,36 @@ describe("Keepa path", () => {
     expect(results(second.runId).every((r) => (r.inputs as { market: { hasHistory: boolean } }).market.hasHistory)).toBe(true);
   });
 
-  it("Re-screen from stored data only fetches nothing and leaves rows that need data as they were", async () => {
+  it("Re-screen from stored data only fetches nothing but still re-evaluates every row with the current config", async () => {
     k.live = false;
     const { runId } = await ingest({ files: [upload()] });
     await until(runId);
-    const before = results(runId).map((r) => ({ status: r.status, why: r.why }));
     k.live = true;
+    // The profile changes after screening: a price band these rows now fall outside.
+    const prof = fake.tables.profiles.find((p) => p.is_default)!;
+    const cfg = prof.config as { gates?: Record<string, unknown> };
+    prof.config = { ...cfg, gates: { ...(cfg.gates ?? {}), priceBand: { mode: "fail", min: 30, max: 60 } } };
+    prof.updated_at = "2026-09-25T12:31:45.000Z";
     const r = await rescreenRun(runId, null, { storedOnly: true });
-    expect(r).toMatchObject({ requeued: 0, leftAsIs: 2 });
+    expect(r).toMatchObject({ requeued: 0, rescored: 2, remaining: 0, profile: { savedAt: "2026-09-25T12:31:45.000Z" } });
     expect(k.asinCalls).toEqual([]);
-    expect(results(runId).map((x) => ({ status: x.status, why: x.why }))).toEqual(before);
+    for (const x of results(runId)) {
+      expect(x.status).toBe("done");
+      expect(gate(x, "priceBand")!.detail).toMatch(/£30\.00/);
+    }
+    const run = fake.tables.runs.find((x) => x.id === runId)!;
+    expect(run.status).toBe("done");
+    expect((run.stats as { profile: { savedAt: string } }).profile.savedAt).toBe("2026-09-25T12:31:45.000Z");
+  });
+
+  it("a large Re-screen stops at its time budget and carries on where it left off", async () => {
+    const { runId } = await ingest({ files: [upload()] });
+    await until(runId);
+    const first = await rescreenRun(runId, null, { budgetMs: -1 });
+    expect(first).toMatchObject({ rescored: 0, remaining: 2 });
+    expect((await processRun(runId)).done).toBe(false);
+    const next = await rescreenRun(runId, null, { continuing: true });
+    expect(next).toMatchObject({ rescored: 2, remaining: 0 });
     expect(fake.tables.runs.find((x) => x.id === runId)!.status).toBe("done");
   });
 

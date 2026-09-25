@@ -229,7 +229,8 @@ function feeComparison(price: number, ctx: ScreenContext, cfg: ProfileConfig) {
   };
 }
 
-async function finalize(row: Row, run: GateRun, cfg: ProfileConfig, ctx: ScreenContext) {
+/** A screened row's result columns: verdict, gates, money, score, why and the inputs behind them. */
+function resultFields(row: Row, run: GateRun, cfg: ProfileConfig, ctx: ScreenContext) {
   const w = winScore(ctx, run, cfg, { deliveryDays: row.supplier.delivery_days, supplierRating: row.supplier.rating });
   const e = run.economics;
   const notes = [...row.dataNotes, ...row.notes];
@@ -242,8 +243,7 @@ async function finalize(row: Row, run: GateRun, cfg: ProfileConfig, ctx: ScreenC
     restriction: row.restriction, amazonFees: row.amazonFees, lookup: row.lookup, sellers: row.sellers, notes: row.dataNotes,
     qogita: row.qogita ? { ...row.qogita, ...pick(row.qogita, cfg) } : null,
   };
-  must(
-    await db().from("results").update({
+  return {
       status: "done",
       verdict: verdictOf(run.outcomes),
       failed_gate: run.failedGate,
@@ -278,12 +278,32 @@ async function finalize(row: Row, run: GateRun, cfg: ProfileConfig, ctx: ScreenC
       inputs,
       error: null,
       updated_at: new Date().toISOString(),
-    }).eq("id", row.resultId),
-    "save result",
-  );
+  };
+}
+
+async function saveFlags(row: Row, run: GateRun) {
   if (run.ruleMatches.length) {
     must(await db().from("products").update({ compliance_flags: run.ruleMatches }).eq("id", row.product.id), "flags");
   }
+}
+
+async function finalize(row: Row, run: GateRun, cfg: ProfileConfig, ctx: ScreenContext) {
+  must(await db().from("results").update(resultFields(row, run, cfg, ctx)).eq("id", row.resultId), "save result");
+  await saveFlags(row, run);
+}
+
+/**
+ * Save many screened rows in one request per 200 (an upsert on id updates only the columns
+ * given): a re-screen of thousands of rows fits in a function's time limit this way.
+ */
+async function saveResults(runId: string, items: { row: Row; run: GateRun; ctx: ScreenContext }[], cfg: ProfileConfig) {
+  for (const c of chunks(items, 200)) {
+    const payload = c.map(({ row, run, ctx }) => ({ id: row.resultId, run_id: runId, product_id: row.product.id, offer_id: row.offer.id, ...resultFields(row, run, cfg, ctx) }));
+    const res = await db().from("results").upsert(payload, { onConflict: "id" });
+    // One bad row shouldn't lose the batch: fall back to saving them one by one.
+    if (res.error) await mapLimit(c, 10, ({ row, run, ctx }) => safely(row, () => finalize(row, run, cfg, ctx)));
+  }
+  await mapLimit(items.filter((x) => x.run.ruleMatches.length), 10, ({ row, run }) => saveFlags(row, run));
 }
 
 type Approved = Map<string, { status: "approved"; date: string | null }>;
@@ -592,75 +612,116 @@ async function backfillDormancy(rows: { match: { asin: string | null } | null; m
 const nums = (s: Point[] | null): Point[] => (s ?? []).map(([t, v]) => [t, v == null ? NaN : v]);
 
 /**
- * Re-run gates and score for every row of a run with the current profile, from the data
- * stored when it was screened: no Amazon or Keepa calls. Rows that never collected the
- * data a gate now needs (they stopped early last time, or were screened before inputs
- * were stored) go back to pending, and the processor fetches only what they lack.
+ * Re-run every gate and the score for every row of a run with the profile as saved now, from
+ * the data stored when it was screened: no Amazon or Keepa calls. Rows that never collected
+ * data a gate now needs go back to pending for the processor to fetch just that; with
+ * storedOnly they're re-evaluated on what they have instead (a gate without its data is
+ * skipped), so no row keeps results from an older config.
+ *
+ * Works for up to `budgetMs` a call and reports what's left: rows still dated before the
+ * re-screen started. Call again with `continuing` to carry on.
  */
 export async function rescreenRun(
   runId: string,
   profileId?: string | null,
-  /** storedOnly: never fetch; rows that would need data are left exactly as they are. */
-  opts: { resultIds?: string[]; storedOnly?: boolean } = {},
-): Promise<{ rescored: number; requeued: number; leftAsIs: number }> {
+  opts: { resultIds?: string[]; storedOnly?: boolean; budgetMs?: number; continuing?: boolean } = {},
+): Promise<{ rescored: number; requeued: number; remaining: number; profile: { name: string; savedAt: string | null } }> {
+  const deadline = Date.now() + (opts.budgetMs ?? 40_000);
   const d = db();
-  const runRow = must(await d.from("runs").select("id, profile_id").eq("id", runId).single(), "run") as { id: string; profile_id: string | null };
-  const profile = await loadProfile(profileId || runRow.profile_id);
-  const cfg = profile.config;
+  const runRow = must(await d.from("runs").select("id, profile_id, profile_snapshot, stats").eq("id", runId).single(), "run") as {
+    id: string; profile_id: string | null; profile_snapshot: ProfileConfig; stats?: RunStats | null;
+  };
+  const stats: RunStats = { ...(runRow.stats ?? {}) };
+  let cfg: ProfileConfig;
+  let job = stats.rescreen;
+  if (opts.continuing && job && !job.finishedAt) {
+    // Carry on with the config the re-screen started with.
+    cfg = withDefaults(runRow.profile_snapshot);
+  } else {
+    const profile = await loadProfile(profileId || runRow.profile_id);
+    cfg = profile.config;
+    job = { startedAt: new Date().toISOString(), finishedAt: null, storedOnly: !!opts.storedOnly, resultIds: opts.resultIds ?? null, rescored: 0, requeued: 0 };
+    stats.rescreen = job;
+    stats.profile = { id: profile.id, name: profile.name, savedAt: profile.updated_at ?? null, appliedAt: job.startedAt };
+    await updateRun(runId, { profile_id: profile.id, profile_snapshot: cfg, status: "processing", finished_at: null }, { stats });
+  }
   const [card, rules, approved] = await Promise.all([activeRateCard(), loadRules(), approvedBrands()]);
-
-  const all: (PendingRow & { status: string })[] = [];
-  for (let from = 0; ; from += 1000) {
-    const page = must(
-      await d.from("results").select("id, product_id, offer_id, inputs, status").eq("run_id", runId).range(from, from + 999),
-      "results",
-    ) as (PendingRow & { status: string })[];
-    all.push(...page.filter((r) => !opts.resultIds || opts.resultIds.includes(r.id)));
-    if (page.length < 1000) break;
-  }
-
-  must(await d.from("runs").update({ profile_id: profile.id, profile_snapshot: cfg, status: "processing", finished_at: null }).eq("id", runId), "run");
-
-  const rows = await loadRows(all);
   const keepaLive = getKeepa().available;
-  const requeue: string[] = [];
-  const work: (() => Promise<void>)[] = [];
   const middle = GATE_ORDER.filter((g) => g !== "gating" && g !== "fees");
-  rows.forEach((row, i) => {
-    if (!all[i].inputs || all[i].status !== "done") {
-      requeue.push(row.resultId);
-      return;
-    }
-    const ctx = context(row, card, rules, cfg, approved);
-    const pre = runGates(ctx, cfg, ["compliance", "budgetFit"]);
-    if (pre.failedGate) return void work.push(() => safely(row, () => finalize(row, pre, cfg, ctx)));
-    if (STAGE_RANK[row.stage] < STAGE_RANK.enriched) return void requeue.push(row.resultId);
-    // Keepa is live and this listing has no history yet (and none under 24h to read): fetch it once.
-    if (keepaLive && row.match?.asin && !row.market?.hasHistory) return void requeue.push(row.resultId);
-    const mid = runGates(ctx, cfg, middle);
-    if (mid.failedGate) return void work.push(() => safely(row, () => finalize(row, mid, cfg, ctx)));
-    if (STAGE_RANK[row.stage] < STAGE_RANK.account || needsRestrictionCheck(row)) return void requeue.push(row.resultId);
-    const full = runGates(ctx, cfg);
-    if (keepaLive && needsSellers(row, full, cfg)) return void requeue.push(row.resultId);
-    work.push(() => safely(row, () => finalize(row, full, cfg, ctx)));
-  });
 
-  for (let i = 0; i < work.length; i += 10) await Promise.all(work.slice(i, i + 10).map((f) => f()));
-  const leftAsIs = opts.storedOnly ? requeue.splice(0).length : 0;
-  for (const c of chunks(requeue)) {
-    must(await d.from("results").update({ status: "pending", updated_at: new Date().toISOString() }).in("id", c), "requeue");
+  // Rows not yet re-screened: finished (or errored) and last written before this re-screen began.
+  const todo = async () => {
+    const out: (PendingRow & { status: string })[] = [];
+    for (let from = 0; ; from += 1000) {
+      const page = must(
+        await d.from("results").select("id, product_id, offer_id, inputs, status, updated_at").eq("run_id", runId).range(from, from + 999),
+        "results",
+      ) as (PendingRow & { status: string; updated_at: string })[];
+      out.push(...page.filter((r) => r.status !== "pending" && r.updated_at <= job!.startedAt && (!job!.resultIds || job!.resultIds.includes(r.id))));
+      if (page.length < 1000) break;
+    }
+    return out;
+  };
+
+  let rescored = 0, requeued = 0;
+  const left = await todo();
+  while (left.length && Date.now() < deadline) {
+    const batch = left.splice(0, 250);
+    const rows = await loadRows(batch);
+    const requeue: string[] = [];
+    // Stored-data-only and nothing stored to re-screen from: marked seen, left as it is.
+    const untouched: string[] = [];
+    const work: { row: Row; run: GateRun; ctx: ScreenContext }[] = [];
+    rows.forEach((row, i) => {
+      if (!batch[i].inputs || batch[i].status !== "done") {
+        if (!job!.storedOnly) requeue.push(row.resultId);
+        else if (batch[i].inputs) work.push({ row, ...gated(row) });
+        else untouched.push(row.resultId);
+        return;
+      }
+      const ctx = context(row, card, rules, cfg, approved);
+      const fetchNeeded = (() => {
+        const pre = runGates(ctx, cfg, ["compliance", "budgetFit"]);
+        if (pre.failedGate) return false;
+        if (STAGE_RANK[row.stage] < STAGE_RANK.enriched) return true;
+        // Keepa is live and this listing has no history yet (and none under 24h to read): fetch it once.
+        if (keepaLive && row.match?.asin && !row.market?.hasHistory) return true;
+        if (runGates(ctx, cfg, middle).failedGate) return false;
+        if (STAGE_RANK[row.stage] < STAGE_RANK.account || needsRestrictionCheck(row)) return true;
+        return keepaLive && needsSellers(row, runGates(ctx, cfg), cfg);
+      })();
+      if (fetchNeeded && !job!.storedOnly) requeue.push(row.resultId);
+      else work.push({ row, ...gated(row) });
+    });
+    await saveResults(runId, work, cfg);
+    for (const c of chunks(requeue)) {
+      must(await d.from("results").update({ status: "pending", updated_at: new Date().toISOString() }).in("id", c), "requeue");
+    }
+    for (const c of chunks(untouched)) {
+      must(await d.from("results").update({ updated_at: new Date().toISOString() }).in("id", c), "seen");
+    }
+    rescored += work.length;
+    requeued += requeue.length;
   }
+
+  function gated(row: Row) {
+    const ctx = context(row, card, rules, cfg, approved);
+    return { ctx, run: runGates(ctx, cfg) };
+  }
+
   // Counts for the whole run (a partial re-screen touches only some rows).
+  const remaining = left.length;
+  job.rescored += rescored;
+  job.requeued += requeued;
+  if (!remaining) job.finishedAt = new Date().toISOString();
+  stats.rescreen = job;
   const p = await runProgress(runId);
-  must(
-    await d.from("runs").update({
-      processed_count: p.processed,
-      row_count: p.total,
-      ...(p.done ? { status: "done", finished_at: new Date().toISOString() } : {}),
-    }).eq("id", runId),
-    "run progress",
-  );
-  return { rescored: work.length, requeued: requeue.length, leftAsIs };
+  await updateRun(runId, {
+    processed_count: p.processed,
+    row_count: p.total,
+    ...(p.done && !remaining ? { status: "done", finished_at: new Date().toISOString() } : {}),
+  }, { stats });
+  return { rescored, requeued, remaining, profile: { name: stats.profile?.name ?? "", savedAt: stats.profile?.savedAt ?? null } };
 }
 
 // ---------------------------------------------------------------------------------------
@@ -687,6 +748,8 @@ export interface RunProgress {
   eta: Eta;
   /** Another call holds the run's lease. */
   busy?: boolean;
+  /** A re-screen in progress: rows it hasn't reached yet. */
+  rescreen?: { left: number; startedAt: string } | null;
   /** False until the lease migration is run: then only the run page drives the run, one call at a time. */
   leased?: boolean;
 }
@@ -722,10 +785,17 @@ export async function runProgress(runId: string, extra: Partial<RunProgress> = {
   ]);
   const t = total ?? 0, p = pending ?? 0, k = keepa ?? 0;
   const r = run.data as { resume_after?: string | null; stats?: RunStats | null } | null;
+  // A re-screen still going: rows last written before it started haven't been re-screened yet.
+  const job = r?.stats?.rescreen;
+  let rescreenLeft = 0;
+  if (job && !job.finishedAt) {
+    rescreenLeft = (await d.from("results").select("id", { count: "exact", head: true }).eq("run_id", runId).neq("status", "pending").lte("updated_at", job.startedAt)).count ?? 0;
+  }
   const resume = r?.resume_after ?? null;
   const waiting = { amazon: p - k, keepa: k };
   return {
-    done: p === 0,
+    done: p === 0 && rescreenLeft === 0,
+    rescreen: job && !job.finishedAt ? { left: rescreenLeft, startedAt: job.startedAt } : null,
     processed: t - p,
     total: t,
     waiting,
@@ -734,6 +804,16 @@ export async function runProgress(runId: string, extra: Partial<RunProgress> = {
     progressed: 0,
     ...extra,
   };
+}
+
+/**
+ * Save the stats the processor owns (throughput, Keepa's figures, the daily token ledger) over
+ * what's stored now, so a re-screen running alongside keeps its own progress record.
+ */
+async function saveOwnStats(runId: string, own: RunStats) {
+  const cur = await db().from("runs").select("stats").eq("id", runId).maybeSingle();
+  const stored = ((cur.data as { stats?: RunStats | null } | null)?.stats ?? {}) as RunStats;
+  await updateRun(runId, {}, { stats: { ...stored, amazonPerMin: own.amazonPerMin, keepa: own.keepa, keepaByDay: own.keepaByDay } });
 }
 
 /** A write refused because a column isn't there yet: retry without the optional fields. */
@@ -836,7 +916,7 @@ export async function processRun(runId: string, opts: { budgetMs?: number } = {}
         stats.amazonPerMin = stats.amazonPerMin ? 0.5 * stats.amazonPerMin + 0.5 * measured : measured;
       }
       if (kb.tokens) stats.keepa = { ...kb.tokens, at: new Date().toISOString() };
-      await updateRun(runId, {}, { stats });
+      await saveOwnStats(runId, stats);
       q.lookup.push(...la.added);
       q.keepa.unshift(...kb.deferred);
       if (kb.waitUntil != null) keepaWaitUntil = kb.waitUntil;
@@ -896,6 +976,7 @@ async function park(row: Row) {
   const inputs: StoredInputs = {
     v: 1, stage: row.stage, match: row.match, market: row.market, hazmat: row.hazmat,
     restriction: row.restriction, amazonFees: row.amazonFees, lookup: row.lookup, sellers: row.sellers, notes: row.dataNotes,
+    qogita: row.qogita,
   };
   must(await db().from("results").update({ inputs, status: "pending", updated_at: new Date().toISOString() }).eq("id", row.resultId), "park");
 }
