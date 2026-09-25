@@ -3,7 +3,7 @@
  * A gate whose data isn't available (no Keepa yet, no price) is "skipped", never failed.
  */
 import { isDormant, lastSeenLabel } from "./dormant";
-import { salesPerMonth } from "./sales";
+import { salesPerMonth, yourShare } from "./sales";
 import {
   economics,
   hurdlePrice,
@@ -294,10 +294,18 @@ const EVALUATORS: Record<GateId, Evaluator> = {
   demand(ctx, p) {
     const g = p.gates.demand;
     const m = ctx.market;
-    // Both must hold: enough sales in the last 30 days AND a good 90-day average rank. Sales
-    // come from the Keepa history (the same figure as the Sales / mo column), so without
-    // history there's nothing to count: skip rather than pass on the current rank alone.
+    // All must hold: enough sales in total, enough of them for you once shared with the other
+    // sellers (your share), and a good average rank. Sales come from the Keepa history (the
+    // same figure as the Sales / mo column), so without history there's nothing to count:
+    // skip rather than pass on the current rank alone.
     if (!m?.hasHistory) return skipped(m?.rankNow != null ? `Needs Keepa history to count sales (current rank ${m.rankNow.toLocaleString("en-GB")})` : "Needs Keepa history");
+    const share = yourShare(m);
+    const shareCheck = (reasons: string[]) => {
+      if (share.value != null && share.value < g.minSharePerMonth) {
+        reasons.push(`your share ${share.value}/mo, under ${g.minSharePerMonth} (${share.sales} sales ÷ ${share.competitors} other seller${share.competitors === 1 ? "" : "s"}${share.amazon ? ", Amazon counted as 3" : ""} + you)`);
+      }
+    };
+    const shareText = share.value != null ? `, your share ${share.value}/mo` : "";
     if (isDormant(m)) {
       // No rank now: judge the past year instead, as a monthly rate.
       const drops = m.rankDrops12m ?? 0;
@@ -308,6 +316,7 @@ const EVALUATORS: Record<GateId, Evaluator> = {
       const perMonth = Math.round((drops / 12) * 10) / 10;
       const reasons: string[] = [];
       if (perMonth < g.minRankDrops30d) reasons.push(`${drops} rank drops in 12 months (${perMonth}/mo), under ${g.minRankDrops30d}/mo`);
+      shareCheck(reasons);
       if (m.avgRank12m != null && m.avgRank12m > g.maxAvgRank90d) reasons.push(`12-month average rank ${m.avgRank12m.toLocaleString("en-GB")}, over ${g.maxAvgRank90d.toLocaleString("en-GB")}`);
       if (reasons.length) return { status: failAs(g.mode), detail: `dormant: ${reasons.join("; ")}`, tags: ["DORMANT"] };
       return { status: "pass", detail: `dormant: ${drops} rank drops in 12 months (${perMonth}/mo)${m.avgRank12m != null ? `, 12-month average rank ${m.avgRank12m.toLocaleString("en-GB")}` : ""}`, tags: ["DORMANT"] };
@@ -317,10 +326,11 @@ const EVALUATORS: Record<GateId, Evaluator> = {
     const rankLabel = m.avgRank90d != null ? "90-day average rank" : "current rank";
     const reasons: string[] = [];
     if (sales < g.minRankDrops30d) reasons.push(`${sales} sales in 30 days, under ${g.minRankDrops30d}`);
+    shareCheck(reasons);
     if (rank == null) reasons.push("no rank in the last 90 days");
     else if (rank > g.maxAvgRank90d) reasons.push(`${rankLabel} ${rank.toLocaleString("en-GB")}, over ${g.maxAvgRank90d.toLocaleString("en-GB")}`);
     if (reasons.length) return { status: failAs(g.mode), detail: reasons.join("; ") };
-    return { status: "pass", detail: `${sales} sales/mo, ${m.avgRank90d != null ? "avg" : "current"} rank ${rank!.toLocaleString("en-GB")}` };
+    return { status: "pass", detail: `${sales} sales/mo${shareText}, ${m.avgRank90d != null ? "avg" : "current"} rank ${rank!.toLocaleString("en-GB")}` };
   },
 
   priceRegime(ctx, p) {

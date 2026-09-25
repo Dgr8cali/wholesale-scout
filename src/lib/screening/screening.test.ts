@@ -3,7 +3,8 @@ import { UK_RATE_CARD_2026_07 as CARD } from "../fees/rateCard";
 import { DEFAULT_PROFILE, defaultProfiles, invalidNumbers, withDefaults, type ProfileConfig } from "./config";
 import { resolveScoringPrice, runGates, verdictOf, type MarketData, type ScreenContext } from "./gates";
 import { DEFAULT_RULES } from "./rules";
-import { applyScale, winScore } from "./score";
+import { applyScale, paramValues, winScore } from "./score";
+import { yourShare } from "./sales";
 
 const profiles = Object.fromEntries(defaultProfiles().map((p) => [p.name, p.config])) as Record<string, ProfileConfig>;
 
@@ -219,6 +220,41 @@ describe("gates", () => {
       const d = demand(market({ hasHistory: false, rankDrops30d: null, avgRank90d: null, rankNow: 1500 }));
       expect(d.status).toBe("skipped");
       expect(d.detail).toMatch(/current rank 1,500/);
+    });
+  });
+
+  describe("your share", () => {
+    const demand = (m: MarketData, p = DEFAULT_PROFILE) => runGates(ctx({ market: m }), p).outcomes.find((o) => o.gate === "demand")!;
+    const lowTotal = withDefaults({ gates: { ...DEFAULT_PROFILE.gates, demand: { ...DEFAULT_PROFILE.gates.demand, minRankDrops30d: 10 } } });
+
+    it("divides sales by the FBA sellers plus you, with Amazon counted as three", () => {
+      expect(yourShare(market({ rankDrops30d: 100, fbaOffers: 4, amazonLastSeenDays: 400 })).value).toBe(20);
+      expect(yourShare(market({ rankDrops30d: 100, fbaOffers: 4, amazonLastSeenDays: 0 })).value).toBe(12.5); // 100 ÷ (4 + 3 + 1)
+      // All-offers fallback already counts Amazon once.
+      expect(yourShare(market({ rankDrops30d: 100, fbaOffers: null, offersNow: 5, amazonLastSeenDays: 0 })).value).toBe(12.5);
+      expect(yourShare(market({ hasHistory: false })).value).toBeNull();
+    });
+
+    it("passes a low-volume product with few sellers once the total minimum allows it", () => {
+      const m = market({ rankDrops30d: 18, keepaRankDrops30: null, monthlySold: null, fbaOffers: 1, avgRank90d: 20000 });
+      expect(demand(m).status).toBe("fail"); // 18 is under the default 30 total
+      const d = demand(m, lowTotal);
+      expect(d.status).toBe("pass");
+      expect(d.detail).toBe("18 sales/mo, your share 9/mo, avg rank 20,000");
+    });
+
+    it("flags a high-volume product split twenty ways", () => {
+      const d = demand(market({ rankDrops30d: 100, keepaRankDrops30: null, monthlySold: null, fbaOffers: 20, amazonLastSeenDays: 400 }));
+      expect(d.status).toBe("fail");
+      expect(d.detail).toBe("your share 4.8/mo, under 5 (100 sales ÷ 20 other sellers + you)");
+    });
+
+    it("feeds your profit a month into the Margin group", () => {
+      const c = ctx();
+      const run = runGates(c, DEFAULT_PROFILE);
+      const v = paramValues(c, run, DEFAULT_PROFILE, fit);
+      expect(v.profitPerMonth).toBeCloseTo(28 * run.economics!.profit!, 1); // 140 ÷ (4 + 1)
+      expect(winScore(c, run, DEFAULT_PROFILE, fit).groups.margin.params.map((x) => x.key)).toContain("profitPerMonth");
     });
   });
 

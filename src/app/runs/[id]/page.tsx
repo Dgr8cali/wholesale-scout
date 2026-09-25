@@ -246,7 +246,7 @@ export default function RunPage() {
     const val = (r: Result): number | string | null =>
       sort.key === "title" ? titleOf(r).toLowerCase()
         : sort.key === "verdict" ? ({ pass: 0, warn: 1, fail: 2 }[r.verdict ?? "fail"])
-        : sort.key === "sales" || sort.key === "sellers" || sort.key === "buybox" ? figure(r, sort.key).value
+        : sort.key === "sales" || sort.key === "sellers" || sort.key === "buybox" || sort.key === "share" || sort.key === "profitMo" ? figure(r, sort.key).value
         : (r[sort.key] as number | null);
     const order = (a: Result, b: Result) => {
       const x = val(a), y = val(b);
@@ -313,6 +313,8 @@ export default function RunPage() {
       "Est. sales / month": figure(r, "sales").value,
       "Est. sales source": figure(r, "sales").note,
       Sellers: figure(r, "sellers").value,
+      "Your share / mo": figure(r, "share").value,
+      "Your profit / mo": figure(r, "profitMo").value,
       "Sellers source": figure(r, "sellers").note,
       "Buy Box": figure(r, "buybox").value,
       "Landed cost": r.landed_cost,

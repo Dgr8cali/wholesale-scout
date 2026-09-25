@@ -1,7 +1,7 @@
 import type { Eta } from "@/lib/eta";
 import type { GateId, GroupId } from "@/lib/screening/config";
 import type { GateOutcome } from "@/lib/screening/gates";
-import { buyBox, estSales, sellers, type Figure, type StoredMarket } from "@/lib/ui/metrics";
+import { buyBox, estSales, profitMonth, sellers, share, type Figure, type StoredMarket } from "@/lib/ui/metrics";
 
 /** Shapes of a run and its results as the run page receives them. */
 export interface Result {
@@ -67,11 +67,17 @@ export interface Progress {
 }
 
 
-export type SortKey = "score" | "profit" | "roi" | "margin" | "sell_price" | "landed_cost" | "hurdle_price" | "title" | "verdict" | "sales" | "sellers" | "buybox";
+export type SortKey = "score" | "profit" | "roi" | "margin" | "sell_price" | "landed_cost" | "hurdle_price" | "title" | "verdict" | "sales" | "sellers" | "buybox" | "share" | "profitMo";
 
 /** Figures computed from the stored market data, for display and sorting. */
-const FIGURES = { sales: estSales, sellers, buybox: buyBox } as const;
-export const figure = (r: Result, k: keyof typeof FIGURES): Figure => FIGURES[k](r.inputs?.market);
+const FIGURES = {
+  sales: (r: Result) => estSales(r.inputs?.market),
+  sellers: (r: Result) => sellers(r.inputs?.market),
+  buybox: (r: Result) => buyBox(r.inputs?.market),
+  share: (r: Result) => share(r.inputs?.market),
+  profitMo: (r: Result) => profitMonth(r.inputs?.market, r.profit),
+} as const;
+export const figure = (r: Result, k: keyof typeof FIGURES): Figure => FIGURES[k](r);
 
 export const titleOf = (r: Result) => r.product?.title ?? r.offer?.title ?? r.product?.ean ?? "";
 export const eanOf = (r: Result) => r.product?.ean ?? r.id;

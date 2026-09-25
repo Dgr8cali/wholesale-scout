@@ -5,6 +5,7 @@
 import { landedCost } from "../fees/engine";
 import { GROUP_LABELS, SCALE_DEFS, type GroupId, type ProfileConfig, type Scale } from "./config";
 import { isDormant, lastSeenLabel } from "./dormant";
+import { profitPerMonth, yourShare } from "./sales";
 import { tierDisagreement, type GateRun, type ScreenContext } from "./gates";
 
 export interface FitData {
@@ -68,6 +69,7 @@ export function paramValues(ctx: ScreenContext, run: GateRun, p: ProfileConfig, 
     priceSlope: m?.bbSlopePctYr ?? null,
     volatility: m?.bbVolatilityPct ?? null,
     profit: e?.profit ?? null,
+    profitPerMonth: profitPerMonth(yourShare(m).value, e?.profit ?? null),
     roi: e?.roi ?? null,
     margin: e?.margin ?? null,
     complianceFlags: compliance && compliance.status !== "off" ? run.ruleMatches.filter((r) => p.gates.compliance.rules[r.key] !== "off").length : null,

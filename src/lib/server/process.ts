@@ -583,8 +583,9 @@ const nums = (s: Point[] | null): Point[] => (s ?? []).map(([t, v]) => [t, v == 
 export async function rescreenRun(
   runId: string,
   profileId?: string | null,
-  opts: { resultIds?: string[] } = {},
-): Promise<{ rescored: number; requeued: number }> {
+  /** storedOnly: never fetch; rows that would need data are left exactly as they are. */
+  opts: { resultIds?: string[]; storedOnly?: boolean } = {},
+): Promise<{ rescored: number; requeued: number; leftAsIs: number }> {
   const d = db();
   const runRow = must(await d.from("runs").select("id, profile_id").eq("id", runId).single(), "run") as { id: string; profile_id: string | null };
   const profile = await loadProfile(profileId || runRow.profile_id);
@@ -628,6 +629,7 @@ export async function rescreenRun(
   });
 
   for (let i = 0; i < work.length; i += 10) await Promise.all(work.slice(i, i + 10).map((f) => f()));
+  const leftAsIs = opts.storedOnly ? requeue.splice(0).length : 0;
   for (const c of chunks(requeue)) {
     must(await d.from("results").update({ status: "pending", updated_at: new Date().toISOString() }).in("id", c), "requeue");
   }
@@ -641,7 +643,7 @@ export async function rescreenRun(
     }).eq("id", runId),
     "run progress",
   );
-  return { rescored: work.length, requeued: requeue.length };
+  return { rescored: work.length, requeued: requeue.length, leftAsIs };
 }
 
 // ---------------------------------------------------------------------------------------

@@ -48,6 +48,7 @@ const COLS: ColSpec[] = [
   { id: "verdict", label: "Verdict", sort: "verdict", size: 96, min: 88, max: 160 },
   { id: "score", label: "Score", sort: "score", numeric: true, size: 68, min: 56, max: 120 },
   { id: "sales", label: "Sales / mo", header: <>Sales<br />/ mo</>, hint: "Est. sales / month", sort: "sales", numeric: true, size: 76, min: 60, max: 140 },
+  { id: "share", label: "Your share / mo", header: <>Your share<br />/ mo</>, hint: "Sales / mo ÷ (FBA sellers + you), Amazon counted as 3 sellers", sort: "share", numeric: true, size: 84, min: 64, max: 140 },
   { id: "sellers", label: "Sellers", sort: "sellers", numeric: true, size: 72, min: 56, max: 120 },
   { id: "buybox", label: "Buy Box", header: <>Buy<br />Box</>, sort: "buybox", numeric: true, size: 80, min: 64, max: 140 },
   { id: "rank90", label: "Rank, 90 days", header: <>Rank<br />90 d</>, hint: "Sales rank over 90 days from the stored Keepa snapshot; up is a better rank", size: 92, min: 80, max: 220 },
@@ -55,6 +56,7 @@ const COLS: ColSpec[] = [
   { id: "landed", label: "Landed", sort: "landed_cost", numeric: true, size: 80, min: 64, max: 140 },
   { id: "sell", label: "Sell", sort: "sell_price", numeric: true, size: 80, min: 64, max: 140 },
   { id: "profit", label: "Profit", sort: "profit", numeric: true, size: 80, min: 64, max: 140 },
+  { id: "profitMo", label: "Your profit / mo", header: <>Your profit<br />/ mo</>, hint: "Your share × profit per unit", sort: "profitMo", numeric: true, size: 88, min: 64, max: 150 },
   { id: "roi", label: "ROI", sort: "roi", numeric: true, size: 68, min: 56, max: 120 },
   { id: "margin", label: "Margin", sort: "margin", numeric: true, size: 72, min: 56, max: 120 },
   { id: "hurdle", label: "Hurdle", sort: "hurdle_price", numeric: true, size: 80, min: 64, max: 140, hint: "Sell price at which this clears every profit floor" },
@@ -355,6 +357,11 @@ function Cell({ id, d, props, compact, isOpen }: { id: string; d: DisplayRow; pr
       );
     case "sales": return <FigureCell f={figure(r, "sales")} className={num} />;
     case "sellers": return <FigureCell f={figure(r, "sellers")} className={num} />;
+    case "share": return <FigureCell f={figure(r, "share")} className={num} decimals />;
+    case "profitMo": {
+      const f = figure(r, "profitMo");
+      return <FigureCell f={f} className={cn(num, f.value != null && f.value < 0 && "text-fail")} money />;
+    }
     case "buybox": return <FigureCell f={figure(r, "buybox")} className={num} money />;
     case "rank90":
     case "bb90": {
@@ -394,10 +401,11 @@ function sparkLabel(what: string, values: (number | null)[] | null | undefined, 
 }
 
 /** A number with its source as a tooltip; "—" when there's nothing to show. */
-function FigureCell({ f, money, className }: { f: Figure; money?: boolean; className: string }) {
+function FigureCell({ f, money, decimals, className }: { f: Figure; money?: boolean; decimals?: boolean; className: string }) {
   return (
     <span className={className} title={f.note}>
-      {f.value == null ? <span className="text-muted-foreground">—</span> : money ? gbp(f.value) : Math.round(f.value).toLocaleString("en-GB")}
+      {f.value == null ? <span className="text-muted-foreground">—</span> : money ? gbp(f.value)
+        : decimals && f.value < 10 ? f.value.toLocaleString("en-GB", { maximumFractionDigits: 1 }) : Math.round(f.value).toLocaleString("en-GB")}
     </span>
   );
 }

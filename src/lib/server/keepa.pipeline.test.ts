@@ -139,7 +139,7 @@ describe("Keepa path", () => {
     for (const r of results(runId)) {
       expect((r.inputs as { market: { hasHistory: boolean; monthlySold: number } }).market).toMatchObject({ hasHistory: true, monthlySold: 300 });
       for (const g of ["mirage", "amazonPresence", "priceRegime", "priceDrift"]) expect(gate(r, g)?.status, g).not.toBe("skipped");
-      expect(gate(r, "demand")!.detail).toMatch(/300 sales\/mo, avg rank 6,562/);
+      expect(gate(r, "demand")!.detail).toMatch(/300 sales\/mo, your share 60\/mo, avg rank 6,562/);
       expect(r.why).not.toMatch(/No Keepa history/);
     }
     expect(fake.tables.products.every((p) => p.keepa_updated_at)).toBe(true);
@@ -180,6 +180,19 @@ describe("Keepa path", () => {
     expect(tokens(runId)).toBe(9);
     expect(tokens(second.runId)).toBe(0);
     expect(results(second.runId).every((r) => (r.inputs as { market: { hasHistory: boolean } }).market.hasHistory)).toBe(true);
+  });
+
+  it("Re-screen from stored data only fetches nothing and leaves rows that need data as they were", async () => {
+    k.live = false;
+    const { runId } = await ingest({ files: [upload()] });
+    await until(runId);
+    const before = results(runId).map((r) => ({ status: r.status, why: r.why }));
+    k.live = true;
+    const r = await rescreenRun(runId, null, { storedOnly: true });
+    expect(r).toMatchObject({ requeued: 0, leftAsIs: 2 });
+    expect(k.asinCalls).toEqual([]);
+    expect(results(runId).map((x) => ({ status: x.status, why: x.why }))).toEqual(before);
+    expect(fake.tables.runs.find((x) => x.id === runId)!.status).toBe("done");
   });
 
   it("Re-screen fetches history once for rows screened while Keepa was a stub", async () => {

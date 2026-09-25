@@ -1,4 +1,4 @@
-import { salesPerMonth } from "../screening/sales";
+import { profitPerMonth, salesPerMonth, yourShare } from "../screening/sales";
 
 /** Figures for the results table, read from the market data stored on a result. */
 
@@ -11,6 +11,8 @@ export interface StoredMarket {
   offersNow?: number | null;
   currentBuyBox?: number | null;
   rankNow?: number | null;
+  amazonLastSeenDays?: number | null;
+  rankDrops12m?: number | null;
   lastOfferDaysAgo?: number | null;
   lastBuyBox12m?: number | null;
   lastBuyBoxAt?: string | null;
@@ -33,6 +35,21 @@ export function estSales(m: StoredMarket | null | undefined): Figure {
   if (f.sources.every((s) => s.value == null)) return { value: 0, note: "Keepa history shows no rank drops and no bought-in-past-month figure" };
   const lines = f.sources.map((s) => `${s.best ? "▶ " : "  "}${s.label}: ${s.value == null ? "—" : `${s.value}${s.plus ? "+" : ""}`}`);
   return { value: f.value, note: `Highest of:\n${lines.join("\n")}` };
+}
+
+/** Your share of sales a month: sales ÷ (sellers + you), Amazon counted as three. */
+export function share(m: StoredMarket | null | undefined): Figure {
+  const f = yourShare(m);
+  return { value: f.value, note: f.note };
+}
+
+/** Your profit a month: your share × net profit per unit. */
+export function profitMonth(m: StoredMarket | null | undefined, profit: number | null | undefined): Figure {
+  const f = yourShare(m);
+  const v = profitPerMonth(f.value, profit ?? null);
+  return v == null
+    ? { value: null, note: f.value == null ? f.note : "Needs a profit per unit" }
+    : { value: v, note: `${f.value}/mo your share × £${profit!.toFixed(2)} profit per unit` };
 }
 
 /** FBA sellers from Keepa; until then all new offers from SP-API, said so. */

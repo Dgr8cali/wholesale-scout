@@ -15,7 +15,7 @@ export interface GateConfigs {
   mirage: { mode: GateMode; minHistoryDays: number; maxReviewJumpPct: number };
   amazonPresence: { mode: GateMode; days: number };
   competition: { mode: GateMode; minSellers: number; maxSellers: number; maxBbSharePct: number };
-  demand: { mode: GateMode; minRankDrops30d: number; maxAvgRank90d: number };
+  demand: { mode: GateMode; minRankDrops30d: number; maxAvgRank90d: number; /** Your share: sales ÷ (sellers + you). */ minSharePerMonth: number };
   priceRegime: { mode: GateMode; spikePct: number };
   priceDrift: { mode: GateMode; maxDeclinePctYr: number };
   /** Blocked always takes the gate's mode; approval-required has its own (warn by default). */
@@ -99,6 +99,7 @@ export const SCALE_DEFS: Record<string, { group: GroupId; label: string; unit: s
   priceSlope: { group: "priceHealth", label: "12-month Buy Box slope", unit: "%/yr" },
   volatility: { group: "priceHealth", label: "Buy Box volatility", unit: "%" },
   profit: { group: "margin", label: "Net profit per unit", unit: "£" },
+  profitPerMonth: { group: "margin", label: "Your profit a month (your share × profit per unit)", unit: "£/mo" },
   roi: { group: "margin", label: "ROI", unit: "%" },
   margin: { group: "margin", label: "Net margin", unit: "%" },
   complianceFlags: { group: "risk", label: "Compliance flags", unit: "flags" },
@@ -127,6 +128,7 @@ export const DEFAULT_SCALES: Record<string, Scale> = {
   priceSlope: s([[-30, 0], [-10, 50], [0, 85], [10, 100]]),
   volatility: s([[0, 100], [10, 80], [30, 25], [50, 0]]),
   profit: s([[0, 0], [2, 30], [5, 80], [8, 100]]),
+  profitPerMonth: s([[0, 0], [25, 40], [100, 80], [250, 100]]),
   roi: s([[10, 0], [60, 100]]),
   margin: s([[10, 0], [15, 40], [35, 100]]),
   complianceFlags: s([[0, 100], [1, 55], [2, 25], [3, 0]]),
@@ -155,7 +157,7 @@ export const DEFAULT_GATES: GateConfigs = {
   mirage: { mode: "warn", minHistoryDays: 90, maxReviewJumpPct: 50 },
   amazonPresence: { mode: "fail", days: 365 },
   competition: { mode: "warn", minSellers: 3, maxSellers: 12, maxBbSharePct: 70 },
-  demand: { mode: "fail", minRankDrops30d: 30, maxAvgRank90d: 50000 },
+  demand: { mode: "fail", minRankDrops30d: 30, maxAvgRank90d: 50000, minSharePerMonth: 5 },
   priceRegime: { mode: "warn", spikePct: 15 },
   priceDrift: { mode: "warn", maxDeclinePctYr: 20 },
   gating: { mode: "fail", approvalRequired: "warn" },
