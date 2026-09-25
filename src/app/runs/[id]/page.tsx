@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import * as XLSX from "xlsx";
 import { GATE_LABELS, GATE_ORDER, GROUP_LABELS, type GateId, type GroupId } from "@/lib/screening/config";
 import type { GateOutcome } from "@/lib/screening/gates";
@@ -53,6 +53,9 @@ const VERDICT_STYLE = { pass: "bg-pass-soft text-pass", warn: "bg-warn-soft text
 const BAND_STYLE = { green: "bg-pass text-white", amber: "bg-warn text-white", grey: "bg-surface-2 text-muted" } as const;
 const STATUS_ICON: Record<string, string> = { pass: "✓", warn: "!", fail: "✕", skipped: "–", off: "·" };
 const STATUS_STYLE: Record<string, string> = { pass: "bg-pass", warn: "bg-warn", fail: "bg-fail", skipped: "bg-muted", off: "bg-line" };
+
+/** Compact numeric cell: tabular figures, never wrapped, clipped rather than widening the table. */
+const NUM = "num overflow-hidden px-2 py-2 text-right text-[13px] whitespace-nowrap text-ellipsis";
 
 const titleOf = (r: Result) => r.product?.title ?? r.offer?.title ?? r.product?.ean ?? "";
 const eanOf = (r: Result) => r.product?.ean ?? r.id;
@@ -231,9 +234,10 @@ export default function RunPage() {
     XLSX.writeFile(wb, `wholesale-scout-${(run?.source ?? "run").replace(/[^\w-]+/g, "_").slice(0, 40)}.xlsx`);
   }
 
-  const th = (key: SortKey, label: string, right = false) => (
-    <th className={`whitespace-nowrap px-3 py-2 ${right ? "text-right" : ""}`}>
-      <button className="uppercase tracking-wide hover:text-ink" onClick={() => setSort((s) => ({ key, dir: s.key === key ? (s.dir === 1 ? -1 : 1) : key === "title" ? 1 : -1 }))}>
+  const th = (key: SortKey, label: ReactNode, right = false, hint?: string) => (
+    <th className={`overflow-hidden px-2 py-2 align-bottom leading-tight ${right ? "text-right" : ""}`} title={hint}>
+      <button className={`uppercase hover:text-ink ${right ? "text-right tracking-normal" : "text-left tracking-wide"}`}
+        onClick={() => setSort((s) => ({ key, dir: s.key === key ? (s.dir === 1 ? -1 : 1) : key === "title" ? 1 : -1 }))}>
         {label}{sort.key === key ? (sort.dir === -1 ? " ↓" : " ↑") : ""}
       </button>
     </th>
@@ -315,14 +319,31 @@ export default function RunPage() {
         <span className="text-sm text-muted">{counts.green} green · showing {rows.length} products, {listingCount} listings</span>
       </div>
 
+      {/* Fixed layout: numeric columns compact, product capped, why takes the rest and wraps.
+          Scrolls sideways inside the card only below the table's minimum width. */}
       <div className="card overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full min-w-[70rem] table-fixed text-sm">
+          <colgroup>
+            <col className="w-[4rem]" />{/* verdict */}
+            <col className="w-[3.25rem]" />{/* score */}
+            <col className="w-[14.5rem]" />{/* product */}
+            <col className="w-[4rem]" />{/* sales */}
+            <col className="w-[4.25rem]" />{/* sellers */}
+            <col className="w-[4.25rem]" />{/* buy box */}
+            <col className="w-[4.25rem]" />{/* landed */}
+            <col className="w-[4.25rem]" />{/* sell */}
+            <col className="w-[4.25rem]" />{/* profit */}
+            <col className="w-[3.5rem]" />{/* roi */}
+            <col className="w-[3.75rem]" />{/* margin */}
+            <col className="w-[4.25rem]" />{/* hurdle */}
+            <col />{/* why: the rest */}
+          </colgroup>
           <thead className="border-b border-line text-left text-xs text-muted">
             <tr>
               {th("verdict", "Verdict")}
               {th("score", "Score", true)}
               {th("title", "Product")}
-              {th("sales", "Est. sales / mo", true)}
+              {th("sales", <>Sales<br />/ mo</>, true, "Est. sales / month")}
               {th("sellers", "Sellers", true)}
               {th("buybox", "Buy Box", true)}
               {th("landed_cost", "Landed", true)}
@@ -331,7 +352,7 @@ export default function RunPage() {
               {th("roi", "ROI", true)}
               {th("margin", "Margin", true)}
               {th("hurdle_price", "Hurdle", true)}
-              <th className="px-3 py-2 uppercase tracking-wide">Why</th>
+              <th className="px-2 py-2 align-bottom uppercase tracking-wide">Why</th>
             </tr>
           </thead>
           <tbody>
@@ -344,18 +365,18 @@ export default function RunPage() {
                 <Fragment key={r.id}>
                   <tr className={`cursor-pointer border-b border-line align-top hover:bg-surface-2 ${alt ? "bg-surface-2/40 text-muted" : ""}`}
                     onClick={() => setOpen((s) => { const n = new Set(s); if (n.has(r.id)) n.delete(r.id); else n.add(r.id); return n; })}>
-                    <td className="px-3 py-2">
+                    <td className="px-2 py-2">
                       {r.status === "error"
                         ? <span className="rounded-full bg-fail-soft px-2 py-0.5 text-xs font-semibold text-fail">error</span>
                         : r.verdict && <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${VERDICT_STYLE[r.verdict]}`}>{r.verdict}</span>}
                     </td>
-                    <td className="px-3 py-2 text-right">
+                    <td className="px-2 py-2 text-right">
                       {r.score != null && r.band
                         ? <span className={`num inline-block min-w-9 rounded px-1.5 py-0.5 text-center text-xs font-semibold ${BAND_STYLE[r.band]}`}>{Math.round(r.score)}</span>
                         : <span className="text-muted">—</span>}
                     </td>
-                    <td className={`max-w-[340px] px-3 py-2 ${alt ? "pl-8" : ""}`}>
-                      <div className="truncate font-medium" title={titleOf(r)}>{alt ? "↳ " : ""}{titleOf(r)}</div>
+                    <td className={`px-2 py-2 ${alt ? "pl-6" : ""}`}>
+                      <div className="line-clamp-2 font-medium leading-snug break-words" title={titleOf(r)}>{alt ? "↳ " : ""}{titleOf(r)}</div>
                       <div className="num truncate text-xs text-muted">
                         {r.product?.ean}
                         {r.product?.asin && <> · <a className="text-accent hover:underline" href={`https://www.amazon.co.uk/dp/${r.product.asin}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>{r.product.asin}</a></>}
@@ -371,13 +392,13 @@ export default function RunPage() {
                     <FigureCell f={figure(r, "sales")} />
                     <FigureCell f={figure(r, "sellers")} />
                     <FigureCell f={figure(r, "buybox")} money />
-                    <td className="num px-3 py-2 text-right">{gbp(r.landed_cost)}</td>
-                    <td className="num px-3 py-2 text-right">{gbp(r.sell_price)}</td>
-                    <td className={`num px-3 py-2 text-right ${r.profit != null && r.profit < 0 ? "text-fail" : ""}`}>{gbp(r.profit)}</td>
-                    <td className="num px-3 py-2 text-right">{pct(r.roi)}</td>
-                    <td className="num px-3 py-2 text-right">{pct(r.margin)}</td>
-                    <td className="num px-3 py-2 text-right">{gbp(r.hurdle_price)}</td>
-                    <td className="min-w-[320px] px-3 py-2 text-xs leading-snug">
+                    <td className={NUM}>{gbp(r.landed_cost)}</td>
+                    <td className={NUM}>{gbp(r.sell_price)}</td>
+                    <td className={`${NUM} ${r.profit != null && r.profit < 0 ? "text-fail" : ""}`}>{gbp(r.profit)}</td>
+                    <td className={NUM}>{pct(r.roi)}</td>
+                    <td className={NUM}>{pct(r.margin)}</td>
+                    <td className={NUM}>{gbp(r.hurdle_price)}</td>
+                    <td className="px-2 py-2 text-xs leading-snug [overflow-wrap:anywhere]">
                       {r.status === "error" ? r.error : r.why}
                       <ApplyLink r={r} />
                     </td>
@@ -405,7 +426,7 @@ export default function RunPage() {
 /** A number with its source as a tooltip; "—" when there's nothing to show. */
 function FigureCell({ f, money }: { f: Figure; money?: boolean }) {
   return (
-    <td className="num px-3 py-2 text-right" title={f.note}>
+    <td className={NUM} title={f.note}>
       {f.value == null ? <span className="text-muted">—</span> : money ? gbp(f.value) : Math.round(f.value).toLocaleString("en-GB")}
     </td>
   );
