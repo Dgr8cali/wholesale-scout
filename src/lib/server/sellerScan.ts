@@ -177,6 +177,7 @@ export async function startScan(sellerId: string, profileId?: string | null): Pr
       fileName: name,
       supplier: { name: "Manual", vatBasis: "ex_vat", vatRate: 20, currency: "GBP" },
       keepSupplier: true,
+      sourceType: "manual",
       headers: [],
       fingerprint: "",
       mapping: { headerRow: 0, columns: {}, pricePer: "unit" } as unknown as ColumnMapping,

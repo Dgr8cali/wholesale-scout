@@ -14,6 +14,8 @@ export interface IngestFile {
   rows: NormalizedRow[];
   /** Use a supplier of this name as it is (an ASIN check naming one): don't overwrite its VAT and currency. */
   keepSupplier?: boolean;
+  /** Where the supplier's prices come from, for the ledger: a file (default), Qogita, or typed in. */
+  sourceType?: "upload" | "qogita" | "manual";
 }
 
 export interface IngestPayload {
@@ -63,7 +65,7 @@ export async function ingest(payload: IngestPayload): Promise<{ runId: string; r
       : null;
     const row = existing ?? must(
       await d.from("suppliers")
-        .upsert({ name: s.name.trim(), vat_basis: s.vatBasis, vat_rate: s.vatRate, currency: s.currency, updated_at: new Date().toISOString() }, { onConflict: "name" })
+        .upsert({ name: s.name.trim(), source_type: f.sourceType ?? "upload", vat_basis: s.vatBasis, vat_rate: s.vatRate, currency: s.currency, updated_at: new Date().toISOString() }, { onConflict: "name" })
         .select("id, vat_rate")
         .single(),
       "supplier",

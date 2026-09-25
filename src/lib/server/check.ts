@@ -99,6 +99,7 @@ export async function startCheck(req: CheckRequest): Promise<{ runId: string; li
       fileName: source,
       supplier: { name: supplier, vatBasis: "ex_vat", vatRate: CHECK_VAT, currency: "GBP" },
       keepSupplier: true,
+      sourceType: "manual",
       headers: [],
       fingerprint: "",
       mapping: { headerRow: 0, columns: {}, pricePer: "unit" } as unknown as ColumnMapping,

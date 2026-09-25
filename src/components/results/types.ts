@@ -34,9 +34,9 @@ export interface Result {
   band: "green" | "amber" | "grey" | null;
   offer_count: number;
   error: string | null;
-  inputs: { market?: StoredMarket | null; sellers?: Seller[] | null; qogita?: QogitaOffers | null; maxLandedGbp?: number | null; pack?: { listing: number; supplier: number; ratio: number } | null; lookup?: { outcome: string; attempts: { identifiersType: string; code: string; items: number; total?: number; error?: string }[]; raw?: string } | null } | null;
+  inputs: { market?: StoredMarket | null; sellers?: Seller[] | null; qogita?: QogitaOffers | null; maxLandedGbp?: number | null; movMoq?: number; pack?: { listing: number; supplier: number; ratio: number } | null; lookup?: { outcome: string; attempts: { identifiersType: string; code: string; items: number; total?: number; error?: string }[]; raw?: string } | null } | null;
   product: { ean: string; asin: string | null; title: string | null; brand: string | null; category: string | null; image_url?: string | null } | null;
-  offer: { unit_cost: number; currency: string; unit_cost_gbp: number; cost_known?: boolean; moq: number | null; pack_units: number; stock?: number | null; title: string | null; source_ref: string | null; supplier: { name: string } | null } | null;
+  offer: { unit_cost: number; currency: string; unit_cost_gbp: number; cost_known?: boolean; moq: number | null; pack_units: number; stock?: number | null; title: string | null; source_ref: string | null; supplier: { id?: string; name: string } | null } | null;
 }
 
 export interface Run {
@@ -94,6 +94,8 @@ export const figure = (r: Result, k: keyof typeof FIGURES): Figure => FIGURES[k]
 
 /** The MOQ in Amazon listings: a multipack listing takes several of the supplier's items. */
 export const listingMoq = (r: Result): number | null => {
+  // No line MOQ: the units the supplier's minimum order value makes the first order (already per listing).
+  if (r.offer?.moq == null && r.inputs?.movMoq != null) return r.inputs.movMoq;
   const moq = r.offer?.moq ?? null, k = r.inputs?.pack;
   return moq == null || !k || k.ratio === 1 ? moq : Math.max(1, Math.ceil(moq / k.ratio));
 };

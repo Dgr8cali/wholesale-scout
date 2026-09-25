@@ -177,6 +177,7 @@ export async function runQogitaPull(opts: {
       files: [{
         fileName: label,
         supplier: { name: "Qogita", vatBasis: "ex_vat", vatRate: 20, currency: pull.currency },
+        sourceType: "qogita",
         headers: HEADERS,
         fingerprint: headerFingerprint(HEADERS),
         mapping: MAPPING,

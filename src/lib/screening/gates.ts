@@ -228,11 +228,25 @@ type Evaluator = (ctx: ScreenContext, p: ProfileConfig, run: GateRun) => Omit<Ga
 
 const skipped = (detail: string) => ({ status: "skipped" as const, detail });
 
+/**
+ * Units the first order has to be: the line's MOQ; with none, enough to reach the supplier's
+ * minimum order value (a supplier with a £150 MOV and £5 items needs 30); else one.
+ */
+export function effectiveMoq(ctx: ScreenContext): { units: number; fromMov: boolean } {
+  if (ctx.offer.moq != null) return { units: Math.max(1, ctx.offer.moq), fromMov: false };
+  const mov = ctx.offer.supplierMovGbp;
+  if (mov != null && mov > 0 && ctx.offer.unitCostGbp > 0 && ctx.offer.costKnown !== false) {
+    return { units: Math.max(1, Math.ceil(mov / ctx.offer.unitCostGbp)), fromMov: true };
+  }
+  return { units: 1, fromMov: false };
+}
+
 /** The first order for this row under the profile's line cap (see ./order). */
 export function firstOrder(ctx: ScreenContext, p: ProfileConfig, share: number | null): OrderPlan | null {
   if (ctx.offer.costKnown === false) return null;
   const landed = landedCost(ctx.offer.unitCostGbp, { goodsVatRatePct: ctx.offer.goodsVatRatePct }, p.fees).total;
-  return orderPlan({ lineCapGbp: (p.budget * p.gates.budgetFit.maxLineSharePct) / 100, landedGbp: landed, moq: ctx.offer.moq, sharePerMonth: share });
+  const m = effectiveMoq(ctx);
+  return orderPlan({ lineCapGbp: (p.budget * p.gates.budgetFit.maxLineSharePct) / 100, landedGbp: landed, moq: ctx.offer.moq ?? (m.fromMov ? m.units : null), sharePerMonth: share });
 }
 
 const EVALUATORS: Record<GateId, Evaluator> = {
@@ -282,18 +296,20 @@ const EVALUATORS: Record<GateId, Evaluator> = {
     const g = p.gates.budgetFit;
     if (ctx.offer.costKnown === false) return skipped("No cost given");
     const landed = landedCost(ctx.offer.unitCostGbp, { goodsVatRatePct: ctx.offer.goodsVatRatePct }, p.fees).total;
-    const moq = Math.max(1, ctx.offer.moq ?? 1);
+    const { units: moq, fromMov } = effectiveMoq(ctx);
     const order = moq * landed;
     const cap = (p.budget * g.maxLineSharePct) / 100;
+    // No line MOQ: the supplier's minimum order value sets the smallest order instead.
+    const what = fromMov ? `No line MOQ: the supplier's ${money(ctx.offer.supplierMovGbp!)} minimum order is ${moq}` : `MOQ ${moq}`;
     if (order > cap) {
       const fit = Math.floor(cap / landed);
       const fits = fit > 0 ? `${fit.toLocaleString("en-GB")} unit${fit === 1 ? "" : "s"} fit` : "not one unit fits";
-      return { status: failAs(g.mode), detail: `MOQ ${moq} × ${money(landed)} = ${money(order)}, over the ${money(cap)} line cap; ${fits}` };
+      return { status: failAs(g.mode), detail: `${what} × ${money(landed)} = ${money(order)}, over the ${money(cap)} line cap; ${fits}`, tags: fromMov ? ["MOV"] : undefined };
     }
     if (ctx.offer.supplierMovGbp != null && ctx.offer.supplierMovGbp > p.budget) {
       return { status: failAs(g.mode), detail: `Supplier minimum order ${money(ctx.offer.supplierMovGbp)} is over the ${money(p.budget)} budget` };
     }
-    return { status: "pass", detail: `First order ${money(order)} of ${money(p.budget)}` };
+    return { status: "pass", detail: `First order ${money(order)} of ${money(p.budget)}${fromMov ? ` (${moq} units to reach the supplier's ${money(ctx.offer.supplierMovGbp!)} minimum order)` : ""}` };
   },
 
   matchQuality(ctx, p) {

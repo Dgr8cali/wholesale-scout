@@ -143,8 +143,16 @@ export function Detail({ r, fav, onNote, onWaive, onWatch, stacked = false, budg
           <p className="text-xs text-muted-foreground">No sell price yet.{r.hurdle_price != null ? ` Clears the floors at ${gbp(r.hurdle_price)}.` : ""}</p>
         )}
         {r.fees?.compare && <FeeCompare c={r.fees.compare} dimsSource={r.fees.dimsSource} />}
+        {r.offer?.supplier && (
+          <p className="mt-2 text-xs">
+            <span className="text-muted-foreground">Source: </span>
+            {r.offer.supplier.id
+              ? <Link className="font-medium text-brand hover:underline" href={`/suppliers/${r.offer.supplier.id}`} onClick={(e) => e.stopPropagation()}>{r.offer.supplier.name}</Link>
+              : <span className="font-medium">{r.offer.supplier.name}</span>}
+          </p>
+        )}
         {r.offer && (
-          <p className="mt-2 text-xs text-muted-foreground">
+          <p className="mt-1 text-xs text-muted-foreground">
             Quoted {r.offer.unit_cost} {r.offer.currency}/unit → {gbp(r.offer.unit_cost_gbp)} ex-VAT · MOQ {r.offer.moq ?? "—"} · {r.offer.source_ref}
           </p>
         )}

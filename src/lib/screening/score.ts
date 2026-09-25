@@ -7,7 +7,7 @@ import { GROUP_LABELS, SCALE_DEFS, type GroupId, type ProfileConfig, type Scale 
 import { isDormant, lastSeenLabel } from "./dormant";
 import { profitPerMonth, yourShare } from "./sales";
 import { monthsLabel } from "./order";
-import { firstOrder, tierDisagreement, type GateRun, type ScreenContext } from "./gates";
+import { effectiveMoq, firstOrder, tierDisagreement, type GateRun, type ScreenContext } from "./gates";
 
 export interface FitData {
   deliveryDays: number | null;
@@ -51,7 +51,7 @@ export function paramValues(ctx: ScreenContext, run: GateRun, p: ProfileConfig, 
   const e = run.economics;
   const outcome = (id: string) => run.outcomes.find((o) => o.gate === id);
   const landed = landedCost(ctx.offer.unitCostGbp, { goodsVatRatePct: ctx.offer.goodsVatRatePct }, p.fees).total;
-  const moq = Math.max(1, ctx.offer.moq ?? 1);
+  const moq = effectiveMoq(ctx).units;
   const mirage = outcome("mirage");
   const compliance = outcome("compliance");
   const warnings = run.outcomes.filter((o) => o.status === "warn" && !["compliance", "mirage", "gating", "matchQuality"].includes(o.gate)).length;

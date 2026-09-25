@@ -13,7 +13,7 @@ import { isDormant } from "../screening/dormant";
 import { getQogita, variantFid } from "../qogita/client";
 import { chooseOffer, toSupplierOffer, type QogitaOffers, type SupplierOffer } from "../qogita/offers";
 import { GATE_ORDER, withDefaults, type GateId, type ProfileConfig } from "../screening/config";
-import { packNote, resolveScoringPrice, runGates, verdictOf, type GateRun, type MarketData, type ScreenContext, type SellerView } from "../screening/gates";
+import { effectiveMoq, packNote, resolveScoringPrice, runGates, verdictOf, type GateRun, type MarketData, type ScreenContext, type SellerView } from "../screening/gates";
 import { listingPack, supplierPack, type PackAttrs } from "../screening/pack";
 import type { CategoryRule, DgFacts } from "../screening/rules";
 import { ipIndex, matchIpRisk, type IpIndex } from "../ipRisk";
@@ -102,6 +102,8 @@ export interface StoredInputs {
   qogita?: QogitaOffers | null;
   /** No cost given (ASIN check): the most it can cost landed and clear the floors. */
   maxLandedGbp?: number | null;
+  /** No line MOQ: the first order's units from the supplier's minimum order value. */
+  movMoq?: number;
   /** The listing's pack against the supplier row's, when they differ (cost and MOQ scaled). */
   pack?: { listing: number; supplier: number; ratio: number } | null;
   notes: string[];
@@ -298,6 +300,8 @@ function resultFields(row: Row, run: GateRun, cfg: ProfileConfig, ctx: ScreenCon
     qogita: row.qogita ? { ...row.qogita, ...pick(row.qogita, cfg) } : null,
     // The most it can cost landed at its sell price: the hurdle with no cost, and a watch condition's value.
     maxLandedGbp: run.maxLandedGbp ?? maxLandedFor(ctx, run, cfg),
+    // No line MOQ: the units the supplier's minimum order value makes the first order.
+    movMoq: (() => { const m = effectiveMoq(ctx); return m.fromMov ? m.units : undefined; })(),
     pack: ctx.pack && ctx.pack.ratio !== 1 ? { listing: ctx.pack.listing, supplier: ctx.pack.supplier, ratio: ctx.pack.ratio } : null,
   };
   return {
