@@ -103,6 +103,20 @@ export function parseFeesEstimate(raw: unknown, asin: string): FeesEstimate {
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
+export type ApprovalKind = "brand" | "category" | "product";
+
+/**
+ * What Amazon wants you approved for, read from its reason text: "You need approval to
+ * list this brand", "...in this category", or a product-level restriction. null if unclear.
+ */
+export function approvalKind(message: string | null | undefined): ApprovalKind | null {
+  const m = (message ?? "").toLowerCase();
+  if (/\bbrand\b/.test(m)) return "brand";
+  if (/\bcategor(y|ies)\b|\bsub-?category\b/.test(m)) return "category";
+  if (/\b(this|the) (product|item|asin|listing)\b/.test(m)) return "product";
+  return null;
+}
+
 export function parseRestrictions(asin: string, restrictions: unknown[]): Restriction {
   const reasons = restrictions
     .flatMap((x) => arr(obj(x).reasons))

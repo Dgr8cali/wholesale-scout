@@ -107,11 +107,26 @@ describe("gates", () => {
     expect(m.tags).toContain("MIRAGE");
   });
 
-  it("fails blocked listings and approval-needed by default", () => {
-    expect(runGates(ctx({ restriction: { status: "blocked", message: "" } }), DEFAULT_PROFILE).failedGate).toBe("gating");
-    expect(runGates(ctx({ restriction: { status: "approval_required", message: "100 units" } }), DEFAULT_PROFILE).failedGate).toBe("gating");
-    const soft = withDefaults({ gates: { ...DEFAULT_PROFILE.gates, gating: { mode: "fail", approvalRequired: "warn" } } });
-    expect(runGates(ctx({ restriction: { status: "approval_required", message: "" } }), soft).failedGate).toBeNull();
+  it("fails blocked listings but only warns on approval-needed by default", () => {
+    const blocked = runGates(ctx({ restriction: { status: "blocked", message: "You are not approved to list products with this brand." } }), DEFAULT_PROFILE);
+    expect(blocked.failedGate).toBe("gating");
+    expect(blocked.outcomes.at(-1)!.detail).toMatch(/^Blocked for your account \(brand\)/);
+
+    const c = ctx({ restriction: { status: "approval_required", message: "You need approval to list this brand." }, product: { ...ctx().product, brand: "Nuxe" } });
+    const run = runGates(c, DEFAULT_PROFILE);
+    expect(run.failedGate).toBeNull();
+    const g = run.outcomes.find((o) => o.gate === "gating")!;
+    expect(g).toMatchObject({ status: "warn", detail: "Brand approval needed (Nuxe): You need approval to list this brand." });
+    expect(g.tags).toEqual(["APPROVAL", "BRAND"]);
+    expect(winScore(c, run, DEFAULT_PROFILE, fit).why).toContain("Watch: Brand approval needed (Nuxe)");
+
+    const strictApproval = withDefaults({ gates: { ...DEFAULT_PROFILE.gates, gating: { mode: "fail", approvalRequired: "fail" } } });
+    expect(runGates(c, strictApproval).failedGate).toBe("gating");
+  });
+
+  it("names category approval with the listing's category", () => {
+    const c = ctx({ amazonCategory: "Grocery", restriction: { status: "approval_required", message: "You need approval to list in this category." } });
+    expect(runGates(c, DEFAULT_PROFILE).outcomes.find((o) => o.gate === "gating")!.detail).toMatch(/^Category approval needed \(Grocery\)/);
   });
 
   it("fails cheap products on fees and reports the hurdle price", () => {

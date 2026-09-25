@@ -18,7 +18,7 @@ export interface GateConfigs {
   demand: { mode: GateMode; minRankDrops30d: number; maxAvgRank90d: number };
   priceRegime: { mode: GateMode; spikePct: number };
   priceDrift: { mode: GateMode; maxDeclinePctYr: number };
-  /** Blocked always takes the gate's mode; approval-required can be softened to warn. */
+  /** Blocked always takes the gate's mode; approval-required has its own (warn by default). */
   gating: { mode: GateMode; approvalRequired: GateMode };
   fees: { mode: GateMode; minProfit: number; minRoiPct: number; minMarginPct: number };
 }
@@ -149,7 +149,7 @@ export const DEFAULT_GATES: GateConfigs = {
   demand: { mode: "fail", minRankDrops30d: 30, maxAvgRank90d: 50000 },
   priceRegime: { mode: "warn", spikePct: 15 },
   priceDrift: { mode: "warn", maxDeclinePctYr: 20 },
-  gating: { mode: "fail", approvalRequired: "fail" },
+  gating: { mode: "fail", approvalRequired: "warn" },
   fees: { mode: "fail", minProfit: 2, minRoiPct: 20, minMarginPct: 15 },
 };
 

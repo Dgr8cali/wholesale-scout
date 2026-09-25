@@ -11,6 +11,7 @@ import {
   type Economics,
 } from "../fees/engine";
 import type { RateCard } from "../fees/rateCard";
+import { approvalKind } from "../spapi/parse";
 import type { RestrictionStatus } from "../spapi/types";
 import { GATE_LABELS, GATE_ORDER, type GateId, type GateMode, type ProfileConfig } from "./config";
 import { matchRules, type CategoryRule, type RuleMatch } from "./rules";
@@ -64,6 +65,7 @@ export interface ScreenContext {
   /** Null until the EAN has been looked up. */
   match: { asin: string | null; asinCount: number; looked: boolean } | null;
   product: {
+    brand?: string | null;
     referralCategory: string | null;
     dimsCm: Dims | null;
     weightG: number | null;
@@ -251,10 +253,19 @@ const EVALUATORS: Record<GateId, Evaluator> = {
     const g = p.gates.gating;
     const r = ctx.restriction;
     if (!r) return skipped("Not checked (SP-API not configured)");
-    if (r.status === "blocked") return { status: failAs(g.mode), detail: `Blocked for your account${r.message ? `: ${r.message}` : ""}`, tags: ["BLOCKED"] };
+    // "Brand approval needed (Nuxe)", "Category approval needed (Beauty)", from Amazon's reason text.
+    const kind = approvalKind(r.message);
+    const what = kind === "brand" ? ctx.product.brand : kind === "category" ? ctx.amazonCategory : null;
+    const label = kind ? `${kind[0].toUpperCase()}${kind.slice(1)} approval` : "Approval";
+    const reason = r.message ? `: ${r.message}` : "";
+    if (r.status === "blocked") {
+      return { status: failAs(g.mode), detail: `Blocked for your account${kind ? ` (${kind}${what ? `: ${what}` : ""})` : ""}${reason}`, tags: ["BLOCKED"] };
+    }
     if (r.status === "approval_required") {
       const mode: GateMode = g.mode === "off" ? "off" : g.approvalRequired;
-      if (mode !== "off") return { status: failAs(mode), detail: `Approval needed${r.message ? `: ${r.message}` : ""}`, tags: ["APPROVAL"] };
+      if (mode !== "off") {
+        return { status: failAs(mode), detail: `${label} needed${what ? ` (${what})` : ""}${reason}`, tags: ["APPROVAL", ...(kind ? [kind.toUpperCase()] : [])] };
+      }
     }
     if (r.status === "unknown") return { status: "skipped", detail: r.message || "Restriction status unknown" };
     return { status: "pass", detail: r.status === "open" ? "Open to list" : "Approval needed (allowed by profile)" };

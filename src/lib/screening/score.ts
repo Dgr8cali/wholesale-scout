@@ -155,7 +155,6 @@ function phrase(g: GroupScore, ctx: ScreenContext, run: GateRun, strong: boolean
       const flags = [
         ...run.ruleMatches.map((r) => r.name.toLowerCase()),
         ...run.outcomes.filter((o) => o.gate === "mirage" && o.status === "warn").map(() => "borrowed rank"),
-        ctx.restriction?.status === "approval_required" ? "approval needed" : null,
       ].filter(Boolean);
       if (!flags.length) return strong ? "no compliance or gating flags" : null;
       return `flags: ${flags.join(", ")}`;
@@ -187,7 +186,7 @@ export function whyLine(ctx: ScreenContext, run: GateRun, score: number | null, 
     .slice(0, 2)
     .map((g) => phrase(g, ctx, run, false))
     .filter(Boolean);
-  const warns = run.outcomes.filter((o) => o.status === "warn" && o.tags?.some((t) => ["SPIKE", "EROSION", "MULTI_ASIN"].includes(t)));
+  const warns = run.outcomes.filter((o) => o.status === "warn" && o.tags?.some((t) => ["APPROVAL", "SPIKE", "EROSION", "MULTI_ASIN"].includes(t)));
 
   if (score == null) {
     const need = [groups.margin.score == null ? "a sell price" : null, groups.demand.score == null ? "rank data" : null].filter(Boolean);

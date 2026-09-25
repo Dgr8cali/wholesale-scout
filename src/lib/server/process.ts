@@ -143,6 +143,7 @@ function context(row: Row, card: RateCard, rules: CategoryRule[], cfg: ProfileCo
     },
     match: row.match,
     product: {
+      brand: p.brand ?? o.brand,
       referralCategory: p.referral_category ?? referralCategoryFor(p.category, card),
       dimsCm: p.dims_cm,
       weightG: p.weight_g == null ? null : Number(p.weight_g),

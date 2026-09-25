@@ -51,7 +51,7 @@ vi.mock("../spapi/client", async (orig) => {
       async getListingsRestrictions(asin: string) {
         calls.restrictions++;
         return asin === "B0MULTIB01"
-          ? { asin, status: "approval_required", reasons: [{ code: "APPROVAL_REQUIRED", message: "Apply to sell: 100 units" }] }
+          ? { asin, status: "approval_required", reasons: [{ code: "APPROVAL_REQUIRED", message: "You need approval to list this brand." }] }
           : { asin, status: "open", reasons: [] };
       },
       async getMyFeesEstimates(items: { asin: string; price: number }[]) {
@@ -149,9 +149,10 @@ describe("ingest → process", () => {
     expect(cheap.failed_gate).toBe("fees");
     expect(Number(cheap.hurdle_price)).toBeGreaterThan(12.5);
 
-    // One EAN, two ASINs: both scored; the gated one fails on gating.
+    // One EAN, two ASINs: both scored; the one needing brand approval warns and says so.
     expect(byAsin("B0MULTIA01").failed_gate).not.toBe("gating");
-    expect(byAsin("B0MULTIB01")).toMatchObject({ verdict: "fail", failed_gate: "gating" });
+    expect(byAsin("B0MULTIB01")).toMatchObject({ verdict: "warn", failed_gate: null });
+    expect(byAsin("B0MULTIB01").why).toContain("Brand approval needed (Brand)");
   });
 
   it("re-screens from stored data, fetching only what a row never had", async () => {
