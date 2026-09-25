@@ -4,6 +4,7 @@ import { DownloadIcon, PinIcon, PinOffIcon, RotateCcwIcon, ShoppingCartIcon, XIc
 import Link from "next/link";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { useDialogs } from "@/components/Dialogs";
 import * as XLSX from "xlsx";
 import { usePageCrumbs } from "@/components/Crumbs";
 import { useQogitaCart } from "@/components/QogitaCart";
@@ -28,6 +29,22 @@ const gates = (g?: string[]) => (g ?? []).map((x) => GATE_LABELS[x as GateId] ??
 
 /** Order planner: the set and quantities that make the most profit a month within the budget. */
 export default function PlanPage() {
+  const { confirm } = useDialogs();
+  /** After ordering from a supplier: its plan lines go into the tracker, each with its prediction. */
+  async function recordGroup(g: { name: string; supplierId: string | null; lines: { qty: number; c: { asin: string | null; landedGbp: number; unitCostGbp: number } }[] }) {
+    const lines = g.lines.filter((x) => x.c.asin && x.qty > 0);
+    if (!lines.length) return;
+    const total = lines.reduce((s, x) => s + x.qty * x.c.landedGbp, 0);
+    if (!(await confirm({ title: `Record ${lines.length} line${lines.length === 1 ? "" : "s"} as bought from ${g.name}?`, description: `${gbp(total)} landed, ordered today. Each is recorded in the tracker with the app's prediction as it stands now.`, confirmLabel: "Record" }))) return;
+    let ok = 0;
+    for (const x of lines) {
+      try {
+        await api("/api/purchases", { method: "POST", json: { asin: x.c.asin, units: x.qty, landedGbp: x.c.landedGbp, unitCostGbp: x.c.unitCostGbp, supplierId: g.supplierId, supplierName: g.name } });
+        ok++;
+      } catch (e) { toast.error((e as Error).message); }
+    }
+    if (ok) toast.success(`${ok} line${ok === 1 ? "" : "s"} recorded: see Tracker`);
+  }
   usePageCrumbs([{ label: "Plan" }]);
   const cart = useQogitaCart();
   const [warns, setWarns] = useState(false);
@@ -171,7 +188,8 @@ export default function PlanPage() {
                         <span className="font-semibold">
                           {g.supplierId ? <Link className="hover:underline" href={`/suppliers/${g.supplierId}`}>{g.name}</Link> : g.name}
                         </span>
-                        <span className="num text-xs">
+                        <Button size="xs" variant="outline" onClick={() => recordGroup(g)} title="After ordering: record these lines in the tracker, with the app's prediction for each">Record as bought</Button>
+                        <span className="num ml-auto text-xs">
                           goods {gbp(g.goods)}
                           {g.movGbp != null && <span className={g.movMet ? "text-pass" : "text-fail"}> · MOV {gbp(g.movGbp)} {g.movMet ? "met" : "not met"}</span>}
                           <span className="text-muted-foreground"> · landed {gbp(g.landed)}</span>
@@ -241,7 +259,7 @@ function Line({ x, lineCap, onPin, onExclude, ownQty, onQty }: { x: PlanLine; li
   return (
     <TableRow className={cn(x.notes.length > 0 && "bg-warn-soft/40")}>
       <TableCell className="max-w-96 pl-4 whitespace-normal">
-        <p className="line-clamp-2 text-sm">{c.title ?? c.ean}</p>
+        <p className="line-clamp-2 text-sm">{c.asin ? <Link className="hover:text-brand hover:underline" href={`/products/${c.asin}`}>{c.title ?? c.ean}</Link> : c.title ?? c.ean}</p>
         <p className="num text-2xs text-muted-foreground">
           {c.brand} · {c.asin ? <a className="text-brand hover:underline" href={`https://www.amazon.co.uk/dp/${c.asin}`} target="_blank" rel="noreferrer">{c.asin}</a> : c.ean}
           {c.verdict === "warn" && <span className="font-sans text-warn" title={gates(c.warnGates)}> · warns: {gates(c.warnGates) || "yes"}</span>}

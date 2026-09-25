@@ -30,6 +30,10 @@ Under it, the key figures each say where they came from and how old they are: pr
 
 When it needs approval, **Apply kit** gathers the brand's documents and the cheapest supplier's invoices (see [Apply for brand approval](/help/howto/apply-for-brand-approval)).
 
+## Your purchases
+
+Record what you buy here (see [Tracker](/help/pages/tracker)): the prediction is frozen with it, and once the stock is live the actual sell price, fees, profit and sales appear beside it.
+
 ## Last 12 months
 
 Charts from the latest Keepa history the app holds (no tokens spent): the Buy Box and Amazon's own price, the sales rank (log scale, better is higher), and the number of new offers. Hover for the values on a day. Links to Amazon and Keepa are in the header.

@@ -30,6 +30,7 @@ import { amazonLastSeen, ago } from "@/lib/ui/when";
 import { applyLinks } from "@/lib/spapi/parse";
 import { approvalRequestUrl } from "@/lib/ui/RestrictionLink";
 import { cn } from "@/lib/utils";
+import { Tracker, type SupplierChoice } from "@/components/product/Tracker";
 import type { WatchCondition } from "@/lib/watch";
 
 const DECISION: Record<Decision, { label: string; variant: "pass" | "warn" | "fail" }> = {
@@ -176,6 +177,9 @@ export default function ProductPage() {
           </div>
         )}
       </section>
+
+      <Tracker asin={v.asin} defaultLanded={cheapest?.landedGbp ?? r?.landed_cost ?? null}
+        suppliers={v.offers.filter((o) => o.supplier).map((o): SupplierChoice => ({ id: o.supplier!.id, name: o.supplier!.name, landedGbp: o.landedGbp, unitCostGbp: o.unitCostGbp }))} />
 
       {/* History charts */}
       {v.keepa && (
