@@ -1,0 +1,145 @@
+import "server-only";
+import type { ColumnMapping, Fx, NormalizedRow } from "../ingest/mapping";
+import { CURRENCIES } from "../ingest/mapping";
+import { chunks, db, loadProfile, must } from "./db";
+
+export interface IngestFile {
+  fileName: string;
+  supplier: { name: string; vatBasis: "ex_vat" | "inc_vat"; vatRate: number; currency: string };
+  headers: string[];
+  fingerprint: string;
+  mapping: ColumnMapping;
+  fx: Fx;
+  rows: NormalizedRow[];
+}
+
+export interface IngestPayload {
+  profileId?: string | null;
+  files: IngestFile[];
+}
+
+function validate(p: IngestPayload) {
+  if (!Array.isArray(p?.files) || !p.files.length) throw new Error("No files");
+  for (const f of p.files) {
+    if (!f.supplier?.name?.trim()) throw new Error(`${f.fileName}: supplier name is required`);
+    if (!["ex_vat", "inc_vat"].includes(f.supplier.vatBasis)) throw new Error(`${f.fileName}: VAT basis must be ex_vat or inc_vat`);
+    if (!(CURRENCIES as readonly string[]).includes(f.supplier.currency)) throw new Error(`${f.fileName}: unsupported currency ${f.supplier.currency}`);
+    if (!(f.fx?.rate > 0)) throw new Error(`${f.fileName}: FX rate must be positive`);
+    if (f.supplier.currency === "GBP" && f.fx.rate !== 1) throw new Error(`${f.fileName}: GBP must use an FX rate of 1`);
+    if (!Array.isArray(f.rows)) throw new Error(`${f.fileName}: rows missing`);
+    for (const r of f.rows) {
+      if (typeof r.ean !== "string" || !/^\d{8,14}$/.test(r.ean)) throw new Error(`${f.fileName} row ${r.sourceRow}: bad EAN`);
+      if (!(r.unitCostGbp > 0)) throw new Error(`${f.fileName} row ${r.sourceRow}: bad price`);
+    }
+  }
+}
+
+/**
+ * Store suppliers, their learned layouts, products and offers, then open a run with
+ * one pending result per product (the cheapest offer across all files wins).
+ */
+export async function ingest(payload: IngestPayload): Promise<{ runId: string; rowCount: number; offerCount: number }> {
+  validate(payload);
+  const d = db();
+  const profile = await loadProfile(payload.profileId);
+
+  // Suppliers (upsert by name) and their mappings.
+  const supplierIds = new Map<string, { id: string; vatRate: number }>();
+  for (const f of payload.files) {
+    const s = f.supplier;
+    const row = must(
+      await d.from("suppliers")
+        .upsert({ name: s.name.trim(), vat_basis: s.vatBasis, vat_rate: s.vatRate, currency: s.currency, updated_at: new Date().toISOString() }, { onConflict: "name" })
+        .select("id, vat_rate")
+        .single(),
+      "supplier",
+    ) as { id: string; vat_rate: number };
+    supplierIds.set(f.fileName, { id: row.id, vatRate: Number(row.vat_rate) });
+    must(
+      await d.from("supplier_mappings").upsert(
+        { supplier_id: row.id, header_fingerprint: f.fingerprint, headers: f.headers, mapping: f.mapping, updated_at: new Date().toISOString() },
+        { onConflict: "supplier_id,header_fingerprint" },
+      ),
+      "mapping",
+    );
+  }
+
+  // Products: one per EAN until matched; an EAN already matched to several ASINs gets an offer on each.
+  const eans = [...new Set(payload.files.flatMap((f) => f.rows.map((r) => r.ean)))];
+  const productsByEan = new Map<string, { id: string }[]>();
+  for (const c of chunks(eans)) {
+    const rows = must(await d.from("products").select("id, ean").in("ean", c), "products") as { id: string; ean: string }[];
+    for (const p of rows) productsByEan.set(p.ean, [...(productsByEan.get(p.ean) ?? []), p]);
+  }
+  const missing = eans.filter((e) => !productsByEan.has(e));
+  const firstRowByEan = new Map<string, NormalizedRow>();
+  for (const f of payload.files) for (const r of f.rows) if (!firstRowByEan.has(r.ean)) firstRowByEan.set(r.ean, r);
+  for (const c of chunks(missing, 500)) {
+    const inserted = must(
+      await d.from("products").insert(c.map((ean) => ({ ean, title: firstRowByEan.get(ean)?.title, brand: firstRowByEan.get(ean)?.brand }))).select("id, ean"),
+      "insert products",
+    ) as { id: string; ean: string }[];
+    for (const p of inserted) productsByEan.set(p.ean, [p]);
+  }
+
+  // Offers.
+  const offerRows = payload.files.flatMap((f) => {
+    const sup = supplierIds.get(f.fileName)!;
+    return f.rows.flatMap((r) =>
+      (productsByEan.get(r.ean) ?? []).map((p) => ({
+        product_id: p.id,
+        supplier_id: sup.id,
+        unit_cost: r.unitCost,
+        currency: f.supplier.currency,
+        fx_rate: f.fx.rate,
+        fx_date: f.fx.date,
+        unit_cost_gbp: r.unitCostGbp,
+        pack_units: r.packUnits,
+        moq: r.moq,
+        stock: r.stock,
+        title: r.title,
+        brand: r.brand,
+        category: r.category,
+        source_ref: `${f.fileName} row ${r.sourceRow}`,
+        _vatRate: sup.vatRate,
+      })),
+    );
+  });
+  const offers: { id: string; product_id: string; unit_cost_gbp: number; _vatRate: number }[] = [];
+  for (const c of chunks(offerRows, 500)) {
+    const inserted = must(
+      await d.from("offers").insert(c.map(({ _vatRate, ...o }) => (void _vatRate, o))).select("id, product_id, unit_cost_gbp"),
+      "insert offers",
+    ) as { id: string; product_id: string; unit_cost_gbp: number }[];
+    inserted.forEach((o, i) => offers.push({ ...o, _vatRate: c[i]._vatRate }));
+  }
+
+  // Cheapest landed offer per product (VAT on goods counts when not registered).
+  const vatCounts = !profile.config.fees.vatRegistered;
+  const best = new Map<string, { offerId: string; cost: number; count: number }>();
+  for (const o of offers) {
+    const cost = Number(o.unit_cost_gbp) * (vatCounts ? 1 + o._vatRate / 100 : 1);
+    const cur = best.get(o.product_id);
+    if (!cur) best.set(o.product_id, { offerId: o.id, cost, count: 1 });
+    else best.set(o.product_id, cost < cur.cost ? { offerId: o.id, cost, count: cur.count + 1 } : { ...cur, count: cur.count + 1 });
+  }
+
+  const run = must(
+    await d.from("runs").insert({
+      profile_id: profile.id,
+      profile_snapshot: profile.config,
+      source: payload.files.map((f) => f.fileName).join(", "),
+      status: "pending",
+      row_count: best.size,
+    }).select("id").single(),
+    "run",
+  ) as { id: string };
+
+  for (const c of chunks([...best.entries()], 500)) {
+    must(
+      await d.from("results").insert(c.map(([productId, b]) => ({ run_id: run.id, product_id: productId, offer_id: b.offerId, offer_count: b.count }))),
+      "results",
+    );
+  }
+  return { runId: run.id, rowCount: best.size, offerCount: offers.length };
+}

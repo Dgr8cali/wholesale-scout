@@ -1,0 +1,215 @@
+/**
+ * Profile configuration: every gate mode and parameter, score weights and scales,
+ * fee assumptions and the scoring-price rule. Stored as JSON in `profiles.config`.
+ */
+import { DEFAULT_FEE_ASSUMPTIONS, type FeeAssumptions } from "../fees/engine";
+
+export type GateMode = "off" | "warn" | "fail";
+
+export interface GateConfigs {
+  priceBand: { mode: GateMode; min: number; max: number };
+  /** `rules` gives each compliance rule its own mode; the gate's mode switches the whole gate. */
+  compliance: { mode: GateMode; rules: Record<string, GateMode> };
+  budgetFit: { mode: GateMode; maxLineSharePct: number };
+  matchQuality: { mode: GateMode };
+  mirage: { mode: GateMode; minHistoryDays: number; maxReviewJumpPct: number };
+  amazonPresence: { mode: GateMode; days: number };
+  competition: { mode: GateMode; minSellers: number; maxSellers: number; maxBbSharePct: number };
+  demand: { mode: GateMode; minRankDrops30d: number; maxAvgRank90d: number };
+  priceRegime: { mode: GateMode; spikePct: number };
+  priceDrift: { mode: GateMode; maxDeclinePctYr: number };
+  /** Blocked always takes the gate's mode; approval-required can be softened to warn. */
+  gating: { mode: GateMode; approvalRequired: GateMode };
+  fees: { mode: GateMode; minProfit: number; minRoiPct: number; minMarginPct: number };
+}
+
+export type GateId = keyof GateConfigs;
+
+/** A piecewise-linear curve mapping a value to 0–100. Points are [value, score]. */
+export interface Scale {
+  points: [number, number][];
+  /** Weight of this parameter inside its group. */
+  weight: number;
+}
+
+export type GroupId = "demand" | "competition" | "priceHealth" | "margin" | "risk" | "fit";
+
+export interface ScoreConfig {
+  weights: Record<GroupId, number>;
+  scales: Record<string, Scale>;
+  bands: { green: number; amber: number };
+}
+
+export interface ProfileConfig {
+  scoringPrice: "current" | "median" | "lower";
+  budget: number;
+  fees: FeeAssumptions;
+  gates: GateConfigs;
+  score: ScoreConfig;
+}
+
+export const GATE_ORDER: GateId[] = [
+  "priceBand", "compliance", "budgetFit", "matchQuality", "mirage", "amazonPresence",
+  "competition", "demand", "priceRegime", "priceDrift", "gating", "fees",
+];
+
+export const GATE_LABELS: Record<GateId, string> = {
+  priceBand: "Price band",
+  compliance: "Compliance category",
+  budgetFit: "Budget fit",
+  matchQuality: "Match quality",
+  mirage: "Borrowed rank (mirage)",
+  amazonPresence: "Amazon presence",
+  competition: "Competition shape",
+  demand: "Demand",
+  priceRegime: "Price regime",
+  priceDrift: "Price drift",
+  gating: "Gating and blocks",
+  fees: "Fee engine",
+};
+
+export const GROUP_LABELS: Record<GroupId, string> = {
+  demand: "Demand",
+  competition: "Competition",
+  priceHealth: "Price health",
+  margin: "Margin",
+  risk: "Risk",
+  fit: "Fit",
+};
+
+/** Which group each scale belongs to, and how to describe it in Settings. */
+export const SCALE_DEFS: Record<string, { group: GroupId; label: string; unit: string }> = {
+  rankDrops: { group: "demand", label: "Rank drops / 30 days", unit: "drops" },
+  avgRank: { group: "demand", label: "90-day average rank", unit: "rank" },
+  rankTrend: { group: "demand", label: "12-month rank trend (negative = improving)", unit: "%" },
+  sellers: { group: "competition", label: "FBA seller count", unit: "sellers" },
+  amazonAbsence: { group: "competition", label: "Days since Amazon last sold", unit: "days" },
+  topSellerShare: { group: "competition", label: "Top seller's Buy Box share", unit: "%" },
+  offerTrend: { group: "competition", label: "Offer count change vs 90 days ago", unit: "%" },
+  priceVsMedian: { group: "priceHealth", label: "Current vs 12-month median", unit: "%" },
+  priceSlope: { group: "priceHealth", label: "12-month Buy Box slope", unit: "%/yr" },
+  volatility: { group: "priceHealth", label: "Buy Box volatility", unit: "%" },
+  profit: { group: "margin", label: "Net profit per unit", unit: "£" },
+  roi: { group: "margin", label: "ROI", unit: "%" },
+  margin: { group: "margin", label: "Net margin", unit: "%" },
+  complianceFlags: { group: "risk", label: "Compliance flags", unit: "flags" },
+  mirage: { group: "risk", label: "Mirage flag (1 = flagged)", unit: "flag" },
+  gating: { group: "risk", label: "Gating (0 open, 1 unknown, 2 approval needed)", unit: "status" },
+  brandLock: { group: "risk", label: "Brand-lock pattern (1 = one seller holds ≥ 90%)", unit: "flag" },
+  variations: { group: "risk", label: "Variation count", unit: "variations" },
+  warnings: { group: "risk", label: "Other warn-mode gates tripped", unit: "gates" },
+  budgetShare: { group: "fit", label: "Order cost as share of budget", unit: "%" },
+  moq: { group: "fit", label: "MOQ", unit: "units" },
+  deliveryDays: { group: "fit", label: "Delivery time", unit: "days" },
+  supplierRating: { group: "fit", label: "Supplier ledger rating", unit: "0–5" },
+};
+
+const s = (points: [number, number][], weight = 1): Scale => ({ points, weight });
+
+export const DEFAULT_SCALES: Record<string, Scale> = {
+  rankDrops: s([[10, 0], [200, 100]]),
+  avgRank: s([[1000, 100], [20000, 70], [50000, 40], [150000, 0]]),
+  rankTrend: s([[-30, 100], [0, 70], [30, 20], [60, 0]]),
+  sellers: s([[1, 40], [3, 90], [4, 100], [6, 100], [12, 30], [20, 0]]),
+  amazonAbsence: s([[0, 0], [365, 70], [730, 100]]),
+  topSellerShare: s([[30, 100], [50, 80], [70, 40], [100, 0]]),
+  offerTrend: s([[-30, 100], [0, 70], [30, 30], [70, 0]]),
+  priceVsMedian: s([[-25, 30], [-5, 100], [0, 100], [15, 40], [40, 0]]),
+  priceSlope: s([[-30, 0], [-10, 50], [0, 85], [10, 100]]),
+  volatility: s([[0, 100], [10, 80], [30, 25], [50, 0]]),
+  profit: s([[0, 0], [2, 30], [5, 80], [8, 100]]),
+  roi: s([[10, 0], [60, 100]]),
+  margin: s([[10, 0], [15, 40], [35, 100]]),
+  complianceFlags: s([[0, 100], [1, 55], [2, 25], [3, 0]]),
+  mirage: s([[0, 100], [1, 15]]),
+  gating: s([[0, 100], [1, 70], [2, 35]]),
+  brandLock: s([[0, 100], [1, 20]]),
+  variations: s([[1, 100], [10, 75], [50, 30]]),
+  warnings: s([[0, 100], [1, 65], [2, 40], [4, 0]]),
+  budgetShare: s([[0, 100], [30, 90], [60, 50], [100, 0]]),
+  moq: s([[1, 100], [24, 85], [100, 45], [500, 0]]),
+  deliveryDays: s([[1, 100], [3, 90], [7, 60], [21, 0]]),
+  supplierRating: s([[0, 30], [3, 70], [5, 100]]),
+};
+
+export const COMPLIANCE_RULE_KEYS = [
+  "fragrance", "liquid", "aerosol", "cosmetic", "supplement", "food", "electrical", "battery", "under3sToy", "chemical",
+] as const;
+
+const allRules = (mode: GateMode) => Object.fromEntries(COMPLIANCE_RULE_KEYS.map((k) => [k, mode])) as Record<string, GateMode>;
+
+export const DEFAULT_GATES: GateConfigs = {
+  priceBand: { mode: "fail", min: 12, max: 40 },
+  compliance: { mode: "warn", rules: allRules("warn") },
+  budgetFit: { mode: "fail", maxLineSharePct: 100 },
+  matchQuality: { mode: "fail" },
+  mirage: { mode: "warn", minHistoryDays: 90, maxReviewJumpPct: 50 },
+  amazonPresence: { mode: "fail", days: 365 },
+  competition: { mode: "warn", minSellers: 3, maxSellers: 12, maxBbSharePct: 70 },
+  demand: { mode: "fail", minRankDrops30d: 30, maxAvgRank90d: 50000 },
+  priceRegime: { mode: "warn", spikePct: 15 },
+  priceDrift: { mode: "warn", maxDeclinePctYr: 20 },
+  gating: { mode: "fail", approvalRequired: "fail" },
+  fees: { mode: "fail", minProfit: 2, minRoiPct: 20, minMarginPct: 15 },
+};
+
+export const DEFAULT_PROFILE: ProfileConfig = {
+  scoringPrice: "lower",
+  budget: 1000,
+  fees: DEFAULT_FEE_ASSUMPTIONS,
+  gates: DEFAULT_GATES,
+  score: {
+    weights: { demand: 25, competition: 20, priceHealth: 15, margin: 25, risk: 10, fit: 5 },
+    scales: DEFAULT_SCALES,
+    bands: { green: 75, amber: 55 },
+  },
+};
+
+const clone = <T,>(x: T): T => JSON.parse(JSON.stringify(x));
+
+/** The three profiles the app ships with. */
+export function defaultProfiles(): { name: string; is_default: boolean; config: ProfileConfig }[] {
+  const strict = clone(DEFAULT_PROFILE);
+  strict.gates.compliance = { mode: "fail", rules: allRules("fail") };
+  strict.gates.amazonPresence = { mode: "fail", days: 365 };
+  strict.scoringPrice = "lower";
+  strict.gates.fees = { ...strict.gates.fees, minRoiPct: 25, minMarginPct: 18 };
+
+  const test = clone(DEFAULT_PROFILE);
+  test.gates.compliance = { mode: "warn", rules: allRules("warn") };
+  test.gates.fees = { ...test.gates.fees, minRoiPct: 20, minMarginPct: 15 };
+  test.gates.budgetFit = { mode: "fail", maxLineSharePct: 30 };
+
+  const dry = clone(DEFAULT_PROFILE);
+  dry.gates.compliance = {
+    mode: "fail",
+    rules: { ...allRules("warn"), fragrance: "fail", liquid: "fail", aerosol: "fail", cosmetic: "fail", supplement: "fail", chemical: "fail" },
+  };
+
+  return [
+    { name: "Strict", is_default: false, config: strict },
+    { name: "Test order", is_default: true, config: test },
+    { name: "Dry goods only", is_default: false, config: dry },
+  ];
+}
+
+/** Fill any keys missing from a stored config with defaults, so old profiles keep working. */
+export function withDefaults(cfg: Partial<ProfileConfig> | null | undefined): ProfileConfig {
+  const c = cfg ?? {};
+  const gates = { ...DEFAULT_GATES } as GateConfigs;
+  for (const id of GATE_ORDER) {
+    (gates as unknown as Record<string, unknown>)[id] = { ...DEFAULT_GATES[id], ...(c.gates?.[id] ?? {}) };
+  }
+  gates.compliance.rules = { ...DEFAULT_GATES.compliance.rules, ...(c.gates?.compliance?.rules ?? {}) };
+  return {
+    scoringPrice: c.scoringPrice ?? DEFAULT_PROFILE.scoringPrice,
+    budget: c.budget ?? DEFAULT_PROFILE.budget,
+    fees: { ...DEFAULT_FEE_ASSUMPTIONS, ...(c.fees ?? {}), missingDims: { ...DEFAULT_FEE_ASSUMPTIONS.missingDims, ...(c.fees?.missingDims ?? {}) } },
+    gates,
+    score: {
+      weights: { ...DEFAULT_PROFILE.score.weights, ...(c.score?.weights ?? {}) },
+      scales: { ...DEFAULT_SCALES, ...(c.score?.scales ?? {}) },
+      bands: { ...DEFAULT_PROFILE.score.bands, ...(c.score?.bands ?? {}) },
+    },
+  };
+}
