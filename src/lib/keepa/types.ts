@@ -41,6 +41,12 @@ export interface KeepaSummary {
   packageWeightG?: number | null;
   /** Size of the variation family. */
   variationCount?: number | null;
+  /**
+   * False when fetched without Buy Box data (stage 1, 1 token): price figures come from the
+   * lowest new offer and there's no Buy Box seller history. Absent on older snapshots (which
+   * always had it).
+   */
+  buyBoxFetched?: boolean;
   // History for dormant listings (no offer now); see summarize.dormancy.
   lastBuyBox12m?: number | null;
   lastBuyBoxAt?: string | null;
@@ -77,6 +83,8 @@ export interface KeepaProduct {
 /** What Keepa said about one request: its own token figures, logged and recorded as they arrive. */
 export interface KeepaResponseMeta {
   kind: "asin" | "code" | "seller";
+  /** The request included Buy Box data (buybox=1): 3 tokens a product instead of 1. */
+  buyBox?: boolean;
   /** ASINs or codes asked for. */
   count: number;
   status: number;
@@ -135,8 +143,9 @@ export interface KeepaClient {
   /** False for the stub: gates that need Keepa report "not checked" instead of failing. */
   readonly available: boolean;
   readonly name: string;
-  lookupByEans(eans: string[], onResponse?: OnKeepaResponse): Promise<KeepaLookup>;
-  lookupByAsins(asins: string[], onResponse?: OnKeepaResponse): Promise<KeepaLookup>;
+  /** buyBox: include Buy Box price and seller history (3 tokens a product; 1 without). */
+  lookupByEans(eans: string[], onResponse?: OnKeepaResponse, opts?: { buyBox?: boolean }): Promise<KeepaLookup>;
+  lookupByAsins(asins: string[], onResponse?: OnKeepaResponse, opts?: { buyBox?: boolean }): Promise<KeepaLookup>;
   lookupSellers(sellerIds: string[], onResponse?: OnKeepaResponse): Promise<SellerLookup>;
   /** Current token balance (free). null when unknown. */
   tokenStatus(): Promise<KeepaTokens | null>;

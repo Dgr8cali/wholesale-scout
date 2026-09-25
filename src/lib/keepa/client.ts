@@ -87,7 +87,7 @@ interface RawKeepaProduct {
   monthlySold?: number | null;
 }
 
-export function parseKeepaProduct(p: RawKeepaProduct, now = Date.now()): KeepaProduct {
+export function parseKeepaProduct(p: RawKeepaProduct, now = Date.now(), buyBoxFetched = true): KeepaProduct {
   const csv = p.csv ?? [];
   const series = {
     rank: decodeSeries(csv[CSV.SALES]),
@@ -108,9 +108,11 @@ export function parseKeepaProduct(p: RawKeepaProduct, now = Date.now()): KeepaPr
   const weightG = p.packageWeight && p.packageWeight > 0 ? p.packageWeight : null;
   const variationCount = p.variations?.length || null;
   const pick = p.fbaFees?.pickAndPackFee;
+  // Without Buy Box data (stage 1) the lowest new offer stands in for the Buy Box price.
   const base = summarize({
     now,
     ...series,
+    buyBox: buyBoxFetched ? series.buyBox : series.newPrice,
     fbaOfferCount: p.stats?.offerCountFBA ?? null,
     buyBoxSellers,
     monthlySold: p.monthlySold ?? null,
@@ -136,6 +138,7 @@ export function parseKeepaProduct(p: RawKeepaProduct, now = Date.now()): KeepaPr
       packageDims: dims,
       packageWeightG: weightG,
       variationCount,
+      buyBoxFetched,
     },
   };
 }
@@ -170,15 +173,16 @@ export class HttpKeepaClient implements KeepaClient {
   ) {}
 
   /** One request, logged with Keepa's own token figures and reported before it's parsed. */
-  private async request(kind: "asin" | "code" | "seller", ids: string[], onResponse?: OnKeepaResponse): Promise<{ body: KeepaBody; meta: KeepaResponseMeta }> {
+  private async request(kind: "asin" | "code" | "seller", ids: string[], onResponse?: OnKeepaResponse, buyBox = true): Promise<{ body: KeepaBody; meta: KeepaResponseMeta }> {
     const url = new URL(kind === "seller" ? "https://api.keepa.com/seller" : "https://api.keepa.com/product");
     url.search = new URLSearchParams(kind === "seller"
       ? { key: this.key, domain: "2", seller: ids.join(",") }
-      : { key: this.key, domain: "2", [kind]: ids.join(","), stats: "365", history: "1", buybox: "1" }).toString();
+      : { key: this.key, domain: "2", [kind]: ids.join(","), stats: "365", history: "1", ...(buyBox ? { buybox: "1" } : {}) }).toString();
     const res = await this.fetchImpl(url);
     const body = (await res.json().catch(() => ({}))) as KeepaBody;
     const meta: KeepaResponseMeta = {
       kind,
+      ...(kind === "seller" ? {} : { buyBox }),
       count: ids.length,
       status: res.status,
       tokensConsumed: body.tokensConsumed ?? 0,
@@ -188,7 +192,7 @@ export class HttpKeepaClient implements KeepaClient {
       products: kind === "seller" ? Object.keys(body.sellers ?? {}).length : body.products?.length ?? 0,
     };
     this.log(
-      `[keepa] ${kind} lookup n=${meta.count} http=${meta.status} products=${meta.products} ` +
+      `[keepa] ${kind}${kind !== "seller" ? (buyBox ? "+buybox" : " history-only") : ""} lookup n=${meta.count} http=${meta.status} products=${meta.products} ` +
         `tokensConsumed=${meta.tokensConsumed} tokensLeft=${meta.tokensLeft} refillIn=${meta.refillInMs}ms processing=${meta.processingTimeInMs}ms`,
     );
     await onResponse?.(meta);
@@ -197,7 +201,7 @@ export class HttpKeepaClient implements KeepaClient {
   }
 
   /** Batches of 100; stops (and says so) when Keepa has no tokens left. */
-  private async run(kind: "asin" | "code", ids: string[], onResponse: OnKeepaResponse | undefined, take: (p: KeepaProduct, chunk: string[], out: KeepaLookup) => void): Promise<KeepaLookup> {
+  private async run(kind: "asin" | "code", ids: string[], onResponse: OnKeepaResponse | undefined, take: (p: KeepaProduct, chunk: string[], out: KeepaLookup) => void, buyBox = true): Promise<KeepaLookup> {
     const out = emptyLookup();
     const unique = [...new Set(ids)];
     for (let i = 0; i < unique.length; i += 100) {
@@ -207,11 +211,11 @@ export class HttpKeepaClient implements KeepaClient {
         break;
       }
       try {
-        const { body, meta } = await this.request(kind, chunk, onResponse);
+        const { body, meta } = await this.request(kind, chunk, onResponse, buyBox);
         out.requests.push(meta);
         out.tokensUsed += meta.tokensConsumed;
         out.tokensLeft = meta.tokensLeft;
-        for (const raw of body.products ?? []) if (raw?.asin) take(parseKeepaProduct(raw), chunk, out);
+        for (const raw of body.products ?? []) if (raw?.asin) take(parseKeepaProduct(raw, Date.now(), buyBox), chunk, out);
       } catch (e) {
         if (e instanceof KeepaError) {
           out.requests.push(e.meta);
@@ -268,13 +272,13 @@ export class HttpKeepaClient implements KeepaClient {
     return out;
   }
 
-  async lookupByAsins(asins: string[], onResponse?: OnKeepaResponse): Promise<KeepaLookup> {
+  async lookupByAsins(asins: string[], onResponse?: OnKeepaResponse, opts: { buyBox?: boolean } = {}): Promise<KeepaLookup> {
     return this.run("asin", asins, onResponse, (p, _chunk, out) => {
       out.byAsin.set(p.asin, p);
-    });
+    }, opts.buyBox ?? true);
   }
 
-  async lookupByEans(eans: string[], onResponse?: OnKeepaResponse): Promise<KeepaLookup> {
+  async lookupByEans(eans: string[], onResponse?: OnKeepaResponse, opts: { buyBox?: boolean } = {}): Promise<KeepaLookup> {
     return this.run("code", eans, onResponse, (p, chunk, out) => {
       out.byAsin.set(p.asin, p);
       for (const ean of chunk) {
@@ -282,7 +286,7 @@ export class HttpKeepaClient implements KeepaClient {
           out.byEan.set(ean, [...(out.byEan.get(ean) ?? []), p]);
         }
       }
-    });
+    }, opts.buyBox ?? true);
   }
 }
 

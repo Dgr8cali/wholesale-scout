@@ -63,6 +63,8 @@ export interface MarketData {
   packageDims?: Dims | null;
   packageWeightG?: number | null;
   variationCount?: number | null;
+  /** False for stage-1 Keepa data: no Buy Box seller history yet (see keepa/types). */
+  buyBoxFetched?: boolean;
   /** From SP-API's current offers before any Keepa history: Amazon holds an offer now. */
   amazonNow?: boolean | null;
   // From the Keepa history, for dormant listings (see ./dormant).
@@ -299,7 +301,8 @@ const EVALUATORS: Record<GateId, Evaluator> = {
     const reasons: string[] = [];
     if (sellers < g.minSellers) reasons.push(`${sellers} sellers, under ${g.minSellers}`);
     if (sellers > g.maxSellers) reasons.push(`${sellers} sellers, over ${g.maxSellers}`);
-    if (m?.topSellerBbSharePct != null && m.topSellerBbSharePct > g.maxBbSharePct) reasons.push(`one seller held the Buy Box ${pct(m.topSellerBbSharePct)} of the year`);
+    // Top-seller share needs Buy Box seller history: stage 2, only for rows that pass everything else.
+    if (m?.buyBoxFetched !== false && m?.topSellerBbSharePct != null && m.topSellerBbSharePct > g.maxBbSharePct) reasons.push(`one seller held the Buy Box ${pct(m.topSellerBbSharePct)} of the year`);
     const threshold = p.sellerLookup.distributorBrandSharePct;
     const distributors = (ctx.sellers ?? []).filter((s) => s.brandSharePct != null && s.brandSharePct >= threshold);
     const flag = distributors.map((s) =>

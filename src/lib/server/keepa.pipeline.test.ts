@@ -15,7 +15,7 @@ import { withDefaults } from "../screening/config";
 
 const k = vi.hoisted(() => ({
   offers: {} as Record<string, { amazon: boolean; fbaOffers: number | null; totalOffers: number | null; buyBox: number | null }>,
-  live: true, asinCalls: [] as string[][], codeCalls: [] as string[][], sellerCalls: [] as string[][],
+  live: true, asinCalls: [] as string[][], bbCalls: [] as string[][], summaryOver: {} as Record<string, unknown>, codeCalls: [] as string[][], sellerCalls: [] as string[][],
   tokens: { tokensLeft: 1000, refillInMs: 60_000, refillRate: 21 },
 }));
 
@@ -56,10 +56,12 @@ vi.mock("../keepa/client", async (orig) => {
   const fake = {
     name: "fake-keepa",
     get available() { return k.live; },
-    async lookupByAsins(asins: string[], onResponse?: OnKeepaResponse) {
-      k.asinCalls.push(asins);
-      await onResponse?.({ kind: "asin", count: asins.length, status: 200, tokensConsumed: 3 * asins.length, tokensLeft: 279, refillInMs: 7000, processingTimeInMs: 400, products: asins.length });
-      return { byEan: new Map(), byAsin: new Map(asins.map((a) => [a, product(a, summary())])), tokensUsed: 3 * asins.length, tokensLeft: 279, requests: [] };
+    async lookupByAsins(asins: string[], onResponse?: OnKeepaResponse, opts: { buyBox?: boolean } = {}) {
+      const buyBox = opts.buyBox !== false;
+      (buyBox ? k.bbCalls : k.asinCalls).push(asins);
+      const per = buyBox ? 3 : 1;
+      await onResponse?.({ kind: "asin", buyBox, count: asins.length, status: 200, tokensConsumed: per * asins.length, tokensLeft: 279, refillInMs: 7000, processingTimeInMs: 400, products: asins.length });
+      return { byEan: new Map(), byAsin: new Map(asins.map((a) => [a, product(a, summary({ ...k.summaryOver, buyBoxFetched: buyBox }))])), tokensUsed: per * asins.length, tokensLeft: 279, requests: [] };
     },
     async lookupByEans(eans: string[]) {
       k.codeCalls.push(eans);
@@ -155,6 +157,8 @@ describe("Keepa path", () => {
     __setDbForTests(fake);
     k.live = true;
     k.asinCalls.length = 0;
+    k.bbCalls.length = 0;
+    k.summaryOver = {};
     k.codeCalls.length = 0;
     k.sellerCalls.length = 0;
     k.offers = {};
@@ -166,11 +170,14 @@ describe("Keepa path", () => {
     const { runId } = await ingest({ files: [upload()] });
     await until(runId);
 
+    // Stage 1 (history, 1 token each) for both; both pass everything else, so stage 2 (Buy Box, 3 each).
     expect(k.asinCalls).toEqual([["B0060OMXUA", "B002XZLAWM"]]);
+    expect(k.bbCalls).toEqual([["B0060OMXUA", "B002XZLAWM"]]);
     expect(k.codeCalls).toEqual([]); // the catalog resolved both EANs
-    expect(fake.tables.keepa_snapshots.map((x) => x.asin).sort()).toEqual(["B002XZLAWM", "B0060OMXUA"]);
+    expect(fake.tables.keepa_snapshots.map((x) => x.asin).sort()).toEqual(["B002XZLAWM", "B002XZLAWM", "B0060OMXUA", "B0060OMXUA"]);
     expect(fake.tables.keepa_snapshots[0]).toMatchObject({ monthly_sold: 300, keepa_rank_drops_30d: 70, fba_fee: 3.09, referral_fee_pct: 15, variation_count: null });
-    expect(tokens(runId)).toBe(6 + 3); // 3 per ASIN, then 1 per seller (the same three sellers for both rows)
+    expect(tokens(runId)).toBe(2 + 6 + 3); // 1 + 3 per ASIN, then 1 per seller (the same three sellers for both rows)
+    expect(fake.tables.runs.find((r) => r.id === runId)!.stats).toMatchObject({ keepaStages: { history: 2, buyBox: 6, lookup: 0, sellers: 3 } });
 
     for (const r of results(runId)) {
       expect((r.inputs as { market: { hasHistory: boolean; monthlySold: number } }).market).toMatchObject({ hasHistory: true, monthlySold: 300 });
@@ -213,7 +220,8 @@ describe("Keepa path", () => {
     const second = await ingest({ files: [upload()] });
     await until(second.runId);
     expect(k.asinCalls).toHaveLength(1);
-    expect(tokens(runId)).toBe(9);
+    expect(k.bbCalls).toHaveLength(1);
+    expect(tokens(runId)).toBe(11);
     expect(tokens(second.runId)).toBe(0);
     expect(results(second.runId).every((r) => (r.inputs as { market: { hasHistory: boolean } }).market.hasHistory)).toBe(true);
   });
@@ -262,7 +270,7 @@ describe("Keepa path", () => {
     expect(r1.requeued).toBe(2);
     await until(runId);
     expect(k.asinCalls).toEqual([["B0060OMXUA", "B002XZLAWM"]]);
-    expect(tokens(runId)).toBe(9);
+    expect(tokens(runId)).toBe(11);
     expect(results(runId).every((r) => gate(r, "mirage")?.status === "pass")).toBe(true);
 
     const r2 = await rescreenRun(runId);
@@ -274,7 +282,7 @@ describe("Keepa path", () => {
     fake.missingColumns.keepa_snapshots = ["monthly_sold", "package", "fba_fee", "buybox_seller_history"];
     const { runId } = await ingest({ files: [upload()] });
     await until(runId);
-    expect(fake.tables.keepa_snapshots).toHaveLength(2);
+    expect(fake.tables.keepa_snapshots).toHaveLength(4); // history-only, then with Buy Box, per ASIN
     expect((fake.tables.keepa_snapshots[0].summary as { fbaFee: number }).fbaFee).toBe(3.09);
     await rescreenRun(runId);
     await until(runId);
@@ -282,10 +290,12 @@ describe("Keepa path", () => {
   });
 
   it("paces Keepa by its token balance: fetches what it can afford, waits for the rest", async () => {
-    k.tokens = { tokensLeft: 4, refillInMs: 60_000, refillRate: 21 }; // enough for one ASIN (3 tokens)
+    // 4 tokens: stage 1 for both (1 each), then stage 2 (3) for only one of them.
+    k.tokens = { tokensLeft: 4, refillInMs: 60_000, refillRate: 21 };
     const { runId } = await ingest({ files: [upload()] });
     const p1 = await processRun(runId, { budgetMs: 1_000 });
-    expect(k.asinCalls).toEqual([["B0060OMXUA"]]);
+    expect(k.asinCalls).toEqual([["B0060OMXUA", "B002XZLAWM"]]);
+    expect(k.bbCalls).toEqual([["B0060OMXUA"]]);
     expect(p1.done).toBe(false);
     expect(p1.waiting).toEqual({ amazon: 0, keepa: 1 });
     expect(Date.parse(p1.keepaResumeAt!)).toBeGreaterThan(Date.now() + 50_000);
@@ -296,12 +306,12 @@ describe("Keepa path", () => {
     expect(p1.eta.minutes).not.toBeNull();
     // The waiting row kept its SP-API price and match; nothing was finalised without history.
     const waiting = results(runId).find((r) => r.status === "pending")!;
-    expect((waiting.inputs as { stage: string; market: { currentBuyBox: number } })).toMatchObject({ stage: "priced", market: { currentBuyBox: 23.55 } });
+    expect((waiting.inputs as { stage: string; market: { buyBoxFetched: boolean } })).toMatchObject({ stage: "buybox", market: { buyBoxFetched: false } });
 
     k.tokens = { tokensLeft: 300, refillInMs: 60_000, refillRate: 21 };
     const p2 = await processRun(runId, { budgetMs: 1_000 });
     expect(p2.done).toBe(true);
-    expect(k.asinCalls).toEqual([["B0060OMXUA"], ["B002XZLAWM"]]);
+    expect(k.bbCalls).toEqual([["B0060OMXUA"], ["B002XZLAWM"]]);
     expect(results(runId).every((r) => (r.inputs as { market: { hasHistory: boolean } }).market.hasHistory)).toBe(true);
   });
 
@@ -355,6 +365,17 @@ describe("Keepa path", () => {
     expect(tokens(runId)).toBe(0);
   });
 
+  it("spends only the 1-token history on rows that fail on it, and no Buy Box data", async () => {
+    // Few sales: fails Demand on stage-1 history.
+    k.summaryOver = { rankDrops30d: 2, keepaRankDrops30: 2, monthlySold: null };
+    const { runId } = await ingest({ files: [upload()] });
+    await until(runId);
+    expect(results(runId).every((r) => r.failed_gate === "demand")).toBe(true);
+    expect(k.asinCalls).toEqual([["B0060OMXUA", "B002XZLAWM"]]);
+    expect(k.bbCalls).toEqual([]);
+    expect(tokens(runId)).toBe(2);
+  });
+
   it("lets one worker hold a run at a time", async () => {
     const { runId } = await ingest({ files: [upload()] });
     fake.tables.runs.find((r) => r.id === runId)!.lease_until = new Date(Date.now() + 30_000).toISOString();
@@ -367,7 +388,7 @@ describe("Keepa path", () => {
     fake.failInserts.add("keepa_snapshots");
     const { runId } = await ingest({ files: [upload()] });
     await until(runId);
-    expect(tokens(runId)).toBe(9);
+    expect(tokens(runId)).toBe(11);
     const r = results(runId)[0];
     expect((r.inputs as { market: { hasHistory: boolean } }).market.hasHistory).toBe(true);
     expect(r.why).toMatch(/Keepa snapshot not stored: request entity too large/);

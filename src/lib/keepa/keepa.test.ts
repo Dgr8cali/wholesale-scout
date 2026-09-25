@@ -130,8 +130,8 @@ describe("Keepa requests: logging and tokens", () => {
     const r = await new HttpKeepaClient("k".repeat(64), fetchImpl, (l) => lines.push(l)).lookupByAsins(["B1", "B2", "B1"], (m) => void seen.push(m));
     expect([...r.byAsin.keys()]).toEqual(["B1", "B2"]);
     expect(r).toMatchObject({ tokensUsed: 6, tokensLeft: 279 });
-    expect(lines).toEqual(["[keepa] asin lookup n=2 http=200 products=2 tokensConsumed=6 tokensLeft=279 refillIn=7598ms processing=496ms"]);
-    expect(seen).toEqual([{ kind: "asin", count: 2, status: 200, tokensConsumed: 6, tokensLeft: 279, refillInMs: 7598, processingTimeInMs: 496, products: 2 }]);
+    expect(lines).toEqual(["[keepa] asin+buybox lookup n=2 http=200 products=2 tokensConsumed=6 tokensLeft=279 refillIn=7598ms processing=496ms"]);
+    expect(seen).toEqual([{ kind: "asin", buyBox: true, count: 2, status: 200, tokensConsumed: 6, tokensLeft: 279, refillInMs: 7598, processingTimeInMs: 496, products: 2 }]);
   });
 
   it("stops asking once Keepa reports no tokens left", async () => {

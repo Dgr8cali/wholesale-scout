@@ -388,7 +388,7 @@ export default function RunPage() {
           </h1>
           {run.name && run.name !== run.source && <p className="text-xs text-muted-foreground">{run.source}</p>}
           <p className="text-sm text-muted-foreground">
-            {run.profile?.name ?? "Profile"}{profileVersion(run)} · started {when(run.started_at)} · {products.length || total} products ({total} listings) · {run.token_cost} Keepa tokens
+            {run.profile?.name ?? "Profile"}{profileVersion(run)} · started {when(run.started_at)} · {products.length || total} products ({total} listings) · {run.token_cost.toLocaleString("en-GB")} Keepa tokens{tokenStages(run)}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -495,4 +495,13 @@ function profileVersion(run: Run): string {
   const p = run.stats?.profile;
   if (!p) return "";
   return ` (${p.savedAt ? `version saved ${when(p.savedAt)}; ` : ""}applied ${when(p.appliedAt)})`;
+}
+
+/** " (history 412 · Buy Box 36 · sellers 9)": the run's Keepa tokens by stage. */
+function tokenStages(run: Run): string {
+  const s = run.stats?.keepaStages;
+  if (!s) return "";
+  const parts = [["history", s.history], ["Buy Box", s.buyBox], ["EAN lookups", s.lookup], ["sellers", s.sellers]]
+    .filter(([, n]) => (n as number) > 0).map(([l, n]) => `${l} ${(n as number).toLocaleString("en-GB")}`);
+  return parts.length ? ` (${parts.join(" · ")})` : "";
 }

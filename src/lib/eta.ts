@@ -12,6 +12,8 @@ export interface RunStats {
   profile?: { id: string; name: string; savedAt: string | null; appliedAt: string } | null;
   /** A re-screen in progress (or the last one): rows updated before startedAt still need it. */
   rescreen?: { startedAt: string; finishedAt: string | null; storedOnly: boolean; resultIds?: string[] | null; rescored: number; requeued: number } | null;
+  /** Keepa tokens by stage: history (1 a product), Buy Box (3 a product), EAN lookups, seller profiles. */
+  keepaStages?: { history: number; buyBox: number; lookup: number; sellers: number } | null;
   /** Keepa tokens this run spent per UK day (see keepaLedger). */
   keepaByDay?: Record<string, number> | null;
 }
@@ -32,6 +34,8 @@ export function estimateEta(
   stats: RunStats | null | undefined,
   resumeAfter: string | null,
   now = Date.now(),
+  /** Keepa tokens the waiting rows need (1 for history, 3 with Buy Box); defaults to 3 a row. */
+  keepaTokensNeeded?: number,
 ): Eta {
   const rate = stats?.amazonPerMin ?? null;
   let minutes: number | null = 0;
@@ -47,7 +51,7 @@ export function estimateEta(
       // Tokens now: last reported balance plus what has refilled since.
       const since = Math.max(0, (now - Date.parse(k.at)) / 60_000);
       const tokensNow = k.tokensLeft + k.refillRate * since;
-      const need = waiting.keepa * KEEPA_TOKENS_PER_ROW;
+      const need = keepaTokensNeeded ?? waiting.keepa * KEEPA_TOKENS_PER_ROW;
       const keepaMin = Math.max(0, need - tokensNow) / k.refillRate;
       if (minutes != null) minutes += keepaMin;
       if (waiting.amazon === 0 && tokensNow < KEEPA_TOKENS_PER_ROW) {

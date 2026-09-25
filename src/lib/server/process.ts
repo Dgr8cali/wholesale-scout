@@ -68,9 +68,10 @@ interface Supplier {
 }
 
 /** How far a row's data collection got: row text only, matched and priced, account checked. */
-type Stage = "row" | "priced" | "enriched" | "account";
+type Stage = "row" | "priced" | "enriched" | "account" | "buybox";
 /** row: text only; priced: matched and priced, waiting on Keepa; enriched: history in; account: done. */
-const STAGE_RANK: Record<Stage, number> = { row: 0, priced: 1, enriched: 2, account: 3 };
+// "buybox": passed every other gate on stage-1 history; waiting for Keepa's Buy Box data (stage 2).
+const STAGE_RANK: Record<Stage, number> = { row: 0, priced: 1, enriched: 2, account: 3, buybox: 3 };
 
 /** What a result was screened on, stored so Re-screen can re-run gates without fetching. */
 export interface StoredInputs {
@@ -316,10 +317,13 @@ async function approvedBrands(): Promise<Approved> {
   return new Map(rows.map((r) => [r.brand_key, { status: "approved", date: r.status_date }]));
 }
 
-/** Latest Keepa summary per ASIN fetched in the last 24 hours. */
-async function freshSnapshots(asins: string[]): Promise<Map<string, KeepaSummary>> {
+/** How old a Keepa snapshot may be and still be used instead of fetching. */
+const maxAgeMs = (cfg: ProfileConfig) => (void cfg, KEEPA_TTL);
+
+/** Latest Keepa summary per ASIN fetched within `maxAge`. */
+async function freshSnapshots(asins: string[], maxAge: number = KEEPA_TTL): Promise<Map<string, KeepaSummary>> {
   const out = new Map<string, KeepaSummary>();
-  const since = new Date(Date.now() - KEEPA_TTL).toISOString();
+  const since = new Date(Date.now() - maxAge).toISOString();
   for (const c of chunks([...new Set(asins)])) {
     const snaps = must(
       await db().from("keepa_snapshots").select("asin, fetched_at, summary").in("asin", c).gte("fetched_at", since).order("fetched_at", { ascending: false }),
@@ -379,11 +383,16 @@ async function addRunTokens(runId: string, tokens: number): Promise<void> {
  * 24 hours old. New snapshots are stored one ASIN at a time before any gate runs; if a
  * store fails, the fetched data is still used and the failure is logged and noted.
  */
-async function attachKeepa(rows: Row[], alreadyFetched: Map<string, KeepaProduct>, onResponse: OnKeepaResponse): Promise<{ summaries: Map<string, KeepaSummary>; exhausted: boolean }> {
+async function attachKeepa(
+  rows: Row[], alreadyFetched: Map<string, KeepaProduct>, onResponse: OnKeepaResponse,
+  opts: { buyBox?: boolean; maxAgeMs?: number } = {},
+): Promise<{ summaries: Map<string, KeepaSummary>; exhausted: boolean }> {
   const keepa = getKeepa();
   const withAsin = rows.filter((r) => r.match?.asin);
   const asins = [...new Set(withAsin.map((r) => r.match!.asin!))];
-  const summaries = await freshSnapshots(asins);
+  const summaries = await freshSnapshots(asins, opts.maxAgeMs);
+  // Stage 2 needs a snapshot with the Buy Box data; a history-only one doesn't count.
+  if (opts.buyBox) for (const [a, s] of summaries) if (s.buyBoxFetched === false) summaries.delete(a);
   const products = new Map<string, KeepaProduct>();
   for (const [asin, k] of alreadyFetched) if (!summaries.has(asin)) products.set(asin, k);
 
@@ -391,7 +400,7 @@ async function attachKeepa(rows: Row[], alreadyFetched: Map<string, KeepaProduct
   let exhausted: { refillInMs: number | null } | undefined;
   if (keepa.available && need.length) {
     try {
-      const res = await keepa.lookupByAsins(need, onResponse);
+      const res = await keepa.lookupByAsins(need, onResponse, { buyBox: opts.buyBox ?? true });
       for (const [asin, k] of res.byAsin) products.set(asin, k);
       exhausted = res.exhausted;
     } catch (e) {
@@ -689,7 +698,10 @@ export async function rescreenRun(
         if (keepaLive && row.match?.asin && !row.market?.hasHistory) return true;
         if (runGates(ctx, cfg, middle).failedGate) return false;
         if (STAGE_RANK[row.stage] < STAGE_RANK.account || needsRestrictionCheck(row)) return true;
-        return keepaLive && needsSellers(row, runGates(ctx, cfg), cfg);
+        const full = runGates(ctx, cfg);
+        // Passes everything on stage-1 history: needs the Buy Box data before a verdict.
+        if (!full.failedGate && wantsBuyBox(row, keepaLive)) return true;
+        return keepaLive && needsSellers(row, full, cfg);
       })();
       if (fetchNeeded && !job!.storedOnly) requeue.push(row.resultId);
       else work.push({ row, ...gated(row) });
@@ -756,7 +768,12 @@ export interface RunProgress {
 }
 
 const BATCH = { lookup: 100, keepa: 100, account: 60 };
-const KEEPA_TOKENS_PER_ASIN = 3;
+/** Keepa tokens a product: history only (stage 1), and with Buy Box data (stage 2). */
+const KEEPA_HISTORY_TOKENS = 1;
+const KEEPA_BUYBOX_TOKENS = 3;
+
+/** Rows that passed every other gate on stage-1 history and now need the Buy Box data. */
+const wantsBuyBox = (row: Row, keepaLive: boolean) => keepaLive && !!row.match?.asin && !!row.market?.hasHistory && row.market.buyBoxFetched === false;
 
 /** Rows a call keeps in memory between stages. */
 interface Queues {
@@ -778,13 +795,14 @@ async function mapLimit<T>(items: T[], limit: number, fn: (x: T) => Promise<void
 /** Pending rows of a run, and how many wait on Keepa (stage "priced"). */
 export async function runProgress(runId: string, extra: Partial<RunProgress> = {}): Promise<RunProgress> {
   const d = db();
-  const [{ count: total }, { count: pending }, { count: keepa }, run] = await Promise.all([
+  const [{ count: total }, { count: pending }, { count: keepa }, { count: buyBox }, run] = await Promise.all([
     d.from("results").select("id", { count: "exact", head: true }).eq("run_id", runId),
     d.from("results").select("id", { count: "exact", head: true }).eq("run_id", runId).eq("status", "pending"),
     d.from("results").select("id", { count: "exact", head: true }).eq("run_id", runId).eq("status", "pending").eq("inputs->>stage", "priced"),
+    d.from("results").select("id", { count: "exact", head: true }).eq("run_id", runId).eq("status", "pending").eq("inputs->>stage", "buybox"),
     d.from("runs").select("*").eq("id", runId).single(),
   ]);
-  const t = total ?? 0, p = pending ?? 0, k = keepa ?? 0;
+  const t = total ?? 0, p = pending ?? 0, bb = buyBox ?? 0, k = (keepa ?? 0) + bb;
   const r = run.data as { resume_after?: string | null; stats?: RunStats | null } | null;
   // A re-screen still going: rows last written before it started haven't been re-screened yet.
   const job = r?.stats?.rescreen;
@@ -801,7 +819,7 @@ export async function runProgress(runId: string, extra: Partial<RunProgress> = {
     total: t,
     waiting,
     keepaResumeAt: k > 0 ? resume : null,
-    eta: estimateEta(waiting, r?.stats, k > 0 ? resume : null),
+    eta: estimateEta(waiting, r?.stats, k > 0 ? resume : null, Date.now(), (k - bb) * KEEPA_HISTORY_TOKENS + bb * KEEPA_BUYBOX_TOKENS),
     progressed: 0,
     ...extra,
   };
@@ -814,7 +832,7 @@ export async function runProgress(runId: string, extra: Partial<RunProgress> = {
 async function saveOwnStats(runId: string, own: RunStats) {
   const cur = await db().from("runs").select("stats").eq("id", runId).maybeSingle();
   const stored = ((cur.data as { stats?: RunStats | null } | null)?.stats ?? {}) as RunStats;
-  await updateRun(runId, {}, { stats: { ...stored, amazonPerMin: own.amazonPerMin, keepa: own.keepa, keepaByDay: own.keepaByDay } });
+  await updateRun(runId, {}, { stats: { ...stored, amazonPerMin: own.amazonPerMin, keepa: own.keepa, keepaByDay: own.keepaByDay, keepaStages: own.keepaStages } });
 }
 
 /** A write refused because a column isn't there yet: retry without the optional fields. */
@@ -873,6 +891,11 @@ export async function processRun(runId: string, opts: { budgetMs?: number } = {}
     const recordTokens = (meta: KeepaResponseMeta) => {
       // Saved with the run's stats after each batch; the dashboard sums today's across runs.
       stats.keepaByDay = addDailyTokens(stats.keepaByDay, meta.tokensConsumed);
+      // And by stage, for the run header: history (stage 1), Buy Box (stage 2), EAN lookups, sellers.
+      const st = { history: 0, buyBox: 0, lookup: 0, sellers: 0, ...(stats.keepaStages ?? {}) };
+      const which = meta.kind === "seller" ? "sellers" : meta.kind === "code" ? "lookup" : meta.buyBox === false ? "history" : "buyBox";
+      st[which] += meta.tokensConsumed;
+      stats.keepaStages = st;
       return addRunTokens(runId, meta.tokensConsumed);
     };
     const env: StageEnv = { runId, cfg, card, rules, approved, spapi, keepa, recordTokens };
@@ -906,7 +929,7 @@ export async function processRun(runId: string, opts: { budgetMs?: number } = {}
       const [la, kb, ac]: [Awaited<ReturnType<typeof stageLookup>>, Awaited<ReturnType<typeof stageKeepa>>, StageOut] =
         await Promise.all([stageLookup(a, env), stageKeepa(b, env), stageAccount(c, env)]);
       progressed += la.finished + kb.finished + ac.finished + la.next.length + kb.next.length;
-      for (const row of [...la.next, ...kb.next]) route(row, q, env);
+      for (const row of [...la.next, ...kb.next, ...ac.next]) route(row, q, env);
       // Throughput for the time-left estimate: rows that left the Amazon queue this batch
       // (finished, or handed to Keepa), per minute, smoothed across batches.
       const leftAmazon = la.finished + ac.finished + la.next.filter((r) => r.stage === "priced").length;
@@ -965,7 +988,8 @@ interface StageOut {
 
 /** Put a row in the queue its stage calls for. */
 function route(row: Row, q: Queues, env: StageEnv) {
-  if (STAGE_RANK[row.stage] < STAGE_RANK.enriched && row.stage !== "priced") q.lookup.push(row);
+  if (row.stage === "buybox") (env.keepa.available ? q.keepa : q.account).push(row);
+  else if (STAGE_RANK[row.stage] < STAGE_RANK.enriched && row.stage !== "priced") q.lookup.push(row);
   else if (env.keepa.available && row.match?.asin && !row.market?.hasHistory) {
     row.stage = "priced";
     q.keepa.push(row);
@@ -1052,7 +1076,7 @@ async function stageLookup(rows: Row[], env: StageEnv): Promise<StageOut & { add
   const unresolved = live.filter((r) => !r.product.asin && !catalog.get(r.product.ean)?.length);
   if (keepa.available && unresolved.length) {
     try {
-      const res = await keepa.lookupByEans([...new Set(unresolved.map((r) => r.product.ean))], env.recordTokens);
+      const res = await keepa.lookupByEans([...new Set(unresolved.map((r) => r.product.ean))], env.recordTokens, { buyBox: false });
       keepaByEan = res.byEan;
       for (const [asin, k] of res.byAsin) fetched.set(asin, k);
     } catch (e) {
@@ -1148,24 +1172,38 @@ async function stageKeepa(rows: Row[], env: StageEnv): Promise<StageOut & { defe
   if (!rows.length) return { finished: 0, next: [], deferred: [], waitUntil: null };
   let tokens: KeepaTokens | undefined;
 
-  // Snapshots under 24h cost nothing; count only the ASINs that need fetching.
-  const fresh = await freshSnapshots(rows.map((r) => r.match!.asin!));
-  const needAsins = [...new Set(rows.map((r) => r.match!.asin!).filter((a) => !fresh.has(a)))];
+  // Stage 1 (history, 1 token) for rows with none; stage 2 (with Buy Box, 3 tokens) for rows that
+  // passed everything else. Snapshots within the max age cost nothing.
+  const stage2 = (r: Row) => r.stage === "buybox";
+  const fresh = await freshSnapshots(rows.map((r) => r.match!.asin!), maxAgeMs(cfg));
+  const covered = (r: Row) => { const s = fresh.get(r.match!.asin!); return !!s && (!stage2(r) || s.buyBoxFetched !== false); };
+  const need = rows.filter((r) => !covered(r));
+  const cost = (r: Row) => (stage2(r) ? KEEPA_BUYBOX_TOKENS : KEEPA_HISTORY_TOKENS);
   let take = rows;
   let deferred: Row[] = [];
   let waitUntil: number | null = null;
-  if (needAsins.length) {
+  if (need.length) {
     const status = await keepa.tokenStatus();
     if (status) tokens = status;
     if (status) {
-      const affordable = Math.floor(status.tokensLeft / KEEPA_TOKENS_PER_ASIN);
-      if (affordable < needAsins.length) {
-        const allowed = new Set(needAsins.slice(0, Math.max(0, affordable)));
-        take = rows.filter((r) => fresh.has(r.match!.asin!) || allowed.has(r.match!.asin!));
+      // Take rows in queue order (best first) while the balance covers them.
+      let left = status.tokensLeft;
+      const allowed = new Set<Row>();
+      const seen = new Map<string, number>();
+      for (const r of need) {
+        const key = `${r.match!.asin}:${stage2(r)}`;
+        if (seen.has(key)) { allowed.add(r); continue; }
+        if (left < cost(r)) break;
+        left -= cost(r);
+        seen.set(key, 1);
+        allowed.add(r);
+      }
+      if (allowed.size < need.length) {
+        take = rows.filter((r) => covered(r) || allowed.has(r));
         deferred = rows.filter((r) => !take.includes(r));
-        // Next batch of up to 20 ASINs: wait for the next refill, plus whole minutes beyond it.
-        const want = Math.min(20, needAsins.length - allowed.size) * KEEPA_TOKENS_PER_ASIN;
-        const short = Math.max(0, want - Math.max(0, status.tokensLeft - allowed.size * KEEPA_TOKENS_PER_ASIN));
+        // Next batch of up to 20: wait for the next refill, plus whole minutes beyond it.
+        const want = deferred.slice(0, 20).reduce((a, r) => a + cost(r), 0);
+        const short = Math.max(0, want - Math.max(0, left));
         const minutes = Math.max(0, Math.ceil(short / Math.max(1, status.refillRate)) - 1);
         waitUntil = Date.now() + status.refillInMs + minutes * 60_000;
       }
@@ -1173,14 +1211,27 @@ async function stageKeepa(rows: Row[], env: StageEnv): Promise<StageOut & { defe
   }
   if (!take.length) return { finished: 0, next: [], deferred, waitUntil, tokens };
 
-  const { summaries, exhausted } = await attachKeepa(take, new Map(), env.recordTokens);
+  const one = take.filter((r) => !stage2(r)), two = take.filter(stage2);
+  const [h, bb] = await Promise.all([
+    attachKeepa(one, new Map(), env.recordTokens, { buyBox: false, maxAgeMs: maxAgeMs(cfg) }),
+    attachKeepa(two, new Map(), env.recordTokens, { buyBox: true, maxAgeMs: maxAgeMs(cfg) }),
+  ]);
   const done: { row: Row; run: GateRun; ctx: ScreenContext }[] = [];
   const next: Row[] = [];
   for (const row of take) {
-    const snap = summaries.get(row.match!.asin!);
-    if (!snap && exhausted) {
+    const res = stage2(row) ? bb : h;
+    const snap = res.summaries.get(row.match!.asin!);
+    if (!snap && res.exhausted) {
       deferred.push(row);
       waitUntil ??= Date.now() + 60_000;
+      continue;
+    }
+    if (stage2(row)) {
+      // Stage 2: the Buy Box data is in (or couldn't be had); back to the account stage for the verdict.
+      if (snap) row.market = marketFromKeepa(snap);
+      if (row.market?.buyBoxFetched === false) row.market = { ...row.market, buyBoxFetched: true };
+      row.stage = "account";
+      next.push(row);
       continue;
     }
     if (snap) row.market = marketFromKeepa(snap);
@@ -1284,13 +1335,24 @@ async function stageAccount(rows: Row[], env: StageEnv): Promise<StageOut> {
       if (row.sellers.some((s) => !s.name && s.storefrontSize == null)) row.sellers = null;
     }
   }
+  // Stage 2: rows that pass every gate on stage-1 history go back for Keepa's Buy Box data (3 tokens)
+  // before a verdict: gate 7's top-seller share, and the Buy Box price itself.
+  const stage2: Row[] = [];
+  rows = rows.filter((row) => {
+    if (wantsBuyBox(row, keepa.available) && !runGates(context(row, card, rules, cfg, approved), cfg).failedGate) {
+      row.stage = "buybox";
+      stage2.push(row);
+      return false;
+    }
+    return true;
+  });
   await attachQogitaOffers(rows.filter((row) => isQogita(row) && !row.qogita && !runGates(context(row, card, rules, cfg, approved), cfg).failedGate), env);
   const done = rows.map((row) => {
     row.stage = "account";
     const ctx = context(row, card, rules, cfg, approved);
     return { row, run: runGates(ctx, cfg), ctx };
   });
-  return { finished: await finishAll(done, cfg), next: [] };
+  return { finished: await finishAll(done, cfg), next: stage2 };
 }
 
 /**
