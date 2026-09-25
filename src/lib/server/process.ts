@@ -18,6 +18,7 @@ import { listingPack, supplierPack, type PackAttrs } from "../screening/pack";
 import type { CategoryRule, DgFacts } from "../screening/rules";
 import { ipIndex, matchIpRisk, type IpIndex } from "../ipRisk";
 import { winScore } from "../screening/score";
+import { yourShare } from "../screening/sales";
 import { getSpApi, type CatalogMatch, type CompetitivePrice, type LookupTrace } from "../spapi/client";
 import type { ListingOffers } from "../spapi/types";
 import { activeRateCard, chunks, db, loadIpRisk, loadProfile, loadRules, must } from "./db";
@@ -611,6 +612,14 @@ export interface StoredEvaluation {
   market: MarketData | null;
   restriction: ScreenContext["restriction"];
   sellers: SellerView[] | null;
+  /** Profit at a landed cost of 0 (profit = proceeds − landed): prices any supplier's offer. */
+  proceedsGbp: number | null;
+  /** Your share of sales a month. */
+  shareMonth: number | null;
+  /** Gates that warned. */
+  warnGates: string[];
+  /** The chosen Qogita offer, in GBP: to add to the cart. */
+  qogita: { fid: string; qid: string; seller: string; unit: number; inventory: number; priceGbp: number; movGbp: number } | null;
 }
 
 /**
@@ -634,6 +643,19 @@ export async function evaluateStored(results: PendingRow[], cfg: ProfileConfig):
       market: row.market,
       restriction: row.restriction,
       sellers: row.sellers,
+      proceedsGbp: (() => {
+        if (run.scoringPrice == null) return null;
+        const item = { referralCategory: ctx.product.referralCategory, dimsCm: ctx.product.dimsCm, weightG: ctx.product.weightG, goodsVatRatePct: ctx.offer.goodsVatRatePct };
+        const e = economics(run.scoringPrice, 0, item, card, cfg.fees, { date: ctx.now, amazon: ctx.amazonFees });
+        return e.profit == null ? null : Math.round((e.profit + e.landed.total) * 100) / 100;
+      })(),
+      shareMonth: yourShare(row.market).value,
+      warnGates: run.outcomes.filter((o) => o.status === "warn").map((o) => o.gate),
+      qogita: (() => {
+        const q = row.qogita;
+        const c = q ? chooseOffer(q.offers, cfg.budget, q.fxRate).chosen : null;
+        return q && c ? { fid: q.fid, qid: c.qid, seller: c.seller, unit: c.unit, inventory: c.inventory, priceGbp: c.basePrice * q.fxRate, movGbp: c.baseMov * q.fxRate } : null;
+      })(),
     };
   });
 }

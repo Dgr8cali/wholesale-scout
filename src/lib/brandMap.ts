@@ -27,6 +27,11 @@ export interface BrandProduct {
   sellers: { id: string; name: string | null; sharePct: number }[];
   buy_box_holder: string | null;
   suppliers: string[];
+  /** Planner inputs: profit at a landed cost of 0, your share a month, gates that warned, the chosen Qogita offer. */
+  proceeds?: number | null;
+  share_month?: number | null;
+  warn_gates?: string[];
+  qogita?: { fid: string; qid: string; seller: string; unit: number; inventory: number; priceGbp: number; movGbp: number } | null;
 }
 
 /** Where you stand with the brand: approved or open, approval needed (applied or not), blocked. */

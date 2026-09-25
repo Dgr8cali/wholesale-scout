@@ -24,7 +24,8 @@ async function state(): Promise<State> {
 async function defaultProfile() {
   const [p, ip] = await Promise.all([loadProfile(null), loadIpRisk()]);
   const ipVersion = `${ip.length}:${ip.reduce((m, x) => ((x as { updated_at?: string }).updated_at ?? "") > m ? (x as { updated_at?: string }).updated_at ?? "" : m, "")}`;
-  return { profile: p, version: `${p.id}@${p.updated_at ?? ""}#ip${ipVersion}` };
+  // "v2": the planner's figures (proceeds, share, warned gates, Qogita offer) were added.
+  return { profile: p, version: `v2:${p.id}@${p.updated_at ?? ""}#ip${ipVersion}` };
 }
 
 /** Whether the map is behind: the default profile was saved, or a result changed, since the last refresh. */
@@ -104,6 +105,7 @@ export async function refreshBrandMap(budgetMs = 40_000): Promise<{ busy?: boole
           sellers: (e.sellers ?? []).map((s) => ({ id: s.sellerId, name: s.name, sharePct: s.sharePct })),
           buy_box_holder: m?.buyBoxSellerId ?? null,
           suppliers: suppliers.get(e.product.ean) ?? [],
+          proceeds: e.proceedsGbp, share_month: e.shareMonth, warn_gates: e.warnGates, qogita: e.qogita,
           evaluated_at: new Date().toISOString(),
         };
       });

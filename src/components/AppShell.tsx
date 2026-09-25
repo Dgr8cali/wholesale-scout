@@ -1,6 +1,6 @@
 "use client";
 
-import { BuildingIcon, DownloadCloudIcon, HomeIcon, ListChecksIcon, ScanSearchIcon, SettingsIcon, StarIcon, StoreIcon, UploadIcon, EyeIcon, TruckIcon } from "lucide-react";
+import { BuildingIcon, DownloadCloudIcon, HomeIcon, ListChecksIcon, ScanSearchIcon, SettingsIcon, StarIcon, StoreIcon, UploadIcon, EyeIcon, TruckIcon, ClipboardListIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Fragment, useEffect, useState, type CSSProperties, type ReactNode } from "react";
@@ -29,6 +29,7 @@ const NAV = [
   { href: "/qogita", label: "Qogita", icon: DownloadCloudIcon },
   { href: "/favourites", label: "Favourites", icon: StarIcon },
   { href: "/watchlist", label: "Watchlist", icon: EyeIcon },
+  { href: "/plan", label: "Plan", icon: ClipboardListIcon },
   { href: "/brands", label: "Brands", icon: BuildingIcon },
   { href: "/settings", label: "Settings", icon: SettingsIcon },
 ];
