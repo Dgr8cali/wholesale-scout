@@ -9,7 +9,9 @@ The compliance gate flags products in categories that need extra paperwork, a da
 
 ## What it checks
 
-It matches a set of compliance rules against the product. Each rule can be matched in three ways, in this order:
+It matches a set of compliance rules against the product. For dangerous goods, **Amazon's DG lookup** comes first: if you've [imported a DG report](/help/howto/import-a-dg-report) for the ASIN, the line starts "Amazon DG lookup: …". "Not dangerous goods" clears the DG rules' matches (flammable liquid, aerosol, battery, chemical) from the attributes and keywords below; a DG or review-required status takes their place under the rule that matched (Chemical if none did); "not fulfillable" fails whatever the rule's mode. Wording the import didn't recognise is shown but changes nothing.
+
+Otherwise each rule can be matched in three ways, in this order:
 
 1. **Amazon's own dangerous-goods data** for the listing (hazmat UN number, shipping name and class, GHS classes, heat-sensitive). This wins over keywords for the same rule.
 2. **Keywords** in the row's own text (the supplier's product name, brand and category, plus the Amazon title once matched). Keywords match whole words or phrases; `/pattern/` is a regular expression.
@@ -23,7 +25,7 @@ The shipped rules are: Hazmat: flammable liquid, Liquid, Aerosol, Cosmetic, Supp
 
 - Rules set to **off** are ignored.
 - Nothing matched: pass.
-- The gate fails only when the gate's mode is **fail** and at least one matched rule is set to **fail**. The IP-risk rule on **fail** only fails **high**-risk brands; medium and low only warn.
+- The gate fails only when the gate's mode is **fail** and at least one matched rule is set to **fail**. Amazon's DG lookup saying "not fulfillable" counts as a rule on **fail** whatever that rule's mode. The IP-risk rule on **fail** only fails **high**-risk brands; medium and low only warn.
 - Anything else that matched is a warn.
 
 So a rule on **fail** inside a gate on **warn** only warns.

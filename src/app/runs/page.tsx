@@ -5,9 +5,10 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useDialogs } from "@/components/Dialogs";
+import { exportDgAsins, useDgImport } from "@/components/DgReport";
 import { EditableName } from "@/components/EditableName";
 import { allListings, downloadXlsx, exportRows } from "@/components/results/exportXlsx";
 import type { Result } from "@/components/results/types";
@@ -165,6 +166,9 @@ export default function RunsPage() {
       toast.error((e as Error).message);
     }
   }
+  // Import DG report: from a run's menu, that run is re-screened once it's saved.
+  const dgRun = useRef<Run | null>(null);
+  const { pick: dgPick, input: dgInput } = useDgImport(async () => { if (dgRun.current) await rescreen(dgRun.current); });
   async function exportRun(r: Run) {
     const t = toast.loading("Preparing the spreadsheet…");
     try {
@@ -182,7 +186,7 @@ export default function RunsPage() {
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="icon-sm" aria-label={`Actions for ${r.name || r.source}`}><MoreHorizontalIcon /></Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-44">
+      <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuItem onSelect={() => router.push(`/runs/${r.id}`)}><ExternalLinkIcon /> Open</DropdownMenuItem>
         <DropdownMenuItem onSelect={() => rename(r)}><PencilIcon /> Rename</DropdownMenuItem>
         <DropdownMenuItem onSelect={() => rescreen(r)} disabled={r.status !== "done"}><RefreshCwIcon /> Re-screen</DropdownMenuItem>
@@ -192,6 +196,8 @@ export default function RunsPage() {
         {keepaQueue.includes(r.id) && keepaQueue[0] !== r.id && <DropdownMenuItem onSelect={() => control(r, "keepaFirst")}><ChevronsUpIcon /> Go first on Keepa</DropdownMenuItem>}
         {isStale(r) && <DropdownMenuItem onSelect={() => control(r, "refresh")}><RefreshCwIcon /> Refresh Keepa data</DropdownMenuItem>}
         <DropdownMenuItem onSelect={() => exportRun(r)}><DownloadIcon /> Export to xlsx</DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => exportDgAsins(r.id, r.name || r.source)}><DownloadIcon /> Export ASINs for DG lookup</DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => { dgRun.current = r; dgPick(); }} disabled={r.status !== "done"}><UploadIcon /> Import DG report…</DropdownMenuItem>
         <DropdownMenuSeparator />
         {r.archived_at
           ? <DropdownMenuItem onSelect={() => archive([r.id], false)}><ArchiveRestoreIcon /> Restore</DropdownMenuItem>
@@ -300,8 +306,12 @@ export default function RunsPage() {
         </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild><Button variant="outline" size="icon" aria-label="More actions"><MoreHorizontalIcon /></Button></DropdownMenuTrigger>
-          <DropdownMenuContent align="end"><ImageBackfillItem /></DropdownMenuContent>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={() => { dgRun.current = null; dgPick(); }}><UploadIcon /> Import DG report…</DropdownMenuItem>
+            <ImageBackfillItem />
+          </DropdownMenuContent>
         </DropdownMenu>
+        {dgInput}
       </div>
 
       <div className="flex flex-wrap items-center gap-3">

@@ -15,6 +15,7 @@ import { chooseOffer, toSupplierOffer, type QogitaOffers, type SupplierOffer } f
 import { GATE_ORDER, withDefaults, type GateId, type ProfileConfig } from "../screening/config";
 import { effectiveMoq, packNote, resolveScoringPrice, runGates, verdictOf, type GateRun, type MarketData, type ScreenContext, type SellerView } from "../screening/gates";
 import { listingPack, supplierPack, type PackAttrs } from "../screening/pack";
+import type { DgLookup } from "../dg/report";
 import { keepSellerCentralMark, type CategoryRule, type DgFacts } from "../screening/rules";
 import { ipIndex, matchIpRisk, type IpIndex } from "../ipRisk";
 import { winScore } from "../screening/score";
@@ -51,6 +52,8 @@ interface Product {
   pack_attrs?: PackAttrs | null;
   /** Amazon's dangerous-goods attributes (see spapi/types AmazonDg). */
   amazon_dg?: DgFacts | null;
+  /** Seller Central's DG lookup, from an imported report. */
+  dg_lookup?: DgLookup | null;
 }
 
 interface Offer {
@@ -243,6 +246,7 @@ function context(row: Row, card: RateCard, rules: CategoryRule[], cfg: ProfileCo
       ipRisk: matchIpRisk(approved.ipRisk, p.brand, o.brand),
       // Stored with the product; null until read (then the older `hazmat` form counts).
       amazonDg: row.product.amazon_dg ?? null,
+      dgLookup: row.product.dg_lookup ?? null,
     },
     sellers: row.sellers ?? undefined,
     waivers: row.waivers,

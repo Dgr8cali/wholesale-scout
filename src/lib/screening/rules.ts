@@ -145,10 +145,15 @@ export interface RuleMatch {
   /** The text that matched (as written in the row), the matching category, or what Amazon says. */
   hit: string;
   /** Amazon's own dangerous-goods data, a keyword in the row's text, the Amazon category, or your IP-risk list. */
-  source?: "amazon" | "keyword" | "category" | "ipRisk";
+  source?: "amazon" | "keyword" | "category" | "ipRisk" | "dgLookup";
+  /** Amazon's DG lookup says it can't fulfil it: fails whatever the rule's mode. */
+  forceFail?: boolean;
   /** An IP-risk match: its level (the rule's fail mode applies to high only). */
   level?: "low" | "medium" | "high";
 }
+
+/** The rules that are about dangerous goods (what Amazon's DG lookup settles). */
+export const DG_RULE_KEYS = ["fragrance", "aerosol", "battery", "chemical"];
 
 /** How a match reads in the gate and the why line: "keyword match: aerosol". */
 export const matchReason = (m: RuleMatch) => (m.source === "keyword" ? `keyword match: ${m.hit}` : m.hit);

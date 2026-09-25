@@ -58,3 +58,38 @@ describe("compliance gate with Amazon's data", () => {
     expect(comp(ctx("Dry shampoo aerosol 200ml", notRegulated), "fail")).toMatchObject({ status: "fail", detail: "Aerosol (keyword match: aerosol)" });
   });
 });
+
+describe("compliance gate with Amazon's DG lookup (imported report)", () => {
+  const ctx = (text: string, attrs: Record<string, unknown> | null, dgLookup: ScreenContext["product"]["dgLookup"]): ScreenContext => ({
+    now: new Date("2026-09-25T12:00:00Z"), card: UK_RATE_CARD_2026_07, rules: DEFAULT_RULES, text, amazonCategory: "Beauty",
+    offer: { unitCostGbp: 5, moq: 12, goodsVatRatePct: 20, supplierMovGbp: null },
+    match: { asin: "B000TEST01", asinCount: 1, looked: true },
+    product: { referralCategory: "Beauty", dimsCm: { l: 15, w: 12, h: 8 }, weightG: 200, variationCount: null, hazmat: [], amazonDg: attrs ? parseDg(attrs, []) : null, dgLookup },
+    market: null, restriction: null, amazonFees: null,
+  });
+  const profile = (aerosol: "fail" | "warn" | "off", chemical: "fail" | "warn" | "off" = "warn") =>
+    withDefaults({ gates: { compliance: { mode: "fail", rules: { aerosol, chemical, cosmetic: "off", liquid: "off" } } } } as unknown as Parameters<typeof withDefaults>[0]);
+  const comp = (c: ScreenContext, p = profile("fail")) => runGates(c, p).outcomes.find((o) => o.gate === "compliance")!;
+
+  it("not DG clears the catalog's and the keyword's DG matches, and says so first", () => {
+    const o = comp(ctx("Dry shampoo aerosol 200ml", aerosol, { status: "not_dg", text: "Not dangerous goods", programme: "FBA" }));
+    expect(o).toMatchObject({ status: "pass", detail: "Amazon DG lookup: not dangerous goods (FBA)" });
+    expect(o.tags).toContain("AMAZON_DG_LOOKUP");
+  });
+  it("a DG status takes the place of the attributes, under their rule", () => {
+    const o = comp(ctx("Dry shampoo aerosol 200ml", aerosol, { status: "dg_fulfillable", text: "Dangerous goods", programme: "FBA" }));
+    expect(o).toMatchObject({ status: "fail", detail: "Amazon DG lookup: dangerous goods, fulfillable (FBA) → Aerosol" });
+    // No DG rule matched otherwise: under Chemical, with that rule's mode.
+    expect(comp(ctx("Hand cream 50ml", null, { status: "review_required", text: "Review required", programme: null }))).toMatchObject({
+      status: "warn", detail: expect.stringMatching(/^Amazon DG lookup: review required → /),
+    });
+  });
+  it("DG Amazon can't fulfil fails even when its rule only warns or is off", () => {
+    expect(comp(ctx("Hand cream 50ml", null, { status: "dg_not_fulfillable", text: "Not eligible", programme: null }), profile("off", "off"))).toMatchObject({ status: "fail" });
+  });
+  it("wording it didn't recognise is shown but changes nothing", () => {
+    expect(comp(ctx("Dry shampoo aerosol 200ml", null, { status: "unknown", text: "In progress", programme: null }))).toMatchObject({
+      status: "fail", detail: "Amazon DG lookup: “In progress”; Aerosol (keyword match: aerosol)",
+    });
+  });
+});

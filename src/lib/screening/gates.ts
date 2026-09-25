@@ -20,7 +20,8 @@ import { applyLinks, approvalKind } from "../spapi/parse";
 import type { RestrictionLink, RestrictionStatus } from "../spapi/types";
 import { GATE_LABELS, GATE_ORDER, type GateId, type GateMode, type ProfileConfig } from "./config";
 import { doubtfulMatch, type Listing } from "./match";
-import { amazonRuleMatches, matchReason, matchRules, type CategoryRule, type DgFacts, type RuleMatch } from "./rules";
+import { amazonRuleMatches, DEFAULT_RULES, DG_RULE_KEYS, matchReason, matchRules, type CategoryRule, type DgFacts, type RuleMatch } from "./rules";
+import { dgLookupText, type DgLookup } from "../dg/report";
 import { ipRiskText, type IpRiskMatch } from "../ipRisk";
 
 export type GateStatus = "pass" | "warn" | "fail" | "skipped" | "off";
@@ -139,6 +140,8 @@ export interface ScreenContext {
     hazmat: string[];
     /** Amazon's dangerous-goods attributes for the listing, when read. */
     amazonDg?: DgFacts | null;
+    /** Seller Central's Dangerous Goods lookup for the ASIN (an imported report): ahead of the attributes. */
+    dgLookup?: Pick<DgLookup, "status" | "text" | "programme"> | null;
     /** The brand is on your IP-risk list. */
     ipRisk?: IpRiskMatch | null;
   };
@@ -266,7 +269,19 @@ const EVALUATORS: Record<GateId, Evaluator> = {
     const g = p.gates.compliance;
     // Amazon's own dangerous-goods data first; keywords only for rules it didn't trigger.
     const amazon = amazonRuleMatches(ctx.rules, ctx.product.amazonDg, ctx.product.amazonDg ? ctx.product.hazmat.filter((h) => h === "batteries") : ctx.product.hazmat);
-    const matches = [...amazon, ...matchRules(ctx.rules, ctx.text, ctx.amazonCategory).filter((m) => !amazon.some((a) => a.key === m.key))];
+    let matches = [...amazon, ...matchRules(ctx.rules, ctx.text, ctx.amazonCategory).filter((m) => !amazon.some((a) => a.key === m.key))];
+    // Amazon's DG lookup settles dangerous goods ahead of catalog attributes and keywords:
+    // "not DG" clears the DG rules' matches; a DG status takes the place of theirs.
+    const lookup = ctx.product.dgLookup;
+    if (lookup && lookup.status !== "unknown") {
+      const dgMatches = matches.filter((m) => DG_RULE_KEYS.includes(m.key));
+      matches = matches.filter((m) => !DG_RULE_KEYS.includes(m.key));
+      if (lookup.status !== "not_dg") {
+        const key = dgMatches[0]?.key ?? "chemical";
+        const name = ctx.rules.find((r) => r.key === key)?.name ?? DEFAULT_RULES.find((r) => r.key === key)?.name ?? key;
+        matches.unshift({ key, name, hit: dgLookupText(lookup), source: "dgLookup", forceFail: lookup.status === "dg_not_fulfillable" });
+      }
+    }
     const ip = ctx.product.ipRisk;
     if (ip) matches.push({ key: "ipRisk", name: "IP-risk brand", hit: ipRiskText(ip), source: "ipRisk", level: ip.level });
     // Liquids: only above a volume when the profile says so (small bottles aren't worth a flag).
@@ -279,18 +294,22 @@ const EVALUATORS: Record<GateId, Evaluator> = {
       }
     }
     run.ruleMatches = matches;
-    const active = matches.filter((m) => (g.rules[m.key] ?? "warn") !== "off");
-    if (!active.length) return { status: "pass", detail: "No compliance rule matched" };
-    // The IP-risk rule's fail mode drops high-risk brands; medium and low only warn.
-    const failsHere = (m: RuleMatch) => g.rules[m.key] === "fail" && (m.key !== "ipRisk" || m.level === "high");
+    const active = matches.filter((m) => m.forceFail || (g.rules[m.key] ?? "warn") !== "off");
+    // What the lookup said leads the line, whatever else matched.
+    const lead = lookup && (lookup.status === "not_dg" || lookup.status === "unknown") ? `${dgLookupText(lookup)}` : null;
+    if (!active.length) return { status: "pass", detail: lead ?? "No compliance rule matched", tags: lead ? ["AMAZON_DG_LOOKUP"] : undefined };
+    // The IP-risk rule's fail mode drops high-risk brands; medium and low only warn. Amazon
+    // saying it can't fulfil the DG fails whatever the rule's mode.
+    const failsHere = (m: RuleMatch) => m.forceFail || (g.rules[m.key] === "fail" && (m.key !== "ipRisk" || m.level === "high"));
     const worst = active.some(failsHere) ? "fail" : "warn";
     const status: GateStatus = g.mode === "fail" && worst === "fail" ? "fail" : "warn";
     return {
       status,
-      detail: active.map((m) => (m.source === "ipRisk" ? m.hit : `${m.name} (${matchReason(m)})`)).join("; "),
+      detail: [lead, ...active.map((m) => (m.source === "ipRisk" || m.source === "dgLookup" ? (m.source === "dgLookup" ? `${m.hit} → ${m.name}` : m.hit) : `${m.name} (${matchReason(m)})`))].filter(Boolean).join("; "),
       tags: [
         ...active.map((m) => (m.key === "ipRisk" ? "IP_RISK" : m.key.toUpperCase())),
         ...(active.some((m) => m.source === "amazon") ? ["AMAZON_DG"] : []),
+        ...(lookup ? ["AMAZON_DG_LOOKUP"] : []),
       ],
     };
   },

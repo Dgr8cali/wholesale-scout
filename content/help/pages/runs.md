@@ -17,6 +17,7 @@ Repeat uploads of the same file are grouped: the newest is shown, with the older
 | --- | --- |
 | **Search runs, files or suppliers** | Filters the list by run name, file name or supplier. |
 | **Show archived** | Shows archived runs instead of the current ones. |
+| **⋯** (More actions) › **Import DG report…** | Saves each ASIN's status from Seller Central's Dangerous Goods lookup file on its products, without re-screening anything (see [Import a DG report](/help/howto/import-a-dg-report)). |
 | **⋯** (More actions) › **Fetch missing images** | Fetches product images from Amazon's catalog (free) for products screened before images were kept, 400 at a time until none are left. |
 
 ### Columns
@@ -44,6 +45,8 @@ Click **Run**, **Started** or **Rows** to sort by it; click again to reverse. Th
 | **Go first on Keepa** | Only when the run is queued for Keepa behind another. Puts it first in line. |
 | **Refresh Keepa data** | Only on a **stale** run. Sends rows whose Keepa history is over 7 days old back for a fresh fetch, which spends tokens. Says "Refreshing Keepa data for N rows", or "Nothing older than 7 days to refresh". |
 | **Export to xlsx** | Downloads every row as a spreadsheet (see [Export](#export)). |
+| **Export ASINs for DG lookup** | Downloads the run's ASINs as a one-column CSV for Seller Central's Dangerous Goods lookup (see [Import a DG report](/help/howto/import-a-dg-report)). |
+| **Import DG report…** | Pick the file the Dangerous Goods lookup returned: each ASIN's status is saved on its product and this run is re-screened. Only for finished runs. |
 | **Archive** / **Restore** | Hides the run from the list (or brings it back). Nothing is deleted. |
 | **Delete…** | Deletes the run and its results after you confirm. Products, favourites and waivers are kept. It can't be undone. |
 
