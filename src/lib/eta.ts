@@ -4,6 +4,8 @@
  */
 
 export interface RunStats {
+  /** "Fetch anyway": gather every source for each row even past a failing gate (the verdict still fails). */
+  fetchAll?: boolean;
   /** A watchlist re-check: when it started, and when its conditions were evaluated (alerts sent). */
   watch?: { startedAt: string; evaluatedAt?: string | null; alerts?: number; emailed?: boolean } | null;
   /** A seller scan: whose storefront this run screens (rows mark whether it holds the Buy Box). */

@@ -1,7 +1,7 @@
 "use client";
 
 import { ExternalLinkIcon, LoaderIcon } from "lucide-react";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { ProductThumb } from "@/components/ProductThumb";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -28,7 +28,9 @@ function Stat({ label, children, note, strong, text }: { label: string; children
 }
 
 /** A check's verdict at a glance: verdict, score, profit, hurdle, share, months, gating. */
-export function VerdictCard({ card }: { card: Card }) {
+export function VerdictCard({ card, onFetchAnyway }: { card: Card; onFetchAnyway?: () => Promise<void> }) {
+  const [fetching, setFetching] = useState(false);
+  const nf = card.notFetched ? `not fetched: failed at ${card.notFetched.label.toLowerCase()}` : null;
   const g = card.gating ? GATING[card.gating.status] ?? GATING.unknown : null;
   const verdict = card.verdict ?? (card.pending ? null : "fail");
   return (
@@ -69,9 +71,9 @@ export function VerdictCard({ card }: { card: Card }) {
           {gbp(card.hurdle.value)}
         </Stat>
         <Stat label="Sells at" note={card.priceSource ?? undefined}>{gbp(card.sellPrice)}</Stat>
-        <Stat label="Sales / mo" note={card.sellers != null ? `${card.sellers} seller${card.sellers === 1 ? "" : "s"}` : undefined}>{card.salesPerMonth ?? "—"}</Stat>
-        <Stat label="Your share" note="per month">{card.yourSharePerMonth ?? "—"}</Stat>
-        <Stat label="Months to sell" note={card.orderQty != null ? `first order ${card.orderQty}` : card.costKnown ? undefined : "needs a cost"}>
+        <Stat label="Sales / mo" note={nf ?? (card.sellers != null ? `${card.sellers} seller${card.sellers === 1 ? "" : "s"}` : undefined)}>{card.salesPerMonth ?? "—"}</Stat>
+        <Stat label="Your share" note={nf ?? "per month"}>{card.yourSharePerMonth ?? "—"}</Stat>
+        <Stat label="Months to sell" note={nf ?? (card.orderQty != null ? `first order ${card.orderQty}` : card.costKnown ? undefined : "needs a cost")}>
           {card.monthsToSell != null ? monthsLabel(card.monthsToSell) : "—"}
         </Stat>
         <Stat label="Amazon" text note={card.amazon?.lastSeenDays != null && !card.amazon.sellingNow ? `last seen ${card.amazon.lastSeenDays} days ago` : undefined}>
@@ -82,6 +84,19 @@ export function VerdictCard({ card }: { card: Card }) {
         </Stat>
       </div>
       {card.why && <p className="text-xs text-muted-foreground">{card.why}</p>}
+      {card.notFetched && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted/60 px-3 py-2 text-xs">
+          <span>
+            Stopped at <b>{card.notFetched.label}</b> before Keepa: Buy Box, offers and Amazon are from Amazon&apos;s current offers (free); sales,
+            your share and history weren&apos;t fetched.
+          </span>
+          {onFetchAnyway && (
+            <Button size="sm" variant="outline" disabled={fetching} onClick={async () => { setFetching(true); try { await onFetchAnyway(); } finally { setFetching(false); } }}>
+              {fetching ? "Fetching…" : "Fetch anyway"}
+            </Button>
+          )}
+        </div>
+      )}
     </section>
   );
 }

@@ -7,6 +7,8 @@ import { listingPack } from "../screening/pack";
 import { applyLinks } from "../spapi/parse";
 import type { CatalogMatch, RestrictionLink } from "../spapi/types";
 import { getSpApi } from "../spapi/client";
+import { getKeepa } from "../keepa/client";
+import type { RunStats } from "../eta";
 import { estSales, firstOrderFigures, share, type StoredMarket } from "../ui/metrics";
 import { activeRateCard, db, loadProfile, must } from "./db";
 import { ingest } from "./ingest";
@@ -191,6 +193,11 @@ export interface VerdictCard {
   fees: { referral: number | null; fba: number | null; total: number | null; source: string | null } | null;
   gating: { status: string; message: string | null; applyUrl: string | null } | null;
   keepaHistory: boolean;
+  /**
+   * Failed before Keepa, so sales, your share and history weren't fetched: which gate stopped it.
+   * "Fetch anyway" (fetchAnyway) screens it again gathering everything.
+   */
+  notFetched: { gate: string; label: string } | null;
   gates: { gate: string; label: string; status: string; detail: string }[];
   runUrl: string;
 }
@@ -208,8 +215,8 @@ type ResultRow = {
 /** The compact verdict for a check's (first) row: the card on the run page and the extension's JSON. */
 export async function verdictCard(runId: string): Promise<VerdictCard | null> {
   const d = db();
-  const run = must(await d.from("runs").select("id, status, profile_snapshot").eq("id", runId).maybeSingle(), "run") as
-    { id: string; status: string; profile_snapshot: ProfileConfig } | null;
+  const run = must(await d.from("runs").select("id, status, profile_snapshot, stats").eq("id", runId).maybeSingle(), "run") as
+    { id: string; status: string; profile_snapshot: ProfileConfig; stats: RunStats | null } | null;
   if (!run) return null;
   const r = (must(
     await d.from("results").select("id, status, verdict, failed_gate, score, band, why, landed_cost, profit, roi, margin, sell_price, price_source, hurdle_price, gate_outcomes, fees, inputs, product_id, offer_id")
@@ -265,6 +272,9 @@ export async function verdictCard(runId: string): Promise<VerdictCard | null> {
     fees: r?.fees ? { referral: num(r.fees.referral), fba: num(r.fees.fba), total: num(r.fees.total), source: r.fees.source ?? null } : null,
     gating: restriction ? { status: restriction.status, message: restriction.message || null, applyUrl: applyLinks(restriction.links)[0]?.resource ?? null } : null,
     keepaHistory: !!m?.hasHistory,
+    notFetched: r?.status === "done" && r.failed_gate && !m?.hasHistory && getKeepa().available && !run.stats?.fetchAll
+      ? { gate: r.failed_gate, label: r.gate_outcomes?.find((g) => g.gate === r.failed_gate)?.label ?? r.failed_gate }
+      : null,
     gates: (r?.gate_outcomes ?? []).map((g) => ({ gate: g.gate, label: g.label, status: g.status, detail: g.detail })),
     runUrl: `/runs/${runId}`,
   };
@@ -276,8 +286,9 @@ export async function verdictCard(runId: string): Promise<VerdictCard | null> {
  * row's sell price; gating from Amazon, once, kept on the row for next time.
  */
 async function fillIn(r: ResultRow, cfg: ProfileConfig) {
+  await freeMarketData(r);
   const m = r.inputs?.market;
-  const price = num(r.sell_price);
+  const price = num(r.sell_price) ?? num(m?.currentBuyBox);
   const costKnown = r.offer?.cost_known !== false;
   const unit = costKnown ? Number(r.offer?.unit_cost_gbp ?? 0) : 0;
   if (price != null && (r.fees == null || (costKnown ? r.profit == null : r.inputs?.maxLandedGbp == null))) {
@@ -316,6 +327,50 @@ async function fillIn(r: ResultRow, cfg: ProfileConfig) {
       // Gating stays unknown on the card; the verdict doesn't depend on it.
     }
   }
+}
+
+/**
+ * A row that failed before any API call (a compliance or budget gate) has no market data: fetch
+ * what SP-API gives for free (Buy Box, offer count, whether Amazon sells it now) and keep it on the
+ * row. Keepa (sales, your share, history) stays unfetched.
+ */
+async function freeMarketData(r: ResultRow) {
+  const asin = r.product?.asin;
+  const spapi = getSpApi();
+  if (r.inputs?.market || !asin || !spapi) return;
+  try {
+    const [pricing, offers] = await Promise.all([
+      spapi.getCompetitivePricing([asin]).catch(() => new Map()),
+      spapi.getItemOffersBatch([asin]).catch(() => new Map()),
+    ]);
+    const p = pricing.get(asin), o = offers.get(asin);
+    if (!p && !o) return;
+    const market = {
+      hasHistory: false,
+      currentBuyBox: o?.buyBox ?? p?.buyBox ?? null,
+      offersNow: o?.totalOffers ?? p?.newOffers ?? null,
+      // SP-API counts Amazon's own offer as FBA; the seller count is about the others.
+      fbaOffers: o?.fbaOffers != null ? Math.max(0, o.fbaOffers - (o.amazon ? 1 : 0)) : null,
+      amazonNow: o ? !!o.amazon : null,
+      buyBoxSellerId: o?.buyBoxSellerId ?? null,
+      rankNow: p?.salesRank ?? null,
+    };
+    r.inputs = { ...r.inputs, market: market as NonNullable<ResultRow["inputs"]>["market"] };
+    await db().from("results").update({ inputs: r.inputs }).eq("id", r.id);
+  } catch {
+    // The card shows what it has.
+  }
+}
+
+/**
+ * "Fetch anyway": screen a check's rows again gathering every source (SP-API, Keepa, gating, fees)
+ * even past a gate that fails; the verdict is still decided by the gates.
+ */
+export async function fetchAnyway(runId: string): Promise<void> {
+  const d = db();
+  const run = must(await d.from("runs").select("stats").eq("id", runId).single(), "run") as { stats: RunStats | null };
+  must(await d.from("runs").update({ stats: { ...(run.stats ?? {}), fetchAll: true }, status: "processing", finished_at: null }).eq("id", runId), "run");
+  must(await d.from("results").update({ status: "pending", inputs: null, updated_at: new Date().toISOString() }).eq("run_id", runId), "requeue");
 }
 
 const num = (v: unknown): number | null => (v == null || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));

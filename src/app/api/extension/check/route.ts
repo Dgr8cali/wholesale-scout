@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { runCheckFor, startCheck, verdictCard } from "@/lib/server/check";
+import { fetchAnyway, runCheckFor, startCheck, verdictCard } from "@/lib/server/check";
 import { asinFromUrl } from "@/lib/check/parse";
 import { db } from "@/lib/server/db";
 import { handle } from "@/lib/server/http";
@@ -27,6 +27,7 @@ export function OPTIONS() {
  *
  *   GET /api/extension/check?asin=B0ABC12345[&cost=4.73][&supplier=Name][&fresh=1]
  *   GET /api/extension/check?run=<runId>          (poll a card that was still pending)
+ *   GET /api/extension/check?run=<runId>&fetchAll=1 ("Fetch anyway": past the gate that stopped it)
  *
  * `asin` may also be an Amazon product link. Authorization: Basic (any user, APP_PASSWORD) or
  * Bearer APP_PASSWORD. A check of the same ASIN and cost in the last 12 hours is reused unless
@@ -36,6 +37,11 @@ export const GET = handle(async (req: NextRequest) => {
   const q = req.nextUrl.searchParams;
   const json = (body: unknown, status = 200) => Response.json(body, { status, headers: CORS });
   const run = q.get("run");
+  if (run && q.get("fetchAll") === "1") {
+    // "Fetch anyway": gather every source past the gate that stopped it.
+    await fetchAnyway(run);
+    if (!(await runCheckFor(run, 12_000))) scheduleNext(req.nextUrl.origin, run);
+  }
   if (run) {
     const card = await verdictCard(run);
     return card ? json({ card }) : json({ error: "Run not found" }, 404);

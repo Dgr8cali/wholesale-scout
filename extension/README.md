@@ -2,7 +2,7 @@
 
 Wholesale Scout's verdict on Amazon UK, where you browse:
 
-- **Product pages**: a panel on the right with the verdict card: verdict, score, Buy Box, sales a month, sellers, your share, Amazon, gating (with Amazon's Apply link), the hurdle price or the most it can cost landed, and profit once you type a cost. Star it, put it on the watchlist (with the condition suggested from what blocked it) or open it in the app. While Keepa and gating are still running the card says "pending" and updates by itself.
+- **Product pages**: a panel on the right with the verdict card: verdict, score, Buy Box, sales a month, sellers, your share, Amazon, gating (with Amazon's Apply link), the hurdle price or the most it can cost landed, and profit once you type a cost. Star it, put it on the watchlist (with the condition suggested from what blocked it) or open it in the app. While Keepa and gating are still running the card says "pending" and updates by itself. A product that fails a gate before any API call (compliance, budget) still shows the free Amazon data (Buy Box, sellers, Amazon now); sales and your share say "not fetched", with **Fetch anyway** to run the full check.
 - **Search results**: a badge on each product with its verdict colour and score, from what the app already knows (nothing is screened, 20 per request). A grey **?** hasn't been checked: click it to check it.
 - **Competitors' stock** (on request, per click): see below.
 - **Dangerous goods**: "Look up" opens Seller Central for the ASIN; a bar there reads the classification and, when you confirm it, saves it to the product in the app. Hazmat counts in the compliance gate the next time the product is screened.

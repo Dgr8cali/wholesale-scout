@@ -81,6 +81,18 @@
     }, 5000);
   }
 
+  // Screen it again gathering every source past the gate that stopped it.
+  async function fetchAnyway() {
+    if (!card?.runId) return;
+    status("Fetching everything…");
+    const r = await ws.api("GET", `/api/extension/check?run=${card.runId}&fetchAll=1`);
+    if (!r.ok) return status(r.error, true);
+    card = r.data.card;
+    message = null;
+    render();
+    if (card?.pending) poll(0);
+  }
+
   const kv = (k, v) => ws.h("div", {}, [ws.h("div", { class: "k", text: k }), ws.h("div", { class: "v" }, [v])]);
 
   function render() {
@@ -108,19 +120,27 @@
         c.pending ? ws.h("span", { class: "muted", text: "pending: Keepa and gating still coming" }) : null,
       ]));
       if (c.title) panel.append(ws.h("div", { class: "muted", style: "margin-top:4px", text: c.title }));
+      // Failed before Keepa: sales and share weren't fetched (Buy Box, sellers, Amazon are from current offers).
+      const nf = c.notFetched ? ws.h("span", { class: "muted", title: `Failed at ${c.notFetched.label}: Keepa not fetched`, text: "not fetched" }) : null;
       const amazon = !c.amazon ? "—" : c.amazon.sellingNow ? "selling now" : c.amazon.lastSeenDays != null ? `last seen ${c.amazon.lastSeenDays} days ago` : c.keepaHistory ? "never" : "not now";
       const gating = c.gating ? ({ open: "Open", approval_required: "Approval needed", blocked: "Blocked" }[c.gating.status] ?? c.gating.status) : "—";
       panel.append(ws.h("div", { class: "grid" }, [
         kv("Buy Box", ws.gbp(c.buyBox)),
-        kv("Sales / mo", ws.num(c.salesPerMonth)),
+        kv("Sales / mo", c.notFetched ? nf : ws.num(c.salesPerMonth)),
         kv("Sellers", ws.num(c.sellers)),
-        kv("Your share / mo", ws.num(c.yourSharePerMonth)),
+        kv("Your share / mo", c.notFetched ? nf : ws.num(c.yourSharePerMonth)),
         kv("Amazon", amazon),
         kv("Gating", c.gating?.applyUrl ? ws.h("span", {}, [gating, " · ", ws.h("a", { href: c.gating.applyUrl, target: "_blank", rel: "noreferrer", text: "Apply" })]) : gating),
         kv(c.hurdle.kind === "landed" ? "Max landed" : "Hurdle (sell at)", ws.gbp(c.hurdle.value)),
         kv(c.costKnown ? `Profit at ${ws.gbp(c.landed)}` : "Profit", c.costKnown ? ws.gbp(c.profit) : "needs a cost"),
       ]));
       if (c.why) panel.append(ws.h("div", { class: "why", text: c.why }));
+      if (c.notFetched) {
+        panel.append(ws.h("div", { class: "why", style: "background:#f4f4f5;padding:6px 8px;border-radius:6px" }, [
+          `Not fetched: failed at ${c.notFetched.label.toLowerCase()}. Buy Box, sellers and Amazon are from current offers; sales, your share and history weren't fetched. `,
+          ws.h("button", { class: "b", text: "Fetch anyway", onclick: fetchAnyway }),
+        ]));
+      }
     }
     if (!unchecked) renderCostAndActions();
     renderSections();

@@ -67,6 +67,8 @@ export interface MarketData {
   variationCount?: number | null;
   /** False for stage-1 Keepa data: no Buy Box seller history yet (see keepa/types). */
   buyBoxFetched?: boolean;
+  /** Keepa was asked and had nothing for this ASIN: don't ask again in this run. */
+  keepaEmpty?: boolean;
   /** From SP-API's current offers before any Keepa history: Amazon holds an offer now. */
   amazonNow?: boolean | null;
   /** Seller holding the Buy Box now: SP-API's current offers, else the end of Keepa's history. */

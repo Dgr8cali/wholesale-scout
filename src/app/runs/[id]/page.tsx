@@ -409,7 +409,15 @@ export default function RunPage() {
         </div>
       </div>
 
-      {card && <VerdictCard card={card} />}
+      {card && <VerdictCard card={card} onFetchAnyway={async () => {
+        try {
+          const r = await api<{ card: VerdictCardData }>(`/api/runs/${id}/fetch-anyway`, { method: "POST" });
+          setCard(r.card);
+          setNonce((n) => n + 1);
+        } catch (e) {
+          toast.error((e as Error).message);
+        }
+      }} />}
 
       {progress && !progress.done && (
         <div className="panel space-y-2 p-4">

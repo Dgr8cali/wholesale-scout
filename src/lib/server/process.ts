@@ -1082,7 +1082,7 @@ export async function processRun(runId: string, opts: { budgetMs?: number } = {}
       stats.keepaStages = st;
       return addRunTokens(runId, meta.tokensConsumed);
     };
-    const env: StageEnv = { runId, cfg, card, rules, approved, spapi, keepa, recordTokens, scanSellerId: stats.scan?.sellerId ?? null };
+    const env: StageEnv = { runId, cfg, card, rules, approved, spapi, keepa, recordTokens, scanSellerId: stats.scan?.sellerId ?? null, fetchAll: !!stats.fetchAll };
 
     const pending: PendingRow[] = [];
     for (let from = 0; ; from += 1000) {
@@ -1179,6 +1179,8 @@ interface StageEnv {
   recordTokens: OnKeepaResponse;
   /** A seller scan: fetch current offers for every row, to see whether this seller holds the Buy Box. */
   scanSellerId?: string | null;
+  /** "Fetch anyway": don't stop at a gate that fails before Keepa; the verdict is decided at the end. */
+  fetchAll?: boolean;
 }
 
 interface StageOut {
@@ -1192,7 +1194,7 @@ interface StageOut {
 function route(row: Row, q: Queues, env: StageEnv) {
   if (row.stage === "buybox") (env.keepa.available ? q.keepa : q.account).push(row);
   else if (STAGE_RANK[row.stage] < STAGE_RANK.enriched && row.stage !== "priced") q.lookup.push(row);
-  else if (env.keepa.available && row.match?.asin && !row.market?.hasHistory) {
+  else if (env.keepa.available && row.match?.asin && !row.market?.hasHistory && !row.market?.keepaEmpty) {
     row.stage = "priced";
     q.keepa.push(row);
   } else q.account.push(row);
@@ -1258,7 +1260,7 @@ async function stageLookup(rows: Row[], env: StageEnv): Promise<StageOut & { add
   for (const row of rows) {
     const ctx = context(row, card, rules, cfg, approved);
     const run = runGates(ctx, cfg, pre);
-    if (run.failedGate) done.push({ row, run, ctx });
+    if (run.failedGate && !env.fetchAll) done.push({ row, run, ctx });
     else live.push(row);
   }
 
@@ -1362,8 +1364,9 @@ async function stageLookup(rows: Row[], env: StageEnv): Promise<StageOut & { add
     // No listing, or what current offers already settle: done before any Keepa token.
     const certain = certainBeforeKeepa(row, cfg);
     const early = runGates(ctx, cfg, GATE_ORDER.filter((g) => [...pre, "matchQuality", ...certain].includes(g)));
-    if (early.failedGate && certain.includes(early.failedGate)) row.notes.push("Ruled out from current offers before any Keepa token.");
-    if (early.failedGate) {
+    // "Fetch anyway" carries on past everything but a missing listing.
+    if (early.failedGate && !(env.fetchAll && early.failedGate !== "matchQuality")) {
+      if (certain.includes(early.failedGate)) row.notes.push("Ruled out from current offers before any Keepa token.");
       done.push({ row, run: early, ctx });
       continue;
     }
@@ -1373,7 +1376,7 @@ async function stageLookup(rows: Row[], env: StageEnv): Promise<StageOut & { add
       continue;
     }
     const mid = runGates(ctx, cfg, GATE_ORDER.filter((g) => g !== "gating" && g !== "fees"));
-    if (mid.failedGate) done.push({ row, run: mid, ctx });
+    if (mid.failedGate && !env.fetchAll) done.push({ row, run: mid, ctx });
     else next.push(row);
   }
 
@@ -1453,10 +1456,14 @@ async function stageKeepa(rows: Row[], env: StageEnv): Promise<StageOut & { defe
       continue;
     }
     if (snap) row.market = marketFromKeepa(snap, row.market);
+    else if (row.market) {
+      row.market = { ...row.market, keepaEmpty: true };
+      row.dataNotes.push("Keepa has no data for this ASIN.");
+    }
     row.stage = "enriched";
     const ctx = context(row, card, rules, cfg, approved);
     const mid = runGates(ctx, cfg, GATE_ORDER.filter((g) => g !== "gating" && g !== "fees"));
-    if (mid.failedGate) done.push({ row, run: mid, ctx });
+    if (mid.failedGate && !env.fetchAll) done.push({ row, run: mid, ctx });
     else next.push(row);
   }
   return { finished: await finishAll(done, cfg), next, deferred, waitUntil, tokens };
