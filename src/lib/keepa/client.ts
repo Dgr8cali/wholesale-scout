@@ -3,20 +3,24 @@
  *
  * - StubKeepaClient: the default until a real key is set. Returns nothing, and the
  *   Keepa-dependent gates report "not checked" rather than failing rows.
- * - HttpKeepaClient: the Keepa product API (amazon.co.uk = domain 2), EAN lookups in
- *   batches of up to 100. Written to Keepa's documented response format; exercise it
- *   against a real key before trusting it on a full sheet.
+ * - HttpKeepaClient: the Keepa product API (amazon.co.uk = domain 2), by ASIN or by
+ *   EAN, batches of up to 100. Every request is logged with Keepa's own token figures.
  */
 import { decodeSeries, summarize } from "./summarize";
-import type { KeepaClient, KeepaLookup, KeepaProduct } from "./types";
+import type { KeepaClient, KeepaLookup, KeepaProduct, KeepaResponseMeta, OnKeepaResponse } from "./types";
 
 export * from "./types";
+
+const emptyLookup = (): KeepaLookup => ({ byEan: new Map(), byAsin: new Map(), tokensUsed: 0, tokensLeft: null, requests: [] });
 
 export class StubKeepaClient implements KeepaClient {
   readonly available = false;
   readonly name = "stub";
   async lookupByEans(): Promise<KeepaLookup> {
-    return { byEan: new Map(), tokensUsed: 0 };
+    return emptyLookup();
+  }
+  async lookupByAsins(): Promise<KeepaLookup> {
+    return emptyLookup();
   }
 }
 
@@ -83,39 +87,113 @@ export function parseKeepaProduct(p: RawKeepaProduct, now = Date.now()): KeepaPr
   };
 }
 
+interface KeepaBody {
+  products?: RawKeepaProduct[];
+  tokensConsumed?: number;
+  tokensLeft?: number;
+  refillIn?: number;
+  processingTimeInMs?: number;
+  error?: { type?: string; message?: string };
+}
+
+export class KeepaError extends Error {
+  constructor(message: string, readonly meta: KeepaResponseMeta) {
+    super(message);
+  }
+}
+
+/**
+ * Keepa product API on amazon.co.uk (domain 2), with a year of stats, full history and
+ * Buy Box seller history: 1 token per product plus 2 for the Buy Box data.
+ */
 export class HttpKeepaClient implements KeepaClient {
   readonly available = true;
   readonly name = "keepa";
-  constructor(private readonly key: string, private readonly fetchImpl: typeof fetch = fetch) {}
+  constructor(
+    private readonly key: string,
+    private readonly fetchImpl: typeof fetch = fetch,
+    private readonly log: (line: string) => void = (l) => console.log(l),
+  ) {}
 
-  async lookupByEans(eans: string[]): Promise<KeepaLookup> {
-    const byEan = new Map<string, KeepaProduct[]>();
-    let tokensUsed = 0;
-    for (let i = 0; i < eans.length; i += 100) {
-      const chunk = eans.slice(i, i + 100);
-      const url = new URL("https://api.keepa.com/product");
-      url.search = new URLSearchParams({
-        key: this.key,
-        domain: "2",
-        code: chunk.join(","),
-        stats: "365",
-        history: "1",
-        buybox: "1",
-      }).toString();
-      const res = await this.fetchImpl(url);
-      const body = (await res.json()) as { products?: RawKeepaProduct[]; tokensConsumed?: number; error?: { message?: string } };
-      if (!res.ok) throw new Error(`Keepa ${res.status}: ${body.error?.message ?? "request failed"}`);
-      tokensUsed += body.tokensConsumed ?? 0;
-      for (const raw of body.products ?? []) {
-        const product = parseKeepaProduct(raw);
-        for (const ean of chunk) {
-          if (product.eans.some((e) => e.replace(/^0+/, "") === ean.replace(/^0+/, ""))) {
-            byEan.set(ean, [...(byEan.get(ean) ?? []), product]);
+  /** One request, logged with Keepa's own token figures and reported before it's parsed. */
+  private async request(kind: "asin" | "code", ids: string[], onResponse?: OnKeepaResponse): Promise<{ body: KeepaBody; meta: KeepaResponseMeta }> {
+    const url = new URL("https://api.keepa.com/product");
+    url.search = new URLSearchParams({
+      key: this.key,
+      domain: "2",
+      [kind]: ids.join(","),
+      stats: "365",
+      history: "1",
+      buybox: "1",
+    }).toString();
+    const res = await this.fetchImpl(url);
+    const body = (await res.json().catch(() => ({}))) as KeepaBody;
+    const meta: KeepaResponseMeta = {
+      kind,
+      count: ids.length,
+      status: res.status,
+      tokensConsumed: body.tokensConsumed ?? 0,
+      tokensLeft: body.tokensLeft ?? null,
+      refillInMs: body.refillIn ?? null,
+      processingTimeInMs: body.processingTimeInMs ?? null,
+      products: body.products?.length ?? 0,
+    };
+    this.log(
+      `[keepa] ${kind} lookup n=${meta.count} http=${meta.status} products=${meta.products} ` +
+        `tokensConsumed=${meta.tokensConsumed} tokensLeft=${meta.tokensLeft} refillIn=${meta.refillInMs}ms processing=${meta.processingTimeInMs}ms`,
+    );
+    await onResponse?.(meta);
+    if (!res.ok) throw new KeepaError(`Keepa ${res.status}: ${body.error?.message ?? body.error?.type ?? "request failed"}`, meta);
+    return { body, meta };
+  }
+
+  /** Batches of 100; stops (and says so) when Keepa has no tokens left. */
+  private async run(kind: "asin" | "code", ids: string[], onResponse: OnKeepaResponse | undefined, take: (p: KeepaProduct, chunk: string[], out: KeepaLookup) => void): Promise<KeepaLookup> {
+    const out = emptyLookup();
+    const unique = [...new Set(ids)];
+    for (let i = 0; i < unique.length; i += 100) {
+      const chunk = unique.slice(i, i + 100);
+      if (out.tokensLeft != null && out.tokensLeft <= 0) {
+        out.exhausted = { refillInMs: out.requests.at(-1)?.refillInMs ?? null, skipped: unique.length - i };
+        break;
+      }
+      try {
+        const { body, meta } = await this.request(kind, chunk, onResponse);
+        out.requests.push(meta);
+        out.tokensUsed += meta.tokensConsumed;
+        out.tokensLeft = meta.tokensLeft;
+        for (const raw of body.products ?? []) if (raw?.asin) take(parseKeepaProduct(raw), chunk, out);
+      } catch (e) {
+        if (e instanceof KeepaError) {
+          out.requests.push(e.meta);
+          out.tokensUsed += e.meta.tokensConsumed;
+          out.tokensLeft = e.meta.tokensLeft;
+          if (e.meta.status === 429) {
+            out.exhausted = { refillInMs: e.meta.refillInMs, skipped: unique.length - i };
+            break;
           }
         }
+        throw e;
       }
     }
-    return { byEan, tokensUsed };
+    return out;
+  }
+
+  async lookupByAsins(asins: string[], onResponse?: OnKeepaResponse): Promise<KeepaLookup> {
+    return this.run("asin", asins, onResponse, (p, _chunk, out) => {
+      out.byAsin.set(p.asin, p);
+    });
+  }
+
+  async lookupByEans(eans: string[], onResponse?: OnKeepaResponse): Promise<KeepaLookup> {
+    return this.run("code", eans, onResponse, (p, chunk, out) => {
+      out.byAsin.set(p.asin, p);
+      for (const ean of chunk) {
+        if (p.eans.some((e) => e.replace(/^0+/, "") === ean.replace(/^0+/, ""))) {
+          out.byEan.set(ean, [...(out.byEan.get(ean) ?? []), p]);
+        }
+      }
+    });
   }
 }
 

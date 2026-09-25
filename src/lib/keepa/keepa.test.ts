@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getKeepa, HttpKeepaClient, parseKeepaProduct, StubKeepaClient } from "./client";
-import { decodeSeries, keepaTimeToMs, median, rankDrops, summarize } from "./summarize";
+import { decodeSeries, keepaTimeToMs, median, rankDrops, summarize, trimSeries } from "./summarize";
 import type { Point } from "./types";
 
 const DAY = 86_400_000;
@@ -105,11 +105,71 @@ describe("clients", () => {
       return new Response(JSON.stringify({ tokensConsumed: codes.length, products: [{ asin: "B" + codes[0], eanList: [codes[0]], csv: [] }] }));
     }) as unknown as typeof fetch;
     const eans = Array.from({ length: 150 }, (_, i) => String(5000000000000 + i));
-    const r = await new HttpKeepaClient("k".repeat(64), fetchImpl).lookupByEans(eans);
+    const r = await new HttpKeepaClient("k".repeat(64), fetchImpl, () => {}).lookupByEans(eans);
     expect(urls).toHaveLength(2);
     expect(urls[0].searchParams.get("domain")).toBe("2");
     expect(r.tokensUsed).toBe(150);
     expect(r.byEan.get(eans[0])![0].asin).toBe("B" + eans[0]);
     expect(r.byEan.get(eans[100])![0].asin).toBe("B" + eans[100]);
+  });
+});
+
+describe("Keepa requests: logging and tokens", () => {
+  const reply = (body: object, status = 200) => new Response(JSON.stringify(body), { status });
+
+  it("looks up by ASIN, logs Keepa's token figures, and reports each response before parsing", async () => {
+    const lines: string[] = [];
+    const seen: unknown[] = [];
+    const fetchImpl = (async (u: URL) => {
+      expect(u.searchParams.get("asin")).toBe("B1,B2");
+      expect(u.searchParams.get("buybox")).toBe("1");
+      return reply({ tokensConsumed: 6, tokensLeft: 279, refillIn: 7598, processingTimeInMs: 496, products: [{ asin: "B1", csv: [] }, { asin: "B2", csv: [] }] });
+    }) as unknown as typeof fetch;
+    const r = await new HttpKeepaClient("k".repeat(64), fetchImpl, (l) => lines.push(l)).lookupByAsins(["B1", "B2", "B1"], (m) => void seen.push(m));
+    expect([...r.byAsin.keys()]).toEqual(["B1", "B2"]);
+    expect(r).toMatchObject({ tokensUsed: 6, tokensLeft: 279 });
+    expect(lines).toEqual(["[keepa] asin lookup n=2 http=200 products=2 tokensConsumed=6 tokensLeft=279 refillIn=7598ms processing=496ms"]);
+    expect(seen).toEqual([{ kind: "asin", count: 2, status: 200, tokensConsumed: 6, tokensLeft: 279, refillInMs: 7598, processingTimeInMs: 496, products: 2 }]);
+  });
+
+  it("stops asking once Keepa reports no tokens left", async () => {
+    let calls = 0;
+    const fetchImpl = (async () => {
+      calls++;
+      return reply({ tokensConsumed: 300, tokensLeft: -12, refillIn: 60000, products: [] });
+    }) as unknown as typeof fetch;
+    const asins = Array.from({ length: 150 }, (_, i) => `B${i}`);
+    const r = await new HttpKeepaClient("k".repeat(64), fetchImpl, () => {}).lookupByAsins(asins);
+    expect(calls).toBe(1);
+    expect(r.exhausted).toEqual({ refillInMs: 60000, skipped: 50 });
+  });
+
+  it("reports a 429 as exhausted, with the tokens it cost", async () => {
+    const fetchImpl = (async () => reply({ tokensConsumed: 0, tokensLeft: -5, refillIn: 30000, error: { type: "NOT_ENOUGH_TOKEN" } }, 429)) as unknown as typeof fetch;
+    const r = await new HttpKeepaClient("k".repeat(64), fetchImpl, () => {}).lookupByAsins(["B1", "B2"]);
+    expect(r.exhausted).toEqual({ refillInMs: 30000, skipped: 2 });
+    expect(r.requests[0]).toMatchObject({ status: 429, tokensLeft: -5 });
+    expect(r.byAsin.size).toBe(0);
+  });
+});
+
+describe("summary fixes from live data", () => {
+  it("treats Keepa's negative 'not collected' FBA count as unknown", () => {
+    const s = summarize({ now: NOW, rank: [], buyBox: [], offerCount: [], amazon: [], reviewCount: [], fbaOfferCount: -2 });
+    expect(s.fbaOffers).toBeNull();
+  });
+
+  it("won't extrapolate a slope from a few scattered Buy Box points", () => {
+    // Five priced spells in a year with gaps between: once gave -592%/yr.
+    const bb: Point[] = [];
+    for (const d of [360, 300, 200, 100, 20]) bb.push([daysAgo(d), 40 - d / 20], [daysAgo(d - 3), NaN]);
+    const s = summarize({ now: NOW, rank: [], buyBox: bb, offerCount: [], amazon: [], reviewCount: [] });
+    expect(s.bbSlopePctYr).toBeNull();
+  });
+
+  it("trims a series to a window, keeping the point in force at its start", () => {
+    const series: Point[] = [[daysAgo(900), 1], [daysAgo(600), 2], [daysAgo(100), 3], [daysAgo(10), 4]];
+    expect(trimSeries(series, daysAgo(460))).toEqual([[daysAgo(600), 2], [daysAgo(100), 3], [daysAgo(10), 4]]);
+    expect(trimSeries(series, daysAgo(5))).toEqual([[daysAgo(10), 4]]);
   });
 });

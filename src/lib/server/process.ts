@@ -2,7 +2,8 @@ import "server-only";
 import { brandKey } from "../brands";
 import { referralCategoryFor } from "../fees/engine";
 import type { RateCard } from "../fees/rateCard";
-import { getKeepa, type KeepaProduct, type KeepaSummary } from "../keepa/client";
+import { getKeepa, type KeepaProduct, type KeepaResponseMeta, type KeepaSummary, type OnKeepaResponse } from "../keepa/client";
+import { trimSeries } from "../keepa/summarize";
 import { GATE_ORDER, withDefaults, type GateId, type ProfileConfig } from "../screening/config";
 import { resolveScoringPrice, runGates, verdictOf, type GateRun, type MarketData, type ScreenContext } from "../screening/gates";
 import type { CategoryRule } from "../screening/rules";
@@ -229,6 +230,94 @@ async function approvedBrands(): Promise<Approved> {
   return new Map(rows.map((r) => [r.brand_key, { status: "approved", date: r.status_date }]));
 }
 
+/** Latest Keepa summary per ASIN fetched in the last 24 hours. */
+async function freshSnapshots(asins: string[]): Promise<Map<string, KeepaSummary>> {
+  const out = new Map<string, KeepaSummary>();
+  const since = new Date(Date.now() - KEEPA_TTL).toISOString();
+  for (const c of chunks([...new Set(asins)])) {
+    const snaps = must(
+      await db().from("keepa_snapshots").select("asin, fetched_at, summary").in("asin", c).gte("fetched_at", since).order("fetched_at", { ascending: false }),
+      "snapshots",
+    ) as { asin: string; summary: KeepaSummary }[];
+    for (const x of snaps) if (!out.has(x.asin)) out.set(x.asin, x.summary);
+  }
+  return out;
+}
+
+/** Keep what the gates read: the last ~15 months (a year, plus the 90 days before it for rank trend). */
+const SNAPSHOT_DAYS = 460;
+
+async function saveSnapshot(k: KeepaProduct): Promise<void> {
+  const since = Date.now() - SNAPSHOT_DAYS * DAY;
+  const res = await db().from("keepa_snapshots").insert({
+    asin: k.asin,
+    rank_series: trimSeries(k.series.rank, since),
+    buybox_series: trimSeries(k.series.buyBox, since),
+    new_series: trimSeries(k.series.newPrice, since),
+    offer_count_series: trimSeries(k.series.offerCount, since),
+    amazon_series: trimSeries(k.series.amazon, since),
+    review_count_series: trimSeries(k.series.reviewCount, since),
+    summary: k.summary,
+  });
+  if (res.error) throw new Error(res.error.message);
+}
+
+/** Add Keepa's tokensConsumed to the run's total straight away, so a later failure can't lose it. */
+async function addRunTokens(runId: string, tokens: number): Promise<void> {
+  if (!tokens) return;
+  const d = db();
+  const cur = must(await d.from("runs").select("token_cost").eq("id", runId).single(), "run tokens") as { token_cost: number };
+  must(await d.from("runs").update({ token_cost: (cur.token_cost ?? 0) + tokens }).eq("id", runId), "run tokens");
+}
+
+/**
+ * Keepa history for rows with an ASIN. Never re-fetches an ASIN with a snapshot under
+ * 24 hours old. New snapshots are stored one ASIN at a time before any gate runs; if a
+ * store fails, the fetched data is still used and the failure is logged and noted.
+ */
+async function attachKeepa(rows: Row[], alreadyFetched: Map<string, KeepaProduct>, onResponse: OnKeepaResponse): Promise<Map<string, KeepaSummary>> {
+  const keepa = getKeepa();
+  const withAsin = rows.filter((r) => r.match?.asin);
+  const asins = [...new Set(withAsin.map((r) => r.match!.asin!))];
+  const summaries = await freshSnapshots(asins);
+  const products = new Map<string, KeepaProduct>();
+  for (const [asin, k] of alreadyFetched) if (!summaries.has(asin)) products.set(asin, k);
+
+  const need = asins.filter((a) => !summaries.has(a) && !products.has(a));
+  let exhausted: { refillInMs: number | null } | undefined;
+  if (keepa.available && need.length) {
+    try {
+      const res = await keepa.lookupByAsins(need, onResponse);
+      for (const [asin, k] of res.byAsin) products.set(asin, k);
+      exhausted = res.exhausted;
+    } catch (e) {
+      for (const r of withAsin) if (need.includes(r.match!.asin!)) r.dataNotes.push(`Keepa lookup failed: ${(e as Error).message}.`);
+    }
+  }
+
+  for (const [asin, k] of products) {
+    try {
+      await saveSnapshot(k);
+    } catch (e) {
+      console.error(`[keepa] storing snapshot for ${asin} failed: ${(e as Error).message}`);
+      for (const r of withAsin) if (r.match!.asin === asin) r.dataNotes.push(`Keepa snapshot not stored: ${(e as Error).message}.`);
+    }
+    summaries.set(asin, k.summary);
+  }
+  if (products.size) {
+    for (const c of chunks([...products.keys()])) {
+      await db().from("products").update({ keepa_updated_at: new Date().toISOString() }).in("asin", c);
+    }
+  }
+  if (exhausted) {
+    const wait = exhausted.refillInMs != null ? ` (refill in ${Math.ceil(exhausted.refillInMs / 1000)}s)` : "";
+    for (const r of withAsin) {
+      if (!summaries.has(r.match!.asin!)) r.dataNotes.push(`Keepa out of tokens${wait}: history not checked. Re-screen after the refill.`);
+    }
+  }
+  return summaries;
+}
+
 /** Run `fn` for a row; if it throws, mark that result as an error so the run can finish. */
 async function safely(row: Row, fn: () => Promise<void>) {
   try {
@@ -286,17 +375,21 @@ async function loadRows(results: PendingRow[]): Promise<Row[]> {
     for (const x of rows) if (x.asin) siblings.set(x.ean, (siblings.get(x.ean) ?? 0) + 1);
   }
 
+  // A Keepa snapshot under 24 hours old beats stored market data without history.
+  const keepaFresh = await freshSnapshots(products.map((p) => p.asin).filter((a): a is string => !!a));
+
   return results.map((r) => {
     const offer = O.get(r.offer_id)!;
     const product = P.get(r.product_id)!;
     const i = r.inputs?.v === 1 ? r.inputs : null;
+    const snap = product.asin ? keepaFresh.get(product.asin) : undefined;
     const stored = i?.match ?? (product.asin ? { asin: product.asin, asinCount: 1, looked: true } : null);
     const match = stored?.asin ? { ...stored, asinCount: Math.max(stored.asinCount, siblings.get(product.ean) ?? 0) } : stored;
     return {
       resultId: r.id, product, offer, supplier: S.get(offer.supplier_id)!,
       stage: i?.stage ?? "row",
       match,
-      market: i?.market ?? null,
+      market: snap && !i?.market?.hasHistory ? marketFromKeepa(snap) : i?.market ?? null,
       hazmat: i?.hazmat ?? [],
       restriction: i?.restriction ?? null,
       amazonFees: i?.amazonFees ?? null,
@@ -333,6 +426,7 @@ export async function rescreenRun(runId: string, profileId?: string | null): Pro
   must(await d.from("runs").update({ profile_id: profile.id, profile_snapshot: cfg, status: "processing", finished_at: null }).eq("id", runId), "run");
 
   const rows = await loadRows(all);
+  const keepaLive = getKeepa().available;
   const requeue: string[] = [];
   const work: (() => Promise<void>)[] = [];
   const middle = GATE_ORDER.filter((g) => g !== "gating" && g !== "fees");
@@ -345,6 +439,8 @@ export async function rescreenRun(runId: string, profileId?: string | null): Pro
     const pre = runGates(ctx, cfg, ["compliance", "budgetFit"]);
     if (pre.failedGate) return void work.push(() => safely(row, () => finalize(row, pre, cfg, ctx)));
     if (STAGE_RANK[row.stage] < STAGE_RANK.enriched) return void requeue.push(row.resultId);
+    // Keepa is live and this listing has no history yet (and none under 24h to read): fetch it once.
+    if (keepaLive && row.match?.asin && !row.market?.hasHistory) return void requeue.push(row.resultId);
     const mid = runGates(ctx, cfg, middle);
     if (mid.failedGate) return void work.push(() => safely(row, () => finalize(row, mid, cfg, ctx)));
     if (STAGE_RANK[row.stage] < STAGE_RANK.account || needsRestrictionCheck(row)) return void requeue.push(row.resultId);
@@ -391,6 +487,8 @@ export async function processRun(runId: string, limit = 20): Promise<{ done: boo
   const [card, rules, approved] = await Promise.all([activeRateCard(), loadRules(), approvedBrands()]);
   const spapi = getSpApi();
   const keepa = getKeepa();
+  // Keepa's own tokensConsumed, added to the run as each response arrives.
+  const recordTokens = (meta: KeepaResponseMeta) => addRunTokens(runId, meta.tokensConsumed);
 
   const pending = must(
     await d.from("results").select("id, product_id, offer_id, inputs").eq("run_id", runId).eq("status", "pending").limit(limit),
@@ -416,6 +514,8 @@ export async function processRun(runId: string, limit = 20): Promise<{ done: boo
     rows = survivors.filter((r) => STAGE_RANK[r.stage] < STAGE_RANK.enriched);
 
     // Stage 2 — match and enrich: SP-API catalog by EAN, Keepa history (24-hour cache).
+    // Notes from an earlier pass's failed lookups are cleared before this pass looks again.
+    for (const r of rows) r.dataNotes = r.dataNotes.filter((n) => !/lookup failed|Keepa/i.test(n));
     // Unmatched EANs are always asked again: a miss isn't cached.
     const needCatalog = rows.filter((r) => !r.product.asin || !FRESH(r.product.catalog_updated_at, CATALOG_TTL));
     let catalog = new Map<string, CatalogMatch[]>();
@@ -428,37 +528,18 @@ export async function processRun(runId: string, limit = 20): Promise<{ done: boo
       }
     }
 
-    const snapshots = new Map<string, KeepaSummary>();
-    const knownAsins = rows.map((r) => r.product.asin).filter((a): a is string => !!a);
-    if (knownAsins.length) {
-      const snaps = must(
-        await d.from("keepa_snapshots").select("asin, fetched_at, summary").in("asin", knownAsins)
-          .gte("fetched_at", new Date(Date.now() - KEEPA_TTL).toISOString()).order("fetched_at", { ascending: false }),
-        "snapshots",
-      ) as { asin: string; summary: KeepaSummary }[];
-      for (const s of snaps) if (!snapshots.has(s.asin)) snapshots.set(s.asin, s.summary);
-    }
+    // Keepa by EAN only where neither the catalog nor an earlier match found a listing;
+    // everything with an ASIN gets its history by ASIN below.
     let keepaByEan = new Map<string, KeepaProduct[]>();
-    const needKeepa = rows.filter((r) => !r.product.asin || !snapshots.has(r.product.asin));
-    if (keepa.available && needKeepa.length) {
+    const fetched = new Map<string, KeepaProduct>();
+    const unresolved = rows.filter((r) => !r.product.asin && !catalog.get(r.product.ean)?.length);
+    if (keepa.available && unresolved.length) {
       try {
-        const res = await keepa.lookupByEans([...new Set(needKeepa.map((r) => r.product.ean))]);
+        const res = await keepa.lookupByEans([...new Set(unresolved.map((r) => r.product.ean))], recordTokens);
         keepaByEan = res.byEan;
-        if (res.tokensUsed) must(await d.from("runs").update({ token_cost: runRow.token_cost + res.tokensUsed }).eq("id", runId), "tokens");
-        const snapRows = [...res.byEan.values()].flat().map((k) => ({
-          asin: k.asin,
-          rank_series: k.series.rank,
-          buybox_series: k.series.buyBox,
-          new_series: k.series.newPrice,
-          offer_count_series: k.series.offerCount,
-          amazon_series: k.series.amazon,
-          review_count_series: k.series.reviewCount,
-          summary: k.summary,
-        }));
-        if (snapRows.length) must(await d.from("keepa_snapshots").insert(snapRows), "save snapshots");
-        for (const k of [...res.byEan.values()].flat()) snapshots.set(k.asin, k.summary);
+        for (const [asin, k] of res.byAsin) fetched.set(asin, k);
       } catch (e) {
-        for (const r of needKeepa) r.dataNotes.push(`Keepa lookup failed: ${(e as Error).message}.`);
+        for (const r of unresolved) r.dataNotes.push(`Keepa lookup failed: ${(e as Error).message}.`);
       }
     }
 
@@ -466,7 +547,6 @@ export async function processRun(runId: string, limit = 20): Promise<{ done: boo
     // new products with the same offer and join this run as pending rows.
     const resolved: Row[] = [];
     for (const row of rows) await safely(row, async () => {
-      row.dataNotes = row.dataNotes.filter((n) => !/lookup failed/i.test(n));
       const p = row.product;
       const cat = catalog.get(p.ean) ?? [];
       const kp = keepaByEan.get(p.ean) ?? [];
@@ -531,6 +611,11 @@ export async function processRun(runId: string, limit = 20): Promise<{ done: boo
     });
     rows = resolved;
 
+    // Keepa history for every row in this chunk that has an ASIN and no history yet,
+    // including rows Re-screen sent back. Stored before any gate runs.
+    for (const r of enrichedBefore) r.dataNotes = r.dataNotes.filter((n) => !/Keepa/i.test(n));
+    const snapshots = await attachKeepa([...enrichedBefore, ...rows], fetched, recordTokens);
+
     // Market data: Keepa history, else SP-API's current Buy Box and offer count.
     const noHistory = rows.filter((r) => r.match?.asin && !snapshots.has(r.match.asin));
     let pricing = new Map<string, CompetitivePrice>();
@@ -546,6 +631,10 @@ export async function processRun(runId: string, limit = 20): Promise<{ done: boo
       if (!asin) continue;
       const snap = snapshots.get(asin);
       row.market = snap ? marketFromKeepa(snap) : marketFromSpApi(pricing.get(asin), row.product.sales_rank);
+    }
+    for (const row of enrichedBefore) {
+      const snap = row.match?.asin ? snapshots.get(row.match.asin) : undefined;
+      if (snap) row.market = marketFromKeepa(snap);
     }
     for (const row of rows) row.stage = "enriched";
     rows = [...enrichedBefore, ...rows];

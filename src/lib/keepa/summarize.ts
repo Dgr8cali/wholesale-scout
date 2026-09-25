@@ -60,6 +60,27 @@ export function daily(series: Point[], from: number, to: number): number[] {
   return out;
 }
 
+/** Daily samples as [days since `from`, value], skipping days with no value. */
+export function dailyPoints(series: Point[], from: number, to: number): [number, number][] {
+  const out: [number, number][] = [];
+  for (let t = from, d = 0; t <= to; t += DAY, d++) {
+    const v = valueAt(series, t);
+    if (v != null) out.push([d, v]);
+  }
+  return out;
+}
+
+/**
+ * The part of a series the gates read, for storage: points from `since` on, plus the
+ * point in force at `since` (series are step functions). Full Keepa histories run to
+ * hundreds of KB per ASIN; a year and a quarter is a small fraction of that.
+ */
+export function trimSeries(series: Point[], since: number): Point[] {
+  const i = series.findIndex(([t]) => t >= since);
+  if (i === -1) return series.length ? [series[series.length - 1]] : [];
+  return i > 0 ? series.slice(i - 1) : series;
+}
+
 /** Count of rank improvements (a sale, roughly) inside the window. */
 export function rankDrops(rank: Point[], from: number, to: number): number {
   const pts = valid(rank).filter(([t]) => t >= from - DAY && t <= to);
@@ -73,16 +94,20 @@ function mean(xs: number[]) {
 }
 
 /** Least-squares slope of daily values, per year, as % of `base`. */
-function slopePctPerYear(values: number[], base: number | null): number | null {
-  if (values.length < 30 || !base) return null;
-  const n = values.length;
-  const mx = (n - 1) / 2;
-  const my = values.reduce((a, b) => a + b, 0) / n;
+/**
+ * Least-squares slope per year as % of `base`, on real day positions (gaps stay gaps).
+ * Needs 60 priced days spanning at least 90, or a few points would extrapolate wildly.
+ */
+function slopePctPerYear(points: [number, number][], base: number | null): number | null {
+  if (points.length < 60 || !base || points[points.length - 1][0] - points[0][0] < 90) return null;
+  const n = points.length;
+  const mx = points.reduce((a, [x]) => a + x, 0) / n;
+  const my = points.reduce((a, [, y]) => a + y, 0) / n;
   let num = 0, den = 0;
-  values.forEach((y, x) => {
+  for (const [x, y] of points) {
     num += (x - mx) * (y - my);
     den += (x - mx) ** 2;
-  });
+  }
   return den ? ((num / den) * 365 / base) * 100 : null;
 }
 
@@ -108,7 +133,8 @@ export function summarize(i: SummaryInput): KeepaSummary {
   const firstPoint = Math.min(...[i.rank, i.buyBox, i.offerCount].map((s) => valid(s)[0]?.[0] ?? Infinity));
   const historyDays = Number.isFinite(firstPoint) ? Math.floor((now - firstPoint) / DAY) : null;
 
-  const bbDaily = daily(i.buyBox, yearAgo, now);
+  const bbPoints = dailyPoints(i.buyBox, yearAgo, now);
+  const bbDaily = bbPoints.map(([, v]) => v);
   const medianBuyBox12m = median(bbDaily);
   const bbMean = mean(bbDaily);
   const bbSd = bbMean == null ? null : Math.sqrt(bbDaily.reduce((a, v) => a + (v - bbMean) ** 2, 0) / bbDaily.length);
@@ -159,11 +185,12 @@ export function summarize(i: SummaryInput): KeepaSummary {
     rankTrendPct12m: avgRank90d != null && avgRank90dYearAgo ? ((avgRank90d - avgRank90dYearAgo) / avgRank90dYearAgo) * 100 : null,
     currentBuyBox: valueAt(i.buyBox, now),
     medianBuyBox12m,
-    bbSlopePctYr: slopePctPerYear(bbDaily, medianBuyBox12m),
+    bbSlopePctYr: slopePctPerYear(bbPoints, medianBuyBox12m),
     bbVolatilityPct: bbSd != null && bbMean ? (bbSd / bbMean) * 100 : null,
     offersNow: valueAt(i.offerCount, now),
     offers90dAgo: valueAt(i.offerCount, now - 90 * DAY),
-    fbaOffers: i.fbaOfferCount ?? null,
+    // Keepa uses negative numbers for "not collected".
+    fbaOffers: i.fbaOfferCount != null && i.fbaOfferCount >= 0 ? i.fbaOfferCount : null,
     amazonLastSeenDays,
     topSellerBbSharePct,
     reviewJumpPct,

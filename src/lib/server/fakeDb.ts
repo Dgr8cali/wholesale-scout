@@ -27,6 +27,8 @@ const uuid = () => `00000000-0000-4000-8000-${String(++seq).padStart(12, "0")}`;
 
 export class FakeDb {
   tables: Record<string, Row[]> = {};
+  /** Inserts into these tables fail, to test what happens when a write is refused. */
+  failInserts = new Set<string>();
   from(table: string) {
     this.tables[table] ??= [];
     return new Query(this, table);
@@ -78,6 +80,9 @@ class Query implements PromiseLike<{ data: unknown; error: { message: string; co
   private exec(): { data: unknown; error: { message: string; code?: string } | null; count?: number | null } {
     let out: Row[] = [];
     const now = new Date().toISOString();
+    if ((this.op === "insert" || this.op === "upsert") && this.db.failInserts.has(this.table)) {
+      return { data: null, error: { message: "request entity too large" } };
+    }
     if (this.op === "insert" || this.op === "upsert") {
       const list = Array.isArray(this.payload) ? this.payload : [this.payload!];
       for (const p of list) {
@@ -89,7 +94,7 @@ class Query implements PromiseLike<{ data: unknown; error: { message: string; co
           out.push(hit);
           continue;
         }
-        const row = { id: uuid(), created_at: now, ...DEFAULTS[this.table], ...p };
+        const row = { id: uuid(), created_at: now, ...(this.table === "keepa_snapshots" ? { fetched_at: now } : {}), ...DEFAULTS[this.table], ...p };
         this.rows().push(row);
         out.push(row);
       }

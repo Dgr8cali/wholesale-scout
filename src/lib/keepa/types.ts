@@ -51,15 +51,39 @@ export interface KeepaProduct {
   };
 }
 
-export interface KeepaLookup {
-  /** EAN → every ASIN it resolves to. */
-  byEan: Map<string, KeepaProduct[]>;
-  tokensUsed: number;
+/** What Keepa said about one request: its own token figures, logged and recorded as they arrive. */
+export interface KeepaResponseMeta {
+  kind: "asin" | "code";
+  /** ASINs or codes asked for. */
+  count: number;
+  status: number;
+  tokensConsumed: number;
+  tokensLeft: number | null;
+  refillInMs: number | null;
+  processingTimeInMs: number | null;
+  products: number;
 }
+
+export interface KeepaLookup {
+  /** EAN → every ASIN it resolves to (code lookups). */
+  byEan: Map<string, KeepaProduct[]>;
+  /** ASIN → product (ASIN lookups). */
+  byAsin: Map<string, KeepaProduct>;
+  /** Sum of Keepa's tokensConsumed across the requests. */
+  tokensUsed: number;
+  /** Keepa's tokensLeft after the last request. */
+  tokensLeft: number | null;
+  requests: KeepaResponseMeta[];
+  /** Set when Keepa refused for lack of tokens; the rest weren't asked. */
+  exhausted?: { refillInMs: number | null; skipped: number };
+}
+
+export type OnKeepaResponse = (meta: KeepaResponseMeta) => void | Promise<void>;
 
 export interface KeepaClient {
   /** False for the stub: gates that need Keepa report "not checked" instead of failing. */
   readonly available: boolean;
   readonly name: string;
-  lookupByEans(eans: string[]): Promise<KeepaLookup>;
+  lookupByEans(eans: string[], onResponse?: OnKeepaResponse): Promise<KeepaLookup>;
+  lookupByAsins(asins: string[], onResponse?: OnKeepaResponse): Promise<KeepaLookup>;
 }
