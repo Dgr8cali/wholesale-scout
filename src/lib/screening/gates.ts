@@ -6,6 +6,7 @@ import {
   economics,
   hurdlePrice,
   landedCost,
+  sizeTier,
   type AmazonFeeOverride,
   type Dims,
   type Economics,
@@ -51,6 +52,27 @@ export interface MarketData {
   topSellerBbSharePct: number | null;
   reviewJumpPct: number | null;
   youngerThanParent: boolean | null;
+  // From Keepa, when history exists (see KeepaSummary).
+  keepaRankDrops30?: number | null;
+  topSellers?: { sellerId: string; sharePct: number }[];
+  fbaFee?: number | null;
+  referralFeePct?: number | null;
+  packageDims?: Dims | null;
+  packageWeightG?: number | null;
+  variationCount?: number | null;
+}
+
+/** A top Buy Box seller with its Keepa profile. */
+export interface SellerView {
+  sellerId: string;
+  /** Share of the Buy Box over 365 days, %. */
+  sharePct: number;
+  name: string | null;
+  ratingPct: number | null;
+  ratingCount: number | null;
+  storefrontSize: number | null;
+  /** How much of the storefront is this product's brand, %. null when unknown. */
+  brandSharePct: number | null;
 }
 
 export interface ScreenContext {
@@ -76,9 +98,16 @@ export interface ScreenContext {
     referralCategory: string | null;
     dimsCm: Dims | null;
     weightG: number | null;
+    /** Where dimsCm/weightG came from: the SP-API catalog, or filled in from Keepa. */
+    dimsSource?: "catalog" | "keepa" | null;
+    /** Keepa's package size, kept to compare tiers with the catalog's. */
+    keepaDims?: Dims | null;
+    keepaWeightG?: number | null;
     variationCount: number | null;
     hazmat: string[];
   };
+  /** Top Buy Box sellers' profiles, looked up for rows that pass every gate. */
+  sellers?: SellerView[];
   market: MarketData | null;
   /** A brand you've recorded as approved on the Brands page, with the date. */
   brandApproval?: { status: "approved"; date: string | null } | null;
@@ -130,6 +159,14 @@ export function resolveScoringPrice(m: MarketData | null, p: ProfileConfig): { p
     return { price: m.medianBuyBox12m, source: "12-month median (spike)" };
   }
   return base;
+}
+
+/** "size tier disagreement: SP-API catalog says Small parcel, Keepa says Standard parcel", or null. */
+export function tierDisagreement(ctx: ScreenContext): string | null {
+  const p = ctx.product;
+  if (p.dimsSource !== "catalog" || !p.dimsCm || p.weightG == null || !p.keepaDims || p.keepaWeightG == null) return null;
+  const a = sizeTier(p.dimsCm, p.weightG, ctx.card), b = sizeTier(p.keepaDims, p.keepaWeightG, ctx.card);
+  return a.id === b.id ? null : `size tier disagreement: SP-API catalog says ${a.name}, Keepa says ${b.name}`;
 }
 
 type Evaluator = (ctx: ScreenContext, p: ProfileConfig, run: GateRun) => Omit<GateOutcome, "gate" | "label">;
@@ -227,7 +264,13 @@ const EVALUATORS: Record<GateId, Evaluator> = {
     if (sellers < g.minSellers) reasons.push(`${sellers} sellers, under ${g.minSellers}`);
     if (sellers > g.maxSellers) reasons.push(`${sellers} sellers, over ${g.maxSellers}`);
     if (m?.topSellerBbSharePct != null && m.topSellerBbSharePct > g.maxBbSharePct) reasons.push(`one seller held the Buy Box ${pct(m.topSellerBbSharePct)} of the year`);
-    if (reasons.length) return { status: failAs(g.mode), detail: reasons.join("; ") };
+    const threshold = p.sellerLookup.distributorBrandSharePct;
+    const distributors = (ctx.sellers ?? []).filter((s) => s.brandSharePct != null && s.brandSharePct >= threshold);
+    const flag = distributors.map((s) =>
+      `likely brand distributor: ${s.name ?? s.sellerId} (${pct(s.brandSharePct!)} of ${s.storefrontSize?.toLocaleString("en-GB") ?? "?"} storefront listings are ${ctx.product.brand ?? "this brand"}, ${pct(s.sharePct)} of the Buy Box)`);
+    const tags = distributors.length ? ["BRAND_DISTRIBUTOR"] : undefined;
+    if (reasons.length) return { status: failAs(g.mode), detail: [...reasons, ...flag].join("; "), tags };
+    if (flag.length) return { status: "warn", detail: flag.join("; "), tags };
     return { status: "pass", detail: `${sellers} sellers${m?.topSellerBbSharePct != null ? `, top Buy Box share ${pct(m.topSellerBbSharePct)}` : ""}` };
   },
 
@@ -306,11 +349,15 @@ const EVALUATORS: Record<GateId, Evaluator> = {
     if (e.roi! < g.minRoiPct) misses.push(`ROI ${pct(e.roi!)} < ${pct(g.minRoiPct)}`);
     if (e.margin! < g.minMarginPct) misses.push(`margin ${pct(e.margin!)} < ${pct(g.minMarginPct)}`);
     const tail = run.hurdlePrice != null ? `; passes at ${money(run.hurdlePrice)}` : "";
-    if (misses.length) return { status: failAs(g.mode), detail: `At ${money(run.scoringPrice)}: ${misses.join(", ")}${tail}` };
+    const size = e.fees.dimsEstimated ? " (size assumed)" : ctx.product.dimsSource === "keepa" ? " (size from Keepa)" : "";
+    const clash = tierDisagreement(ctx);
+    const tags = [...(e.fees.source === "amazon" ? ["AMAZON_FEE"] : []), ...(clash ? ["TIER_MISMATCH"] : [])];
+    const note = clash ? `; ${clash}` : "";
+    if (misses.length) return { status: failAs(g.mode), detail: `At ${money(run.scoringPrice)}: ${misses.join(", ")}${tail}${note}`, tags: tags.length ? tags : undefined };
     return {
       status: "pass",
-      detail: `${money(e.profit)} profit, ${pct(e.roi!)} ROI, ${pct(e.margin!)} margin at ${money(run.scoringPrice)}${e.fees.dimsEstimated ? " (size assumed)" : ""}`,
-      tags: e.fees.source === "amazon" ? ["AMAZON_FEE"] : undefined,
+      detail: `${money(e.profit)} profit, ${pct(e.roi!)} ROI, ${pct(e.margin!)} margin at ${money(run.scoringPrice)}${size}${note}`,
+      tags: tags.length ? tags : undefined,
     };
   },
 };

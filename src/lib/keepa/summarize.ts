@@ -154,6 +154,7 @@ export function summarize(i: SummaryInput): KeepaSummary {
 
   // Buy Box share by seller over the last year, by time held.
   let topSellerBbSharePct: number | null = null;
+  let topSellers: { sellerId: string; sharePct: number }[] = [];
   if (i.buyBoxSellers?.length) {
     const held = new Map<string, number>();
     const s = i.buyBoxSellers;
@@ -164,7 +165,11 @@ export function summarize(i: SummaryInput): KeepaSummary {
       held.set(s[k][1], (held.get(s[k][1]) ?? 0) + (end - start));
     }
     const total = [...held.values()].reduce((a, b) => a + b, 0);
-    if (total > 0) topSellerBbSharePct = (Math.max(...held.values()) / total) * 100;
+    if (total > 0) {
+      topSellerBbSharePct = (Math.max(...held.values()) / total) * 100;
+      topSellers = [...held.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3)
+        .map(([sellerId, ms]) => ({ sellerId, sharePct: Math.round((ms / total) * 1000) / 10 }));
+    }
   }
 
   // Review count: biggest one-day jump.
@@ -193,6 +198,7 @@ export function summarize(i: SummaryInput): KeepaSummary {
     fbaOffers: i.fbaOfferCount != null && i.fbaOfferCount >= 0 ? i.fbaOfferCount : null,
     amazonLastSeenDays,
     topSellerBbSharePct,
+    topSellers,
     reviewJumpPct,
     youngerThanParent: i.parentFirstSeen == null || !Number.isFinite(firstPoint) ? null : firstPoint > i.parentFirstSeen + 30 * DAY,
   };

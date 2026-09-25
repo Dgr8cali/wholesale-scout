@@ -1,11 +1,11 @@
 import "server-only";
 import { brandKey } from "../brands";
-import { referralCategoryFor } from "../fees/engine";
+import { computeFees, referralCategoryFor } from "../fees/engine";
 import type { RateCard } from "../fees/rateCard";
-import { getKeepa, type KeepaProduct, type KeepaResponseMeta, type KeepaSummary, type OnKeepaResponse } from "../keepa/client";
+import { getKeepa, type KeepaProduct, type KeepaResponseMeta, type KeepaSummary, type OnKeepaResponse, type SellerProfile } from "../keepa/client";
 import { trimSeries } from "../keepa/summarize";
 import { GATE_ORDER, withDefaults, type GateId, type ProfileConfig } from "../screening/config";
-import { resolveScoringPrice, runGates, verdictOf, type GateRun, type MarketData, type ScreenContext } from "../screening/gates";
+import { resolveScoringPrice, runGates, verdictOf, type GateRun, type MarketData, type ScreenContext, type SellerView } from "../screening/gates";
 import type { CategoryRule } from "../screening/rules";
 import { winScore } from "../screening/score";
 import { getSpApi, type CatalogMatch, type CompetitivePrice, type LookupTrace } from "../spapi/client";
@@ -71,6 +71,8 @@ export interface StoredInputs {
   amazonFees: { price: number; referral: number; fba: number } | null;
   /** How the EAN was resolved: attempts, and the raw response when it missed. */
   lookup?: LookupTrace | null;
+  /** Top Buy Box sellers with their Keepa profiles (rows that passed every gate). */
+  sellers?: SellerView[] | null;
   notes: string[];
 }
 
@@ -86,6 +88,7 @@ interface Row {
   restriction: ScreenContext["restriction"];
   amazonFees: StoredInputs["amazonFees"];
   lookup: LookupTrace | null;
+  sellers: SellerView[] | null;
   /** Lookup notes that belong to the row's data (kept across re-screens). */
   dataNotes: string[];
   /** Notes about this screening pass only. */
@@ -122,6 +125,16 @@ function marketFromSpApi(p: CompetitivePrice | undefined, rank: number | null): 
   };
 }
 
+/** Package size for the fee engine: the SP-API catalog's, else Keepa's, else none (tier assumed). */
+function size(p: Product, m: MarketData | null): Pick<ScreenContext["product"], "dimsCm" | "weightG" | "dimsSource"> {
+  const weight = p.weight_g == null ? null : Number(p.weight_g);
+  if (p.dims_cm && weight != null) return { dimsCm: p.dims_cm, weightG: weight, dimsSource: "catalog" };
+  const dims = p.dims_cm ?? m?.packageDims ?? null;
+  const w = weight ?? m?.packageWeightG ?? null;
+  if (dims && w != null) return { dimsCm: dims, weightG: w, dimsSource: "keepa" };
+  return { dimsCm: dims, weightG: w, dimsSource: null };
+}
+
 /**
  * Amazon's fee applies only at the price it was quoted for; at any other scoring price
  * (a changed profile rule, say) the rate card is used instead.
@@ -154,11 +167,14 @@ function context(row: Row, card: RateCard, rules: CategoryRule[], cfg: ProfileCo
     product: {
       brand: p.brand ?? o.brand,
       referralCategory: p.referral_category ?? referralCategoryFor(p.category, card),
-      dimsCm: p.dims_cm,
-      weightG: p.weight_g == null ? null : Number(p.weight_g),
-      variationCount: p.variation_count,
+      ...size(p, row.market),
+      keepaDims: row.market?.packageDims ?? null,
+      keepaWeightG: row.market?.packageWeightG ?? null,
+      // Keepa knows the whole variation family; the catalog only lists a parent's children.
+      variationCount: row.market?.variationCount ?? p.variation_count,
       hazmat: row.hazmat,
     },
+    sellers: row.sellers ?? undefined,
     market: row.market,
     restriction: row.restriction,
     amazonFees: feesAt(row, cfg),
@@ -166,6 +182,26 @@ function context(row: Row, card: RateCard, rules: CategoryRule[], cfg: ProfileCo
 }
 
 const r2 = (n: number | null | undefined) => (n == null || !Number.isFinite(n) ? null : Math.round(n * 100) / 100);
+
+/**
+ * Referral and FBA fee at the scoring price, ex-VAT and ex-DSF, from each source that has
+ * one: Amazon's estimate (SP-API), Keepa's, and the rate card.
+ */
+function feeComparison(price: number, ctx: ScreenContext, cfg: ProfileConfig) {
+  const item = { referralCategory: ctx.product.referralCategory, dimsCm: ctx.product.dimsCm, weightG: ctx.product.weightG, goodsVatRatePct: ctx.offer.goodsVatRatePct };
+  const card = computeFees(price, item, ctx.card, cfg.fees, { date: ctx.now });
+  const m = ctx.market;
+  return {
+    amazon: ctx.amazonFees ? { referral: r2(ctx.amazonFees.referral), fba: r2(ctx.amazonFees.fba) } : null,
+    keepa: m?.fbaFee != null || m?.referralFeePct != null
+      ? {
+          referral: m?.referralFeePct != null ? r2(Math.max((price * m.referralFeePct) / 100, ctx.card.referral.minimumFee)) : null,
+          fba: m?.fbaFee ?? null,
+        }
+      : null,
+    rateCard: { referral: r2(card.referralBase), fba: r2(card.fbaBase), tier: card.tier?.name ?? null },
+  };
+}
 
 async function finalize(row: Row, run: GateRun, cfg: ProfileConfig, ctx: ScreenContext) {
   const w = winScore(ctx, run, cfg, { deliveryDays: row.supplier.delivery_days, supplierRating: row.supplier.rating });
@@ -177,7 +213,7 @@ async function finalize(row: Row, run: GateRun, cfg: ProfileConfig, ctx: ScreenC
   const why = notes.length ? `${w.why} ${notes.join(" ")}` : w.why;
   const inputs: StoredInputs = {
     v: 1, stage: row.stage, match: row.match, market: row.market, hazmat: row.hazmat,
-    restriction: row.restriction, amazonFees: row.amazonFees, lookup: row.lookup, notes: row.dataNotes,
+    restriction: row.restriction, amazonFees: row.amazonFees, lookup: row.lookup, sellers: row.sellers, notes: row.dataNotes,
   };
   must(
     await db().from("results").update({
@@ -197,7 +233,9 @@ async function finalize(row: Row, run: GateRun, cfg: ProfileConfig, ctx: ScreenC
         tier: e.fees.tier?.name ?? null,
         fbaSource: e.fees.fbaSource,
         dimsEstimated: e.fees.dimsEstimated,
+        dimsSource: ctx.product.dimsSource ?? null,
         outputVat: r2(e.outputVat),
+        compare: feeComparison(e.price, ctx, cfg),
       } : null,
       sell_price: r2(run.scoringPrice),
       price_source: run.priceSource,
@@ -247,9 +285,12 @@ async function freshSnapshots(asins: string[]): Promise<Map<string, KeepaSummary
 /** Keep what the gates read: the last ~15 months (a year, plus the 90 days before it for rank trend). */
 const SNAPSHOT_DAYS = 460;
 
+/** A write refused because the table or column isn't there yet (a migration not yet run). */
+const schemaMissing = (msg: string) => /does not exist|could not find the .* (column|table)|schema cache/i.test(msg);
+
 async function saveSnapshot(k: KeepaProduct): Promise<void> {
   const since = Date.now() - SNAPSHOT_DAYS * DAY;
-  const res = await db().from("keepa_snapshots").insert({
+  const base = {
     asin: k.asin,
     rank_series: trimSeries(k.series.rank, since),
     buybox_series: trimSeries(k.series.buyBox, since),
@@ -258,7 +299,22 @@ async function saveSnapshot(k: KeepaProduct): Promise<void> {
     amazon_series: trimSeries(k.series.amazon, since),
     review_count_series: trimSeries(k.series.reviewCount, since),
     summary: k.summary,
-  });
+  };
+  const extras = {
+    monthly_sold: k.summary.monthlySold ?? null,
+    keepa_rank_drops_30d: k.summary.keepaRankDrops30 ?? null,
+    package: k.dimsCm || k.weightG ? { ...(k.dimsCm ?? {}), weight_g: k.weightG } : null,
+    fba_fee: k.summary.fbaFee ?? null,
+    referral_fee_pct: k.summary.referralFeePct ?? null,
+    variation_count: k.variationCount,
+    buybox_seller_history: k.buyBoxSellers.filter(([t], i, all) => t >= Date.now() - 365 * DAY || all[i + 1]?.[0] >= Date.now() - 365 * DAY),
+  };
+  let res = await db().from("keepa_snapshots").insert({ ...base, ...extras });
+  if (res.error && schemaMissing(res.error.message)) {
+    // Extra columns not migrated yet: store the snapshot without them (the summary carries them).
+    console.error(`[keepa] snapshot extras not stored (run migration 20260926000300): ${res.error.message}`);
+    res = await db().from("keepa_snapshots").insert(base);
+  }
   if (res.error) throw new Error(res.error.message);
 }
 
@@ -316,6 +372,73 @@ async function attachKeepa(rows: Row[], alreadyFetched: Map<string, KeepaProduct
     }
   }
   return summaries;
+}
+
+const SELLER_TTL = 7 * DAY;
+
+/** The top Buy Box sellers this row would look up (by 365-day share). */
+function wantedSellers(row: Row, cfg: ProfileConfig): { sellerId: string; sharePct: number }[] {
+  return (row.market?.topSellers ?? []).slice(0, cfg.sellerLookup.topN);
+}
+
+/** Sellers need looking up: the row passed every gate, the lookup is on, and it hasn't been done. */
+function needsSellers(row: Row, run: GateRun, cfg: ProfileConfig): boolean {
+  return !run.failedGate && cfg.sellerLookup.enabled && !row.sellers && wantedSellers(row, cfg).length > 0;
+}
+
+/** Seller profiles from the cache (under 7 days old), then Keepa for the rest (1 token each). */
+async function sellerProfiles(ids: string[], onResponse: OnKeepaResponse): Promise<{ profiles: Map<string, SellerProfile>; note: string | null }> {
+  const d = db();
+  const profiles = new Map<string, SellerProfile>();
+  const since = new Date(Date.now() - SELLER_TTL).toISOString();
+  for (const c of chunks([...new Set(ids)])) {
+    const res = await d.from("keepa_sellers").select("*").in("seller_id", c).gte("fetched_at", since);
+    if (res.error) {
+      console.error(`[keepa] seller cache unavailable (run migration 20260926000300): ${res.error.message}`);
+      break;
+    }
+    const cached = (res.data ?? []) as
+      { seller_id: string; name: string | null; rating_pct: number | null; rating_count: number | null; storefront_size: number | null; brands: SellerProfile["brands"] }[];
+    for (const x of cached) {
+      profiles.set(x.seller_id, { sellerId: x.seller_id, name: x.name, ratingPct: x.rating_pct, ratingCount: x.rating_count, storefrontSize: x.storefront_size, brands: x.brands ?? [] });
+    }
+  }
+  const need = [...new Set(ids)].filter((id) => !profiles.has(id));
+  let note: string | null = null;
+  const keepa = getKeepa();
+  if (need.length && keepa.available) {
+    try {
+      const res = await keepa.lookupSellers(need, onResponse);
+      for (const [id, p] of res.profiles) {
+        profiles.set(id, p);
+        const saved = await d.from("keepa_sellers").upsert({
+          seller_id: id, name: p.name, rating_pct: p.ratingPct, rating_count: p.ratingCount,
+          storefront_size: p.storefrontSize, brands: p.brands, fetched_at: new Date().toISOString(),
+        }, { onConflict: "seller_id" });
+        if (saved.error) console.error(`[keepa] storing seller ${id} failed: ${saved.error.message}`);
+      }
+      if (res.exhausted) note = "Keepa out of tokens: some seller profiles not looked up. Re-screen after the refill.";
+    } catch (e) {
+      note = `Seller lookup failed: ${(e as Error).message}.`;
+    }
+  }
+  return { profiles, note };
+}
+
+/** A row's top sellers with profiles, and how much of each storefront is this product's brand. */
+function sellerViews(row: Row, cfg: ProfileConfig, profiles: Map<string, SellerProfile>): SellerView[] {
+  const brand = brandKey(row.product.brand ?? row.offer.brand);
+  return wantedSellers(row, cfg).map(({ sellerId, sharePct }) => {
+    const p = profiles.get(sellerId);
+    // No brand breakdown from Keepa means unknown, not 0%.
+    const count = brand && p?.brands.length ? p.brands.filter((b) => brandKey(b.brand) === brand).reduce((a, b) => a + b.count, 0) : null;
+    return {
+      sellerId, sharePct,
+      name: p?.name ?? null, ratingPct: p?.ratingPct ?? null, ratingCount: p?.ratingCount ?? null,
+      storefrontSize: p?.storefrontSize ?? null,
+      brandSharePct: count != null && p?.storefrontSize ? Math.round((count / p.storefrontSize) * 1000) / 10 : null,
+    };
+  });
 }
 
 /** Run `fn` for a row; if it throws, mark that result as an error so the run can finish. */
@@ -394,6 +517,7 @@ async function loadRows(results: PendingRow[]): Promise<Row[]> {
       restriction: i?.restriction ?? null,
       amazonFees: i?.amazonFees ?? null,
       lookup: i?.lookup ?? null,
+      sellers: i?.sellers ?? null,
       dataNotes: i?.notes ?? [],
       notes: [],
     };
@@ -445,6 +569,7 @@ export async function rescreenRun(runId: string, profileId?: string | null): Pro
     if (mid.failedGate) return void work.push(() => safely(row, () => finalize(row, mid, cfg, ctx)));
     if (STAGE_RANK[row.stage] < STAGE_RANK.account || needsRestrictionCheck(row)) return void requeue.push(row.resultId);
     const full = runGates(ctx, cfg);
+    if (keepaLive && needsSellers(row, full, cfg)) return void requeue.push(row.resultId);
     work.push(() => safely(row, () => finalize(row, full, cfg, ctx)));
   });
 
@@ -680,6 +805,17 @@ export async function processRun(runId: string, limit = 20): Promise<{ done: boo
         } catch (e) {
           for (const x of c) x.row.notes.push(`Amazon fee estimate failed, rate card used: ${(e as Error).message}.`);
         }
+      }
+    }
+    // Rows that pass every gate: profile their top Buy Box sellers (cached 7 days), then re-run
+    // the gates so a likely brand distributor is flagged.
+    const passing = stage3.filter((row) => needsSellers(row, runGates(context(row, card, rules, cfg, approved), cfg), cfg));
+    if (passing.length && keepa.available) {
+      const { profiles, note } = await sellerProfiles(passing.flatMap((r) => wantedSellers(r, cfg).map((s) => s.sellerId)), recordTokens);
+      for (const row of passing) {
+        row.sellers = sellerViews(row, cfg, profiles);
+        if (note) row.notes.push(note);
+        if (row.sellers.some((s) => !s.name && s.storefrontSize == null)) row.sellers = null; // not looked up: try again next time
       }
     }
     for (const row of stage3) {

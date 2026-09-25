@@ -7,7 +7,7 @@
  *   EAN, batches of up to 100. Every request is logged with Keepa's own token figures.
  */
 import { decodeSeries, summarize } from "./summarize";
-import type { KeepaClient, KeepaLookup, KeepaProduct, KeepaResponseMeta, OnKeepaResponse } from "./types";
+import type { KeepaClient, KeepaLookup, KeepaProduct, KeepaResponseMeta, OnKeepaResponse, SellerLookup, SellerProfile } from "./types";
 
 export * from "./types";
 
@@ -22,6 +22,37 @@ export class StubKeepaClient implements KeepaClient {
   async lookupByAsins(): Promise<KeepaLookup> {
     return emptyLookup();
   }
+  async lookupSellers(): Promise<SellerLookup> {
+    return { profiles: new Map(), tokensUsed: 0 };
+  }
+}
+
+interface RawSeller {
+  sellerId?: string;
+  sellerName?: string | null;
+  currentRating?: number | null;
+  currentRatingCount?: number | null;
+  /** [keepa minutes, count, ...]: the last count is current. */
+  totalStorefrontAsins?: number[] | null;
+  sellerBrandStatistics?: { brand?: string; productCount?: number }[] | null;
+}
+
+export function parseSeller(id: string, s: RawSeller): SellerProfile {
+  const store = s.totalStorefrontAsins ?? [];
+  const size = store.length >= 2 ? store[store.length - 1] : null;
+  const pos = (n: number | null | undefined) => (n != null && n >= 0 ? n : null);
+  return {
+    sellerId: s.sellerId ?? id,
+    name: s.sellerName ?? null,
+    ratingPct: pos(s.currentRating),
+    ratingCount: pos(s.currentRatingCount),
+    storefrontSize: pos(size),
+    brands: (s.sellerBrandStatistics ?? [])
+      .filter((b) => b.brand && (b.productCount ?? 0) > 0)
+      .map((b) => ({ brand: b.brand!, count: b.productCount! }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 20),
+  };
 }
 
 // Keepa csv indices.
@@ -43,7 +74,10 @@ interface RawKeepaProduct {
   variations?: unknown[] | null;
   csv?: (number[] | null)[];
   buyBoxSellerIdHistory?: string[] | null;
-  stats?: { offerCountFBA?: number } | null;
+  stats?: { offerCountFBA?: number; salesRankDrops30?: number } | null;
+  /** Keepa's FBA fee estimate; pickAndPackFee in pence. */
+  fbaFees?: { pickAndPackFee?: number } | null;
+  referralFeePercent?: number | null;
   /** Amazon's "bought in past month" (e.g. 200 for "200+"); absent or -1 when not shown. */
   monthlySold?: number | null;
 }
@@ -66,6 +100,16 @@ export function parseKeepaProduct(p: RawKeepaProduct, now = Date.now()): KeepaPr
   const dims = p.packageLength && p.packageWidth && p.packageHeight
     ? { l: p.packageLength / 10, w: p.packageWidth / 10, h: p.packageHeight / 10 }
     : null;
+  const weightG = p.packageWeight && p.packageWeight > 0 ? p.packageWeight : null;
+  const variationCount = p.variations?.length || null;
+  const pick = p.fbaFees?.pickAndPackFee;
+  const base = summarize({
+    now,
+    ...series,
+    fbaOfferCount: p.stats?.offerCountFBA ?? null,
+    buyBoxSellers,
+    monthlySold: p.monthlySold ?? null,
+  });
   return {
     asin: p.asin,
     eans: [...(p.eanList ?? []), ...(p.upcList ?? [])],
@@ -73,22 +117,26 @@ export function parseKeepaProduct(p: RawKeepaProduct, now = Date.now()): KeepaPr
     brand: p.brand ?? null,
     category: p.categoryTree?.[0]?.name ?? null,
     dimsCm: dims,
-    weightG: p.packageWeight && p.packageWeight > 0 ? p.packageWeight : null,
+    weightG,
     parentAsin: p.parentAsin ?? null,
-    variationCount: p.variations?.length ?? null,
+    variationCount,
     series,
-    summary: summarize({
-      now,
-      ...series,
-      fbaOfferCount: p.stats?.offerCountFBA ?? null,
-      buyBoxSellers,
-      monthlySold: p.monthlySold ?? null,
-    }),
+    buyBoxSellers,
+    summary: {
+      ...base,
+      keepaRankDrops30: p.stats?.salesRankDrops30 != null && p.stats.salesRankDrops30 >= 0 ? p.stats.salesRankDrops30 : null,
+      fbaFee: pick != null && pick > 0 ? pick / 100 : null,
+      referralFeePct: p.referralFeePercent != null && p.referralFeePercent > 0 ? p.referralFeePercent : null,
+      packageDims: dims,
+      packageWeightG: weightG,
+      variationCount,
+    },
   };
 }
 
 interface KeepaBody {
   products?: RawKeepaProduct[];
+  sellers?: Record<string, RawSeller>;
   tokensConsumed?: number;
   tokensLeft?: number;
   refillIn?: number;
@@ -116,16 +164,11 @@ export class HttpKeepaClient implements KeepaClient {
   ) {}
 
   /** One request, logged with Keepa's own token figures and reported before it's parsed. */
-  private async request(kind: "asin" | "code", ids: string[], onResponse?: OnKeepaResponse): Promise<{ body: KeepaBody; meta: KeepaResponseMeta }> {
-    const url = new URL("https://api.keepa.com/product");
-    url.search = new URLSearchParams({
-      key: this.key,
-      domain: "2",
-      [kind]: ids.join(","),
-      stats: "365",
-      history: "1",
-      buybox: "1",
-    }).toString();
+  private async request(kind: "asin" | "code" | "seller", ids: string[], onResponse?: OnKeepaResponse): Promise<{ body: KeepaBody; meta: KeepaResponseMeta }> {
+    const url = new URL(kind === "seller" ? "https://api.keepa.com/seller" : "https://api.keepa.com/product");
+    url.search = new URLSearchParams(kind === "seller"
+      ? { key: this.key, domain: "2", seller: ids.join(",") }
+      : { key: this.key, domain: "2", [kind]: ids.join(","), stats: "365", history: "1", buybox: "1" }).toString();
     const res = await this.fetchImpl(url);
     const body = (await res.json().catch(() => ({}))) as KeepaBody;
     const meta: KeepaResponseMeta = {
@@ -136,7 +179,7 @@ export class HttpKeepaClient implements KeepaClient {
       tokensLeft: body.tokensLeft ?? null,
       refillInMs: body.refillIn ?? null,
       processingTimeInMs: body.processingTimeInMs ?? null,
-      products: body.products?.length ?? 0,
+      products: kind === "seller" ? Object.keys(body.sellers ?? {}).length : body.products?.length ?? 0,
     };
     this.log(
       `[keepa] ${kind} lookup n=${meta.count} http=${meta.status} products=${meta.products} ` +
@@ -172,6 +215,33 @@ export class HttpKeepaClient implements KeepaClient {
             out.exhausted = { refillInMs: e.meta.refillInMs, skipped: unique.length - i };
             break;
           }
+        }
+        throw e;
+      }
+    }
+    return out;
+  }
+
+  /** Seller profiles, 1 token each, batches of 100. */
+  async lookupSellers(sellerIds: string[], onResponse?: OnKeepaResponse): Promise<SellerLookup> {
+    const out: SellerLookup = { profiles: new Map(), tokensUsed: 0 };
+    const unique = [...new Set(sellerIds)];
+    let left: number | null = null;
+    for (let i = 0; i < unique.length; i += 100) {
+      const chunk = unique.slice(i, i + 100);
+      if (left != null && left <= 0) {
+        out.exhausted = { refillInMs: null, skipped: unique.length - i };
+        break;
+      }
+      try {
+        const { body, meta } = await this.request("seller", chunk, onResponse);
+        out.tokensUsed += meta.tokensConsumed;
+        left = meta.tokensLeft;
+        for (const [id, raw] of Object.entries(body.sellers ?? {})) out.profiles.set(id, parseSeller(id, raw));
+      } catch (e) {
+        if (e instanceof KeepaError && e.meta.status === 429) {
+          out.exhausted = { refillInMs: e.meta.refillInMs, skipped: unique.length - i };
+          break;
         }
         throw e;
       }

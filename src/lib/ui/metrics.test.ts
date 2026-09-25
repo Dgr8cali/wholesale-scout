@@ -3,18 +3,22 @@ import { buyBox, estSales, sellers } from "./metrics";
 
 describe("results figures", () => {
   it("shows nothing for sales while Keepa is a stub", () => {
-    expect(estSales({ hasHistory: false, offersNow: 5 })).toEqual({ value: null, note: "Needs Keepa history (Keepa is a stub for now)" });
+    expect(estSales({ hasHistory: false, offersNow: 5 })).toEqual({ value: null, note: "Needs Keepa history" });
     expect(estSales(null).value).toBeNull();
   });
 
-  it("takes the higher of rank drops and bought-in-past-month, and says which", () => {
-    const a = estSales({ hasHistory: true, rankDrops30d: 140, monthlySold: 200 });
+  it("takes the highest of three sources and lists all three", () => {
+    const a = estSales({ hasHistory: true, rankDrops30d: 53, keepaRankDrops30: 55, monthlySold: 200 });
     expect(a.value).toBe(200);
-    expect(a.note).toMatch(/^Amazon's "bought in past month" \(200\+\), higher than 140 rank drops/);
-    const b = estSales({ hasHistory: true, rankDrops30d: 140, monthlySold: 100 });
+    expect(a.note).toBe([
+      "Highest of:",
+      "  rank drops in 30 days (from the history): 53",
+      "  Keepa's 30-day rank-drop count: 55",
+      '▶ Amazon "bought in past month" (via Keepa): 200+',
+    ].join("\n"));
+    const b = estSales({ hasHistory: true, rankDrops30d: 140, keepaRankDrops30: 138, monthlySold: null });
     expect(b.value).toBe(140);
-    expect(b.note).toMatch(/^140 rank drops in the last 30 days \(Keepa\), vs 100\+ bought/);
-    expect(estSales({ hasHistory: true, rankDrops30d: 12, monthlySold: null }).note).toMatch(/no bought-in-past-month figure/);
+    expect(b.note).toContain('  Amazon "bought in past month" (via Keepa): —');
   });
 
   it("uses FBA sellers from Keepa, else labels SP-API's all-offer count", () => {

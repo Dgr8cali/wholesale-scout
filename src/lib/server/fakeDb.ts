@@ -29,6 +29,8 @@ export class FakeDb {
   tables: Record<string, Row[]> = {};
   /** Inserts into these tables fail, to test what happens when a write is refused. */
   failInserts = new Set<string>();
+  /** Columns a table doesn't have yet (an unapplied migration), as PostgREST reports them. */
+  missingColumns: Record<string, string[]> = {};
   from(table: string) {
     this.tables[table] ??= [];
     return new Query(this, table);
@@ -82,6 +84,12 @@ class Query implements PromiseLike<{ data: unknown; error: { message: string; co
     const now = new Date().toISOString();
     if ((this.op === "insert" || this.op === "upsert") && this.db.failInserts.has(this.table)) {
       return { data: null, error: { message: "request entity too large" } };
+    }
+    const missing = this.db.missingColumns[this.table] ?? [];
+    if ((this.op === "insert" || this.op === "upsert") && missing.length) {
+      const rows = Array.isArray(this.payload) ? this.payload : [this.payload!];
+      const col = missing.find((c) => rows.some((r) => c in r));
+      if (col) return { data: null, error: { message: `Could not find the '${col}' column of '${this.table}' in the schema cache` } };
     }
     if (this.op === "insert" || this.op === "upsert") {
       const list = Array.isArray(this.payload) ? this.payload : [this.payload!];

@@ -4,7 +4,7 @@
  */
 import { landedCost } from "../fees/engine";
 import { GROUP_LABELS, SCALE_DEFS, type GroupId, type ProfileConfig, type Scale } from "./config";
-import type { GateRun, ScreenContext } from "./gates";
+import { tierDisagreement, type GateRun, type ScreenContext } from "./gates";
 
 export interface FitData {
   deliveryDays: number | null;
@@ -72,7 +72,8 @@ export function paramValues(ctx: ScreenContext, run: GateRun, p: ProfileConfig, 
     gating: !ctx.restriction ? null
       : outcome("gating")?.tags?.includes("BRAND_APPROVED") ? 0
       : ({ open: 0, unknown: 1, approval_required: 2, blocked: 2 } as const)[ctx.restriction.status],
-    brandLock: m?.topSellerBbSharePct != null ? (m.topSellerBbSharePct >= 90 ? 1 : 0) : null,
+    brandLock: outcome("competition")?.tags?.includes("BRAND_DISTRIBUTOR") ? 1
+      : m?.topSellerBbSharePct != null ? (m.topSellerBbSharePct >= 90 ? 1 : 0) : null,
     variations: ctx.product.variationCount ?? null,
     warnings,
     budgetShare: p.budget > 0 ? ((moq * landed) / p.budget) * 100 : null,
@@ -188,7 +189,8 @@ export function whyLine(ctx: ScreenContext, run: GateRun, score: number | null, 
     .slice(0, 2)
     .map((g) => phrase(g, ctx, run, false))
     .filter(Boolean);
-  const warns = run.outcomes.filter((o) => o.status === "warn" && o.tags?.some((t) => ["APPROVAL", "SPIKE", "EROSION", "MULTI_ASIN"].includes(t)));
+  const warns = run.outcomes.filter((o) => o.status === "warn" && o.tags?.some((t) => ["APPROVAL", "SPIKE", "EROSION", "MULTI_ASIN", "BRAND_DISTRIBUTOR"].includes(t)));
+  const clash = run.outcomes.some((o) => o.tags?.includes("TIER_MISMATCH")) ? tierDisagreement(ctx) : null;
 
   if (score == null) {
     const need = [groups.margin.score == null ? "a sell price" : null, groups.demand.score == null ? "rank data" : null].filter(Boolean);
@@ -200,7 +202,7 @@ export function whyLine(ctx: ScreenContext, run: GateRun, score: number | null, 
   }
   const head = String(Math.round(score));
   let s = `${head} — ${top.length ? top.join(", ") : "nothing stands out"}`;
-  const watch = [...weak, ...warns.map((w) => w.detail)];
+  const watch = [...weak, ...warns.map((w) => w.detail), ...(clash ? [clash] : [])];
   if (watch.length) s += `. Watch: ${watch.join("; ")}`;
   if (!ctx.market?.hasHistory) s += ". No Keepa history yet: mirage, Amazon and price-trend gates not checked";
   return s + ".";

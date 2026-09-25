@@ -203,6 +203,48 @@ describe("gates", () => {
   });
 });
 
+describe("Keepa extras in the gates", () => {
+  it("fills size from Keepa when the catalog has none, and says so", () => {
+    const c = ctx({ product: { ...ctx().product, dimsCm: { l: 21.2, w: 7.1, h: 7 }, weightG: 570, dimsSource: "keepa" } });
+    expect(runGates(c, DEFAULT_PROFILE).outcomes.at(-1)!.detail).toMatch(/\(size from Keepa\)$/);
+  });
+
+  it("flags a size-tier disagreement between the catalog and Keepa, in the fee detail and the why", () => {
+    const c = ctx({ product: {
+      ...ctx().product, dimsCm: { l: 15, w: 12, h: 8 }, weightG: 200, dimsSource: "catalog",
+      keepaDims: { l: 40, w: 30, h: 20 }, keepaWeightG: 2000,
+    } });
+    const run = runGates(c, DEFAULT_PROFILE);
+    const fee = run.outcomes.find((o) => o.gate === "fees")!;
+    expect(fee.tags).toContain("TIER_MISMATCH");
+    expect(fee.detail).toContain("size tier disagreement: SP-API catalog says Small parcel, Keepa says Standard parcel");
+    expect(winScore(c, run, DEFAULT_PROFILE, fit).why).toContain("Watch: size tier disagreement");
+    const same = ctx({ product: { ...c.product, keepaDims: { l: 15, w: 12, h: 8 }, keepaWeightG: 210 } });
+    expect(runGates(same, DEFAULT_PROFILE).outcomes.find((o) => o.gate === "fees")!.tags ?? []).not.toContain("TIER_MISMATCH");
+  });
+
+  it("flags a likely brand distributor as a warning and counts it against Risk", () => {
+    const seller = { sellerId: "S1", sharePct: 62, name: "Pierre Fabre UK", ratingPct: 99, ratingCount: 5000, storefrontSize: 400, brandSharePct: 78 };
+    const c = ctx({ product: { ...ctx().product, brand: "Bioderma" }, sellers: [seller] });
+    const run = runGates(c, DEFAULT_PROFILE);
+    const comp = run.outcomes.find((o) => o.gate === "competition")!;
+    expect(comp).toMatchObject({ status: "warn", tags: ["BRAND_DISTRIBUTOR"] });
+    expect(comp.detail).toBe("likely brand distributor: Pierre Fabre UK (78% of 400 storefront listings are Bioderma, 62% of the Buy Box)");
+    const flagged = winScore(c, run, DEFAULT_PROFILE, fit);
+    const clean = winScore(ctx(), runGates(ctx(), DEFAULT_PROFILE), DEFAULT_PROFILE, fit);
+    expect(flagged.groups.risk.score!).toBeLessThan(clean.groups.risk.score!);
+    expect(flagged.why).toContain("Watch: likely brand distributor: Pierre Fabre UK");
+    const below = ctx({ sellers: [{ ...seller, brandSharePct: 14 }] });
+    expect(runGates(below, DEFAULT_PROFILE).outcomes.find((o) => o.gate === "competition")!.status).toBe("pass");
+  });
+
+  it("uses the variation count for Risk", () => {
+    const few = winScore(ctx(), runGates(ctx(), DEFAULT_PROFILE), DEFAULT_PROFILE, fit);
+    const many = ctx({ product: { ...ctx().product, variationCount: 40 } });
+    expect(winScore(many, runGates(many, DEFAULT_PROFILE), DEFAULT_PROFILE, fit).groups.risk.score!).toBeLessThan(few.groups.risk.score!);
+  });
+});
+
 describe("score", () => {
   it("interpolates scales and clamps at the ends", () => {
     const s = { points: [[10, 0], [200, 100]] as [number, number][], weight: 1 };

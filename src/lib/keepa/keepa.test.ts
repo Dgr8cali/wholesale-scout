@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getKeepa, HttpKeepaClient, parseKeepaProduct, StubKeepaClient } from "./client";
+import { getKeepa, HttpKeepaClient, parseKeepaProduct, parseSeller, StubKeepaClient } from "./client";
 import { decodeSeries, keepaTimeToMs, median, rankDrops, summarize, trimSeries } from "./summarize";
 import type { Point } from "./types";
 
@@ -171,5 +171,50 @@ describe("summary fixes from live data", () => {
     const series: Point[] = [[daysAgo(900), 1], [daysAgo(600), 2], [daysAgo(100), 3], [daysAgo(10), 4]];
     expect(trimSeries(series, daysAgo(460))).toEqual([[daysAgo(600), 2], [daysAgo(100), 3], [daysAgo(10), 4]]);
     expect(trimSeries(series, daysAgo(5))).toEqual([[daysAgo(10), 4]]);
+  });
+});
+
+describe("snapshot extras and seller profiles (fields as the live API returns them)", () => {
+  it("reads Keepa's fee, referral %, own drop count, variations, package and top Buy Box sellers", () => {
+    const km = (msAgoDays: number) => String(Math.round((NOW - msAgoDays * DAY) / 60000 - 21_564_000));
+    const p = parseKeepaProduct({
+      asin: "B0060OMXUA", csv: [],
+      packageLength: 212, packageWidth: 71, packageHeight: 70, packageWeight: 570,
+      fbaFees: { pickAndPackFee: 309 }, referralFeePercent: 15, variations: [{}, {}, {}, {}],
+      stats: { salesRankDrops30: 68, offerCountFBA: -2 },
+      buyBoxSellerIdHistory: [km(400), "OLD", km(365), "A2EMSOJIB72L9M", km(200), "ACZ7XXV2ABVHG", km(73), "A213N0RBNFMX21"],
+    } as Parameters<typeof parseKeepaProduct>[0], NOW);
+    expect(p.summary).toMatchObject({
+      fbaFee: 3.09, referralFeePct: 15, keepaRankDrops30: 68, variationCount: 4, fbaOffers: null,
+      packageDims: { l: 21.2, w: 7.1, h: 7 }, packageWeightG: 570,
+    });
+    // Last 365 days only ("OLD" held it before that): 165, 127 and 73 days.
+    expect(p.summary.topSellers).toEqual([
+      { sellerId: "A2EMSOJIB72L9M", sharePct: 45.2 },
+      { sellerId: "ACZ7XXV2ABVHG", sharePct: 34.8 },
+      { sellerId: "A213N0RBNFMX21", sharePct: 20 },
+    ]);
+  });
+
+  it("parses a seller: rating, storefront size from the last pair, brands largest first", () => {
+    const s = parseSeller("A2EMSOJIB72L9M", {
+      sellerName: "Cosmeco", currentRating: 98, currentRatingCount: 1289, totalStorefrontAsins: [7900000, 700, 7963294, 766],
+      sellerBrandStatistics: [{ brand: "taaj", productCount: 61 }, { brand: "bioderma", productCount: 110 }, { brand: "x", productCount: 0 }],
+    });
+    expect(s).toEqual({ sellerId: "A2EMSOJIB72L9M", name: "Cosmeco", ratingPct: 98, ratingCount: 1289, storefrontSize: 766,
+      brands: [{ brand: "bioderma", count: 110 }, { brand: "taaj", count: 61 }] });
+  });
+
+  it("asks the seller endpoint on domain 2 and logs Keepa's token figures", async () => {
+    const lines: string[] = [];
+    const fetchImpl = (async (u: URL) => {
+      expect(u.pathname).toBe("/seller");
+      expect(u.searchParams.get("seller")).toBe("S1,S2");
+      return new Response(JSON.stringify({ tokensConsumed: 2, tokensLeft: 267, sellers: { S1: { sellerName: "One" }, S2: { sellerName: "Two" } } }));
+    }) as unknown as typeof fetch;
+    const r = await new HttpKeepaClient("k".repeat(64), fetchImpl, (l) => lines.push(l)).lookupSellers(["S1", "S2", "S1"]);
+    expect([...r.profiles.keys()]).toEqual(["S1", "S2"]);
+    expect(r.tokensUsed).toBe(2);
+    expect(lines[0]).toMatch(/^\[keepa\] seller lookup n=2 http=200 products=2 tokensConsumed=2 tokensLeft=267/);
   });
 });

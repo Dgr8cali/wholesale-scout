@@ -28,6 +28,19 @@ export interface KeepaSummary {
   reviewJumpPct: number | null;
   /** True when this ASIN is a variation child whose history starts after its parent's. */
   youngerThanParent: boolean | null;
+  // Optional: absent on snapshots stored before these were kept.
+  /** Keepa's own count of rank drops in 30 days (stats.salesRankDrops30). */
+  keepaRankDrops30?: number | null;
+  /** The sellers who held the Buy Box longest over 365 days, most first. */
+  topSellers?: { sellerId: string; sharePct: number }[];
+  /** Keepa's FBA pick-and-pack fee estimate, GBP ex-VAT. */
+  fbaFee?: number | null;
+  referralFeePct?: number | null;
+  /** Package dimensions (cm) and weight (g) as Keepa has them. */
+  packageDims?: { l: number; w: number; h: number } | null;
+  packageWeightG?: number | null;
+  /** Size of the variation family. */
+  variationCount?: number | null;
 }
 
 export interface KeepaProduct {
@@ -41,6 +54,8 @@ export interface KeepaProduct {
   parentAsin: string | null;
   variationCount: number | null;
   summary: KeepaSummary;
+  /** Buy Box holder changes: [unix ms, seller id]. */
+  buyBoxSellers: [number, string][];
   series: {
     rank: Point[];
     buyBox: Point[];
@@ -53,7 +68,7 @@ export interface KeepaProduct {
 
 /** What Keepa said about one request: its own token figures, logged and recorded as they arrive. */
 export interface KeepaResponseMeta {
-  kind: "asin" | "code";
+  kind: "asin" | "code" | "seller";
   /** ASINs or codes asked for. */
   count: number;
   status: number;
@@ -78,6 +93,25 @@ export interface KeepaLookup {
   exhausted?: { refillInMs: number | null; skipped: number };
 }
 
+/** A Keepa seller profile (1 token). */
+export interface SellerProfile {
+  sellerId: string;
+  name: string | null;
+  /** Positive rating over the last 12 months, %. */
+  ratingPct: number | null;
+  ratingCount: number | null;
+  /** Listings on the storefront. */
+  storefrontSize: number | null;
+  /** Largest brands on the storefront, by listing count. */
+  brands: { brand: string; count: number }[];
+}
+
+export interface SellerLookup {
+  profiles: Map<string, SellerProfile>;
+  tokensUsed: number;
+  exhausted?: { refillInMs: number | null; skipped: number };
+}
+
 export type OnKeepaResponse = (meta: KeepaResponseMeta) => void | Promise<void>;
 
 export interface KeepaClient {
@@ -86,4 +120,5 @@ export interface KeepaClient {
   readonly name: string;
   lookupByEans(eans: string[], onResponse?: OnKeepaResponse): Promise<KeepaLookup>;
   lookupByAsins(asins: string[], onResponse?: OnKeepaResponse): Promise<KeepaLookup>;
+  lookupSellers(sellerIds: string[], onResponse?: OnKeepaResponse): Promise<SellerLookup>;
 }

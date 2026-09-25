@@ -40,8 +40,17 @@ export interface ScoreConfig {
   bands: { green: number; amber: number };
 }
 
+/** Keepa seller profiles for the top Buy Box sellers of rows that pass every gate (1 token each). */
+export interface SellerLookupConfig {
+  enabled: boolean;
+  topN: number;
+  /** A seller whose storefront is at least this % the product's brand is a likely distributor. */
+  distributorBrandSharePct: number;
+}
+
 export interface ProfileConfig {
   scoringPrice: "current" | "median" | "lower";
+  sellerLookup: SellerLookupConfig;
   budget: number;
   fees: FeeAssumptions;
   gates: GateConfigs;
@@ -155,6 +164,7 @@ export const DEFAULT_GATES: GateConfigs = {
 
 export const DEFAULT_PROFILE: ProfileConfig = {
   scoringPrice: "lower",
+  sellerLookup: { enabled: true, topN: 3, distributorBrandSharePct: 50 },
   budget: 1000,
   fees: DEFAULT_FEE_ASSUMPTIONS,
   gates: DEFAULT_GATES,
@@ -203,6 +213,7 @@ export function withDefaults(cfg: Partial<ProfileConfig> | null | undefined): Pr
   gates.compliance.rules = { ...DEFAULT_GATES.compliance.rules, ...(c.gates?.compliance?.rules ?? {}) };
   return {
     scoringPrice: c.scoringPrice ?? DEFAULT_PROFILE.scoringPrice,
+    sellerLookup: { ...DEFAULT_PROFILE.sellerLookup, ...(c.sellerLookup ?? {}) },
     budget: c.budget ?? DEFAULT_PROFILE.budget,
     fees: { ...DEFAULT_FEE_ASSUMPTIONS, ...(c.fees ?? {}), missingDims: { ...DEFAULT_FEE_ASSUMPTIONS.missingDims, ...(c.fees?.missingDims ?? {}) } },
     gates,

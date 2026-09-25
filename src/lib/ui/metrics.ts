@@ -3,6 +3,7 @@
 export interface StoredMarket {
   hasHistory: boolean;
   rankDrops30d?: number | null;
+  keepaRankDrops30?: number | null;
   monthlySold?: number | null;
   fbaOffers?: number | null;
   offersNow?: number | null;
@@ -16,18 +17,22 @@ export interface Figure {
 }
 
 /**
- * Estimated sales a month: the higher of Keepa's rank drops in the last 30 days and
- * Amazon's "bought in past month". Nothing without Keepa history.
+ * Estimated sales a month: the highest of our rank-drop count from the history, Keepa's
+ * own 30-day rank-drop count, and Amazon's "bought in past month" (which Keepa carries as
+ * monthlySold). The tooltip lists all three. Nothing without Keepa history.
  */
 export function estSales(m: StoredMarket | null | undefined): Figure {
-  if (!m?.hasHistory) return { value: null, note: "Needs Keepa history (Keepa is a stub for now)" };
-  const drops = m.rankDrops30d ?? null;
-  const bought = m.monthlySold ?? null;
-  if (drops == null && bought == null) return { value: null, note: "Keepa has no rank drops or bought-in-past-month figure" };
-  if (bought != null && (drops == null || bought > drops)) {
-    return { value: bought, note: `Amazon's "bought in past month" (${bought}+)${drops != null ? `, higher than ${drops} rank drops in 30 days` : ""}` };
-  }
-  return { value: drops, note: `${drops} rank drops in the last 30 days (Keepa)${bought != null ? `, vs ${bought}+ bought in past month` : ", no bought-in-past-month figure"}` };
+  if (!m?.hasHistory) return { value: null, note: "Needs Keepa history" };
+  const sources = [
+    { label: "rank drops in 30 days (from the history)", value: m.rankDrops30d ?? null },
+    { label: "Keepa's 30-day rank-drop count", value: m.keepaRankDrops30 ?? null },
+    { label: `Amazon "bought in past month" (via Keepa)`, value: m.monthlySold ?? null, plus: true },
+  ];
+  const known = sources.filter((s) => s.value != null);
+  if (!known.length) return { value: null, note: "Keepa has no rank drops or bought-in-past-month figure" };
+  const best = known.reduce((a, b) => (b.value! > a.value! ? b : a));
+  const lines = sources.map((s) => `${s === best ? "▶ " : "  "}${s.label}: ${s.value == null ? "—" : `${s.value}${s.plus ? "+" : ""}`}`);
+  return { value: best.value, note: `Highest of:\n${lines.join("\n")}` };
 }
 
 /** FBA sellers from Keepa; until then all new offers from SP-API, said so. */

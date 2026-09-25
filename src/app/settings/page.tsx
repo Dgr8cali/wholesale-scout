@@ -194,6 +194,19 @@ function Profiles() {
         </div>
       </section>
 
+      <section className="card space-y-3 p-4">
+        <h2 className="h2">Seller profiles</h2>
+        <p className="text-sm text-muted">For rows that pass every gate, look up the top Buy Box sellers on Keepa (1 token each, reused for 7 days) and flag a likely brand distributor.</p>
+        <div className="grid items-end gap-3 sm:grid-cols-3">
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={draft.sellerLookup.enabled} onChange={(e) => setDraft({ ...draft, sellerLookup: { ...draft.sellerLookup, enabled: e.target.checked } })} />
+            Look up seller profiles
+          </label>
+          <NumberField label="Sellers per row" value={draft.sellerLookup.topN} step={1} onChange={(n) => setDraft({ ...draft, sellerLookup: { ...draft.sellerLookup, topN: n } })} />
+          <NumberField label="Distributor when brand is at least" unit="% of storefront" value={draft.sellerLookup.distributorBrandSharePct} onChange={(n) => setDraft({ ...draft, sellerLookup: { ...draft.sellerLookup, distributorBrandSharePct: n } })} />
+        </div>
+      </section>
+
       <section className="space-y-3">
         <h2 className="h2">Gates</h2>
         <p className="text-sm text-muted">Run in this order. Fail drops the row and records why; warn keeps it and lowers the Risk group; off skips the gate.</p>

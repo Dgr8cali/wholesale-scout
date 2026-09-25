@@ -11,16 +11,18 @@ import { FakeDb } from "./fakeDb";
 import { ingest } from "./ingest";
 import { processRun, rescreenRun } from "./process";
 
-const k = vi.hoisted(() => ({ live: true, asinCalls: [] as string[][], codeCalls: [] as string[][] }));
+const k = vi.hoisted(() => ({ live: true, asinCalls: [] as string[][], codeCalls: [] as string[][], sellerCalls: [] as string[][] }));
 
 const summary = (over: Partial<KeepaSummary> = {}): KeepaSummary => ({
   historyDays: 1200, rankNow: 5568, rankDrops30d: 68, monthlySold: 300, avgRank90d: 6562, rankTrendPct12m: -5,
   currentBuyBox: 23.55, medianBuyBox12m: 22.9, bbSlopePctYr: 2, bbVolatilityPct: 8, offersNow: 5, offers90dAgo: 5,
-  fbaOffers: 4, amazonLastSeenDays: null, topSellerBbSharePct: 35, reviewJumpPct: 2, youngerThanParent: null, ...over,
+  fbaOffers: 4, amazonLastSeenDays: null, topSellerBbSharePct: 35, reviewJumpPct: 2, youngerThanParent: null,
+  keepaRankDrops30: 70, fbaFee: 3.09, referralFeePct: 15, packageDims: { l: 21.2, w: 7.1, h: 7 }, packageWeightG: 570, variationCount: 4,
+  topSellers: [{ sellerId: "S1", sharePct: 35 }, { sellerId: "S2", sharePct: 30 }, { sellerId: "S3", sharePct: 20 }], ...over,
 });
 const product = (asin: string, s: KeepaSummary): KeepaProduct => ({
   asin, eans: [], title: null, brand: null, category: null, dimsCm: null, weightG: null, parentAsin: null, variationCount: null,
-  summary: s, series: { rank: [[Date.now() - 86_400_000, 5000]], buyBox: [], newPrice: [], offerCount: [], amazon: [], reviewCount: [] },
+  summary: s, buyBoxSellers: [], series: { rank: [[Date.now() - 86_400_000, 5000]], buyBox: [], newPrice: [], offerCount: [], amazon: [], reviewCount: [] },
 });
 
 vi.mock("../keepa/client", async (orig) => {
@@ -36,6 +38,16 @@ vi.mock("../keepa/client", async (orig) => {
     async lookupByEans(eans: string[]) {
       k.codeCalls.push(eans);
       return { byEan: new Map(), byAsin: new Map(), tokensUsed: 0, tokensLeft: null, requests: [] };
+    },
+    async lookupSellers(ids: string[], onResponse?: OnKeepaResponse) {
+      k.sellerCalls.push(ids);
+      await onResponse?.({ kind: "seller", count: ids.length, status: 200, tokensConsumed: ids.length, tokensLeft: 270, refillInMs: 7000, processingTimeInMs: 100, products: ids.length });
+      const profiles: Record<string, object> = {
+        S1: { sellerId: "S1", name: "Pierre Fabre UK", ratingPct: 99, ratingCount: 5000, storefrontSize: 400, brands: [{ brand: "bioderma", count: 312 }] },
+        S2: { sellerId: "S2", name: "Cosmeco", ratingPct: 98, ratingCount: 1289, storefrontSize: 766, brands: [{ brand: "bioderma", count: 110 }] },
+        S3: { sellerId: "S3", name: "Small shop", ratingPct: 90, ratingCount: 40, storefrontSize: 30, brands: [] },
+      };
+      return { profiles: new Map(ids.map((id) => [id, profiles[id]])), tokensUsed: ids.length };
     },
   };
   return { ...real, getKeepa: () => (k.live ? fake : new real.StubKeepaClient()) };
@@ -102,6 +114,7 @@ describe("Keepa path", () => {
     k.live = true;
     k.asinCalls.length = 0;
     k.codeCalls.length = 0;
+    k.sellerCalls.length = 0;
     vi.spyOn(console, "error").mockImplementation(() => {});
   });
 
@@ -112,7 +125,8 @@ describe("Keepa path", () => {
     expect(k.asinCalls).toEqual([["B0060OMXUA", "B002XZLAWM"]]);
     expect(k.codeCalls).toEqual([]); // the catalog resolved both EANs
     expect(fake.tables.keepa_snapshots.map((x) => x.asin).sort()).toEqual(["B002XZLAWM", "B0060OMXUA"]);
-    expect(tokens(runId)).toBe(6);
+    expect(fake.tables.keepa_snapshots[0]).toMatchObject({ monthly_sold: 300, keepa_rank_drops_30d: 70, fba_fee: 3.09, referral_fee_pct: 15, variation_count: null });
+    expect(tokens(runId)).toBe(6 + 3); // 3 per ASIN, then 1 per seller (the same three sellers for both rows)
 
     for (const r of results(runId)) {
       expect((r.inputs as { market: { hasHistory: boolean; monthlySold: number } }).market).toMatchObject({ hasHistory: true, monthlySold: 300 });
@@ -123,6 +137,30 @@ describe("Keepa path", () => {
     expect(fake.tables.products.every((p) => p.keepa_updated_at)).toBe(true);
   });
 
+  it("compares fees by source, profiles top sellers once, and flags a likely distributor", async () => {
+    const { runId } = await ingest({ files: [upload()] });
+    await until(runId);
+    const r = results(runId)[0];
+    const fees = r.fees as { compare: { amazon: object; keepa: { fba: number; referral: number }; rateCard: { fba: number } } };
+    expect(fees.compare.amazon).toEqual({ referral: 3.5, fba: 2.9 });
+    expect(fees.compare.keepa.fba).toBe(3.09);
+    expect(fees.compare.keepa.referral).toBe(3.44); // 15% of £22.90, to the penny
+    expect(fees.compare.rateCard.fba).toBeGreaterThan(0);
+
+    expect(k.sellerCalls).toEqual([["S1", "S2", "S3"]]);
+    const sellers = (r.inputs as { sellers: { sellerId: string; brandSharePct: number }[] }).sellers;
+    expect(sellers.map((x) => [x.sellerId, x.brandSharePct])).toEqual([["S1", 78], ["S2", 14.4], ["S3", null]]);
+    expect(gate(r, "competition")).toMatchObject({ status: "warn" });
+    expect(gate(r, "competition")!.detail).toMatch(/^likely brand distributor: Pierre Fabre UK \(78% of 400 storefront listings are Bioderma/);
+    expect(r.why).toContain("Watch: likely brand distributor: Pierre Fabre UK");
+
+    // A second run within 7 days reuses the cached profiles: no seller tokens.
+    const again = await ingest({ files: [upload()] });
+    await until(again.runId);
+    expect(k.sellerCalls).toHaveLength(1);
+    expect(fake.tables.keepa_sellers).toHaveLength(3);
+  });
+
   it("never re-fetches a snapshot under 24 hours old", async () => {
     const { runId } = await ingest({ files: [upload()] });
     await until(runId);
@@ -131,7 +169,7 @@ describe("Keepa path", () => {
     const second = await ingest({ files: [upload()] });
     await until(second.runId);
     expect(k.asinCalls).toHaveLength(1);
-    expect(tokens(runId)).toBe(6);
+    expect(tokens(runId)).toBe(9);
     expect(tokens(second.runId)).toBe(0);
     expect(results(second.runId).every((r) => (r.inputs as { market: { hasHistory: boolean } }).market.hasHistory)).toBe(true);
   });
@@ -147,7 +185,7 @@ describe("Keepa path", () => {
     expect(r1.requeued).toBe(2);
     await until(runId);
     expect(k.asinCalls).toEqual([["B0060OMXUA", "B002XZLAWM"]]);
-    expect(tokens(runId)).toBe(6);
+    expect(tokens(runId)).toBe(9);
     expect(results(runId).every((r) => gate(r, "mirage")?.status === "pass")).toBe(true);
 
     const r2 = await rescreenRun(runId);
@@ -155,11 +193,22 @@ describe("Keepa path", () => {
     expect(k.asinCalls).toHaveLength(1);
   });
 
+  it("still stores snapshots (and so never re-fetches) before the extras migration is run", async () => {
+    fake.missingColumns.keepa_snapshots = ["monthly_sold", "package", "fba_fee", "buybox_seller_history"];
+    const { runId } = await ingest({ files: [upload()] });
+    await until(runId);
+    expect(fake.tables.keepa_snapshots).toHaveLength(2);
+    expect((fake.tables.keepa_snapshots[0].summary as { fbaFee: number }).fbaFee).toBe(3.09);
+    await rescreenRun(runId);
+    await until(runId);
+    expect(k.asinCalls).toHaveLength(1);
+  });
+
   it("uses fetched history even if storing the snapshot fails, and says so", async () => {
     fake.failInserts.add("keepa_snapshots");
     const { runId } = await ingest({ files: [upload()] });
     await until(runId);
-    expect(tokens(runId)).toBe(6);
+    expect(tokens(runId)).toBe(9);
     const r = results(runId)[0];
     expect((r.inputs as { market: { hasHistory: boolean } }).market.hasHistory).toBe(true);
     expect(r.why).toMatch(/Keepa snapshot not stored: request entity too large/);

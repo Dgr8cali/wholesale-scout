@@ -18,7 +18,12 @@ interface Result {
   fees: {
     source: string; referralCategory: string; referralPct: number; referral: number | null; fba: number | null;
     storage: number | null; returns: number | null; total: number | null; tier: string | null; fbaSource: string;
-    dimsEstimated: boolean; outputVat: number | null;
+    dimsEstimated: boolean; outputVat: number | null; dimsSource?: "catalog" | "keepa" | null;
+    compare?: {
+      amazon: { referral: number | null; fba: number | null } | null;
+      keepa: { referral: number | null; fba: number | null } | null;
+      rateCard: { referral: number | null; fba: number | null; tier: string | null };
+    };
   } | null;
   sell_price: number | null;
   price_source: string | null;
@@ -33,7 +38,7 @@ interface Result {
   band: "green" | "amber" | "grey" | null;
   offer_count: number;
   error: string | null;
-  inputs: { market?: StoredMarket | null; lookup?: { outcome: string; attempts: { identifiersType: string; code: string; items: number; total?: number; error?: string }[]; raw?: string } | null } | null;
+  inputs: { market?: StoredMarket | null; sellers?: Seller[] | null; lookup?: { outcome: string; attempts: { identifiersType: string; code: string; items: number; total?: number; error?: string }[]; raw?: string } | null } | null;
   product: { ean: string; asin: string | null; title: string | null; brand: string | null; category: string | null } | null;
   offer: { unit_cost: number; currency: string; unit_cost_gbp: number; moq: number | null; pack_units: number; title: string | null; source_ref: string | null; supplier: { name: string } | null } | null;
 }
@@ -41,6 +46,11 @@ interface Result {
 interface Run {
   id: string; source: string; status: string; started_at: string; finished_at: string | null;
   row_count: number; processed_count: number; token_cost: number; profile: { name: string } | null; error: string | null;
+}
+
+interface Seller {
+  sellerId: string; sharePct: number; name: string | null; ratingPct: number | null; ratingCount: number | null;
+  storefrontSize: number | null; brandSharePct: number | null;
 }
 
 type SortKey = "score" | "profit" | "roi" | "margin" | "sell_price" | "landed_cost" | "hurdle_price" | "title" | "verdict" | "sales" | "sellers" | "buybox";
@@ -423,6 +433,56 @@ export default function RunPage() {
   );
 }
 
+/** Referral and FBA fee from each source, ex-VAT and ex-DSF, at the scoring price. */
+function FeeCompare({ c, dimsSource }: { c: NonNullable<NonNullable<Result["fees"]>["compare"]>; dimsSource?: string | null }) {
+  const rows: [string, { referral: number | null; fba: number | null } | null][] = [
+    ["Amazon (SP-API)", c.amazon],
+    ["Keepa", c.keepa],
+    [`Rate card${c.rateCard.tier ? ` (${c.rateCard.tier})` : ""}`, c.rateCard],
+  ];
+  return (
+    <div className="mt-3">
+      <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">Fees by source (ex-VAT)</p>
+      <table className="num w-full text-xs">
+        <thead className="text-muted"><tr><th className="text-left font-normal">Source</th><th className="text-right font-normal">Referral</th><th className="text-right font-normal">FBA</th></tr></thead>
+        <tbody>
+          {rows.map(([label, v]) => (
+            <tr key={label}>
+              <td className="pr-2">{label}</td>
+              <td className="text-right">{v?.referral != null ? gbp(v.referral) : <span className="text-muted">—</span>}</td>
+              <td className="text-right">{v?.fba != null ? gbp(v.fba) : <span className="text-muted">—</span>}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {dimsSource === "keepa" && <p className="mt-1 text-xs text-muted">Size from Keepa (no catalog dimensions).</p>}
+    </div>
+  );
+}
+
+/** Top Buy Box sellers over 365 days, with their Keepa profiles. */
+function Sellers({ sellers, flaggedText }: { sellers: Seller[]; flaggedText: string }) {
+  const flagged = (s: Seller) => flaggedText.includes(`likely brand distributor: ${s.name ?? s.sellerId} `);
+  return (
+    <div className="mt-3">
+      <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">Top Buy Box sellers (365 days)</p>
+      <ul className="space-y-1 text-xs">
+        {sellers.map((s) => (
+          <li key={s.sellerId}>
+            <a className="font-medium text-accent hover:underline" href={`https://www.amazon.co.uk/sp?seller=${s.sellerId}`} target="_blank" rel="noreferrer">{s.name ?? s.sellerId}</a>
+            <span className="text-muted"> · {s.sharePct}% of Buy Box</span>
+            {s.ratingPct != null && <span className="text-muted"> · {s.ratingPct}% of {s.ratingCount?.toLocaleString("en-GB")} ratings</span>}
+            {s.storefrontSize != null && <span className="text-muted"> · {s.storefrontSize.toLocaleString("en-GB")} listings</span>}
+            {s.brandSharePct != null && (
+              <span className={flagged(s) ? "font-semibold text-warn" : "text-muted"}> · {s.brandSharePct}% this brand{flagged(s) ? " (likely distributor)" : ""}</span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 /** A number with its source as a tooltip; "—" when there's nothing to show. */
 function FigureCell({ f, money }: { f: Figure; money?: boolean }) {
   return (
@@ -493,6 +553,7 @@ function Detail({ r }: { r: Result }) {
         ) : (
           <p className="text-xs text-muted">No sell price yet.{r.hurdle_price != null ? ` Clears the floors at ${gbp(r.hurdle_price)}.` : ""}</p>
         )}
+        {r.fees?.compare && <FeeCompare c={r.fees.compare} dimsSource={r.fees.dimsSource} />}
         {r.offer && (
           <p className="mt-2 text-xs text-muted">
             Quoted {r.offer.unit_cost} {r.offer.currency}/unit → {gbp(r.offer.unit_cost_gbp)} ex-VAT · MOQ {r.offer.moq ?? "—"} · {r.offer.source_ref}
@@ -517,6 +578,9 @@ function Detail({ r }: { r: Result }) {
             })}
           </ul>
         ) : <p className="text-xs text-muted">Not scored.</p>}
+        {r.inputs?.sellers && r.inputs.sellers.length > 0 && (
+          <Sellers sellers={r.inputs.sellers} flaggedText={r.gate_outcomes.find((g) => g.tags?.includes("BRAND_DISTRIBUTOR"))?.detail ?? ""} />
+        )}
       </div>
     </div>
   );
