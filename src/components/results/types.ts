@@ -69,6 +69,11 @@ export interface Progress {
   tokenCost: number;
   /** A re-screen in progress: rows it hasn't reached yet. */
   rescreen?: { left: number; startedAt: string } | null;
+  /** Paused: nothing works on it (and no Keepa tokens go on it) until resumed. */
+  paused?: boolean;
+  pausedAt?: string | null;
+  /** One run uses Keepa at a time: which one, and whether it's this one. */
+  keepaTurn?: { owner: { id: string; name: string | null; source: string } | null; mine: boolean };
 }
 
 

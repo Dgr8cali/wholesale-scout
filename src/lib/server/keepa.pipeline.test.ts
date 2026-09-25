@@ -402,6 +402,33 @@ describe("Keepa path", () => {
     expect(k.asinCalls).toEqual([["B002XZLAWM"]]);
   });
 
+  it("a paused run does nothing and spends nothing; resumed, it carries on without re-fetching", async () => {
+    const { runId } = await ingest({ files: [upload()] });
+    fake.tables.runs.find((r) => r.id === runId)!.paused_at = new Date().toISOString();
+    const p = await processRun(runId);
+    expect(p).toMatchObject({ paused: true, done: false });
+    expect(k.asinCalls).toEqual([]);
+    expect(results(runId).every((r) => r.status === "pending")).toBe(true);
+    fake.tables.runs.find((r) => r.id === runId)!.paused_at = null;
+    await until(runId);
+    expect(k.asinCalls).toHaveLength(1);
+    expect(results(runId).every((r) => r.status === "done")).toBe(true);
+  });
+
+  it("gives Keepa to one run at a time: the oldest, unless another is put first", async () => {
+    const first = await ingest({ files: [upload()] });
+    const second = await ingest({ files: [upload()] });
+    fake.tables.runs.find((r) => r.id === first.runId)!.started_at = new Date(Date.now() - 60_000).toISOString();
+    fake.tables.runs.find((r) => r.id === second.runId)!.started_at = new Date().toISOString();
+    // The second run does its free lookups, then leaves its rows waiting: the older run is first.
+    await processRun(second.runId, { budgetMs: 1_000 });
+    expect(k.asinCalls).toEqual([]); // not its turn: the first run is older
+    expect((await processRun(second.runId, { budgetMs: 1_000 })).keepaTurn).toMatchObject({ mine: false, owner: { id: first.runId } });
+    fake.tables.runs.find((r) => r.id === second.runId)!.keepa_first_at = new Date().toISOString();
+    await processRun(second.runId, { budgetMs: 1_000 });
+    expect(k.asinCalls).toHaveLength(1);
+  });
+
   it("lets one worker hold a run at a time", async () => {
     const { runId } = await ingest({ files: [upload()] });
     fake.tables.runs.find((r) => r.id === runId)!.lease_until = new Date(Date.now() + 30_000).toISOString();

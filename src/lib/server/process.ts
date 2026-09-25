@@ -4,6 +4,7 @@ import { computeFees, economics, referralCategoryFor } from "../fees/engine";
 import type { RateCard } from "../fees/rateCard";
 import { estimateEta, type Eta, type RunStats } from "../eta";
 import { addDailyTokens } from "../keepaLedger";
+import { keepaOwner } from "./keepaTurn";
 import { getKeepa, type KeepaProduct, type KeepaResponseMeta, type KeepaSummary, type KeepaTokens, type OnKeepaResponse, type SellerProfile } from "../keepa/client";
 import { dormancy, trimSeries, type Dormancy } from "../keepa/summarize";
 import type { Point } from "../keepa/types";
@@ -770,6 +771,10 @@ export interface RunProgress {
   rescreen?: { left: number; startedAt: string } | null;
   /** The run is paused: no call works on it until it's resumed. */
   paused?: boolean;
+  /** When it was paused. */
+  pausedAt?: string | null;
+  /** Whose turn it is on Keepa (one run at a time), and whether it's this run's. */
+  keepaTurn?: { owner: { id: string; name: string | null; source: string } | null; mine: boolean };
   /** False until the lease migration is run: then only the run page drives the run, one call at a time. */
   leased?: boolean;
 }
@@ -831,7 +836,12 @@ export async function runProgress(runId: string, extra: Partial<RunProgress> = {
   }
   const resume = r?.resume_after ?? null;
   const waiting = { amazon: p - k, keepa: k };
+  const pausedAt = (r as { paused_at?: string | null } | null)?.paused_at ?? null;
+  const owner = k > 0 ? await keepaOwner().catch(() => null) : null;
   return {
+    paused: !!pausedAt,
+    pausedAt,
+    keepaTurn: { owner, mine: !owner || owner.id === runId },
     done: p === 0 && rescreenLeft === 0,
     rescreen: job && !job.finishedAt ? { left: rescreenLeft, startedAt: job.startedAt } : null,
     processed: t - p,
@@ -896,8 +906,14 @@ export async function processRun(runId: string, opts: { budgetMs?: number } = {}
   if (runRow.status === "done" && !(await runProgress(runId)).waiting.amazon && !(await runProgress(runId)).waiting.keepa) {
     return runProgress(runId);
   }
+  // Paused: nothing runs and nothing is spent until it's resumed.
+  if ((runRow as { paused_at?: string | null }).paused_at) return runProgress(runId);
   const lease = await claimLease(runId, budget + 30_000);
   if (lease === false) return runProgress(runId, { busy: true });
+  // One run on Keepa at a time: another run's turn means this call leaves Keepa rows waiting.
+  const owner = getKeepa().available ? await keepaOwner().catch(() => null) : null;
+  const myKeepaTurn = !owner || owner.id === runId;
+  const pausedNow = async () => !!((await d.from("runs").select("paused_at").eq("id", runId).maybeSingle()).data as { paused_at?: string | null } | null)?.paused_at;
 
   let progressed = 0;
   let keepaWaitUntil: number | null = null;
@@ -937,9 +953,11 @@ export async function processRun(runId: string, opts: { budgetMs?: number } = {}
     let lastBatchMs = 0;
     const headroom = () => Math.max(Math.min(5_000, budget * 0.1), lastBatchMs * 1.5);
     while (Date.now() + headroom() < deadline - margin) {
+      // Pause takes effect after the batch in hand.
+      if (await pausedNow()) break;
       const a = q.lookup.splice(0, BATCH.lookup);
       const c = q.account.splice(0, BATCH.account);
-      const keepaReady: boolean = keepa.available && (keepaWaitUntil == null || Date.now() >= keepaWaitUntil);
+      const keepaReady: boolean = keepa.available && myKeepaTurn && (keepaWaitUntil == null || Date.now() >= keepaWaitUntil);
       if (keepaReady && q.keepa.length > 1) {
         const score = new Map(q.keepa.map((r) => [r, keepaPriority(r, card, rules, cfg, approved)]));
         q.keepa.sort((x, y) => score.get(y)! - score.get(x)!);

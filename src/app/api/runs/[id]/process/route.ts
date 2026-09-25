@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { db } from "@/lib/server/db";
 import { handle } from "@/lib/server/http";
 import { scheduleNext } from "@/lib/server/kick";
+import { keepaOwner } from "@/lib/server/keepaTurn";
 import { processRun } from "@/lib/server/process";
 
 export const maxDuration = 60;
@@ -19,12 +20,19 @@ export const POST = handle(async (req: NextRequest, ctx: { params: Promise<{ id:
   // 40 s of work inside the 60 s limit; processRun won't start a batch it can't finish.
   const progress = await processRun(id, { budgetMs: 40_000 });
   // Hand on only under a lease; without one, two workers could take the same rows.
-  if (!progress.done && !progress.busy && progress.leased && !progress.paused) {
+  // Not its turn on Keepa and nothing else to do: it waits; the run ahead hands over when done.
+  const waitingForTurn = progress.keepaTurn && !progress.keepaTurn.mine && progress.waiting.amazon === 0;
+  if (!progress.done && !progress.busy && progress.leased && !progress.paused && !waitingForTurn) {
     const run = await db().from("runs").select("last_progress_at, resume_after").eq("id", id).single();
     const r = run.data as { last_progress_at?: string | null; resume_after?: string | null } | null;
     const waitingOnKeepa = !!r?.resume_after || progress.waiting.keepa > 0;
     const stuck = !progress.progressed && !waitingOnKeepa && r?.last_progress_at != null && Date.now() - Date.parse(r.last_progress_at) > GIVE_UP_MS;
     if (!stuck) scheduleNext(req.nextUrl.origin, id);
+  }
+  // This run is off Keepa (done with it, or paused): start the next run in line.
+  if (!progress.busy && (progress.waiting.keepa === 0 || progress.paused)) {
+    const next = await keepaOwner().catch(() => null);
+    if (next && next.id !== id) scheduleNext(req.nextUrl.origin, next.id);
   }
   return Response.json(progress);
 });

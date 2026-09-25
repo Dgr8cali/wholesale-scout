@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { db, must } from "@/lib/server/db";
 import { handle } from "@/lib/server/http";
+import { keepaQueue } from "@/lib/server/keepaTurn";
 
 export interface RunSummary { pass: number; warn: number; fail: number; error: number; pending: number; suppliers: string[]; newestKeepa: string | null }
 
@@ -40,6 +41,7 @@ export const GET = handle(async (req: NextRequest) => {
   if (res.error && /archived_at/.test(res.error.message)) res = await db().from("runs").select("*, profile:profiles(name)").order("started_at", { ascending: false }).limit(300);
   let rows = must(res, "runs") as { id: string; name?: string | null; source: string }[];
   if (q) rows = rows.filter((r) => `${r.name ?? ""} ${r.source}`.toLowerCase().includes(q));
-  const sums = await summaries(rows.map((r) => r.id));
-  return Response.json({ runs: rows.map((r) => ({ ...r, summary: sums.get(r.id) ?? null })) });
+  const [sums, queue] = await Promise.all([summaries(rows.map((r) => r.id)), keepaQueue().catch(() => [])]);
+  // Whose turn it is on Keepa (one run at a time) and who's waiting behind it.
+  return Response.json({ runs: rows.map((r) => ({ ...r, summary: sums.get(r.id) ?? null })), keepaQueue: queue.map((q) => q.id) });
 });

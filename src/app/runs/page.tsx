@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  ArchiveIcon, ArchiveRestoreIcon, ArrowDownIcon, ArrowUpIcon, ChevronRightIcon, DownloadCloudIcon, DownloadIcon, ExternalLinkIcon,
+  ArchiveIcon, ArchiveRestoreIcon, ArrowDownIcon, ArrowUpIcon, ChevronRightIcon, ChevronsUpIcon, PauseIcon, PlayIcon, DownloadCloudIcon, DownloadIcon, ExternalLinkIcon,
   FileSpreadsheetIcon, ImageIcon, ListChecksIcon, MoonIcon, MoreHorizontalIcon, PencilIcon, RefreshCwIcon, SearchIcon, StarIcon, Trash2Icon, UploadIcon,
 } from "lucide-react";
 import Link from "next/link";
@@ -39,12 +39,16 @@ interface Run {
   processed_count: number;
   token_cost: number;
   archived_at?: string | null;
+  paused_at?: string | null;
   profile: { name: string } | null;
   profile_snapshot?: Partial<ProfileConfig> | null;
   summary: Summary | null;
 }
 
 type SortKey = "started" | "name" | "rows";
+
+/** The run's newest Keepa data is over 7 days old. */
+const isStale = (r: Run) => !!r.summary?.newestKeepa && Date.now() - Date.parse(r.summary.newestKeepa) > 7 * 86_400_000;
 
 /** Where a run's rows came from, from its name and source. */
 function sourceKind(r: Run): { icon: typeof FileSpreadsheetIcon; label: string } {
@@ -66,9 +70,12 @@ export default function RunsPage() {
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "started", dir: -1 });
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
+  const [keepaQueue, setKeepaQueue] = useState<string[]>([]);
 
   const load = useCallback(() => {
-    api<{ runs: Run[] }>(`/api/runs${archived ? "?archived=1" : ""}`).then((r) => { setRuns(r.runs); setError(null); }).catch((e) => setError(e.message));
+    api<{ runs: Run[]; keepaQueue?: string[] }>(`/api/runs${archived ? "?archived=1" : ""}`)
+      .then((r) => { setRuns(r.runs); setKeepaQueue(r.keepaQueue ?? []); setError(null); })
+      .catch((e) => setError(e.message));
   }, [archived]);
   useEffect(() => { load(); }, [load]);
   // Keep screening runs' progress live.
@@ -144,6 +151,19 @@ export default function RunsPage() {
       toast.error((e as Error).message);
     }
   }
+  async function control(r: Run, action: "pause" | "resume" | "keepaFirst" | "refresh") {
+    try {
+      const res = await api<{ requeued?: number }>(`/api/runs/${r.id}/control`, { method: "POST", json: { action } });
+      toast.success(
+        action === "pause" ? "Pausing after the current batch" : action === "resume" ? "Resumed"
+          : action === "keepaFirst" ? `“${r.name || r.source}” goes first on Keepa`
+          : res.requeued ? `Refreshing Keepa data for ${res.requeued.toLocaleString("en-GB")} rows` : "Nothing older than 7 days to refresh",
+      );
+      load();
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
   async function exportRun(r: Run) {
     const t = toast.loading("Preparing the spreadsheet…");
     try {
@@ -165,6 +185,11 @@ export default function RunsPage() {
         <DropdownMenuItem onSelect={() => router.push(`/runs/${r.id}`)}><ExternalLinkIcon /> Open</DropdownMenuItem>
         <DropdownMenuItem onSelect={() => rename(r)}><PencilIcon /> Rename</DropdownMenuItem>
         <DropdownMenuItem onSelect={() => rescreen(r)} disabled={r.status !== "done"}><RefreshCwIcon /> Re-screen</DropdownMenuItem>
+        {r.status !== "done" && (r.paused_at
+          ? <DropdownMenuItem onSelect={() => control(r, "resume")}><PlayIcon /> Resume</DropdownMenuItem>
+          : <DropdownMenuItem onSelect={() => control(r, "pause")}><PauseIcon /> Pause</DropdownMenuItem>)}
+        {keepaQueue.includes(r.id) && keepaQueue[0] !== r.id && <DropdownMenuItem onSelect={() => control(r, "keepaFirst")}><ChevronsUpIcon /> Go first on Keepa</DropdownMenuItem>}
+        {isStale(r) && <DropdownMenuItem onSelect={() => control(r, "refresh")}><RefreshCwIcon /> Refresh Keepa data</DropdownMenuItem>}
         <DropdownMenuItem onSelect={() => exportRun(r)}><DownloadIcon /> Export to xlsx</DropdownMenuItem>
         <DropdownMenuSeparator />
         {r.archived_at
@@ -198,6 +223,7 @@ export default function RunsPage() {
               <div className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
                 {r.name && r.name !== r.source && <span className="truncate">{r.source}</span>}
                 {r.archived_at && <Badge variant="muted">archived</Badge>}
+                {isStale(r) && <Badge variant="warn" title={`Newest Keepa data ${when(r.summary!.newestKeepa!)}; over 7 days old`}>stale</Badge>}
                 {!!opts.count && (
                   <button className="inline-flex items-center gap-0.5 font-medium text-brand hover:underline" aria-expanded={groupOpen}
                     onClick={() => setOpenGroups((g) => { const n = new Set(g); if (n.has(opts.groupKey!)) n.delete(opts.groupKey!); else n.add(opts.groupKey!); return n; })}>
@@ -217,9 +243,18 @@ export default function RunsPage() {
           {s && <p className="num mt-1 text-2xs text-muted-foreground">{s.pass} pass · {s.warn} warn · {s.fail} fail</p>}
         </TableCell>
         <TableCell className="w-44">
-          {done ? <Badge variant="pass">Done</Badge> : r.status === "error" ? <Badge variant="fail">Error</Badge> : (
+          {done ? <Badge variant="pass">Done</Badge> : r.status === "error" ? <Badge variant="fail">Error</Badge> : r.paused_at ? (
             <div className="space-y-1">
-              <Badge variant="brand">Screening</Badge>
+              <Badge variant="muted">Paused</Badge>
+              <p className="num text-2xs text-muted-foreground">at {(r.row_count - pending).toLocaleString("en-GB")} of {r.row_count.toLocaleString("en-GB")}</p>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              <div className="flex flex-wrap gap-1">
+                <Badge variant="brand">Screening</Badge>
+                {keepaQueue[0] === r.id && <Badge variant="pass" title="This run is the one spending Keepa tokens">Using Keepa</Badge>}
+                {keepaQueue.includes(r.id) && keepaQueue[0] !== r.id && <Badge variant="muted" title="Another run is using Keepa; this one waits its turn">Waiting for Keepa</Badge>}
+              </div>
               <div className="flex items-center gap-2">
                 <Progress value={pctDone} className="h-1.5 w-20" aria-label="Screened" />
                 <span className="num text-2xs text-muted-foreground">{Math.round(pctDone)}%</span>

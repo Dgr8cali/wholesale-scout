@@ -2,6 +2,7 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChevronsUpIcon, PauseIcon, PlayIcon } from "lucide-react";
 import { toast } from "sonner";
 import { BulkBar } from "@/components/BulkBar";
 import { usePageCrumbs } from "@/components/Crumbs";
@@ -196,14 +197,17 @@ export default function RunPage() {
           lastReload = Date.now();
           apply(await fetchRun());
         }
-        if (left > 0 && !kicking && Date.now() - leftSince > 60_000) {
+        if (p.paused) {
+          // Paused: keep watching (it may be resumed elsewhere) but never kick it.
+        } else if (left > 0 && !kicking && Date.now() - leftSince > 60_000) {
           leftSince = Date.now();
           kicking = true;
           fetch(`/api/runs/${id}/rescreen`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ continuing: true }) })
             .catch(() => {}).finally(() => { kicking = false; });
         }
         // Never overlap our own call; a worker holding the lease shows as working.
-        if (!p.done && !left && !p.working && !kicking && Date.now() - lastKick > 15_000) {
+        const waitingTurn = p.keepaTurn && !p.keepaTurn.mine && p.waiting.amazon === 0;
+        if (!p.paused && !waitingTurn && !p.done && !left && !p.working && !kicking && Date.now() - lastKick > 15_000) {
           lastKick = Date.now();
           kicking = true;
           fetch(`/api/runs/${id}/process`, { method: "POST" }).catch(() => {}).finally(() => {
@@ -227,6 +231,17 @@ export default function RunPage() {
   useEffect(() => {
     api<{ profiles: { id: string; name: string }[] }>("/api/profiles").then((r) => setProfiles(r.profiles)).catch(() => {});
   }, []);
+
+  async function control(action: "pause" | "resume" | "keepaFirst") {
+    try {
+      await api(`/api/runs/${id}/control`, { method: "POST", json: { action } });
+      toast.success(action === "pause" ? "Pausing after the current batch" : action === "resume" ? "Resumed" : "This run goes first on Keepa");
+      setProgress((p) => p && { ...p, paused: action === "pause" ? true : action === "resume" ? false : p.paused });
+      if (action !== "pause") setNonce((n) => n + 1);
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
 
   async function rescreen() {
     setRescreening(true);
@@ -360,6 +375,11 @@ export default function RunPage() {
             title="Re-run gates and score with the profile's current settings, using the data already fetched. No re-upload, no new Amazon or Keepa calls.">
             {rescreening ? "Re-screening…" : "Re-screen"}
           </Button>
+          {processing && (progress?.paused
+            ? <Button onClick={() => control("resume")}><PlayIcon /> Resume</Button>
+            : <Button variant="outline" onClick={() => control("pause")} title="Stop after the current batch. Everything done so far is kept; no Keepa tokens are spent while paused.">
+                <PauseIcon /> Pause
+              </Button>)}
           <Button variant="outline" onClick={() => exportXlsx()} disabled={!rows.length}>Export {rows.length} products to xlsx</Button>
           <Button variant="destructive" onClick={async () => {
             if (!(await confirm({ title: "Delete this run?", description: "The run and its results are removed. Products, favourites and waivers are kept.", confirmLabel: "Delete", destructive: true }))) return;
@@ -374,24 +394,41 @@ export default function RunPage() {
         <div className="panel space-y-2 p-4">
           <div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
             <span className="font-medium">
-              {progress.rescreen?.left ? `Re-screening: ${(progress.total - progress.rescreen.left).toLocaleString("en-GB")} of ${progress.total.toLocaleString("en-GB")} rows` : `Screening ${progress.processed} of ${progress.total}`}
+              {progress.paused ? `Paused at ${progress.processed.toLocaleString("en-GB")} of ${progress.total.toLocaleString("en-GB")}` : progress.rescreen?.left ? `Re-screening: ${(progress.total - progress.rescreen.left).toLocaleString("en-GB")} of ${progress.total.toLocaleString("en-GB")} rows` : `Screening ${progress.processed} of ${progress.total}`}
             </span>
             <span className="text-muted-foreground">
-              {progress.working ? "Working in the background: you can close this page." : "Resuming…"}
+              {progress.paused
+                ? <>Nothing runs and no Keepa tokens are spent until you <button className="font-medium text-brand underline-offset-2 hover:underline" onClick={() => control("resume")}>resume</button>.</>
+                : progress.working ? "Working in the background: you can close this page." : "Resuming…"}
             </span>
           </div>
           <div className="h-2 overflow-hidden rounded-full bg-muted">
             <div className="h-full bg-brand transition-all" style={{ width: `${progress.total ? ((progress.rescreen?.left ? progress.total - progress.rescreen.left : progress.processed) / progress.total) * 100 : 0}%` }} />
           </div>
-          {progress.eta && <p className="text-sm font-medium" aria-live="polite">{etaLabel(progress.eta)[0].toUpperCase() + etaLabel(progress.eta).slice(1)}</p>}
+          {progress.eta && !progress.paused && <p className="text-sm font-medium" aria-live="polite">{etaLabel(progress.eta)[0].toUpperCase() + etaLabel(progress.eta).slice(1)}</p>}
           <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
             <span><span className="num font-semibold text-foreground">{progress.waiting.amazon}</span> waiting on Amazon (catalog, price, gating, fees)</span>
             <span>
               <span className="num font-semibold text-foreground">{progress.waiting.keepa}</span> waiting on Keepa tokens
-              {progress.waiting.keepa > 0 && progress.keepaResumeAt && <> · resumes about {new Date(progress.keepaResumeAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</>}
+              {progress.waiting.keepa > 0 && !progress.paused && progress.keepaResumeAt && <> · resumes about {new Date(progress.keepaResumeAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</>}
             </span>
             <span><span className="num font-semibold text-foreground">{progress.tokenCost}</span> Keepa tokens so far</span>
           </div>
+          {!progress.paused && progress.keepaTurn?.owner && !progress.keepaTurn.mine && progress.waiting.keepa > 0 && (
+            <p className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              <span>
+                Keepa is in use by{" "}
+                <Link className="font-medium text-foreground underline-offset-2 hover:underline" href={`/runs/${progress.keepaTurn.owner.id}`}>
+                  {progress.keepaTurn.owner.name || progress.keepaTurn.owner.source}
+                </Link>
+                ; this run waits its turn (one run uses Keepa at a time).
+              </span>
+              <Button size="xs" variant="outline" onClick={() => control("keepaFirst")}><ChevronsUpIcon /> Go first</Button>
+            </p>
+          )}
+          {!progress.paused && progress.keepaTurn?.mine && progress.waiting.keepa > 0 && (
+            <p className="text-xs text-muted-foreground">This run is the one using Keepa now.</p>
+          )}
         </div>
       )}
       {error && <p className="rounded-md bg-fail-soft px-3 py-2 text-sm text-fail">{error}</p>}
