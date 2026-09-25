@@ -92,6 +92,8 @@ class Query implements PromiseLike<{ data: unknown; error: { message: string; co
   }
   gt(c: string, v: string) { this.filters.push((r) => r[c] != null && String(r[c]) > v); return this; }
   lt(c: string, v: string) { this.filters.push((r) => r[c] != null && String(r[c]) < v); return this; }
+  contains(c: string, vs: unknown[]) { this.filters.push((r) => Array.isArray(r[c]) && vs.every((v) => (r[c] as unknown[]).includes(v))); return this; }
+  overlaps(c: string, vs: unknown[]) { this.filters.push((r) => Array.isArray(r[c]) && vs.some((v) => (r[c] as unknown[]).includes(v))); return this; }
   neq(c: string, v: unknown) { this.filters.push((r) => get(r, c) !== v); return this; }
   order(col: string, o?: { ascending?: boolean }) { this.orderBy = { col, asc: o?.ascending ?? true }; return this; }
   limit(n: number) { this.lim = n; return this; }

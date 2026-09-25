@@ -16,6 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@/components/ui/textarea";
 import type { BestProduct, SupplierRecord, SupplierStats } from "@/lib/server/suppliers";
 import { api, gbp, when } from "@/lib/ui/client";
+import { Documents } from "@/components/documents/Documents";
 
 interface Detail {
   supplier: SupplierRecord;
@@ -131,6 +132,8 @@ export default function SupplierPage() {
           </Field>
         </div>
       </section>
+
+      <Documents supplier={{ id: s.id, name: s.name }} />
 
       <div className="grid gap-4 lg:grid-cols-3">
         <section className="space-y-2 lg:col-span-2" aria-label="Best products">

@@ -169,6 +169,8 @@ export interface VerdictCard {
   asin: string | null;
   ean: string | null;
   title: string | null;
+  /** The listing's brand, for the Apply kit. */
+  brand: string | null;
   imageUrl: string | null;
   amazonUrl: string | null;
   verdict: "pass" | "warn" | "fail" | null;
@@ -219,7 +221,7 @@ type ResultRow = {
   hurdle_price: number | null; gate_outcomes: VerdictCard["gates"] | null;
   fees: { referral?: number | null; fba?: number | null; total?: number | null; source?: string | null } | null;
   inputs: { market?: (StoredMarket & { amazonNow?: boolean | null }) | null; maxLandedGbp?: number | null; restriction?: { status: string; message: string; links?: RestrictionLink[] } | null; pack?: { ratio: number } | null } | null;
-  product: { asin: string | null; ean: string; title: string | null; image_url: string | null; competitor_stock?: CompetitorStock | null } | null;
+  product: { asin: string | null; ean: string; title: string | null; brand?: string | null; image_url: string | null; competitor_stock?: CompetitorStock | null } | null;
   updated_at?: string | null;
   offer: { moq: number | null; cost_known?: boolean; unit_cost_gbp?: number } | null;
 };
@@ -237,7 +239,7 @@ export async function verdictCard(runId: string): Promise<VerdictCard | null> {
   ) as unknown as (ResultRow & { product_id: string; offer_id: string })[])[0];
   if (r) {
     const [p, o] = await Promise.all([
-      d.from("products").select("asin, ean, title, image_url, dims_cm, weight_g, referral_category, competitor_stock").eq("id", r.product_id).maybeSingle(),
+      d.from("products").select("asin, ean, title, brand, image_url, dims_cm, weight_g, referral_category, competitor_stock").eq("id", r.product_id).maybeSingle(),
       d.from("offers").select("moq, cost_known, unit_cost_gbp").eq("id", r.offer_id).maybeSingle(),
     ]);
     r.product = p.data as ResultRow["product"];
@@ -263,6 +265,7 @@ export async function verdictCard(runId: string): Promise<VerdictCard | null> {
     asin,
     ean: r?.product?.ean && r.product.ean !== asin ? r.product.ean : null,
     title: r?.product?.title ?? null,
+    brand: r?.product?.brand ?? null,
     imageUrl: r?.product?.image_url || null,
     amazonUrl: asin ? `https://www.amazon.co.uk/dp/${asin}` : null,
     verdict: r?.status === "done" ? r.verdict : null,

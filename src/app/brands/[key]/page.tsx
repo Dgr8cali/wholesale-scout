@@ -18,6 +18,8 @@ import { GATING_LABELS, GATING_VARIANT, type BrandProduct, type BrandSummary } f
 import { APPROVAL_STATUSES, STATUS_LABELS, type ApprovalStatus } from "@/lib/brands";
 import { api, gbp, when } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
+import { ApplyKit } from "@/components/documents/ApplyKit";
+import { Documents } from "@/components/documents/Documents";
 
 type Product = BrandProduct & { bestOffer: { supplier: string; unitCostGbp: number; moq: number | null; seenAt: string } | null; runId: string | null };
 
@@ -94,7 +96,10 @@ export default function BrandPage() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {b.applyUrl && (
-            <Button asChild variant="outline"><a href={b.applyUrl} target="_blank" rel="noreferrer noopener">Apply on Amazon <ExternalLinkIcon /></a></Button>
+            <>
+              <ApplyKit brand={b.brand} applyUrl={b.applyUrl} />
+              <Button asChild variant="outline"><a href={b.applyUrl} target="_blank" rel="noreferrer noopener">Apply on Amazon <ExternalLinkIcon /></a></Button>
+            </>
           )}
           {approval?.status !== "approved" && (
             <Button onClick={() => saveApproval({ status: "approved", status_date: new Date().toISOString().slice(0, 10) })}><CheckIcon /> Mark approved</Button>
@@ -145,6 +150,8 @@ export default function BrandPage() {
           )}
         </section>
       </div>
+
+      <Documents brand={{ name: b.brand }} />
 
       <section className="space-y-2">
         <h2 className="text-sm font-semibold">Products across all runs <span className="font-normal text-muted-foreground">· best offer per EAN</span></h2>

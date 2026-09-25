@@ -3,7 +3,9 @@
 import { FavouriteNote } from "@/components/FavouriteStar";
 import { WaiveControl } from "@/components/WaiveControl";
 import { GATE_LABELS, GROUP_LABELS, type GateId, type GroupId } from "@/lib/screening/config";
-import { RestrictionLink } from "@/lib/ui/RestrictionLink";
+import { approvalRequestUrl, RestrictionLink } from "@/lib/ui/RestrictionLink";
+import { applyLinks } from "@/lib/spapi/parse";
+import { ApplyKit } from "@/components/documents/ApplyKit";
 import { gbp } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
 import { lastSeenLabel } from "@/lib/screening/dormant";
@@ -155,6 +157,12 @@ export function Detail({ r, fav, onNote, onWaive, onWatch, stacked = false, budg
               </button>
               <span className="min-w-0 text-muted-foreground">
                 {g.detail}{g.gate === "gating" && <RestrictionLink outcomes={r.gate_outcomes} asin={r.product?.asin} />}
+                {g.gate === "gating" && r.product?.asin && g.tags?.some((t) => t === "APPROVAL" || t === "BLOCKED") && (
+                  <span className="ml-2 inline-block align-middle">
+                    <ApplyKit compact brand={r.product.brand} supplierId={r.offer?.supplier?.id ?? null}
+                      applyUrl={applyLinks((g as { links?: Parameters<typeof applyLinks>[0] }).links)[0]?.resource ?? approvalRequestUrl(r.product.asin)} />
+                  </span>
+                )}
                 {r.product && (g.status === "fail" || g.tags?.includes("WAIVED")) && (
                   <WaiveControl waived={!!g.tags?.includes("WAIVED")}
                     onWaive={(reason) => onWaive(r, g.gate as GateId, "waive", reason)}

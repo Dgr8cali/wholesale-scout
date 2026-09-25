@@ -106,6 +106,10 @@ This is one row per product, with the best offer for each EAN.
 | **Best offer** | The cheapest costed offer: its ex-VAT price, the supplier, and the MOQ. Hover over it to see when it was seen. It says "no costed offer" if there isn't one. |
 | **Gating** | Open, Approval (with an apply link) or Blocked, as Amazon said for this listing. |
 
+## Documents
+
+A brand's page has a **Documents** section for brand letters, SDS and other paperwork, plus invoices that name the brand (attached here, or on a supplier's page with the brand under **Brands on it**). **Apply kit** next to **Apply on Amazon** gathers them for an application. See [Apply for brand approval](/help/howto/apply-for-brand-approval#keep-your-paperwork-then-apply-in-one-click).
+
 ## Related
 
 - [Score](/help/concepts/score): the per-product score, which is a different thing from the brand score.

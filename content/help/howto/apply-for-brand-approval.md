@@ -22,6 +22,17 @@ The gate needs SP-API with your seller ID (SPAPI_SELLER_ID). Without it the gate
    On the Brands page the same link is the small arrow next to the gating badge, and on a brand's own page it's the **Apply on Amazon** button.
 2. Follow Amazon's steps in Seller Central. Brands often ask for invoices from an authorised distributor for a set number of units.
 
+## Keep your paperwork, then apply in one click
+
+Attach the documents an application needs once, and they're ready every time:
+
+- On a **supplier's page**, under **Documents**: invoices (and anything else from them). Put the brands an invoice covers in **Brands on it** so it shows for those brands too.
+- On a **brand's page**, under **Documents**: brand letters, SDS, and anything else for the brand. **From …** says which supplier a document came from, when the brand has any.
+
+Pick the type (**Invoice**, **SDS (safety data sheet)**, **Brand letter** or **Other**), the document's date and an optional note, then **Attach files** (one or several, up to 50 MB each). Files are kept in the app's private Supabase storage; the file name opens it, the arrow downloads it, the bin deletes it (and the file).
+
+**Apply kit** sits next to every apply link: in a row's details on the Gating line, next to **Apply to sell** on a check's card, and next to **Apply on Amazon** on a brand's page. It lists the brand's documents and that row's supplier's invoices, newest invoices first, and its button **Download N documents and apply on Amazon** downloads them all and opens Amazon's application in one click. Invoices dated more than 180 days ago are marked and left out of the download (Amazon usually wants recent ones). Your browser may ask once to allow several downloads.
+
 ## Record where you are
 
 Open the brand's page from [Brands](/help/pages/brands). Under **Your approval**:

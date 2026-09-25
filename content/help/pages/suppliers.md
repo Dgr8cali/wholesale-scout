@@ -65,3 +65,7 @@ These are up to 10 of the supplier's products that pass or warn on your default 
 ### Brands carried and Runs
 
 **Brands carried** lists up to 30 of the brands they offer, with product counts. **Runs** lists the 20 most recent runs that included their offers, each linking to the run.
+
+## Documents
+
+A supplier's page has a **Documents** section: attach invoices and other paperwork with a type, date and note. **Brands on it** (comma-separated) links a document to those brands, so it shows on their pages and in their **Apply kit**. In an application for a product from this supplier, its invoices are included. See [Apply for brand approval](/help/howto/apply-for-brand-approval#keep-your-paperwork-then-apply-in-one-click).

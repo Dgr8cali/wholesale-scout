@@ -11,6 +11,7 @@ import { gbp, pct } from "@/lib/ui/client";
 import { amazonLastSeen } from "@/lib/ui/when";
 import { cn } from "@/lib/utils";
 import { Checked } from "./Checked";
+import { ApplyKit } from "@/components/documents/ApplyKit";
 
 const GATING: Record<string, { label: string; variant: "pass" | "warn" | "fail" | "muted" }> = {
   open: { label: "Open", variant: "pass" },
@@ -59,9 +60,12 @@ export function VerdictCard({ card, onFetchAnyway }: { card: Card; onFetchAnyway
           {!card.pending && <Checked at={card.checkedAt} recheck={card.recheck} />}
         </div>
         {card.gating?.applyUrl && (
-          <Button asChild size="sm" variant="outline">
-            <a href={card.gating.applyUrl} target="_blank" rel="noreferrer">Apply to sell <ExternalLinkIcon /></a>
-          </Button>
+          <div className="flex items-center gap-2">
+            <ApplyKit brand={card.brand} applyUrl={card.gating.applyUrl} compact />
+            <Button asChild size="sm" variant="outline">
+              <a href={card.gating.applyUrl} target="_blank" rel="noreferrer">Apply to sell <ExternalLinkIcon /></a>
+            </Button>
+          </div>
         )}
       </div>
 
