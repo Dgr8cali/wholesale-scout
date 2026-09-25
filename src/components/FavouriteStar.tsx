@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { Textarea } from "@/components/ui/textarea";
 /** A star that marks a product (EAN + ASIN) as a favourite: an outline always, filled when starred. */
 export function FavouriteStar({ starred, onToggle, busy = false }: { starred: boolean; onToggle: () => void; busy?: boolean }) {
@@ -16,13 +17,31 @@ export function FavouriteStar({ starred, onToggle, busy = false }: { starred: bo
   );
 }
 
-/** A favourite's note, saved when the field loses focus. On a product not yet starred, a note stars it. */
+/**
+ * A favourite's note, saved a moment after typing stops and when the field loses focus. On a
+ * product not yet starred, a note stars it, so the star fills in as soon as you've typed.
+ */
 export function FavouriteNote({ note, onSave, starred = true }: { note: string | null; onSave: (note: string) => void; starred?: boolean }) {
+  const saved = useRef(note ?? "");
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const save = (v: string) => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = null;
+    if (v === saved.current) return;
+    saved.current = v;
+    onSave(v);
+  };
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
   return (
     <label className="block space-y-1 text-xs" onClick={(e) => e.stopPropagation()}>
       <span className="font-semibold uppercase tracking-wide text-muted-foreground">Favourite note{starred ? "" : " (adding one stars the product)"}</span>
       <Textarea className="h-14" maxLength={500} defaultValue={note ?? ""} placeholder="Why it's a favourite, what to check next…"
-        onBlur={(e) => e.target.value !== (note ?? "") && onSave(e.target.value)} />
+        onChange={(e) => {
+          const v = e.target.value;
+          if (timer.current) clearTimeout(timer.current);
+          timer.current = setTimeout(() => save(v), 800);
+        }}
+        onBlur={(e) => save(e.target.value)} />
     </label>
   );
 }

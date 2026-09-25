@@ -12,6 +12,7 @@ const UNIQUE: Record<string, string[][]> = {
   profiles: [["name"]],
   results: [["run_id", "product_id"]],
   category_rules: [["key"]],
+  favourites: [["ean", "asin"]],
 };
 
 const DEFAULTS: Record<string, Row> = {

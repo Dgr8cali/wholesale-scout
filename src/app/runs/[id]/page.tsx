@@ -26,6 +26,7 @@ import { etaLabel } from "@/lib/eta";
 import { EMPTY_FILTERS, matches, normalizeFilters, type FilterSet } from "@/lib/filters";
 import { GATE_LABELS, GATE_ORDER, withDefaults, type GateId } from "@/lib/screening/config";
 import { api, when } from "@/lib/ui/client";
+import { favouriteSync, favStore, type FavStore } from "@/lib/ui/favouriteSync";
 import { firstOrderFigures } from "@/lib/ui/metrics";
 import { groupRows } from "@/lib/ui/group";
 import { brandOf, dormantOf, favKey, toFilterRow } from "@/lib/ui/resultRows";
@@ -76,29 +77,35 @@ export default function RunPage() {
     }
   };
   // Favourites are per product (EAN + ASIN), not per run.
-  const [favs, setFavs] = useState<Map<string, Fav>>(new Map());
+  const [favs, setFavsState] = useState<Map<string, Fav>>(new Map());
+  // The star/note sync reads the latest map at once; React state lags a render behind.
+  const [favMap] = useState(() => favStore<Fav>(setFavsState));
+  const setFavs = favMap.update;
+  // Star and note run in order per product (a star clicked while the note saves waits for it).
+  const [favSync] = useState(() => favouriteSync(
+    {
+      star: async (i) => (await api<{ favourite: Fav }>("/api/favourites", { method: "POST", json: i })).favourite,
+      note: async (i, note) => (await api<{ favourite: Fav }>("/api/favourites", { method: "POST", json: { ...i, note } })).favourite,
+      remove: async (fid) => void (await api(`/api/favourites?id=${fid}`, { method: "DELETE" })),
+    },
+    favMap as FavStore,
+    { onError: (e) => toast.error(e.message) },
+  ));
   const favOf = (r: Result) => (r.product ? favs.get(favKey(r.product.ean, r.product.asin)) : undefined);
   const favourites = useMemo(() => new Set(favs.keys()), [favs]);
   useEffect(() => {
     api<{ favourites: Fav[] }>("/api/favourites?light=1")
-      .then((r) => setFavs(new Map(r.favourites.map((f) => [favKey(f.ean, f.asin), f]))))
+      .then((r) => setFavs(() => new Map(r.favourites.map((f) => [favKey(f.ean, f.asin), f]))))
       .catch(() => {});
-  }, []);
-  async function toggleFavourite(r: Result) {
+  }, [setFavs]);
+  function toggleFavourite(r: Result) {
     if (!r.product) return;
-    const key = favKey(r.product.ean, r.product.asin);
-    const existing = favs.get(key);
-    try {
-      if (existing) {
-        await api(`/api/favourites?id=${existing.id}`, { method: "DELETE" });
-        setFavs((m) => { const n = new Map(m); n.delete(key); return n; });
-      } else {
-        const { favourite } = await api<{ favourite: Fav }>("/api/favourites", { method: "POST", json: { ean: r.product.ean, asin: r.product.asin } });
-        setFavs((m) => new Map(m).set(key, favourite));
-      }
-    } catch (e) {
-      toast.error((e as Error).message);
-    }
+    void favSync.toggle({ ean: r.product.ean, asin: r.product.asin }, (f) => confirm({
+      title: "Un-star this product?",
+      description: `Its note is deleted with it: “${(f.note ?? "").slice(0, 140)}”`,
+      confirmLabel: "Un-star",
+      destructive: true,
+    }));
   }
   /** Waive or un-waive a gate for this product; its rows in this run are re-screened now. */
   async function waive(r: Result, gate: GateId, action: "waive" | "unwaive", reason?: string) {
@@ -142,19 +149,9 @@ export default function RunPage() {
     apply(await fetchRun());
   }
 
-  /** Save a note; on a product not yet starred, the note stars it. */
-  async function saveNote(r: Result, f: Fav | undefined, note: string) {
-    try {
-      if (f) {
-        await api("/api/favourites", { method: "PATCH", json: { id: f.id, note } });
-        setFavs((m) => new Map(m).set(favKey(f.ean, f.asin), { ...f, note }));
-      } else if (r.product && note.trim()) {
-        const { favourite } = await api<{ favourite: Fav }>("/api/favourites", { method: "POST", json: { ean: r.product.ean, asin: r.product.asin, note } });
-        setFavs((m) => new Map(m).set(favKey(favourite.ean, favourite.asin), favourite));
-      }
-    } catch (e) {
-      toast.error((e as Error).message);
-    }
+  /** Save a note; on a product not yet starred, the note stars it (shown at once). */
+  function saveNote(r: Result, _f: Fav | undefined, note: string) {
+    if (r.product) void favSync.saveNote({ ean: r.product.ean, asin: r.product.asin }, note);
   }
   const [profiles, setProfiles] = useState<{ id: string; name: string }[]>([]);
   const [rescreenProfile, setRescreenProfile] = useState("");

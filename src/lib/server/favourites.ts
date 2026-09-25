@@ -45,15 +45,27 @@ export async function bulkFavourites(items: { ean: string; asin: string | null }
   return out;
 }
 
-/** Star a product (idempotent); a note, when given, replaces the current one. */
+/**
+ * Star a product (idempotent); a note, when given, replaces the current one. One upsert on
+ * (ean, asin), so a star and a note saved at the same moment can't both insert: starring
+ * leaves an existing row (and its note) alone, a note updates it.
+ */
 export async function addFavourite(ean: string, asin: string | null, note?: string | null): Promise<Favourite> {
-  const existing = await findFavourite(ean, asin);
-  if (existing) {
-    if (note === undefined) return existing;
-    return must(await db().from("favourites").update({ note: note?.trim() || null, updated_at: new Date().toISOString() }).eq("id", existing.id)
-      .select("id, ean, asin, note, created_at").single(), "favourite") as Favourite;
+  const d = db();
+  const cols = "id, ean, asin, note, created_at";
+  if (note === undefined) {
+    const res = await d.from("favourites").upsert({ ean, asin }, { onConflict: "ean,asin", ignoreDuplicates: true });
+    if (res.error && schemaMissing(res.error.message)) throw new Error(FAVOURITES_MIGRATION);
+    must(res, "favourite");
+    const f = await findFavourite(ean, asin);
+    if (!f) throw new Error("favourite: not saved");
+    return f;
   }
-  return must(await db().from("favourites").insert({ ean, asin, note: note?.trim() || null }).select("id, ean, asin, note, created_at").single(), "favourite") as Favourite;
+  const res = await d.from("favourites")
+    .upsert({ ean, asin, note: note?.trim() || null, updated_at: new Date().toISOString() }, { onConflict: "ean,asin" })
+    .select(cols).single();
+  if (res.error && schemaMissing(res.error.message)) throw new Error(FAVOURITES_MIGRATION);
+  return must(res, "favourite") as Favourite;
 }
 
 export async function setFavouriteNote(id: string, note: string | null): Promise<void> {
