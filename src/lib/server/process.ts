@@ -7,7 +7,7 @@ import { resolveScoringPrice, runGates, verdictOf, type GateRun, type MarketData
 import type { CategoryRule } from "../screening/rules";
 import { winScore } from "../screening/score";
 import { getSpApi, type CatalogMatch, type CompetitivePrice } from "../spapi/client";
-import { activeRateCard, chunks, db, loadRules, must } from "./db";
+import { activeRateCard, chunks, db, loadProfile, loadRules, must } from "./db";
 
 const DAY = 86_400_000;
 const CATALOG_TTL = 7 * DAY;
@@ -53,16 +53,37 @@ interface Supplier {
   rating: number | null;
 }
 
+/** How far a row's data collection got: row text only, matched and priced, account checked. */
+type Stage = "row" | "enriched" | "account";
+const STAGE_RANK: Record<Stage, number> = { row: 0, enriched: 1, account: 2 };
+
+/** What a result was screened on, stored so Re-screen can re-run gates without fetching. */
+export interface StoredInputs {
+  v: 1;
+  stage: Stage;
+  match: ScreenContext["match"];
+  market: MarketData | null;
+  hazmat: string[];
+  restriction: ScreenContext["restriction"];
+  /** Amazon's fee estimate and the sell price it was quoted at. */
+  amazonFees: { price: number; referral: number; fba: number } | null;
+  notes: string[];
+}
+
 interface Row {
   resultId: string;
   product: Product;
   offer: Offer;
   supplier: Supplier;
+  stage: Stage;
   match: ScreenContext["match"];
   market: MarketData | null;
   hazmat: string[];
   restriction: ScreenContext["restriction"];
-  amazonFees: ScreenContext["amazonFees"];
+  amazonFees: StoredInputs["amazonFees"];
+  /** Lookup notes that belong to the row's data (kept across re-screens). */
+  dataNotes: string[];
+  /** Notes about this screening pass only. */
   notes: string[];
 }
 
@@ -95,7 +116,18 @@ function marketFromSpApi(p: CompetitivePrice | undefined, rank: number | null): 
   };
 }
 
-function context(row: Row, card: RateCard, rules: CategoryRule[]): ScreenContext {
+/**
+ * Amazon's fee applies only at the price it was quoted for; at any other scoring price
+ * (a changed profile rule, say) the rate card is used instead.
+ */
+function feesAt(row: Row, cfg: ProfileConfig): ScreenContext["amazonFees"] {
+  const f = row.amazonFees;
+  if (!f) return null;
+  const price = resolveScoringPrice(row.market, cfg).price;
+  return price != null && Math.abs(price - f.price) < 0.005 ? { referral: f.referral, fba: f.fba } : null;
+}
+
+function context(row: Row, card: RateCard, rules: CategoryRule[], cfg: ProfileConfig): ScreenContext {
   const p = row.product, o = row.offer, s = row.supplier;
   return {
     now: new Date(),
@@ -119,7 +151,7 @@ function context(row: Row, card: RateCard, rules: CategoryRule[]): ScreenContext
     },
     market: row.market,
     restriction: row.restriction,
-    amazonFees: row.amazonFees,
+    amazonFees: feesAt(row, cfg),
   };
 }
 
@@ -128,7 +160,15 @@ const r2 = (n: number | null | undefined) => (n == null || !Number.isFinite(n) ?
 async function finalize(row: Row, run: GateRun, cfg: ProfileConfig, ctx: ScreenContext) {
   const w = winScore(ctx, run, cfg, { deliveryDays: row.supplier.delivery_days, supplierRating: row.supplier.rating });
   const e = run.economics;
-  const why = row.notes.length ? `${w.why} ${row.notes.join(" ")}` : w.why;
+  const notes = [...row.dataNotes, ...row.notes];
+  if (row.amazonFees && !ctx.amazonFees && e && run.outcomes.some((o) => o.gate === "fees")) {
+    notes.push(`Amazon's fee was quoted at £${row.amazonFees.price.toFixed(2)}; rate card used at £${e.price.toFixed(2)}.`);
+  }
+  const why = notes.length ? `${w.why} ${notes.join(" ")}` : w.why;
+  const inputs: StoredInputs = {
+    v: 1, stage: row.stage, match: row.match, market: row.market, hazmat: row.hazmat,
+    restriction: row.restriction, amazonFees: row.amazonFees, notes: row.dataNotes,
+  };
   must(
     await db().from("results").update({
       status: "done",
@@ -160,6 +200,8 @@ async function finalize(row: Row, run: GateRun, cfg: ProfileConfig, ctx: ScreenC
       group_scores: Object.fromEntries(Object.entries(w.groups).map(([k, g]) => [k, g.score == null ? null : Math.round(g.score)])),
       why,
       band: w.band,
+      inputs,
+      error: null,
       updated_at: new Date().toISOString(),
     }).eq("id", row.resultId),
     "save result",
@@ -176,6 +218,107 @@ async function safely(row: Row, fn: () => Promise<void>) {
   } catch (e) {
     await db().from("results").update({ status: "error", error: (e as Error).message, updated_at: new Date().toISOString() }).eq("id", row.resultId);
   }
+}
+
+interface PendingRow {
+  id: string;
+  product_id: string;
+  offer_id: string;
+  inputs: StoredInputs | null;
+}
+
+/** Build rows from results, with their product, offer, supplier and any stored inputs. */
+async function loadRows(results: PendingRow[]): Promise<Row[]> {
+  const d = db();
+  const byId = <T extends { id: string }>(xs: T[]) => new Map(xs.map((x) => [x.id, x]));
+  const products: Product[] = [], offers: Offer[] = [], suppliers: Supplier[] = [];
+  for (const c of chunks([...new Set(results.map((r) => r.product_id))])) {
+    products.push(...(must(await d.from("products").select("*").in("id", c), "products") as Product[]));
+  }
+  for (const c of chunks([...new Set(results.map((r) => r.offer_id))])) {
+    offers.push(...(must(await d.from("offers").select("*").in("id", c), "offers") as Offer[]));
+  }
+  for (const c of chunks([...new Set(offers.map((o) => o.supplier_id))])) {
+    suppliers.push(...(must(await d.from("suppliers").select("*").in("id", c), "suppliers") as Supplier[]));
+  }
+  const P = byId(products), O = byId(offers), S = byId(suppliers);
+  return results.map((r) => {
+    const offer = O.get(r.offer_id)!;
+    const product = P.get(r.product_id)!;
+    const i = r.inputs?.v === 1 ? r.inputs : null;
+    return {
+      resultId: r.id, product, offer, supplier: S.get(offer.supplier_id)!,
+      stage: i?.stage ?? "row",
+      match: i?.match ?? (product.asin ? { asin: product.asin, asinCount: 1, looked: true } : null),
+      market: i?.market ?? null,
+      hazmat: i?.hazmat ?? [],
+      restriction: i?.restriction ?? null,
+      amazonFees: i?.amazonFees ?? null,
+      dataNotes: i?.notes ?? [],
+      notes: [],
+    };
+  });
+}
+
+/**
+ * Re-run gates and score for every row of a run with the current profile, from the data
+ * stored when it was screened: no Amazon or Keepa calls. Rows that never collected the
+ * data a gate now needs (they stopped early last time, or were screened before inputs
+ * were stored) go back to pending, and the processor fetches only what they lack.
+ */
+export async function rescreenRun(runId: string, profileId?: string | null): Promise<{ rescored: number; requeued: number }> {
+  const d = db();
+  const runRow = must(await d.from("runs").select("id, profile_id").eq("id", runId).single(), "run") as { id: string; profile_id: string | null };
+  const profile = await loadProfile(profileId || runRow.profile_id);
+  const cfg = profile.config;
+  const [card, rules] = await Promise.all([activeRateCard(), loadRules()]);
+
+  const all: (PendingRow & { status: string })[] = [];
+  for (let from = 0; ; from += 1000) {
+    const page = must(
+      await d.from("results").select("id, product_id, offer_id, inputs, status").eq("run_id", runId).range(from, from + 999),
+      "results",
+    ) as (PendingRow & { status: string })[];
+    all.push(...page);
+    if (page.length < 1000) break;
+  }
+
+  must(await d.from("runs").update({ profile_id: profile.id, profile_snapshot: cfg, status: "processing", finished_at: null }).eq("id", runId), "run");
+
+  const rows = await loadRows(all);
+  const requeue: string[] = [];
+  const work: (() => Promise<void>)[] = [];
+  const middle = GATE_ORDER.filter((g) => g !== "gating" && g !== "fees");
+  rows.forEach((row, i) => {
+    if (!all[i].inputs || all[i].status !== "done") {
+      requeue.push(row.resultId);
+      return;
+    }
+    const ctx = context(row, card, rules, cfg);
+    const pre = runGates(ctx, cfg, ["compliance", "budgetFit"]);
+    if (pre.failedGate) return void work.push(() => safely(row, () => finalize(row, pre, cfg, ctx)));
+    if (STAGE_RANK[row.stage] < STAGE_RANK.enriched) return void requeue.push(row.resultId);
+    const mid = runGates(ctx, cfg, middle);
+    if (mid.failedGate) return void work.push(() => safely(row, () => finalize(row, mid, cfg, ctx)));
+    if (STAGE_RANK[row.stage] < STAGE_RANK.account) return void requeue.push(row.resultId);
+    const full = runGates(ctx, cfg);
+    work.push(() => safely(row, () => finalize(row, full, cfg, ctx)));
+  });
+
+  for (let i = 0; i < work.length; i += 10) await Promise.all(work.slice(i, i + 10).map((f) => f()));
+  for (const c of chunks(requeue)) {
+    must(await d.from("results").update({ status: "pending", updated_at: new Date().toISOString() }).in("id", c), "requeue");
+  }
+  const done = requeue.length === 0;
+  must(
+    await d.from("runs").update({
+      processed_count: all.length - requeue.length,
+      row_count: all.length,
+      ...(done ? { status: "done", finished_at: new Date().toISOString() } : {}),
+    }).eq("id", runId),
+    "run progress",
+  );
+  return { rescored: work.length, requeued: requeue.length };
 }
 
 /** Screen the next `limit` pending rows of a run. The page calls this until `done`. */
@@ -203,39 +346,27 @@ export async function processRun(runId: string, limit = 20): Promise<{ done: boo
   const keepa = getKeepa();
 
   const pending = must(
-    await d.from("results").select("id, product_id, offer_id").eq("run_id", runId).eq("status", "pending").limit(limit),
+    await d.from("results").select("id, product_id, offer_id, inputs").eq("run_id", runId).eq("status", "pending").limit(limit),
     "pending",
-  ) as { id: string; product_id: string; offer_id: string }[];
+  ) as PendingRow[];
 
   if (pending.length) {
-    const products = must(await d.from("products").select("*").in("id", pending.map((r) => r.product_id)), "products") as Product[];
-    const offers = must(await d.from("offers").select("*").in("id", pending.map((r) => r.offer_id)), "offers") as Offer[];
-    const suppliers = must(await d.from("suppliers").select("*").in("id", [...new Set(offers.map((o) => o.supplier_id))]), "suppliers") as Supplier[];
-    const byId = <T extends { id: string }>(xs: T[]) => new Map(xs.map((x) => [x.id, x]));
-    const P = byId(products), O = byId(offers), S = byId(suppliers);
-
-    let rows: Row[] = pending.map((r) => {
-      const offer = O.get(r.offer_id)!;
-      const product = P.get(r.product_id)!;
-      return {
-        resultId: r.id, product, offer, supplier: S.get(offer.supplier_id)!,
-        match: product.asin ? { asin: product.asin, asinCount: 1, looked: true } : null,
-        market: null, hazmat: [], restriction: null, amazonFees: null, notes: [],
-      };
-    });
+    let rows = await loadRows(pending);
 
     // Stage 1 — gates that need only the row: compliance and budget fit. No API calls yet.
     const pre: GateId[] = ["compliance", "budgetFit"];
     const survivors: Row[] = [];
     for (const row of rows) {
       await safely(row, async () => {
-        const ctx = context(row, card, rules);
+        const ctx = context(row, card, rules, cfg);
         const run = runGates(ctx, cfg, pre);
         if (run.failedGate) await finalize(row, run, cfg, ctx);
         else survivors.push(row);
       });
     }
-    rows = survivors;
+    // Rows re-queued by Re-screen keep what was already fetched for them.
+    const enrichedBefore = survivors.filter((r) => STAGE_RANK[r.stage] >= STAGE_RANK.enriched);
+    rows = survivors.filter((r) => STAGE_RANK[r.stage] < STAGE_RANK.enriched);
 
     // Stage 2 — match and enrich: SP-API catalog by EAN, Keepa history (24-hour cache).
     const needCatalog = rows.filter((r) => !FRESH(r.product.catalog_updated_at, CATALOG_TTL));
@@ -244,7 +375,7 @@ export async function processRun(runId: string, limit = 20): Promise<{ done: boo
       try {
         catalog = await spapi.catalogByEans([...new Set(needCatalog.map((r) => r.product.ean))]);
       } catch (e) {
-        for (const r of needCatalog) r.notes.push(`Catalog lookup failed: ${(e as Error).message}.`);
+        for (const r of needCatalog) r.dataNotes.push(`Catalog lookup failed: ${(e as Error).message}.`);
       }
     }
 
@@ -278,7 +409,7 @@ export async function processRun(runId: string, limit = 20): Promise<{ done: boo
         if (snapRows.length) must(await d.from("keepa_snapshots").insert(snapRows), "save snapshots");
         for (const k of [...res.byEan.values()].flat()) snapshots.set(k.asin, k.summary);
       } catch (e) {
-        for (const r of needKeepa) r.notes.push(`Keepa lookup failed: ${(e as Error).message}.`);
+        for (const r of needKeepa) r.dataNotes.push(`Keepa lookup failed: ${(e as Error).message}.`);
       }
     }
 
@@ -286,6 +417,7 @@ export async function processRun(runId: string, limit = 20): Promise<{ done: boo
     // new products with the same offer and join this run as pending rows.
     const resolved: Row[] = [];
     for (const row of rows) await safely(row, async () => {
+      row.dataNotes = row.dataNotes.filter((n) => !/lookup failed/i.test(n));
       const p = row.product;
       const cat = catalog.get(p.ean) ?? [];
       const kp = keepaByEan.get(p.ean) ?? [];
@@ -349,7 +481,7 @@ export async function processRun(runId: string, limit = 20): Promise<{ done: boo
       try {
         pricing = await spapi.getCompetitivePricing([...new Set(noHistory.map((r) => r.match!.asin!))]);
       } catch (e) {
-        for (const r of noHistory) r.notes.push(`Pricing lookup failed: ${(e as Error).message}.`);
+        for (const r of noHistory) r.dataNotes.push(`Pricing lookup failed: ${(e as Error).message}.`);
       }
     }
     for (const row of rows) {
@@ -358,13 +490,15 @@ export async function processRun(runId: string, limit = 20): Promise<{ done: boo
       const snap = snapshots.get(asin);
       row.market = snap ? marketFromKeepa(snap) : marketFromSpApi(pricing.get(asin), row.product.sales_rank);
     }
+    for (const row of rows) row.stage = "enriched";
+    rows = [...enrichedBefore, ...rows];
 
     // Stage 3 — every gate except gating and fees, on the enriched rows.
     const middle = GATE_ORDER.filter((g) => g !== "gating" && g !== "fees");
     const stage3: Row[] = [];
     for (const row of rows) {
       await safely(row, async () => {
-        const ctx = context(row, card, rules);
+        const ctx = context(row, card, rules, cfg);
         const run = runGates(ctx, cfg, middle);
         if (run.failedGate) await finalize(row, run, cfg, ctx);
         else stage3.push(row);
@@ -374,7 +508,7 @@ export async function processRun(runId: string, limit = 20): Promise<{ done: boo
     // Stage 4 — your account: gating, and Amazon's own fee at the scoring price.
     if (spapi) {
       for (const row of stage3) {
-        if (!row.match?.asin) continue;
+        if (!row.match?.asin || row.restriction) continue;
         try {
           const r = await spapi.getListingsRestrictions(row.match.asin);
           row.restriction = { status: r.status, message: r.reasons.map((x) => x.message).filter(Boolean).join(" ") };
@@ -384,12 +518,14 @@ export async function processRun(runId: string, limit = 20): Promise<{ done: boo
       }
       const priced = stage3
         .map((row) => ({ row, price: resolveScoringPrice(row.market, cfg).price }))
-        .filter((x): x is { row: Row; price: number } => !!x.row.match?.asin && x.price != null && x.row.restriction?.status !== "blocked");
+        .filter((x): x is { row: Row; price: number } =>
+          !!x.row.match?.asin && x.price != null && x.row.restriction?.status !== "blocked" &&
+          !(x.row.amazonFees && Math.abs(x.row.amazonFees.price - x.price) < 0.005));
       for (const c of chunks(priced, 20)) {
         try {
           const est = await spapi.getMyFeesEstimates(c.map((x) => ({ asin: x.row.match!.asin!, price: x.price })));
           est.forEach((f, i) => {
-            if (f.ok && f.referral != null && f.fba != null) c[i].row.amazonFees = { referral: f.referral, fba: f.fba };
+            if (f.ok && f.referral != null && f.fba != null) c[i].row.amazonFees = { price: c[i].price, referral: f.referral, fba: f.fba };
           });
         } catch (e) {
           for (const x of c) x.row.notes.push(`Amazon fee estimate failed, rate card used: ${(e as Error).message}.`);
@@ -398,7 +534,8 @@ export async function processRun(runId: string, limit = 20): Promise<{ done: boo
     }
     for (const row of stage3) {
       await safely(row, async () => {
-        const ctx = context(row, card, rules);
+        row.stage = "account";
+        const ctx = context(row, card, rules, cfg);
         await finalize(row, runGates(ctx, cfg), cfg, ctx);
       });
     }

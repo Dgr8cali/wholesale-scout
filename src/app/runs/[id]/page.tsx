@@ -62,6 +62,12 @@ export default function RunPage() {
   const [band, setBand] = useState<string>("");
   const [failedGate, setFailedGate] = useState<string>("");
   const [q, setQ] = useState("");
+  const [profiles, setProfiles] = useState<{ id: string; name: string }[]>([]);
+  const [rescreenProfile, setRescreenProfile] = useState("");
+  const [rescreening, setRescreening] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  // Bumped after a re-screen so the effect below reloads and resumes processing.
+  const [nonce, setNonce] = useState(0);
   // Cancels the processing loop of the current effect (and on delete).
   const cancel = useRef<() => void>(() => {});
 
@@ -105,7 +111,33 @@ export default function RunPage() {
     return () => {
       cancelled = true;
     };
-  }, [id, fetchRun, apply]);
+  }, [id, fetchRun, apply, nonce]);
+
+  useEffect(() => {
+    api<{ profiles: { id: string; name: string }[] }>("/api/profiles").then((r) => setProfiles(r.profiles)).catch(() => {});
+  }, []);
+
+  async function rescreen() {
+    setRescreening(true);
+    setError(null);
+    setNotice(null);
+    try {
+      cancel.current();
+      const r = await api<{ rescored: number; requeued: number }>(`/api/runs/${id}/rescreen`, {
+        method: "POST",
+        json: { profileId: rescreenProfile || undefined },
+      });
+      setNotice(
+        `Re-screened ${r.rescored} rows from stored data` +
+          (r.requeued ? `; ${r.requeued} need data they never fetched and are being looked up now.` : "."),
+      );
+      setNonce((n) => n + 1);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setRescreening(false);
+    }
+  }
 
   const done = results.filter((r) => r.status !== "pending");
   const failedGates = useMemo(() => {
@@ -196,7 +228,15 @@ export default function RunPage() {
             {run.profile?.name ?? "Profile"} · started {when(run.started_at)} · {total} products · {run.token_cost} Keepa tokens
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <select className="input w-48" value={rescreenProfile} onChange={(e) => setRescreenProfile(e.target.value)} aria-label="Profile to re-screen with">
+            <option value="">{run.profile?.name ?? "This run's profile"} (as saved now)</option>
+            {profiles.filter((p) => p.name !== run.profile?.name).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+          <button className="btn" onClick={rescreen} disabled={rescreening || processing}
+            title="Re-run gates and score with the profile's current settings, using the data already fetched. No re-upload, no new Amazon or Keepa calls.">
+            {rescreening ? "Re-screening…" : "Re-screen"}
+          </button>
           <button className="btn" onClick={exportXlsx} disabled={!rows.length}>Export {rows.length} to xlsx</button>
           <button className="btn text-fail" onClick={async () => {
             if (!confirm("Delete this run and its results?")) return;
@@ -219,6 +259,7 @@ export default function RunPage() {
         </div>
       )}
       {error && <p className="rounded-md bg-fail-soft px-3 py-2 text-sm text-fail">{error}</p>}
+      {notice && <p className="rounded-md bg-accent-soft px-3 py-2 text-sm">{notice}</p>}
 
       <div className="card flex flex-wrap items-end gap-4 p-3">
         <div className="flex gap-1">

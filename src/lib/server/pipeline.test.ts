@@ -8,9 +8,10 @@ import type { CatalogMatch } from "../spapi/types";
 import { __setDbForTests } from "./db";
 import { FakeDb } from "./fakeDb";
 import { ingest } from "./ingest";
-import { processRun } from "./process";
+import { processRun, rescreenRun } from "./process";
 
 const catalogCalls: string[][] = [];
+const calls = { catalog: 0, pricing: 0, restrictions: 0, fees: 0 };
 
 const cat = (asin: string, ean: string, over: Partial<CatalogMatch> = {}): CatalogMatch => ({
   asin, eans: [ean], title: `Item ${asin}`, brand: "Brand", category: "DIY & Tools",
@@ -39,18 +40,22 @@ vi.mock("../spapi/client", async (orig) => {
     ...real,
     getSpApi: () => ({
       async catalogByEans(eans: string[]) {
+        calls.catalog++;
         catalogCalls.push(eans);
         return new Map(eans.filter((e) => CATALOG[e]).map((e) => [e, CATALOG[e]]));
       },
       async getCompetitivePricing(asins: string[]) {
+        calls.pricing++;
         return new Map(asins.filter((a) => PRICES[a]).map((a) => [a, { asin: a, buyBox: PRICES[a].buyBox, newOffers: PRICES[a].offers, salesRank: 3000 }]));
       },
       async getListingsRestrictions(asin: string) {
+        calls.restrictions++;
         return asin === "B0MULTIB01"
           ? { asin, status: "approval_required", reasons: [{ code: "APPROVAL_REQUIRED", message: "Apply to sell: 100 units" }] }
           : { asin, status: "open", reasons: [] };
       },
       async getMyFeesEstimates(items: { asin: string; price: number }[]) {
+        calls.fees++;
         return items.map(({ asin }) => (asin === "B0TAPE0001"
           ? { asin, ok: true, referral: 3.25, fba: 2.9, total: 6.15 }
           : { asin, ok: false, referral: null, fba: null, total: null, error: "no estimate" }));
@@ -78,6 +83,7 @@ describe("ingest → process", () => {
     fake = new FakeDb();
     __setDbForTests(fake);
     catalogCalls.length = 0;
+    Object.assign(calls, { catalog: 0, pricing: 0, restrictions: 0, fees: 0 });
   });
 
   it("screens a combined upload in cost order and scores the survivors", async () => {
@@ -146,6 +152,47 @@ describe("ingest → process", () => {
     // One EAN, two ASINs: both scored; the gated one fails on gating.
     expect(byAsin("B0MULTIA01").failed_gate).not.toBe("gating");
     expect(byAsin("B0MULTIB01")).toMatchObject({ verdict: "fail", failed_gate: "gating" });
+  });
+
+  it("re-screens from stored data, fetching only what a row never had", async () => {
+    await import("./db").then((m) => m.ensureSeed());
+    const strict = fake.tables.profiles.find((p) => p.name === "Strict")!;
+    const testOrder = fake.tables.profiles.find((p) => p.name === "Test order")!;
+    const f = file("henbrandt.xlsx", [
+      ["EAN", "Name", "Price", "MOQ"],
+      ["4006381333931", "Walker Tape 25mm", "5.00", 12],
+      ["5000000000011", "Hugo Boss Bottled Eau de Toilette 100ml", "8.00", 6],
+      ["5000000000035", "Cheap widget", "6.00", 10],
+    ], { name: "Henbrandt", vatBasis: "ex_vat", vatRate: 20, currency: "GBP" });
+    const { runId } = await ingest({ profileId: strict.id as string, files: [f] });
+    while (!(await processRun(runId)).done);
+    const before = { ...calls };
+    const results = () => fake.tables.results.filter((r) => r.run_id === runId);
+    const ean = (r: Record<string, unknown>) => fake.tables.products.find((p) => p.id === r.product_id)!.ean;
+    expect(results().find((r) => ean(r) === "5000000000011")!.failed_gate).toBe("compliance");
+
+    // Same profile, tighter floor: re-scored in place, no calls at all.
+    const cfg = structuredClone(strict.config) as { gates: { fees: { minProfit: number } } };
+    cfg.gates.fees.minProfit = 50;
+    strict.config = cfg;
+    const r1 = await rescreenRun(runId);
+    expect(r1.requeued).toBe(0);
+    expect(calls).toEqual(before);
+    expect(results().find((r) => ean(r) === "4006381333931")!.failed_gate).toBe("fees");
+    expect(fake.tables.runs.find((r) => r.id === runId)!.status).toBe("done");
+
+    // Test order only warns on fragrance, which never got a lookup: it alone is re-queued.
+    const r2 = await rescreenRun(runId, testOrder.id as string);
+    expect(r2.requeued).toBe(1);
+    expect(calls).toEqual(before);
+    while (!(await processRun(runId)).done);
+    expect(catalogCalls.at(-1)).toEqual(["5000000000011"]);
+    expect(calls.catalog).toBe(before.catalog + 1);
+    expect(calls.restrictions).toBe(before.restrictions + 1);
+    const frag = results().find((r) => ean(r) === "5000000000011")!;
+    expect(frag.status).toBe("done");
+    expect(frag.failed_gate).not.toBe("compliance");
+    expect(fake.tables.runs.find((r) => r.id === runId)!.profile_id).toBe(testOrder.id);
   });
 
   it("recognises a re-uploaded layout by its fingerprint", async () => {

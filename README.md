@@ -9,7 +9,7 @@ Stack: Next.js 16 (app router), TypeScript, Tailwind 4, Supabase Postgres, Verce
 
 ## Setup
 
-1. **Database.** Run `supabase/migrations/20260925000000_init.sql` in the Supabase SQL editor
+1. **Database.** Run each file in `supabase/migrations/` in the Supabase SQL editor, oldest first
    (or `supabase db push` with the CLI linked to the project). The app seeds the three default
    profiles, the compliance rules and the rate card on first use.
 2. **Environment variables** (Vercel → Settings → Environment Variables):
@@ -52,7 +52,11 @@ npm run build
    - the market gates, then gating and Amazon's own fee estimate only for rows still standing;
    - fees from `getMyFeesEstimate` when available, else the rate card; profit, ROI, margin, hurdle
      price, win score, band and the why line.
-4. **Results** (`/runs/[id]`): verdict, score, landed cost, sell price, profit, ROI, margin, hurdle
+4. **Re-screen** (button on a run): re-runs gates and score with a profile's current settings from
+   the data stored on each result (match, Buy Box, gating, Amazon's fee and its price), with no
+   re-upload and no new Amazon or Keepa calls. Rows that never fetched data a gate now needs are
+   re-queued and looked up once. Amazon's fee is reused only at the price it was quoted for.
+5. **Results** (`/runs/[id]`): verdict, score, landed cost, sell price, profit, ROI, margin, hurdle
    and why; sort by any column, filter by verdict, band, the gate that failed, or text; expand a row
    for each gate's outcome, the fee breakdown and the group scores; export the filtered view to xlsx.
 
