@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { SpApiClient, SpApiError, sameGtin, spApiConfigFromEnv } from "./client";
+import { lookupCandidates, SpApiClient, SpApiError, sameGtin, spApiConfigFromEnv } from "./client";
 import type { SpApiConfig } from "./types";
 
 const CFG: SpApiConfig = {
@@ -190,8 +190,16 @@ describe("catalog lookup by EAN", () => {
     attributes: { supplier_declared_dg_hz_regulation: [{ value: "ghs" }, { value: "not_applicable" }] },
   };
 
+  /** Answers like Amazon: only items whose identifiers were asked for. */
+  const catalogFor = (items: typeof item[]) => (url: string) => {
+    if (!url.includes("/catalog/2022-04-01/items")) return undefined;
+    const asked = new URL(url).searchParams.get("identifiers")!.split(",");
+    const hits = items.filter((it) => it.identifiers[0].identifiers.some((i) => asked.some((a) => sameGtin(a, i.identifier))));
+    return json({ numberOfResults: hits.length, items: hits });
+  };
+
   it("queries by EAN and parses dimensions, rank, variation and hazmat", async () => {
-    const { fn, calls } = mockFetch([(url) => (url.includes("/catalog/2022-04-01/items") ? json({ items: [item] }) : undefined)]);
+    const { fn, calls } = mockFetch([catalogFor([item])]);
     const out = await new SpApiClient(CFG, fn, noSleep).catalogByEans(["08002910012345", "5000000000000"]);
     const u = new URL(calls.find((x) => x.url.includes("/catalog"))!.url);
     expect(u.searchParams.get("identifiersType")).toBe("EAN");
@@ -213,9 +221,79 @@ describe("catalog lookup by EAN", () => {
 
   it("falls back to the summary's display group when there's no rank", async () => {
     const noRank = { ...item, salesRanks: [], summaries: [{ ...item.summaries[0], websiteDisplayGroupName: "Grocery" }] };
-    const { fn } = mockFetch([(url) => (url.includes("/catalog/2022-04-01/items") ? json({ items: [noRank] }) : undefined)]);
+    const { fn } = mockFetch([catalogFor([noRank])]);
     const out = await new SpApiClient(CFG, fn, noSleep).catalogByEans(["8002910012345"]);
     expect(out.get("8002910012345")![0].category).toBe("Grocery");
+  });
+
+  const many = (n: number, ean: string) => Array.from({ length: n }, (_, k) => ({
+    ...item, asin: `B0${ean.slice(-4)}${String(k).padStart(4, "0")}`,
+    identifiers: [{ marketplaceId: "A1F83G8C2ARO7P", identifiers: [{ identifierType: "EAN", identifier: ean }] }],
+  }));
+
+  it("follows nextToken across pages of a batch", async () => {
+    const pages = [many(20, "3264680023323"), many(3, "3337875598996")];
+    const { fn, calls } = mockFetch([(url) => {
+      if (!url.includes("/catalog/2022-04-01/items")) return undefined;
+      const page = new URL(url).searchParams.get("pageToken") ? 1 : 0;
+      return json({ numberOfResults: 23, items: pages[page], pagination: page === 0 ? { nextToken: "p2" } : {} });
+    }]);
+    const r = await new SpApiClient(CFG, fn, noSleep).lookupEans(["3264680023323", "3337875598996"]);
+    expect(r.matches.get("3264680023323")).toHaveLength(20);
+    expect(r.matches.get("3337875598996")).toHaveLength(3);
+    expect(calls.filter((x) => x.url.includes("pageToken=p2"))).toHaveLength(1);
+  });
+
+  it("asks a truncated batch's missing EANs one at a time", async () => {
+    // Amazon reports 26 results, returns 20, and gives no token: the last EAN's item is lost.
+    const all = [...many(20, "3264680023323"), ...many(6, "3282770204681")];
+    const { fn } = mockFetch([(url) => {
+      if (!url.includes("/catalog/2022-04-01/items")) return undefined;
+      const asked = new URL(url).searchParams.get("identifiers")!.split(",");
+      const hits = all.filter((it) => asked.includes(it.identifiers[0].identifiers[0].identifier));
+      return json({ numberOfResults: hits.length, items: hits.slice(0, 20) });
+    }]);
+    const r = await new SpApiClient(CFG, fn, noSleep).lookupEans(["3264680023323", "3282770204681"]);
+    expect(r.matches.get("3282770204681")).toHaveLength(6);
+    expect(r.traces.get("3282770204681")).toMatchObject({
+      outcome: "matched",
+      attempts: [{ identifiersType: "EAN", code: "batch of 2", items: 0, total: 26 }, { identifiersType: "EAN", code: "3282770204681", items: 6 }],
+    });
+  });
+
+  it("tries UPC for 12-digit codes and records a search miss with the raw response", async () => {
+    const upcItem = { ...item, asin: "B0UPC00001", identifiers: [{ marketplaceId: "A1F83G8C2ARO7P", identifiers: [{ identifierType: "UPC", identifier: "036000291452" }] }] };
+    const { fn, calls } = mockFetch([(url) => {
+      if (!url.includes("/catalog/2022-04-01/items")) return undefined;
+      const q = new URL(url).searchParams;
+      const hit = q.get("identifiersType") === "UPC" && q.get("identifiers") === "036000291452";
+      return json({ numberOfResults: hit ? 1 : 0, items: hit ? [upcItem] : [] });
+    }]);
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const r = await new SpApiClient(CFG, fn, noSleep).lookupEans(["0036000291452", "5000000000028"]);
+    expect(r.matches.get("0036000291452")![0].asin).toBe("B0UPC00001");
+    const types = calls.filter((x) => x.url.includes("identifiers=036000291452")).map((x) => new URL(x.url).searchParams.get("identifiersType"));
+    expect(types).toEqual(["UPC"]);
+    const miss = r.traces.get("5000000000028")!;
+    expect(miss.outcome).toBe("search_miss");
+    expect(miss.attempts.map((a) => `${a.identifiersType} ${a.code}`)).toEqual(["EAN batch of 2", "EAN 5000000000028", "GTIN 05000000000028"]);
+    expect(miss.raw).toContain('"numberOfResults":0');
+    expect(log).toHaveBeenCalledWith(expect.stringContaining("[catalog] 5000000000028 search_miss"));
+    log.mockRestore();
+  });
+
+  it("calls it an API error, not a miss, when Amazon doesn't answer", async () => {
+    const { fn } = mockFetch([(url) => (url.includes("/catalog/2022-04-01/items") ? json({ errors: [{ message: "Bad identifier" }] }, 400) : undefined)]);
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const r = await new SpApiClient(CFG, fn, noSleep).lookupEans(["3264680023323"]);
+    expect(r.traces.get("3264680023323")!.outcome).toBe("api_error");
+    expect(r.traces.get("3264680023323")!.attempts[1].error).toMatch(/400: Bad identifier/);
+    log.mockRestore();
+  });
+
+  it("builds identifier variants from an EAN", () => {
+    expect(lookupCandidates("0036000291452")).toEqual([["EAN", "0036000291452"], ["UPC", "036000291452"], ["GTIN", "00036000291452"]]);
+    expect(lookupCandidates("3264680023323")).toEqual([["EAN", "3264680023323"], ["GTIN", "03264680023323"]]);
   });
 
   it("treats GTINs that differ by leading zeros as the same", () => {

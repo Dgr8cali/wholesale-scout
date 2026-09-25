@@ -62,8 +62,8 @@ export interface ScreenContext {
     goodsVatRatePct: number;
     supplierMovGbp: number | null;
   };
-  /** Null until the EAN has been looked up. */
-  match: { asin: string | null; asinCount: number; looked: boolean } | null;
+  /** Null until the EAN has been looked up. `note` explains a miss (what was tried). */
+  match: { asin: string | null; asinCount: number; looked: boolean; note?: string } | null;
   product: {
     brand?: string | null;
     referralCategory: string | null;
@@ -172,7 +172,9 @@ const EVALUATORS: Record<GateId, Evaluator> = {
   matchQuality(ctx, p) {
     const g = p.gates.matchQuality;
     if (!ctx.match || !ctx.match.looked) return skipped("Not looked up yet");
-    if (!ctx.match.asin) return { status: failAs(g.mode), detail: "EAN didn't resolve to an Amazon UK listing" };
+    if (!ctx.match.asin) {
+      return { status: failAs(g.mode), detail: `EAN didn't resolve to an Amazon UK listing${ctx.match.note ? `: ${ctx.match.note}` : ""}` };
+    }
     if (ctx.match.asinCount > 1) return { status: "warn", detail: `EAN maps to ${ctx.match.asinCount} ASINs; each is scored`, tags: ["MULTI_ASIN"] };
     return { status: "pass", detail: `Matched ${ctx.match.asin}` };
   },

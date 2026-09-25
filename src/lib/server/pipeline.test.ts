@@ -11,6 +11,7 @@ import { ingest } from "./ingest";
 import { processRun, rescreenRun } from "./process";
 
 const catalogCalls: string[][] = [];
+const FLAKY_EAN = "5000000000059";
 const calls = { catalog: 0, pricing: 0, restrictions: 0, fees: 0 };
 
 const cat = (asin: string, ean: string, over: Partial<CatalogMatch> = {}): CatalogMatch => ({
@@ -39,10 +40,15 @@ vi.mock("../spapi/client", async (orig) => {
   return {
     ...real,
     getSpApi: () => ({
-      async catalogByEans(eans: string[]) {
+      async lookupEans(eans: string[]) {
         calls.catalog++;
         catalogCalls.push(eans);
-        return new Map(eans.filter((e) => CATALOG[e]).map((e) => [e, CATALOG[e]]));
+        const traces = new Map(eans.map((e) => [e, CATALOG[e]
+          ? { outcome: "matched", attempts: [{ identifiersType: "EAN", code: `batch of ${eans.length}`, items: CATALOG[e].length }] }
+          : e === FLAKY_EAN
+            ? { outcome: "api_error", attempts: [{ identifiersType: "EAN", code: e, items: 0, error: "SP-API catalog 503" }] }
+            : { outcome: "search_miss", attempts: [{ identifiersType: "EAN", code: `batch of ${eans.length}`, items: 0 }, { identifiersType: "EAN", code: e, items: 0, total: 0 }], raw: "{}" }]));
+        return { matches: new Map(eans.filter((e) => CATALOG[e]).map((e) => [e, CATALOG[e]])), traces };
       },
       async getCompetitivePricing(asins: string[]) {
         calls.pricing++;
@@ -94,6 +100,7 @@ describe("ingest → process", () => {
       ["5000000000028", "Unlisted gadget", "4.00", 10],
       ["5000000000035", "Cheap widget", "6.00", 10],
       ["5000000000042", "Two-listing thing", "5.00", 10],
+      ["5000000000059", "Lookup times out", "5.00", 10],
     ], { name: "Henbrandt", vatBasis: "ex_vat", vatRate: 20, currency: "GBP" });
     const b = file("qogita.csv", [
       ["EAN", "Name", "Price", "MOQ"],
@@ -104,8 +111,8 @@ describe("ingest → process", () => {
     await import("./db").then((m) => m.ensureSeed());
     const strict = fake.tables.profiles.find((p) => p.name === "Strict")!;
     const { runId, rowCount, offerCount } = await ingest({ profileId: strict.id as string, files: [a, b] });
-    expect(rowCount).toBe(5);
-    expect(offerCount).toBe(6);
+    expect(rowCount).toBe(6);
+    expect(offerCount).toBe(7);
 
     // Mappings and supplier ledger facts are remembered.
     expect(fake.tables.supplier_mappings).toHaveLength(2);
@@ -118,9 +125,9 @@ describe("ingest → process", () => {
     const productOf = (r: Record<string, unknown>) => fake.tables.products.find((p) => p.id === r.product_id)!;
     const byAsin = (asin: string | null, ean?: string) => results.find((r) => productOf(r).asin === asin && (!ean || productOf(r).ean === ean))!;
 
-    expect(results).toHaveLength(6); // five EANs, one of them on two ASINs
-    expect(results.every((r) => r.status === "done")).toBe(true);
-    expect(fake.tables.runs[0]).toMatchObject({ status: "done", processed_count: 6, row_count: 6 });
+    expect(results).toHaveLength(7); // six EANs, one of them on two ASINs
+    expect(results.filter((r) => r.status === "done")).toHaveLength(6);
+    expect(fake.tables.runs[0]).toMatchObject({ status: "done", processed_count: 7, row_count: 7 });
 
     // Fragrance fails compliance on the row's own text, before any API call is spent on it.
     const frag = results.find((r) => productOf(r).ean === "5000000000011")!;
@@ -140,9 +147,16 @@ describe("ingest → process", () => {
     expect(tape.why).toMatch(/^\d+ — /);
     expect(tape.band).toBe("amber"); // no Keepa history yet: green is held back
 
-    // No listing → match quality fails.
+    // No listing → match quality fails, and says what was tried.
     const unlisted = results.find((r) => productOf(r).ean === "5000000000028")!;
     expect(unlisted).toMatchObject({ verdict: "fail", failed_gate: "matchQuality" });
+    expect(unlisted.why).toMatch(/: search miss: tried a batch of \d+, EAN 5000000000028; Amazon returned no items/);
+    expect((unlisted.inputs as { lookup: { outcome: string } }).lookup.outcome).toBe("search_miss");
+
+    // Amazon failing to answer isn't a verdict: the row is an error to retry, not a failed match.
+    const flaky = results.find((r) => productOf(r).ean === FLAKY_EAN)!;
+    expect(flaky.status).toBe("error");
+    expect(flaky.error).toMatch(/Catalog lookup failed for EAN 5000000000059: SP-API catalog 503/);
 
     // £12.50 on a £6 cost fails the fee gate and reports the hurdle price.
     const cheap = byAsin("B0CHEAP001");

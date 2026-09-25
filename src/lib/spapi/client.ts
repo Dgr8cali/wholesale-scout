@@ -12,6 +12,8 @@ import type {
   CatalogMatch,
   CompetitivePrice,
   FeesEstimate,
+  LookupAttempt,
+  LookupTrace,
   Restriction,
   SpApiConfig,
 } from "./types";
@@ -121,32 +123,110 @@ export class SpApiClient {
     }
   }
 
-  /** Catalog lookup by EAN (up to 20 per call). Every ASIN an EAN maps to is returned. */
+  /** Catalog lookup by EAN. Every ASIN an EAN maps to is returned. */
   async catalogByEans(eans: string[]): Promise<Map<string, CatalogMatch[]>> {
-    const out = new Map<string, CatalogMatch[]>();
-    for (let i = 0; i < eans.length; i += 20) {
-      const chunk = eans.slice(i, i + 20);
-      const res = await this.request<{ items?: unknown[] }>("catalog", "GET", "/catalog/2022-04-01/items", {
+    return (await this.lookupEans(eans)).matches;
+  }
+
+  private async searchCatalog(identifiersType: LookupAttempt["identifiersType"], codes: string[], pageToken?: string) {
+    return this.request<{ items?: unknown[]; numberOfResults?: number; pagination?: { nextToken?: string } }>(
+      "catalog", "GET", "/catalog/2022-04-01/items", {
         query: {
-          identifiers: chunk.join(","),
-          identifiersType: "EAN",
+          identifiers: codes.join(","),
+          identifiersType,
           marketplaceIds: this.config.marketplaceId,
           includedData: "summaries,attributes,dimensions,identifiers,relationships,salesRanks,classifications",
           pageSize: "20",
+          ...(pageToken ? { pageToken } : {}),
         },
-      });
-      for (const raw of res.items ?? []) {
-        const item = parseCatalogItem(raw, this.config.marketplaceId);
-        for (const ean of chunk) {
-          if (item.eans.some((e) => sameGtin(e, ean))) {
-            const list = out.get(ean) ?? [];
-            if (!list.some((x) => x.asin === item.asin)) list.push(item);
-            out.set(ean, list);
+      },
+    );
+  }
+
+  /**
+   * Resolve EANs to catalog items, with a trace per EAN.
+   *
+   * 1. Batches of 20, following nextToken. Amazon caps a page at 20 items and sometimes
+   *    reports more results than it returns without a token, so a batch can drop EANs.
+   * 2. Any EAN still unmatched is asked on its own: EAN-13 without extra leading zeros,
+   *    then UPC for codes of 12 digits or fewer, then GTIN-14. A single-code query
+   *    attributes every item it returns to that code.
+   */
+  async lookupEans(eans: string[]): Promise<{ matches: Map<string, CatalogMatch[]>; traces: Map<string, LookupTrace> }> {
+    const matches = new Map<string, CatalogMatch[]>();
+    const traces = new Map<string, LookupTrace>(eans.map((e) => [e, { outcome: "search_miss", attempts: [] }]));
+    const lastRaw = new Map<string, unknown>();
+    const add = (ean: string, item: CatalogMatch) => {
+      const list = matches.get(ean) ?? [];
+      if (!list.some((x) => x.asin === item.asin)) list.push(item);
+      matches.set(ean, list);
+    };
+
+    for (let i = 0; i < eans.length; i += 20) {
+      const chunk = eans.slice(i, i + 20);
+      const found = new Map<string, number>();
+      let total: number | undefined;
+      try {
+        let token: string | undefined;
+        for (let page = 0; page < 5; page++) {
+          const res = await this.searchCatalog("EAN", chunk, token);
+          total = res.numberOfResults;
+          for (const raw of res.items ?? []) {
+            const item = parseCatalogItem(raw, this.config.marketplaceId);
+            for (const ean of chunk) {
+              if (item.eans.some((e) => sameGtin(e, ean))) {
+                add(ean, item);
+                found.set(ean, (found.get(ean) ?? 0) + 1);
+              }
+            }
           }
+          for (const ean of chunk) if (!found.has(ean)) lastRaw.set(ean, res);
+          token = res.pagination?.nextToken;
+          if (!token) break;
+        }
+        for (const ean of chunk) {
+          traces.get(ean)!.attempts.push({ identifiersType: "EAN", code: `batch of ${chunk.length}`, items: found.get(ean) ?? 0, total });
+        }
+      } catch (e) {
+        for (const ean of chunk) {
+          traces.get(ean)!.attempts.push({ identifiersType: "EAN", code: `batch of ${chunk.length}`, items: 0, error: (e as Error).message });
         }
       }
     }
-    return out;
+
+    for (const ean of eans) {
+      if (matches.has(ean)) continue;
+      const trace = traces.get(ean)!;
+      for (const [type, code] of lookupCandidates(ean)) {
+        try {
+          const res = await this.searchCatalog(type, [code]);
+          const items = (res.items ?? []).map((raw) => parseCatalogItem(raw, this.config.marketplaceId));
+          trace.attempts.push({ identifiersType: type, code, items: items.length, total: res.numberOfResults });
+          lastRaw.set(ean, res);
+          if (items.length) {
+            items.forEach((item) => add(ean, item));
+            break;
+          }
+        } catch (e) {
+          trace.attempts.push({ identifiersType: type, code, items: 0, error: (e as Error).message });
+          lastRaw.set(ean, { error: (e as Error).message, body: (e as SpApiError).body });
+        }
+      }
+    }
+
+    for (const ean of eans) {
+      const trace = traces.get(ean)!;
+      if (matches.has(ean)) {
+        trace.outcome = "matched";
+        continue;
+      }
+      // A miss only counts as a miss if Amazon answered every individual query.
+      const individual = trace.attempts.filter((a) => !a.code.startsWith("batch"));
+      trace.outcome = individual.length && individual.every((a) => !a.error) ? "search_miss" : "api_error";
+      trace.raw = JSON.stringify(lastRaw.get(ean) ?? null).slice(0, 1500);
+      console.log(`[catalog] ${ean} ${trace.outcome}: ${JSON.stringify(trace.attempts)} raw=${trace.raw}`);
+    }
+    return { matches, traces };
   }
 
   /**
@@ -233,6 +313,18 @@ export class SpApiClient {
     }
     return out;
   }
+}
+
+/** Identifier variants to try, one at a time, for an EAN a batch didn't resolve. */
+export function lookupCandidates(ean: string): [LookupAttempt["identifiersType"], string][] {
+  const digits = ean.replace(/\D/g, "");
+  const bare = digits.replace(/^0+/, "");
+  if (!bare) return [];
+  const out: [LookupAttempt["identifiersType"], string][] = [];
+  if (bare.length <= 13) out.push(["EAN", bare.padStart(13, "0")]);
+  if (bare.length <= 12) out.push(["UPC", bare.padStart(12, "0")]);
+  if (bare.length <= 14) out.push(["GTIN", bare.padStart(14, "0")]);
+  return out;
 }
 
 /** EAN-13, UPC-12 and GTIN-14 of the same item differ only by leading zeros. */

@@ -54,3 +54,23 @@ export interface CompetitivePrice {
   newOffers: number | null;
   salesRank: number | null;
 }
+
+/** One catalog query made while resolving an EAN. */
+export interface LookupAttempt {
+  identifiersType: "EAN" | "UPC" | "GTIN";
+  /** The code sent, or "batch of N" for the first, batched pass. */
+  code: string;
+  /** Items Amazon returned that were attributed to this EAN. */
+  items: number;
+  /** Amazon's numberOfResults for the query. */
+  total?: number;
+  error?: string;
+}
+
+/** How an EAN was resolved, kept on the result so a miss can be told from an API failure. */
+export interface LookupTrace {
+  outcome: "matched" | "search_miss" | "api_error";
+  attempts: LookupAttempt[];
+  /** Start of the last raw response, for misses and errors. */
+  raw?: string;
+}

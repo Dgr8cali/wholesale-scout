@@ -6,7 +6,7 @@ import { GATE_ORDER, withDefaults, type GateId, type ProfileConfig } from "../sc
 import { resolveScoringPrice, runGates, verdictOf, type GateRun, type MarketData, type ScreenContext } from "../screening/gates";
 import type { CategoryRule } from "../screening/rules";
 import { winScore } from "../screening/score";
-import { getSpApi, type CatalogMatch, type CompetitivePrice } from "../spapi/client";
+import { getSpApi, type CatalogMatch, type CompetitivePrice, type LookupTrace } from "../spapi/client";
 import { activeRateCard, chunks, db, loadProfile, loadRules, must } from "./db";
 
 const DAY = 86_400_000;
@@ -67,6 +67,8 @@ export interface StoredInputs {
   restriction: ScreenContext["restriction"];
   /** Amazon's fee estimate and the sell price it was quoted at. */
   amazonFees: { price: number; referral: number; fba: number } | null;
+  /** How the EAN was resolved: attempts, and the raw response when it missed. */
+  lookup?: LookupTrace | null;
   notes: string[];
 }
 
@@ -81,6 +83,7 @@ interface Row {
   hazmat: string[];
   restriction: ScreenContext["restriction"];
   amazonFees: StoredInputs["amazonFees"];
+  lookup: LookupTrace | null;
   /** Lookup notes that belong to the row's data (kept across re-screens). */
   dataNotes: string[];
   /** Notes about this screening pass only. */
@@ -168,7 +171,7 @@ async function finalize(row: Row, run: GateRun, cfg: ProfileConfig, ctx: ScreenC
   const why = notes.length ? `${w.why} ${notes.join(" ")}` : w.why;
   const inputs: StoredInputs = {
     v: 1, stage: row.stage, match: row.match, market: row.market, hazmat: row.hazmat,
-    restriction: row.restriction, amazonFees: row.amazonFees, notes: row.dataNotes,
+    restriction: row.restriction, amazonFees: row.amazonFees, lookup: row.lookup, notes: row.dataNotes,
   };
   must(
     await db().from("results").update({
@@ -221,6 +224,13 @@ async function safely(row: Row, fn: () => Promise<void>) {
   }
 }
 
+/** "search miss: tried a batch of 20, EAN 3264680023323, UPC …; Amazon returned no items". */
+function missNote(trace: LookupTrace | undefined): string | undefined {
+  if (!trace) return undefined;
+  const tried = trace.attempts.map((a) => (a.code.startsWith("batch") ? `a ${a.code}` : `${a.identifiersType} ${a.code}`));
+  return `search miss: tried ${tried.join(", ")}; Amazon returned no items`;
+}
+
 interface PendingRow {
   id: string;
   product_id: string;
@@ -255,6 +265,7 @@ async function loadRows(results: PendingRow[]): Promise<Row[]> {
       hazmat: i?.hazmat ?? [],
       restriction: i?.restriction ?? null,
       amazonFees: i?.amazonFees ?? null,
+      lookup: i?.lookup ?? null,
       dataNotes: i?.notes ?? [],
       notes: [],
     };
@@ -370,11 +381,13 @@ export async function processRun(runId: string, limit = 20): Promise<{ done: boo
     rows = survivors.filter((r) => STAGE_RANK[r.stage] < STAGE_RANK.enriched);
 
     // Stage 2 — match and enrich: SP-API catalog by EAN, Keepa history (24-hour cache).
-    const needCatalog = rows.filter((r) => !FRESH(r.product.catalog_updated_at, CATALOG_TTL));
+    // Unmatched EANs are always asked again: a miss isn't cached.
+    const needCatalog = rows.filter((r) => !r.product.asin || !FRESH(r.product.catalog_updated_at, CATALOG_TTL));
     let catalog = new Map<string, CatalogMatch[]>();
+    let traces = new Map<string, LookupTrace>();
     if (spapi && needCatalog.length) {
       try {
-        catalog = await spapi.catalogByEans([...new Set(needCatalog.map((r) => r.product.ean))]);
+        ({ matches: catalog, traces } = await spapi.lookupEans([...new Set(needCatalog.map((r) => r.product.ean))]));
       } catch (e) {
         for (const r of needCatalog) r.dataNotes.push(`Catalog lookup failed: ${(e as Error).message}.`);
       }
@@ -423,13 +436,21 @@ export async function processRun(runId: string, limit = 20): Promise<{ done: boo
       const cat = catalog.get(p.ean) ?? [];
       const kp = keepaByEan.get(p.ean) ?? [];
       const looked = !!spapi || keepa.available;
-      resolved.push(row);
-      if (!looked) return;
+      if (!looked) return void resolved.push(row);
       const catalogChecked = needCatalog.includes(row) && spapi;
       const asins = [...new Set([...cat.map((c) => c.asin), ...kp.map((k) => k.asin), ...(p.asin ? [p.asin] : [])])];
       const primary = p.asin ?? asins[0] ?? null;
+      const trace = traces.get(p.ean);
+      if (trace) row.lookup = trace;
       row.match = { asin: primary, asinCount: Math.max(1, asins.length), looked: true };
+      if (!primary && trace?.outcome === "api_error") {
+        // Amazon didn't answer, so this isn't a verdict on the product: leave it retryable.
+        const err = trace.attempts.find((a) => a.error)?.error ?? "no response";
+        throw new Error(`Catalog lookup failed for EAN ${p.ean}: ${err}. Re-screen to retry.`);
+      }
+      resolved.push(row);
       if (!primary) {
+        row.match.note = missNote(trace);
         if (catalogChecked) must(await d.from("products").update({ catalog_updated_at: new Date().toISOString() }).eq("id", p.id), "product");
         return;
       }

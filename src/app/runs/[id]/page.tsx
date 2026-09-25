@@ -31,6 +31,7 @@ interface Result {
   band: "green" | "amber" | "grey" | null;
   offer_count: number;
   error: string | null;
+  inputs: { lookup?: { outcome: string; attempts: { identifiersType: string; code: string; items: number; total?: number; error?: string }[]; raw?: string } | null } | null;
   product: { ean: string; asin: string | null; title: string | null; brand: string | null; category: string | null } | null;
   offer: { unit_cost: number; currency: string; unit_cost_gbp: number; moq: number | null; pack_units: number; title: string | null; source_ref: string | null; supplier: { name: string } | null } | null;
 }
@@ -374,6 +375,19 @@ function Detail({ r }: { r: Result }) {
           ))}
           {r.failed_gate && <li className="text-xs text-muted">Stopped at {GATE_LABELS[r.failed_gate]}; later gates didn&apos;t run.</li>}
         </ul>
+        {r.inputs?.lookup && r.inputs.lookup.outcome !== "matched" && (
+          <details className="mt-2 text-xs">
+            <summary className="cursor-pointer text-muted">
+              Catalog lookup: {r.inputs.lookup.outcome === "search_miss" ? "search miss (Amazon answered, no items)" : "API error"}
+            </summary>
+            <ul className="num mt-1 space-y-0.5">
+              {r.inputs.lookup.attempts.map((a, i) => (
+                <li key={i}>{a.identifiersType} {a.code}: {a.error ? <span className="text-fail">{a.error}</span> : `${a.items} item${a.items === 1 ? "" : "s"}${a.total != null ? ` of ${a.total} results` : ""}`}</li>
+              ))}
+            </ul>
+            {r.inputs.lookup.raw && <pre className="num mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-all rounded bg-surface p-2">{r.inputs.lookup.raw}</pre>}
+          </details>
+        )}
       </div>
       <div>
         <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">Per unit at {gbp(r.sell_price)}</p>
