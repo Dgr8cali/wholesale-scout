@@ -14,7 +14,7 @@ import { chooseOffer, toSupplierOffer, type QogitaOffers, type SupplierOffer } f
 import { GATE_ORDER, withDefaults, type GateId, type ProfileConfig } from "../screening/config";
 import { packNote, resolveScoringPrice, runGates, verdictOf, type GateRun, type MarketData, type ScreenContext, type SellerView } from "../screening/gates";
 import { listingPack, supplierPack, type PackAttrs } from "../screening/pack";
-import type { CategoryRule } from "../screening/rules";
+import type { CategoryRule, DgFacts } from "../screening/rules";
 import { winScore } from "../screening/score";
 import { getSpApi, type CatalogMatch, type CompetitivePrice, type LookupTrace } from "../spapi/client";
 import type { ListingOffers } from "../spapi/types";
@@ -46,6 +46,8 @@ interface Product {
   /** Units in the Amazon listing (see screening/pack), and the catalog attributes behind it. */
   pack_count?: number | null;
   pack_attrs?: PackAttrs | null;
+  /** Amazon's dangerous-goods attributes (see spapi/types AmazonDg). */
+  amazon_dg?: DgFacts | null;
 }
 
 interface Offer {
@@ -224,6 +226,8 @@ function context(row: Row, card: RateCard, rules: CategoryRule[], cfg: ProfileCo
       // Keepa knows the whole variation family; the catalog only lists a parent's children.
       variationCount: row.market?.variationCount ?? p.variation_count,
       hazmat: row.hazmat,
+      // Stored with the product; null until read (then the older `hazmat` form counts).
+      amazonDg: row.product.amazon_dg ?? null,
     },
     sellers: row.sellers ?? undefined,
     waivers: row.waivers,
@@ -1471,6 +1475,7 @@ async function resolveRow(
       parent_asin: c.parentAsin, variation_count: c.variationCount, catalog_updated_at: new Date().toISOString(),
       image_url: c.imageUrl ?? p.image_url ?? "",
       pack_attrs: c.pack ?? p.pack_attrs ?? null,
+      amazon_dg: c.dg ?? p.amazon_dg ?? null,
     });
     row.hazmat = [...c.hazmat, ...(c.batteries ? ["batteries"] : [])];
   }

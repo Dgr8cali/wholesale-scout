@@ -106,6 +106,16 @@ export const DEFAULT_RULES: CategoryRule[] = [
     checklist: ["GB CLP label in English", "SDS from supplier", "UFI code where required"],
     sort: 9,
   },
+  {
+    key: "meltable",
+    name: "Meltable",
+    // Matched from Amazon's is_heat_sensitive attribute; add keywords in Settings if wanted.
+    keywords: [],
+    amazon_categories: [],
+    note: "Amazon marks it heat-sensitive: FBA only accepts meltable inventory from mid-October to mid-April, and removes what's left in summer.",
+    checklist: ["Check the meltable season before sending", "Plan to sell through or remove by April"],
+    sort: 10,
+  },
 ];
 
 function keywordRegex(k: string): RegExp | null {
@@ -122,8 +132,61 @@ function keywordRegex(k: string): RegExp | null {
 export interface RuleMatch {
   key: string;
   name: string;
-  /** The text that matched (as written in the row), or the matching category. */
+  /** The text that matched (as written in the row), the matching category, or what Amazon says. */
   hit: string;
+  /** Amazon's own dangerous-goods data, a keyword in the row's text, or the Amazon category. */
+  source?: "amazon" | "keyword" | "category";
+}
+
+/** How a match reads in the gate and the why line: "keyword match: aerosol". */
+export const matchReason = (m: RuleMatch) => (m.source === "keyword" ? `keyword match: ${m.hit}` : m.hit);
+
+/** Amazon's dangerous-goods data for a listing (see spapi/types AmazonDg). */
+export interface DgFacts {
+  hazmat: { un: string | null; name: string | null; class: string | null } | null;
+  ghs: string[];
+  declared: string[];
+  heatSensitive: boolean;
+}
+
+const cap = (s: string) => s.charAt(0) + s.slice(1).toLowerCase();
+
+/**
+ * Rules Amazon's own data triggers, ahead of any keyword: a regulated transport entry maps
+ * by UN number, shipping name and class (aerosol, flammable, lithium battery, else
+ * chemical); GHS classes likewise; is_heat_sensitive is Meltable. `legacy` is the older
+ * stored form (declared regulations, "batteries") for rows screened before this data.
+ */
+export function amazonRuleMatches(rules: CategoryRule[], dg: DgFacts | null | undefined, legacy: string[] = []): RuleMatch[] {
+  const name = (key: string) => rules.find((r) => r.key === key)?.name ?? DEFAULT_RULES.find((r) => r.key === key)?.name ?? key;
+  const out = new Map<string, RuleMatch>();
+  const add = (key: string, hit: string) => { if (!out.has(key)) out.set(key, { key, name: name(key), hit, source: "amazon" }); };
+  const h = dg?.hazmat;
+  // A UN number or a real transport class makes it regulated; a shipping name alone only when
+  // it names a hazard (listings carry junk like "auto-grounding" there).
+  const known = /aerosol|flammable|perfum|ethanol|alcohol|lithium|batter|corrosive|toxic|oxidi|peroxide|gas/i;
+  if (h && (h.un || (h.class && !/^0$/.test(h.class)) || known.test(h.name ?? ""))) {
+    const un = (h.un ?? "").toUpperCase().replace(/^(\d)/, "UN$1");
+    const ship = h.name ?? "";
+    const cls = h.class ?? "";
+    const said = [un, ship && cap(ship.replace(/,?\s*n\.o\.s\..*$/i, "").trim()), cls && `class ${cls}`].filter(Boolean).join(", ");
+    const hit = `Amazon marks this as hazmat${said ? `: ${said}` : ""}`;
+    if (un === "UN1950" || /aerosol/i.test(ship) || /^2(\.|$)/.test(cls)) add("aerosol", hit);
+    else if (/^UN3(480|481|090|091)$/.test(un) || /lithium|batter/i.test(ship)) add("battery", hit);
+    else if (/^3(\.|$)/.test(cls) || /^UN(1266|1170|1993|1987|1219)$/.test(un) || /flammable|perfum|ethanol|alcohol/i.test(ship)) add("fragrance", hit);
+    else add("chemical", hit);
+  }
+  for (const g of dg?.ghs ?? []) {
+    const what = g.replace(/_/g, " ");
+    if (/flammable/i.test(g)) add("fragrance", "Amazon marks this as flammable under GHS");
+    else if (/compressed|gas/i.test(g)) add("aerosol", "Amazon marks this as a pressurised gas under GHS");
+    else add("chemical", `Amazon marks this as hazardous under GHS: ${what}`);
+  }
+  if (dg?.heatSensitive) add("meltable", "Amazon marks this as heat-sensitive");
+  const declared = [...(dg?.declared ?? []), ...legacy.filter((x) => x !== "batteries")];
+  if (declared.length && !out.size) add("chemical", `Amazon marks this as regulated: ${[...new Set(declared)].join(", ")}`);
+  if (legacy.includes("batteries")) add("battery", "Amazon lists batteries included or required");
+  return [...out.values()];
 }
 
 /** Rules matched by a row's own text (name, brand, supplier category) and its Amazon category. */
@@ -140,11 +203,11 @@ export function matchRules(rules: CategoryRule[], text: string, amazonCategory?:
       }
     }
     if (hit) {
-      out.push({ key: r.key, name: r.name, hit });
+      out.push({ key: r.key, name: r.name, hit, source: "keyword" });
       continue;
     }
     const ac = cat ? r.amazon_categories.find((c) => cat === c.toLowerCase()) : undefined;
-    if (ac) out.push({ key: r.key, name: r.name, hit: `category ${ac}` });
+    if (ac) out.push({ key: r.key, name: r.name, hit: `category ${ac}`, source: "category" });
   }
   return out;
 }

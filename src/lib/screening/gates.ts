@@ -19,7 +19,7 @@ import { applyLinks, approvalKind } from "../spapi/parse";
 import type { RestrictionLink, RestrictionStatus } from "../spapi/types";
 import { GATE_LABELS, GATE_ORDER, type GateId, type GateMode, type ProfileConfig } from "./config";
 import { doubtfulMatch, type Listing } from "./match";
-import { matchRules, type CategoryRule, type RuleMatch } from "./rules";
+import { amazonRuleMatches, matchReason, matchRules, type CategoryRule, type DgFacts, type RuleMatch } from "./rules";
 
 export type GateStatus = "pass" | "warn" | "fail" | "skipped" | "off";
 
@@ -123,7 +123,10 @@ export interface ScreenContext {
     keepaDims?: Dims | null;
     keepaWeightG?: number | null;
     variationCount: number | null;
+    /** Older stored form: declared regulations and "batteries". */
     hazmat: string[];
+    /** Amazon's dangerous-goods attributes for the listing, when read. */
+    amazonDg?: DgFacts | null;
   };
   /** Top Buy Box sellers' profiles, looked up for rows that pass every gate. */
   sellers?: SellerView[];
@@ -230,19 +233,16 @@ const EVALUATORS: Record<GateId, Evaluator> = {
 
   compliance(ctx, p, run) {
     const g = p.gates.compliance;
-    const matches = matchRules(ctx.rules, ctx.text, ctx.amazonCategory);
-    for (const h of ctx.product.hazmat) {
-      if (!matches.some((m) => m.key === "fragrance" || m.key === "aerosol" || m.key === "chemical")) {
-        matches.push({ key: "chemical", name: "Declared hazmat", hit: `Amazon lists ${h} regulation` });
-      }
-    }
+    // Amazon's own dangerous-goods data first; keywords only for rules it didn't trigger.
+    const amazon = amazonRuleMatches(ctx.rules, ctx.product.amazonDg, ctx.product.amazonDg ? ctx.product.hazmat.filter((h) => h === "batteries") : ctx.product.hazmat);
+    const matches = [...amazon, ...matchRules(ctx.rules, ctx.text, ctx.amazonCategory).filter((m) => !amazon.some((a) => a.key === m.key))];
     // Liquids: only above a volume when the profile says so (small bottles aren't worth a flag).
     if (g.liquidAboveMl != null) {
       const ml = volumeMl(ctx.text);
       const i = matches.findIndex((m) => m.key === "liquid");
       if (i >= 0) {
         if (ml == null || ml <= g.liquidAboveMl) matches.splice(i, 1);
-        else matches[i] = { ...matches[i], hit: `${ml} ml, over ${g.liquidAboveMl} ml` };
+        else matches[i] = { ...matches[i], hit: `${ml} ml, over ${g.liquidAboveMl} ml`, source: undefined };
       }
     }
     run.ruleMatches = matches;
@@ -252,8 +252,8 @@ const EVALUATORS: Record<GateId, Evaluator> = {
     const status: GateStatus = g.mode === "fail" && worst === "fail" ? "fail" : "warn";
     return {
       status,
-      detail: active.map((m) => `${m.name} (${m.hit})`).join("; "),
-      tags: active.map((m) => m.key.toUpperCase()),
+      detail: active.map((m) => `${m.name} (${matchReason(m)})`).join("; "),
+      tags: [...active.map((m) => m.key.toUpperCase()), ...(active.some((m) => m.source === "amazon") ? ["AMAZON_DG"] : [])],
     };
   },
 

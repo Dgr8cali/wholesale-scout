@@ -187,7 +187,7 @@ describe("ingest → process", () => {
     // Fragrance fails compliance on the row's own text, before any API call is spent on it.
     const frag = results.find((r) => productOf(r).ean === "5000000000011")!;
     expect(frag).toMatchObject({ verdict: "fail", failed_gate: "compliance" });
-    expect(frag.why).toContain("Hazmat: flammable liquid (Eau de Toilette); Liquid (100ml)");
+    expect(frag.why).toContain("Hazmat: flammable liquid (keyword match: Eau de Toilette); Liquid (keyword match: 100ml)");
     expect(catalogCalls.flat()).not.toContain("5000000000011");
 
     // The cheaper offer (Qogita, €7 inc VAT → £4.96 ex VAT) wins and is scored with Amazon's fees.

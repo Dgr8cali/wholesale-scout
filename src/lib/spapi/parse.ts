@@ -85,8 +85,8 @@ export function parseCatalogItem(raw: unknown, marketplaceId: string): CatalogMa
   };
 }
 
-/** Amazon's dangerous-goods attributes (see AmazonDg); null when none say anything. */
-export function parseDg(attrs: Json, declared: string[]): AmazonDg | null {
+/** Amazon's dangerous-goods attributes (see AmazonDg); all empty when it says nothing. */
+export function parseDg(attrs: Json, declared: string[]): AmazonDg {
   const aspects = new Map<string, string>();
   for (const x of arr(attrs.hazmat).map(obj)) {
     const a = str(x.aspect), v = str(x.value) ?? (typeof x.value === "number" ? String(x.value) : null);
@@ -100,8 +100,7 @@ export function parseDg(attrs: Json, declared: string[]): AmazonDg | null {
   const ghs = arr(attrs.ghs).map(obj).flatMap((g) => arr(g.classification)).map((c) => str(obj(c).class))
     .filter((c): c is string => !!c && !/no_label|not_applicable|unknown|^none$/i.test(c));
   const heatSensitive = arr(attrs.is_heat_sensitive).some((x) => obj(x).value === true);
-  const dg: AmazonDg = { hazmat: regulated ? { un, name, class: cls } : null, ghs: [...new Set(ghs)], declared, heatSensitive };
-  return dg.hazmat || dg.ghs.length || dg.declared.length || dg.heatSensitive ? dg : null;
+  return { hazmat: regulated ? { un, name, class: cls } : null, ghs: [...new Set(ghs)], declared, heatSensitive };
 }
 
 const r1 = (n: number) => Math.round(n * 10) / 10;

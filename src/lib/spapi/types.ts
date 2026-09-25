@@ -26,7 +26,7 @@ export interface CatalogMatch {
   batteries: boolean;
   /** Pack attributes: item_package_quantity and number_of_items, where given. */
   pack?: { itemPackageQuantity: number | null; numberOfItems: number | null };
-  /** What Amazon's attributes say about dangerous goods and heat; null when it says nothing. */
+  /** What Amazon's attributes say about dangerous goods and heat (empty when nothing). */
   dg?: AmazonDg | null;
   /** Largest MAIN image on Amazon's CDN, or null. */
   imageUrl: string | null;
