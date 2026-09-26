@@ -22,12 +22,16 @@ const today = () => new Date().toLocaleDateString("en-CA", { timeZone: "Europe/L
  * Your purchases of this product: record one (the app's prediction is frozen with it), move it
  * from ordered to live, and see how it's going against what was predicted.
  */
-export function Tracker({ asin, suppliers, defaultLanded }: { asin: string; suppliers: SupplierChoice[]; defaultLanded: number | null }) {
+export function Tracker({ asin, suppliers, defaultLanded, openForm = false }: { asin: string; suppliers: SupplierChoice[]; defaultLanded: number | null; openForm?: boolean }) {
   const { confirm } = useDialogs();
   const [rows, setRows] = useState<(Purchase & { actuals?: Actuals | null })[] | null>(null);
-  const [adding, setAdding] = useState(false);
+  const [adding, setAdding] = useState(openForm);
   const [form, setForm] = useState({ units: "", landed: defaultLanded != null ? defaultLanded.toFixed(2) : "", supplier: suppliers[0]?.id ?? "", other: "", date: today(), note: "" });
   const [busy, setBusy] = useState(false);
+  // Arrived from "Record a purchase": the form is open, and scrolled into view.
+  useEffect(() => {
+    if (openForm) setTimeout(() => document.getElementById("purchases")?.scrollIntoView({ behavior: "smooth", block: "start" }), 300);
+  }, [openForm]);
   const load = useCallback(() => {
     api<{ purchases: (Purchase & { actuals?: Actuals | null })[] }>(`/api/purchases?asin=${asin}&actuals=1`).then((r) => setRows(r.purchases)).catch((e: Error) => toast.error(e.message));
   }, [asin]);
@@ -68,7 +72,7 @@ export function Tracker({ asin, suppliers, defaultLanded }: { asin: string; supp
   }
 
   return (
-    <section className="panel min-w-0 space-y-3 p-4" aria-label="Your purchases">
+    <section id="purchases" className="panel min-w-0 scroll-mt-16 space-y-3 p-4" aria-label="Your purchases">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="section-label">Your purchases <span>· the prediction is frozen when you record one, to compare with what happens</span></h2>
         {!adding && <Button variant="outline" size="sm" onClick={() => setAdding(true)}><PlusIcon /> Record a purchase</Button>}

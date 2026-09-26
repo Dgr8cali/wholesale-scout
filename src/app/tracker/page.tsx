@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 import { PackageIcon } from "lucide-react";
 import { SyncStatus } from "@/components/product/SyncStatus";
 import { CalibrationPanel } from "@/components/product/CalibrationPanel";
+import { RecordPurchaseDialog } from "@/components/product/RecordPurchaseDialog";
 
 type Row = Purchase & { actuals?: Actuals | null };
 const label = (s: PurchaseStatus) => PURCHASE_STATUSES.find((x) => x.id === s)?.label ?? s;
@@ -69,7 +70,10 @@ export default function TrackerPage() {
           <h1 className="page-title">Tracker</h1>
           <p className="text-sm text-muted-foreground">What you&apos;ve bought, the app&apos;s prediction when you bought it, and what Amazon says actually happened.</p>
         </div>
-        <SyncStatus onSynced={() => setNonce((n) => n + 1)} />
+        <div className="flex flex-wrap items-center gap-3">
+          <SyncStatus onSynced={() => setNonce((n) => n + 1)} />
+          <RecordPurchaseDialog />
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

@@ -161,3 +161,49 @@ export async function findProducts(q: string): Promise<{ asin: string; ean: stri
   const seen = new Set<string>();
   return rows.filter((r) => r.asin && !seen.has(r.asin as string) && seen.add(r.asin as string)).slice(0, 20) as never;
 }
+
+export interface ProductListItem {
+  asin: string; ean: string; title: string | null; brand: string | null; image_url: string | null;
+  verdict: string | null; priced: boolean; sell_price: number | null; max_landed: number | null; fba_sellers: number | null;
+  share_month: number | null; screened_at: string | null; bought: boolean;
+}
+
+/**
+ * Every product the app has screened, one per ASIN, newest screening first (from the brand map:
+ * each product's latest result on the default profile). Filters: text (ASIN, EAN, title or
+ * brand), verdict, bought. 50 a page.
+ */
+export async function listProducts(q: { text?: string | null; verdict?: string | null; bought?: boolean; page?: number }): Promise<{ items: ProductListItem[]; more: boolean }> {
+  const d = db();
+  const PAGE = 50;
+  const page = Math.max(0, q.page ?? 0);
+  const boughtAsins = (must(await d.from("purchases").select("asin"), "purchases") as { asin: string }[]).map((p) => p.asin);
+  let query = d.from("brand_products")
+    .select("asin, ean, title, brand, image_url, verdict, priced, sell_price, max_landed, fba_sellers, share_month, result_updated_at")
+    .not("asin", "is", null);
+  const text = q.text?.trim().replace(/[%_,()]/g, " ").trim();
+  if (text) {
+    if (/^[A-Z0-9]{10}$/i.test(text) && /[A-Z]/i.test(text)) query = query.eq("asin", text.toUpperCase());
+    else if (/^\d{8,14}$/.test(text)) query = query.eq("ean", text);
+    else query = query.or(`title.ilike.%${text}%,brand.ilike.%${text}%`);
+  }
+  if (q.verdict && ["pass", "warn", "fail"].includes(q.verdict)) query = query.eq("verdict", q.verdict);
+  if (q.bought) query = query.in("asin", boughtAsins.length ? boughtAsins : ["-"]);
+  // A little extra per page: several EANs can share an ASIN, and only one is shown.
+  const rows = must(await query.order("result_updated_at", { ascending: false, nullsFirst: false }).range(page * PAGE, page * PAGE + PAGE + 20), "products") as Record<string, unknown>[];
+  const seen = new Set<string>();
+  const bought = new Set(boughtAsins);
+  const items: ProductListItem[] = [];
+  for (const r of rows) {
+    const asin = r.asin as string;
+    if (seen.has(asin)) continue;
+    seen.add(asin);
+    items.push({
+      asin, ean: r.ean as string, title: (r.title as string) ?? null, brand: (r.brand as string) ?? null, image_url: (r.image_url as string) ?? null,
+      verdict: (r.verdict as string) ?? null, priced: !!r.priced, sell_price: num(r.sell_price), max_landed: num(r.max_landed), fba_sellers: num(r.fba_sellers),
+      share_month: num(r.share_month), screened_at: (r.result_updated_at as string) ?? null, bought: bought.has(asin),
+    });
+    if (items.length === PAGE) break;
+  }
+  return { items, more: rows.length > PAGE };
+}

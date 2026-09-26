@@ -2,7 +2,7 @@
 
 import { ExternalLinkIcon } from "lucide-react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { Checked } from "@/components/check/Checked";
@@ -66,6 +66,7 @@ function Panel({ title, children, action }: { title: ReactNode; children: ReactN
 /** One product: the decision, its evidence, every supplier's price, its history and the paperwork. */
 export default function ProductPage() {
   const { asin } = useParams<{ asin: string }>();
+  const openForm = useSearchParams().get("record") === "1";
   const { confirm } = useDialogs();
   const [v, setV] = useState<ProductView | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -178,7 +179,7 @@ export default function ProductPage() {
         )}
       </section>
 
-      <Tracker asin={v.asin} defaultLanded={cheapest?.landedGbp ?? r?.landed_cost ?? null}
+      <Tracker asin={v.asin} openForm={openForm} defaultLanded={cheapest?.landedGbp ?? r?.landed_cost ?? null}
         suppliers={v.offers.filter((o) => o.supplier).map((o): SupplierChoice => ({ id: o.supplier!.id, name: o.supplier!.name, landedGbp: o.landedGbp, unitCostGbp: o.unitCostGbp }))} />
 
       {/* History charts */}

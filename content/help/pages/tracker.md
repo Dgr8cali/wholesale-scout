@@ -9,7 +9,9 @@ The tracker keeps every purchase with the app's prediction as it stood when you 
 
 ## Recording a purchase
 
-Two ways:
+Three ways:
+
+- **Record a purchase** at the top of the Tracker (or Products): type the ASIN, Amazon link, EAN or name; the product's page opens with the form ready. A product the app hasn't seen is checked first (a few Keepa tokens).
 
 - **On a product's page**, under **Your purchases**: **Record a purchase**, then the units, the landed cost per unit (filled in from the cheapest supplier; change it to what you actually paid landed), the supplier, the order date and an optional note. **Save**.
 - **On [Plan](/help/pages/plan)**, after placing a supplier's order: **Record as bought** on that supplier's group records every line with its quantity and landed cost, dated today.
