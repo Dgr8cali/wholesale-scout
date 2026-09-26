@@ -237,7 +237,7 @@ export class SpApiClient {
           identifiers: codes.join(","),
           identifiersType,
           marketplaceIds: this.config.marketplaceId,
-          includedData: "summaries,attributes,dimensions,identifiers,relationships,salesRanks,classifications,images",
+          includedData: "summaries,attributes,dimensions,identifiers,relationships,salesRanks,classifications,productTypes,images",
           pageSize: "20",
           ...(pageToken ? { pageToken } : {}),
         },
@@ -340,7 +340,7 @@ export class SpApiClient {
       const res = await this.request<{ items?: unknown[] }>("catalog", "GET", "/catalog/2022-04-01/items", {
         query: {
           identifiers: chunk.join(","), identifiersType: "ASIN", marketplaceIds: this.config.marketplaceId,
-          includedData: "summaries,attributes,dimensions,identifiers,relationships,salesRanks,classifications,images", pageSize: "20",
+          includedData: "summaries,attributes,dimensions,identifiers,relationships,salesRanks,classifications,productTypes,images", pageSize: "20",
         },
       });
       for (const raw of res.items ?? []) {

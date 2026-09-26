@@ -64,8 +64,9 @@ Each rule has:
 | **Name** | Shown in the gate's why-line, e.g. "Hazmat: flammable liquid". |
 | **Key** | Short id (letters, digits, `_`). Profiles store each rule's mode by this key. |
 | **Why it exists** | A note explaining the rule. |
-| **Amazon categories (one per line)** | A product in one of these Amazon categories matches even without a keyword. |
+| **Amazon categories (one per line)** | A product in one of these Amazon categories matches even without a keyword: its display group or any of Amazon's own signals for it (browse path, item type, product type), by exact name or `/pattern/`. |
 | **Keywords (comma or new line)** | Whole words or phrases, case-insensitive. Write `/pattern/` for a regular expression. |
+| **Exclusion words** | A row whose text contains one of these (same form as keywords) skips the rule entirely. Medical device starts with hair, scalp, lash, brow and lip. |
 | **Checklist it triggers (one per line)** | What to sort out before selling, e.g. "Safety data sheet (SDS) from supplier". |
 
 **+ Add rule** adds a blank rule; **Remove rule** deletes one. Nothing is stored until you click **Save rules**. The shipped rules are Hazmat: flammable liquid, Liquid, Aerosol, Cosmetic, Supplement, Food, Electrical, Battery, Under-3s toy, Chemical, Meltable and IP-risk brand. Meltable and IP-risk brand have no keywords: Meltable comes from Amazon's heat-sensitive flag and IP-risk brand from your list on the **IP risk** tab.

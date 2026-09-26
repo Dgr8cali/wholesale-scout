@@ -3,7 +3,9 @@
  * rule's mode. Stored in `category_rules`, editable in Settings.
  *
  * Keywords match whole words or phrases, case-insensitively. A keyword written as
- * /pattern/ is a regular expression.
+ * /pattern/ is a regular expression. Exclusion words (same form) skip the rule for a row whose
+ * text contains one. Amazon categories match the display group or any of Amazon's own signals
+ * for the listing (browse path, item-type keyword, product type): a name exactly, or /pattern/.
  */
 export interface CategoryRule {
   key: string;
@@ -13,6 +15,8 @@ export interface CategoryRule {
   note: string;
   checklist: string[];
   sort: number;
+  /** A row whose text contains any of these skips the rule (e.g. "hair" for Medical device's "treatment"). */
+  exclusions?: string[];
 }
 
 export const DEFAULT_RULES: CategoryRule[] = [
@@ -51,6 +55,17 @@ export const DEFAULT_RULES: CategoryRule[] = [
     note: "UK Cosmetics Regulation: a UK Responsible Person and SCPN notification must exist for what you sell.",
     checklist: ["UK Responsible Person named on pack", "SCPN notification exists", "English labelling with ingredients"],
     sort: 3,
+  },
+  {
+    key: "medicalDevice",
+    name: "Medical device",
+    keywords: ["treatment", "medicated", "antifungal", "anti-fungal", "antiseptic", "anti-septic", "wound", "wounds", "first aid", "plasters", "bandage", "bandages", "cold sore", "verruca", "athlete's foot", "haemorrhoid", "haemorrhoids"],
+    // Amazon's browse path, item-type keyword or product type saying medical, OTC, pharmacy or first aid.
+    amazon_categories: ["/medical|first[ -]?aid|pharmac|over[ -]the[ -]counter|\\botc\\b|medicat/"],
+    note: "Medical devices and medicines: UKCA or CE marking (MHRA-registered), Amazon category approval, and FBA's minimum 105 days of shelf life left on arrival.",
+    checklist: ["UKCA or CE mark on the pack, device registered with the MHRA", "Amazon category approval (Health & Personal Care: medical)", "At least 105 days of shelf life left when it reaches FBA", "No medicinal claims on a product that isn't a licensed medicine"],
+    sort: 4,
+    exclusions: ["hair", "scalp", "lash", "brow", "lip"],
   },
   {
     key: "supplement",
@@ -218,10 +233,13 @@ export function amazonRuleMatches(rules: CategoryRule[], dg: DgFacts | null | un
 }
 
 /** Rules matched by a row's own text (name, brand, supplier category) and its Amazon category. */
-export function matchRules(rules: CategoryRule[], text: string, amazonCategory?: string | null): RuleMatch[] {
+export function matchRules(rules: CategoryRule[], text: string, amazonCategory?: string | null | (string | null | undefined)[]): RuleMatch[] {
   const out: RuleMatch[] = [];
-  const cat = (amazonCategory ?? "").toLowerCase();
+  // The display group, plus any of Amazon's own signals (browse path, item-type keyword, product type).
+  const cats = (Array.isArray(amazonCategory) ? amazonCategory : [amazonCategory]).filter((c): c is string => !!c && !!c.trim());
   for (const r of [...rules].sort((a, b) => a.sort - b.sort)) {
+    // An exclusion word in the row's text: this rule doesn't apply to it.
+    if ((r.exclusions ?? []).some((x) => keywordRegex(x)?.test(text))) continue;
     let hit: string | null = null;
     for (const k of r.keywords) {
       const m = keywordRegex(k)?.exec(text);
@@ -234,8 +252,13 @@ export function matchRules(rules: CategoryRule[], text: string, amazonCategory?:
       out.push({ key: r.key, name: r.name, hit, source: "keyword" });
       continue;
     }
-    const ac = cat ? r.amazon_categories.find((c) => cat === c.toLowerCase()) : undefined;
-    if (ac) out.push({ key: r.key, name: r.name, hit: `category ${ac}`, source: "category" });
+    let found: string | null = null;
+    for (const c of r.amazon_categories) {
+      const pattern = c.match(/^\/(.+)\/([a-z]*)$/) ? keywordRegex(c) : null;
+      const which = cats.find((x) => (pattern ? pattern.test(x) : x.toLowerCase() === c.toLowerCase()));
+      if (which) { found = which; break; }
+    }
+    if (found) out.push({ key: r.key, name: r.name, hit: `category ${found}`, source: "category" });
   }
   return out;
 }

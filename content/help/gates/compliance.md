@@ -19,7 +19,19 @@ Otherwise each rule can be matched in three ways, in this order:
 
 The **IP-risk brand** rule matches the product's brand against your list in Settings, **IP risk** tab.
 
-The shipped rules are: Hazmat: flammable liquid, Liquid, Aerosol, Cosmetic, Supplement, Food, Electrical, Battery, Under-3s toy, Chemical, Meltable and IP-risk brand.
+The shipped rules are: Hazmat: flammable liquid, Liquid, Aerosol, Cosmetic, Medical device, Supplement, Food, Electrical, Battery, Under-3s toy, Chemical, Meltable and IP-risk brand.
+
+**Amazon's own signals.** Besides the listing's display group ("Beauty", "Health & Personal Care"), a rule's Amazon categories are matched against what Amazon's catalog says the item is: every node of its browse path ("First Aid", "Over-the-Counter Medication", "Antiseptics & Disinfectants"…), its item-type keyword and its product type. An entry can be a name (matched exactly) or a `/pattern/`. These are read when the catalog is looked up, so a product screened before this was added gets them the next time its catalog is read (a new upload or check of it); until then only its display group and title count.
+
+**Exclusion words.** Every keyword rule has an exclusion list: if the row's text contains one of those words or phrases, the rule is skipped for that row entirely (keywords and categories). Use it for words that make a keyword mean something else ("hair" for Medical device's "treatment").
+
+### Medical device
+
+Fires when Amazon's signals say medical, first aid, pharmacy, OTC or medication (`/medical|first[ -]?aid|pharmac|over[ -]the[ -]counter|\botc\b|medicat/`), or the title contains treatment, medicated, antifungal, antiseptic, wound, first aid, plasters, bandage, cold sore, verruca, athlete's foot or haemorrhoid. Its exclusion words start as hair, scalp, lash, brow and lip, so hair and lip treatments stay cosmetics. It warns by default in every profile.
+
+Its why-line says what selling one needs: "Medical device (keyword match: antiseptic): needs UKCA/CE marking, Amazon category approval, and 105+ days' shelf life at FBA": a UKCA or CE mark (with the device registered with the MHRA), Amazon's approval for the medical category, and at least 105 days of shelf life left when the stock reaches FBA.
+
+When Medical device fires, the **Cosmetic** rule's keyword match is dropped for that row ("antiseptic cream" is judged as medical, not as a cream). A Cosmetic match from Amazon's category (Beauty) still stands.
 
 ### How the status is worked out
 
@@ -52,7 +64,7 @@ The rules themselves (names, keywords, Amazon categories, notes and checklists) 
 | Profile | Gate mode | Rule modes |
 |---|---|---|
 | First order (default) | fail | Hazmat: flammable liquid, Aerosol, Supplement, Food and Under-3s toy **fail**; the rest **warn** (Liquid only above 500 ml) |
-| Strict | fail | every rule **fail** |
+| Strict | fail | every rule **fail** except Medical device (**warn**) |
 | Test order | warn | every rule **warn** |
 | Dry goods only | fail | Hazmat: flammable liquid, Liquid, Aerosol, Cosmetic, Supplement and Chemical **fail**; the rest **warn** |
 
@@ -65,7 +77,8 @@ Each matched rule reads `Rule name (reason)`, several joined with "; ".
 | Source | Example | Meaning |
 |---|---|---|
 | Keyword | Aerosol (keyword match: dry shampoo) | The text contains a rule keyword, shown as written in the row. |
-| Amazon category | Cosmetic (category Beauty) | The listing's Amazon category is on the rule. |
+| Amazon category | Cosmetic (category Beauty) | The listing's Amazon category (or one of its signals, e.g. "category Over-the-Counter Medication") is on the rule. |
+| Medical device | Medical device (keyword match: Medicated): needs UKCA/CE marking, Amazon category approval, and 105+ days' shelf life at FBA | See Medical device above. |
 | Amazon hazmat data | Hazmat: flammable liquid (Amazon marks this as hazmat: UN1266, Perfumery products, class 3) | Amazon's transport data. Class 2 or UN1950 maps to Aerosol, lithium batteries to Battery, class 3 and flammables to Hazmat: flammable liquid, anything else to Chemical. |
 | Amazon GHS | Hazmat: flammable liquid (Amazon marks this as flammable under GHS) | Also "Amazon marks this as a pressurised gas under GHS" (Aerosol) or "Amazon marks this as hazardous under GHS: …" (Chemical). |
 | Amazon, other | Chemical (Amazon marks this as regulated: …) | Amazon lists a regulation but no hazmat class. |

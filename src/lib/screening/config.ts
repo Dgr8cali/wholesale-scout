@@ -152,7 +152,7 @@ export const DEFAULT_SCALES: Record<string, Scale> = {
 };
 
 export const COMPLIANCE_RULE_KEYS = [
-  "fragrance", "liquid", "aerosol", "cosmetic", "supplement", "food", "electrical", "battery", "under3sToy", "chemical", "meltable", "ipRisk",
+  "fragrance", "liquid", "aerosol", "cosmetic", "medicalDevice", "supplement", "food", "electrical", "battery", "under3sToy", "chemical", "meltable", "ipRisk",
 ] as const;
 
 const allRules = (mode: GateMode) => Object.fromEntries(COMPLIANCE_RULE_KEYS.map((k) => [k, mode])) as Record<string, GateMode>;
@@ -192,7 +192,8 @@ const clone = <T,>(x: T): T => JSON.parse(JSON.stringify(x));
 /** The three profiles the app ships with. */
 export function defaultProfiles(): { name: string; is_default: boolean; config: ProfileConfig }[] {
   const strict = clone(DEFAULT_PROFILE);
-  strict.gates.compliance = { mode: "fail", rules: allRules("fail") };
+  // Medical device only warns by default, even here: it needs checking, not always dropping.
+  strict.gates.compliance = { mode: "fail", rules: { ...allRules("fail"), medicalDevice: "warn" } };
   strict.gates.amazonPresence = { mode: "fail", days: 365 };
   strict.scoringPrice = "lower";
   strict.gates.fees = { ...strict.gates.fees, minRoiPct: 25, minMarginPct: 18 };

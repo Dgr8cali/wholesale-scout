@@ -83,7 +83,29 @@ export function parseCatalogItem(raw: unknown, marketplaceId: string): CatalogMa
     batteries,
     pack: { itemPackageQuantity: intAttr("item_package_quantity"), numberOfItems: intAttr("number_of_items") },
     dg: parseDg(attrs, hazmat),
+    signals: catalogSignals(item, attrs, marketplaceId),
   };
+}
+
+/**
+ * What Amazon says the listing is, beyond the display group: every node of its browse path
+ * ("Health & Personal Care", "Medical Supplies & Equipment", "First Aid"…), the item-type
+ * keyword ("first-aid-kits" as "first aid kits") and the product type ("MEDICAL_SUPPLIES" as
+ * "medical supplies").
+ */
+export function catalogSignals(item: Json, attrs: Json, marketplaceId: string): string[] {
+  const out = new Set<string>();
+  for (const c of arr(forMarketplace(item.classifications, marketplaceId).classifications).map(obj)) {
+    let node: Json | null = c;
+    for (let depth = 0; node && depth < 12; depth++) {
+      const name = str(node.displayName);
+      if (name && name !== "Categories") out.add(name);
+      node = node.parent ? obj(node.parent) : null;
+    }
+  }
+  for (const k of arr(attrs.item_type_keyword).map(obj)) { const v = str(k.value); if (v) out.add(v.replace(/-/g, " ")); }
+  for (const t of arr(item.productTypes).map(obj)) { const v = str(t.productType); if (v) out.add(v.replace(/_/g, " ").toLowerCase()); }
+  return [...out].slice(0, 20);
 }
 
 /** Amazon's dangerous-goods attributes (see AmazonDg); all empty when it says nothing. */

@@ -574,7 +574,7 @@ function Rules() {
   };
 
   return (
-    <Section title="Compliance rules" note={<>Shared by every profile; each profile sets each rule to off, warn or fail above. Keywords match whole words or phrases; write /pattern/ for a regular expression. These run on the row&apos;s own text before any API call.</>}
+    <Section title="Compliance rules" note={<>Shared by every profile; each profile sets each rule to off, warn or fail above. Keywords and exclusion words match whole words or phrases; write /pattern/ for a regular expression. Amazon categories match the display group or any of Amazon&apos;s own signals for the listing (its browse path, item type, product type), by name or /pattern/. Keywords run on the row&apos;s own text before any API call.</>}
       actions={<Button variant="outline" onClick={save}>Save rules</Button>}>
       {rules.map((r, i) => (
         <div key={i} className="grid gap-3 rounded-lg border p-4 lg:grid-cols-2">
@@ -590,6 +590,9 @@ function Rules() {
             <label className="space-y-1.5"><span className="field-label">Keywords (comma or new line)</span>
               <Textarea className="h-24" defaultValue={r.keywords.join(", ")} onBlur={(e) => set(i, { keywords: list(e.target.value) })} />
             </label>
+            <label className="space-y-1.5"><span className="field-label">Exclusion words: a title with one of these skips this rule</span>
+              <Textarea className="h-14" defaultValue={(r.exclusions ?? []).join(", ")} placeholder="e.g. hair, scalp" onBlur={(e) => set(i, { exclusions: list(e.target.value) })} />
+            </label>
             <label className="space-y-1.5"><span className="field-label">Checklist it triggers (one per line)</span>
               <Textarea className="h-16" value={r.checklist.join("\n")} onChange={(e) => set(i, { checklist: e.target.value.split("\n").map((x) => x.trim()).filter(Boolean) })} />
             </label>
@@ -598,7 +601,7 @@ function Rules() {
         </div>
       ))}
       <div className="flex items-center gap-3">
-        <Button variant="outline" onClick={() => setRules([...rules, { key: `rule${rules.length + 1}`, name: "New rule", keywords: [], amazon_categories: [], note: "", checklist: [], sort: rules.length }])}>+ Add rule</Button>
+        <Button variant="outline" onClick={() => setRules([...rules, { key: `rule${rules.length + 1}`, name: "New rule", keywords: [], amazon_categories: [], note: "", checklist: [], sort: rules.length, exclusions: [] }])}>+ Add rule</Button>
       </div>
     </Section>
   );

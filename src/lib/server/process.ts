@@ -52,6 +52,8 @@ interface Product {
   pack_attrs?: PackAttrs | null;
   /** Amazon's dangerous-goods attributes (see spapi/types AmazonDg). */
   amazon_dg?: DgFacts | null;
+  /** Amazon's own signals for the listing (browse path, item-type keyword, product type). */
+  amazon_signals?: string[] | null;
   /** Seller Central's DG lookup, from an imported report. */
   dg_lookup?: DgLookup | null;
 }
@@ -249,6 +251,7 @@ function context(row: Row, card: RateCard, rules: CategoryRule[], cfg: ProfileCo
       // Stored with the product; null until read (then the older `hazmat` form counts).
       amazonDg: row.product.amazon_dg ?? null,
       dgLookup: row.product.dg_lookup ?? null,
+      amazonSignals: row.product.amazon_signals ?? null,
     },
     sellers: row.sellers ?? undefined,
     waivers: row.waivers,
@@ -1634,6 +1637,7 @@ async function resolveRow(
       image_url: c.imageUrl ?? p.image_url ?? "",
       pack_attrs: c.pack ?? p.pack_attrs ?? null,
       amazon_dg: c.dg ? keepSellerCentralMark(c.dg, p.amazon_dg) : p.amazon_dg ?? null,
+      amazon_signals: c.signals?.length ? c.signals : p.amazon_signals ?? null,
     });
     row.hazmat = [...c.hazmat, ...(c.batteries ? ["batteries"] : [])];
   }

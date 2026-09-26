@@ -132,7 +132,7 @@ async function upsertAsinProduct(asin: string, c: CatalogMatch | null, card: Awa
   const fields = c ? {
     title: c.title, brand: c.brand, category: c.category, dims_cm: c.dimsCm, weight_g: c.weightG, sales_rank: c.salesRank,
     parent_asin: c.parentAsin, variation_count: c.variationCount, image_url: c.imageUrl ?? "",
-    pack_attrs: c.pack ?? null, pack_count: listingPack(c.title, c.pack).count, amazon_dg: keepSellerCentralMark(c.dg, existing[0]?.amazon_dg),
+    pack_attrs: c.pack ?? null, pack_count: listingPack(c.title, c.pack).count, amazon_dg: keepSellerCentralMark(c.dg, existing[0]?.amazon_dg), amazon_signals: c.signals?.length ? c.signals : null,
     referral_category: referralCategoryFor(c.category, card), catalog_updated_at: new Date().toISOString(),
   } : {};
   if (existing[0]) {

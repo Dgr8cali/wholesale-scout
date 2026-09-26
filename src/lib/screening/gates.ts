@@ -146,6 +146,8 @@ export interface ScreenContext {
     hazmat: string[];
     /** Amazon's dangerous-goods attributes for the listing, when read. */
     amazonDg?: DgFacts | null;
+    /** Amazon's own signals for the listing: browse path names, item-type keyword, product type. */
+    amazonSignals?: string[] | null;
     /** Seller Central's Dangerous Goods lookup for the ASIN (an imported report): ahead of the attributes. */
     dgLookup?: Pick<DgLookup, "status" | "text" | "programme"> | null;
     /** The brand is on your IP-risk list. */
@@ -274,7 +276,9 @@ const EVALUATORS: Record<GateId, Evaluator> = {
     const g = p.gates.compliance;
     // Amazon's own dangerous-goods data first; keywords only for rules it didn't trigger.
     const amazon = amazonRuleMatches(ctx.rules, ctx.product.amazonDg, ctx.product.amazonDg ? ctx.product.hazmat.filter((h) => h === "batteries") : ctx.product.hazmat);
-    let matches = [...amazon, ...matchRules(ctx.rules, ctx.text, ctx.amazonCategory).filter((m) => !amazon.some((a) => a.key === m.key))];
+    let matches = [...amazon, ...matchRules(ctx.rules, ctx.text, [ctx.amazonCategory, ...(ctx.product.amazonSignals ?? [])]).filter((m) => !amazon.some((a) => a.key === m.key))];
+    // A medical product isn't also judged as a cosmetic on its words ("antiseptic cream").
+    if (matches.some((m) => m.key === "medicalDevice")) matches = matches.filter((m) => !(m.key === "cosmetic" && m.source === "keyword"));
     // Amazon's DG lookup settles dangerous goods ahead of catalog attributes and keywords:
     // "not DG" clears the DG rules' matches; a DG status takes the place of theirs.
     const lookup = ctx.product.dgLookup;
@@ -310,7 +314,8 @@ const EVALUATORS: Record<GateId, Evaluator> = {
     const status: GateStatus = g.mode === "fail" && worst === "fail" ? "fail" : "warn";
     return {
       status,
-      detail: [lead, ...active.map((m) => (m.source === "ipRisk" || m.source === "dgLookup" ? (m.source === "dgLookup" ? `${m.hit} → ${m.name}` : m.hit) : `${m.name} (${matchReason(m)})`))].filter(Boolean).join("; "),
+      detail: [lead, ...active.map((m) => (m.source === "ipRisk" || m.source === "dgLookup" ? (m.source === "dgLookup" ? `${m.hit} → ${m.name}` : m.hit)
+        : `${m.name} (${matchReason(m)})${m.key === "medicalDevice" ? ": needs UKCA/CE marking, Amazon category approval, and 105+ days' shelf life at FBA" : ""}`))].filter(Boolean).join("; "),
       tags: [
         ...active.map((m) => (m.key === "ipRisk" ? "IP_RISK" : m.key.toUpperCase())),
         ...(active.some((m) => m.source === "amazon") ? ["AMAZON_DG"] : []),

@@ -16,7 +16,8 @@ export const PUT = handle(async (req: Request) => {
   }
   const rows = rules.map((r, i) => ({
     key: r.key, name: r.name || r.key, keywords: r.keywords ?? [], amazon_categories: r.amazon_categories ?? [],
-    note: r.note ?? null, checklist: r.checklist ?? [], sort: i, updated_at: new Date().toISOString(),
+    note: r.note ?? null, checklist: r.checklist ?? [], sort: i, exclusions: (r.exclusions ?? []).map((x) => String(x).trim()).filter(Boolean),
+    updated_at: new Date().toISOString(),
   }));
   const existing = must(await db().from("category_rules").select("key"), "rules") as { key: string }[];
   const gone = existing.map((e) => e.key).filter((k) => !keys.has(k));

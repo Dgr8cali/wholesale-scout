@@ -30,6 +30,8 @@ export interface CatalogMatch {
   dg?: AmazonDg | null;
   /** Largest MAIN image on Amazon's CDN, or null. */
   imageUrl: string | null;
+  /** Amazon's own signals for what it is: browse path names, item-type keyword, product type. */
+  signals?: string[];
 }
 
 /**
