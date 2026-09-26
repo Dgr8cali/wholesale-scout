@@ -24,7 +24,7 @@ import type { CostInput } from "@/lib/costOverride";
 import { api, gbp, when } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
 
-interface Data { limits: PlanLimits; profile: string; candidates: PlanCandidate[]; noOffer?: NoOffer[]; updatedAt: string | null }
+interface Data { limits: PlanLimits; profile: string; candidates: PlanCandidate[]; noOffer?: NoOffer[]; updatedAt: string | null; updating?: boolean }
 
 const STORE = "ws.plan.controls";
 const gates = (g?: string[]) => (g ?? []).map((x) => GATE_LABELS[x as GateId] ?? x).join(", ");
@@ -139,6 +139,7 @@ export default function PlanPage() {
           The products and quantities that make the most profit a month{data ? ` on ${data.profile}` : ""}: each line within the line cap and selling within
           the months limit at your share, MOQs and case sizes kept, and a supplier only if its lines reach its MOV. Pin or exclude products and change
           quantities: the plan recomputes. Figures come from each product&apos;s latest result on your default profile{data?.updatedAt ? ` (as of ${when(data.updatedAt)})` : ""}.
+          {data?.updating && <span className="ml-1 font-medium text-warn">Some results changed since: the figures are updating, reload in a minute.</span>}
         </p>
       </div>
       <div className="flex flex-wrap items-center gap-2">

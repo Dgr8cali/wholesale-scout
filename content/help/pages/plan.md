@@ -11,6 +11,8 @@ The Order plan page turns your passing products into an order. It picks the prod
 
 The candidates are every product whose latest result **passes** on your **default profile** (shown in the page description, with "as of" the time of the latest figures). To be a candidate, a product needs at least one costed offer. For each product the planner considers:
 
+When results have changed since the figures were worked out (a re-score after a waiver, approval or cost override, or a profile save), the page says "Some results changed since: the figures are updating, reload in a minute." and the update runs in the background.
+
 - the cheapest offer from **each** supplier that offers its EAN (uploaded price lists and Qogita),
 - for Qogita, the offer from the Qogita seller chosen for it. Each Qogita seller counts as its own order, with its own MOV and case size, and
 - your own cost, set with **Set your cost** ([Override a cost](/help/howto/override-a-cost)). It's planned under the supplier name you gave, or "Your cost" if you gave none, with MOQ 1 and no MOV unless you set them. Lines with the same supplier name make one order.
