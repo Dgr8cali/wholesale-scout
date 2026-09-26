@@ -131,7 +131,7 @@ One line per EAN. Where an EAN matched several ASINs, the best one leads and "�
 | --- | --- |
 | Select | A checkbox, and a chevron that opens the row's details under it. The coloured edge is the verdict. The header box selects every row the filters match, collapsed alternatives included. |
 | **Product** | Image, title, EAN, ASIN (links to Amazon), supplier ("(+2)" when other suppliers offer it). On a seller scan: **Holds Buy Box** or "Buy Box: another seller". |
-| **Verdict** | The star (favourite), the verdict, and **dormant** or **waived** badges. |
+| **Verdict** | The star (favourite), the verdict, and **dormant**, **waived** or **cost overridden** badges. Hover over **cost overridden** to see your cost and the sheet's original. |
 | **Score** | 0–100 in its band colour. |
 | **Sales / mo** | Estimated sales a month. Hover for the source. |
 | **Your share / mo** | Sales / mo ÷ (FBA sellers + you), Amazon counted as 3 sellers. See [your share](/help/reference/glossary#your-share). |
@@ -168,6 +168,7 @@ The details hold:
 - **Days without a seller** and, for a dormant listing, when it last had a Buy Box. **Amazon:** selling now, when it was last seen, or never.
 - **Per unit at £X**: referral, FBA, storage, returns allowance, output VAT, landed cost and profit, with where the fees came from. **Fees by source** compares Amazon's estimate, Keepa and the rate card (see [Fees](/help/concepts/fees)).
 - **Source**: the supplier (links to its page), the quoted cost, GBP ex-VAT cost, MOQ, and a warning when the listing's pack differs from the supplier's (see [multipack](/help/reference/glossary#multipack)).
+- **Set your cost**: your own landed cost, or a supplier price and its VAT basis, with a supplier name and note. It competes with the sheet's price in every run and the cheaper is scored; the row is re-scored now. With one set: **cost overridden** (or a note that the sheet's is cheaper), **Edit** and **Clear**. See [Override a cost](/help/howto/override-a-cost).
 - **Score groups**: Demand, Competition, Price health, Margin, Risk and Fit, each 0–100.
 - **Favourite note**: saved as you type. On a product not yet starred, adding a note stars it.
 - **Watchlist**: pick a condition (or **Re-check weekly**), fill in its value, tick **No supplier yet** if you don't have one, then **Watch** (or **Save** to change it). A condition is suggested from what blocked it. See [Watchlist](/help/pages/watchlist).
@@ -191,6 +192,7 @@ Tick rows and a bar appears:
 | --- | --- |
 | **Star** / **Unstar** | Stars or un-stars every selected product. |
 | Gate picker, **Reason for all (optional)**, **Waive** / **Un-waive** | Waives (or un-waives) the chosen gate for every selected product, re-screening them. |
+| **Set cost…** / **Clear cost** | Sets one cost override for every selected product (re-scoring them now), or clears it. See [Override a cost](/help/howto/override-a-cost). |
 | **Re-screen selected** | Makes a new run of just these rows ("… — N selected"), with this run's profile, and opens it. |
 | **Export selected** | Downloads just these rows. |
 | **Remove from run** | Takes the rows out of this run after you confirm. Products and favourites are kept. |

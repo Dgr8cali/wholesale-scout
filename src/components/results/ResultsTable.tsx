@@ -20,7 +20,8 @@ import type { Sparks } from "@/lib/sparkline";
 import { RestrictionLink } from "@/lib/ui/RestrictionLink";
 import { gbp, pct } from "@/lib/ui/client";
 import { firstOrderFigures, type Figure } from "@/lib/ui/metrics";
-import { brandOf, dormantOf, favKey, isWaived } from "@/lib/ui/resultRows";
+import { brandOf, dormantOf, favKey, isCostOverridden, isWaived } from "@/lib/ui/resultRows";
+import { overrideTitle } from "@/lib/costOverride";
 import { cn } from "@/lib/utils";
 import { Sparkline } from "./Sparkline";
 import { loadPrefs, normalizePrefs, savePrefs, type Density, type TablePrefs } from "./tablePrefs";
@@ -393,6 +394,7 @@ function Cell({ id, d, props, compact, isOpen }: { id: string; d: DisplayRow; pr
           </div>
           {dormantOf(r) && <Badge variant="muted" className="mt-1 ml-[22px]" title="Nobody sells this listing now; judged on its Keepa history">dormant</Badge>}
           {isWaived(r) && <Badge variant="brand" className="mt-1 ml-[22px]" title="A gate on this row is waived by you">waived</Badge>}
+          {isCostOverridden(r) && <Badge variant="brand" className="mt-1 ml-[22px]" title={overrideTitle(r.cost_override!)}>cost overridden</Badge>}
         </div>
       );
     case "score":

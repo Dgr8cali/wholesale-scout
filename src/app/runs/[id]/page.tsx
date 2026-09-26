@@ -33,6 +33,7 @@ import { storefrontUrl } from "@/lib/check/seller";
 import { groupRows } from "@/lib/ui/group";
 import { brandOf, dormantOf, favKey, toFilterRow } from "@/lib/ui/resultRows";
 import { cn } from "@/lib/utils";
+import type { CostInput } from "@/lib/costOverride";
 
 export default function RunPage() {
   const { id } = useParams<{ id: string }>();
@@ -140,6 +141,11 @@ export default function RunPage() {
     const res = await api<{ requeued: number }>("/api/overrides", { method: "POST", json: { items: itemsOf(selectedRows()), gate, action, reason, runId: id } });
     await refresh();
     if (res.requeued) setNonce((n) => n + 1);
+  }
+  /** Set or clear the cost override for these rows' products; they're re-scored now. */
+  async function cost(ids: string[], c: CostInput | null) {
+    await api("/api/cost-override", { method: c ? "POST" : "DELETE", json: c ? { resultIds: ids, cost: c } : { resultIds: ids } });
+    await refresh();
   }
   async function bulkRescreen() {
     const r = await api<{ runId: string }>(`/api/runs/${id}/selection`, { method: "POST", json: { resultIds: [...selected] } });
@@ -472,6 +478,7 @@ export default function RunPage() {
         onClear={() => { setSelected(new Set()); setStash(null); }}
         onStar={() => bulkStar("star")} onUnstar={() => bulkStar("unstar")}
         onWaive={(gate, reason) => bulkWaive(gate, "waive", reason)} onUnwaive={(gate) => bulkWaive(gate, "unwaive")}
+        onSetCost={(c) => cost([...selected], c)} onClearCost={() => cost([...selected], null)}
         onRescreen={bulkRescreen} onExport={() => exportXlsx(selected)} onRemove={bulkRemove} />
 
       <FilterBar value={filters} onChange={setFilters} options={filterOptions} favouritesAvailable={favourites.size > 0}
@@ -491,14 +498,14 @@ export default function RunPage() {
         favourites={favourites} onStar={toggleFavourite} scanSellerId={run.stats?.scan?.sellerId ?? null}
         sort={sort} onSort={(key) => setSort((s) => ({ key, dir: s.key === key ? (s.dir === 1 ? -1 : 1) : key === "title" ? 1 : -1 }))}
         sparks={sparks} observeSparks={observeSparks}
-        renderDetail={(r) => <Detail r={r} fav={favOf(r)} onNote={saveNote} onWaive={waive} onWatch={watch} budgetGbp={lineBudget} />}
+        renderDetail={(r) => <Detail r={r} fav={favOf(r)} onNote={saveNote} onWaive={waive} onWatch={watch} onCost={(r, c) => cost([r.id], c)} budgetGbp={lineBudget} />}
         empty={done.length ? "Nothing matches these filters." : "Rows appear here as they're screened."}
         lineCapGbp={lineBudget} maxMonths={withDefaults(run.profile_snapshot ?? null).gates.demand.maxMonthsToSell} />
 
       {active && (
         <DetailDrawer r={active} index={activeIndex} count={displayRows.length} sparks={active.product?.asin ? sparks[active.product.asin] : null}
           onStep={step} onClose={closeDrawer}>
-          <Detail r={active} fav={favOf(active)} onNote={saveNote} onWaive={waive} onWatch={watch} stacked budgetGbp={lineBudget} />
+          <Detail r={active} fav={favOf(active)} onNote={saveNote} onWaive={waive} onWatch={watch} onCost={(r, c) => cost([r.id], c)} stacked budgetGbp={lineBudget} />
         </DetailDrawer>
       )}
     </div>

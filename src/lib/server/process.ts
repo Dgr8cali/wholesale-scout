@@ -1,6 +1,7 @@
 import "server-only";
 import { brandKey } from "../brands";
-import { computeFees, economics, maxLandedCost, referralCategoryFor } from "../fees/engine";
+import { manualUnitGbp, type CostOverride } from "../costOverride";
+import { computeFees, economics, landedCost, maxLandedCost, referralCategoryFor } from "../fees/engine";
 import type { RateCard } from "../fees/rateCard";
 import { estimateEta, type Eta, type RunStats } from "../eta";
 import { addDailyTokens } from "../keepaLedger";
@@ -72,6 +73,12 @@ interface Offer {
   external_ref?: string | null;
   /** False for an ASIN check with no cost (unit_cost_gbp is 0). */
   cost_known?: boolean;
+  /** A cost override (the "Manual" supplier): a landed cost, or a price with its VAT basis. */
+  manual?: boolean;
+  landed_gbp?: number | null;
+  vat_basis?: "ex_vat" | "inc_vat" | null;
+  manual_supplier?: string | null;
+  note?: string | null;
   [k: string]: unknown;
 }
 
@@ -135,6 +142,10 @@ interface Row {
   dataNotes: string[];
   /** Notes about this screening pass only. */
   notes: string[];
+  /** Your cost override for the product, which competes with `offer` (the sheet's). */
+  manual?: { offer: Offer; supplier: Supplier } | null;
+  /** Set by context(): the override, and whether it's the cheaper cost (and so scored). */
+  costOverride?: CostOverride | null;
 }
 
 const FRESH = (ts: string | null, ttl: number) => !!ts && Date.now() - Date.parse(ts) < ttl;
@@ -206,7 +217,7 @@ function context(row: Row, card: RateCard, rules: CategoryRule[], cfg: ProfileCo
   // (the cheapest whose MOV fits this profile's budget), not the headline price from the search.
   const q = row.qogita ? chooseOffer(row.qogita.offers, cfg.budget, row.qogita.fxRate).chosen : null;
   const pack = packFor(row);
-  const offer = q ? {
+  let offer: ScreenContext["offer"] = q ? {
     unitCostGbp: q.basePrice * row.qogita!.fxRate,
     moq: q.unit,
     goodsVatRatePct: Number(s.vat_rate),
@@ -224,6 +235,36 @@ function context(row: Row, card: RateCard, rules: CategoryRule[], cfg: ProfileCo
     offer.unitCostGbp = piece * pack.ratio;
     if (offer.moq != null) offer.moq = Math.max(1, Math.ceil(offer.moq / pack.ratio));
   }
+  // Your cost override competes with the sheet's cost (both per listing, VAT on goods counted
+  // when not registered); the cheaper is scored. It's per listing, so no pack ratio applies.
+  let packCtx = pack ? { ...pack, pieceCostGbp: piece } : null;
+  row.costOverride = null;
+  const m = row.manual;
+  if (m) {
+    const mVat = Number(m.supplier.vat_rate);
+    const mUnit = manualUnitGbp(m.offer, cfg.fees, mVat);
+    const gross = (unit: number, vat: number) => unit * (cfg.fees.vatRegistered ? 1 : 1 + vat / 100);
+    const sheetKnown = !o.manual && offer.costKnown !== false;
+    const active = !sheetKnown || gross(mUnit, mVat) < gross(offer.unitCostGbp, offer.goodsVatRatePct ?? mVat);
+    row.costOverride = {
+      active,
+      offerId: m.offer.id, supplier: m.offer.manual_supplier ?? null, note: m.offer.note ?? null,
+      landedGbp: m.offer.landed_gbp == null ? null : Number(m.offer.landed_gbp),
+      priceGbp: m.offer.landed_gbp == null ? Number(m.offer.unit_cost) : null,
+      vatBasis: m.offer.vat_basis ?? null,
+      unitGbp: Math.round(mUnit * 10000) / 10000,
+      original: o.manual ? null : {
+        supplier: q ? `Qogita · ${q.seller}` : s.name,
+        unitGbp: sheetKnown ? Math.round(offer.unitCostGbp * 10000) / 10000 : null,
+        landedGbp: sheetKnown ? Math.round(landedCost(offer.unitCostGbp, { goodsVatRatePct: offer.goodsVatRatePct }, cfg.fees).total * 100) / 100 : null,
+        costKnown: sheetKnown,
+      },
+    };
+    if (active) {
+      offer = { unitCostGbp: mUnit, costKnown: true, moq: null, goodsVatRatePct: mVat, supplierMovGbp: null };
+      packCtx = null;
+    }
+  }
   // Your-share calibration from the profile travels with the market data (and is stored with it).
   if (row.market) row.market.shareFactor = cfg.calibration.shareFactor;
   return {
@@ -235,7 +276,7 @@ function context(row: Row, card: RateCard, rules: CategoryRule[], cfg: ProfileCo
     sheet: { brand: o.brand, title: o.title },
     listing: row.match?.asin ? { brand: p.brand, title: p.title } : undefined,
     amazonCategory: p.category,
-    pack: pack ? { ...pack, pieceCostGbp: piece } : null,
+    pack: packCtx,
     offer,
     match: row.match,
     product: {
@@ -315,6 +356,10 @@ function resultFields(row: Row, run: GateRun, cfg: ProfileConfig, ctx: ScreenCon
     pack: ctx.pack && ctx.pack.ratio !== 1 ? { listing: ctx.pack.listing, supplier: ctx.pack.supplier, ratio: ctx.pack.ratio } : null,
   };
   return {
+      // The override's offer while it's the cheaper; the sheet's is kept to go back to.
+      offer_id: row.costOverride?.active ? row.costOverride.offerId : row.offer.id,
+      ...(row.offer.manual ? {} : { sheet_offer_id: row.offer.id }),
+      cost_override: row.costOverride ?? null,
       status: "done",
       verdict: verdictOf(run.outcomes),
       failed_gate: run.failedGate,
@@ -369,7 +414,7 @@ async function finalize(row: Row, run: GateRun, cfg: ProfileConfig, ctx: ScreenC
  */
 async function saveResults(runId: string, items: { row: Row; run: GateRun; ctx: ScreenContext }[], cfg: ProfileConfig) {
   for (const c of chunks(items, 200)) {
-    const payload = c.map(({ row, run, ctx }) => ({ id: row.resultId, run_id: runId, product_id: row.product.id, offer_id: row.offer.id, ...resultFields(row, run, cfg, ctx) }));
+    const payload = c.map(({ row, run, ctx }) => ({ id: row.resultId, run_id: runId, product_id: row.product.id, ...resultFields(row, run, cfg, ctx) }));
     const res = await db().from("results").upsert(payload, { onConflict: "id" });
     // One bad row shouldn't lose the batch: fall back to saving them one by one.
     if (res.error) await mapLimit(c, 10, ({ row, run, ctx }) => safely(row, () => finalize(row, run, cfg, ctx)));
@@ -699,14 +744,25 @@ export async function evaluateStored(results: PendingRow[], cfg: ProfileConfig):
 async function loadRows(results: PendingRow[], maxAge: number = KEEPA_TTL): Promise<Row[]> {
   const d = db();
   const byId = <T extends { id: string }>(xs: T[]) => new Map(xs.map((x) => [x.id, x]));
-  const products: Product[] = [], offers: Offer[] = [], suppliers: Supplier[] = [];
+  const products: Product[] = [], offers: Offer[] = [], suppliers: Supplier[] = [], manual: Offer[] = [];
+  // A row scored on a cost override remembers the sheet's offer: that's the one it competes with.
+  const sheetOf = new Map<string, string>();
+  for (const c of chunks(results.map((r) => r.id))) {
+    const res = await d.from("results").select("id, sheet_offer_id").in("id", c);
+    if (res.error && schemaMissing(res.error.message)) break;
+    for (const x of must(res, "sheet offers") as { id: string; sheet_offer_id: string | null }[]) if (x.sheet_offer_id) sheetOf.set(x.id, x.sheet_offer_id);
+  }
+  const baseOffer = (r: PendingRow) => sheetOf.get(r.id) ?? r.offer_id;
   for (const c of chunks([...new Set(results.map((r) => r.product_id))])) {
     products.push(...(must(await d.from("products").select("*").in("id", c), "products") as Product[]));
+    const res = await d.from("offers").select("*").in("product_id", c).eq("manual", true);
+    if (!(res.error && schemaMissing(res.error.message))) manual.push(...(must(res, "cost overrides") as Offer[]));
   }
-  for (const c of chunks([...new Set(results.map((r) => r.offer_id))])) {
+  const ids = new Set([...results.map(baseOffer), ...results.map((r) => r.offer_id)]);
+  for (const c of chunks([...ids])) {
     offers.push(...(must(await d.from("offers").select("*").in("id", c), "offers") as Offer[]));
   }
-  for (const c of chunks([...new Set(offers.map((o) => o.supplier_id))])) {
+  for (const c of chunks([...new Set([...offers, ...manual].map((o) => o.supplier_id))])) {
     suppliers.push(...(must(await d.from("suppliers").select("*").in("id", c), "suppliers") as Supplier[]));
   }
   const P = byId(products), O = byId(offers), S = byId(suppliers);
@@ -725,8 +781,10 @@ async function loadRows(results: PendingRow[], maxAge: number = KEEPA_TTL): Prom
   const waivers = await waiversFor(products.map((p) => p.ean));
 
   const rows = results.map((r) => {
-    const offer = O.get(r.offer_id)!;
+    // The sheet's offer (gone: the one on the row).
+    const offer = O.get(baseOffer(r)) ?? O.get(r.offer_id)!;
     const product = P.get(r.product_id)!;
+    const m = manual.find((x) => x.product_id === product.id);
     const i = r.inputs?.v === 1 ? r.inputs : null;
     const snap = product.asin ? keepaFresh.get(product.asin) : undefined;
     const stored = i?.match ?? (product.asin ? { asin: product.asin, asinCount: 1, looked: true } : null);
@@ -746,6 +804,7 @@ async function loadRows(results: PendingRow[], maxAge: number = KEEPA_TTL): Prom
       waivers: new Map([...(waivers.get(productKey(product.ean, null)) ?? []), ...(waivers.get(productKey(product.ean, product.asin)) ?? [])]),
       dataNotes: i?.notes ?? [],
       notes: [],
+      manual: m && S.get(m.supplier_id) ? { offer: m, supplier: S.get(m.supplier_id)! } : null,
     };
   });
   await backfillDormancy(rows);

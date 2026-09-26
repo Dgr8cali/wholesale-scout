@@ -9,12 +9,14 @@ import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Separator } from "@/components/ui/separator";
 import { GATE_LABELS, GATE_ORDER, type GateId } from "@/lib/screening/config";
+import { CostOverrideDialog } from "@/components/results/CostOverride";
+import type { CostInput } from "@/lib/costOverride";
 
 /**
  * Actions on the selected result rows. Each action reports its own error; the parent does
  * the work and refreshes the table.
  */
-export function BulkBar({ count, stashed, onReselect, onClear, onStar, onUnstar, onWaive, onUnwaive, onRescreen, onExport, onRemove }: {
+export function BulkBar({ count, stashed, onReselect, onClear, onStar, onUnstar, onWaive, onUnwaive, onSetCost, onClearCost, onRescreen, onExport, onRemove }: {
   count: number;
   /** Size of a selection cleared by a filter change, for "Reselect". */
   stashed: number;
@@ -25,6 +27,9 @@ export function BulkBar({ count, stashed, onReselect, onClear, onStar, onUnstar,
   onUnstar?: () => Promise<void>;
   onWaive?: (gate: GateId, reason: string) => Promise<void>;
   onUnwaive?: (gate: GateId) => Promise<void>;
+  /** Cost override for the selected rows' products (set, or clear). */
+  onSetCost?: (cost: CostInput) => Promise<void>;
+  onClearCost?: () => Promise<void>;
   onRescreen?: () => Promise<void>;
   onExport?: () => void;
   onRemove?: () => Promise<void>;
@@ -32,6 +37,7 @@ export function BulkBar({ count, stashed, onReselect, onClear, onStar, onUnstar,
   const [gate, setGate] = useState<GateId>("budgetFit");
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
+  const [costOpen, setCostOpen] = useState(false);
   const { confirm } = useDialogs();
 
   const act = async (label: string, fn: () => Promise<void>, done?: string) => {
@@ -84,6 +90,15 @@ export function BulkBar({ count, stashed, onReselect, onClear, onStar, onUnstar,
       <Button variant="outline" size="xs" disabled={!!busy} onClick={() => act("unwaive", () => onUnwaive(gate), `Un-waived ${GATE_LABELS[gate]} for ${count}`)}>
         {busy === "unwaive" ? "…" : "Un-waive"}
       </Button>
+      {sep}
+      </>}
+      {onSetCost && onClearCost && <>
+      <Button variant="outline" size="xs" disabled={!!busy} onClick={() => setCostOpen(true)}>Set cost…</Button>
+      <Button variant="outline" size="xs" disabled={!!busy} onClick={() => act("clearCost", onClearCost, `Cleared the cost override for ${count}`)}>
+        {busy === "clearCost" ? "Clearing…" : "Clear cost"}
+      </Button>
+      {costOpen && <CostOverrideDialog open={costOpen} onOpenChange={setCostOpen} count={count}
+        onSave={async (c) => { await onSetCost(c); toast.success(`Cost set for ${count}`); }} />}
       {sep}
       </>}
       {onRescreen && <Button variant="outline" size="xs" disabled={!!busy} onClick={() => act("rescreen", onRescreen)}>{busy === "rescreen" ? "Starting…" : "Re-screen selected"}</Button>}

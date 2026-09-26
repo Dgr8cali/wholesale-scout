@@ -36,6 +36,8 @@ export interface Result {
   band: "green" | "amber" | "grey" | null;
   offer_count: number;
   error: string | null;
+  /** Your cost override for the product, and whether it's the cost scored. */
+  cost_override?: import("@/lib/costOverride").CostOverride | null;
   inputs: { market?: StoredMarket | null; sellers?: Seller[] | null; qogita?: QogitaOffers | null; maxLandedGbp?: number | null; movMoq?: number; pack?: { listing: number; supplier: number; ratio: number } | null; lookup?: { outcome: string; attempts: { identifiersType: string; code: string; items: number; total?: number; error?: string }[]; raw?: string } | null } | null;
   product: {
     ean: string; asin: string | null; title: string | null; brand: string | null; category: string | null; image_url?: string | null;

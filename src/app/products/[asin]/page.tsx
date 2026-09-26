@@ -32,6 +32,7 @@ import { approvalRequestUrl } from "@/lib/ui/RestrictionLink";
 import { cn } from "@/lib/utils";
 import { Tracker, type SupplierChoice } from "@/components/product/Tracker";
 import type { WatchCondition } from "@/lib/watch";
+import type { CostInput } from "@/lib/costOverride";
 
 const DECISION: Record<Decision, { label: string; variant: "pass" | "warn" | "fail" }> = {
   buy: { label: "Buy", variant: "pass" },
@@ -113,6 +114,10 @@ export default function ProductPage() {
   async function waive(_r: Result, gate: GateId, action: "waive" | "unwaive", reason?: string) {
     await api("/api/overrides", { method: "POST", json: { items: [{ ean: p.ean, asin: v!.asin }], gate, action, reason } });
     toast.success(`${GATE_LABELS[gate]} ${action === "waive" ? "waived" : "un-waived"}: it applies when the product is next screened (Re-check).`);
+    load();
+  }
+  async function cost(r: Result, c: CostInput | null) {
+    await api("/api/cost-override", { method: c ? "POST" : "DELETE", json: c ? { resultIds: [r.id], cost: c } : { resultIds: [r.id] } });
     load();
   }
   async function watch(_r: Result, condition: WatchCondition | null, noSupplier: boolean) {
@@ -272,7 +277,7 @@ export default function ProductPage() {
       {/* The latest screening in full */}
       {r && (
         <Panel title={<>Latest screening <span>· {r.run ? <Link className="text-brand hover:underline" href={`/runs/${r.run.id}`}>{r.run.name ?? r.run.source}</Link> : null}</span></>}>
-          <Detail r={r} fav={fav ?? undefined} onNote={saveNote} onWaive={waive} onWatch={watch} />
+          <Detail r={r} fav={fav ?? undefined} onNote={saveNote} onWaive={waive} onWatch={watch} onCost={cost} />
         </Panel>
       )}
     </div>

@@ -52,4 +52,4 @@ Every finished screening, newest first: the run (linked), its profile, verdict, 
 
 ## Approval and paperwork, and the latest screening
 
-Your approval status for the brand, its documents and any gates you've waived. At the bottom, the latest screening in full: gates (waive from here), the per-unit money, score groups, your note, the watchlist and what the extension read.
+Your approval status for the brand, its documents and any gates you've waived. At the bottom, the latest screening in full: gates (waive from here), the per-unit money (with **Set your cost**, see [Override a cost](/help/howto/override-a-cost)), score groups, your note, the watchlist and what the extension read.

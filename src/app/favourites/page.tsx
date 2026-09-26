@@ -26,6 +26,7 @@ import { GATE_LABELS, withDefaults, type GateId, type ProfileConfig } from "@/li
 import { api, when } from "@/lib/ui/client";
 import { brandOf, dormantOf, toFilterRow } from "@/lib/ui/resultRows";
 import type { WatchCondition } from "@/lib/watch";
+import type { CostInput } from "@/lib/costOverride";
 
 interface Item {
   favourite: Fav & { created_at: string };
@@ -177,6 +178,11 @@ export default function FavouritesPage() {
     const items = itemsOf(selected).map((i) => ({ ean: i.favourite.ean, asin: i.favourite.asin }));
     await api("/api/overrides", { method: "POST", json: { items, gate, action, reason } });
   }
+  /** Set or clear the cost override for these rows' products; their latest results are re-scored now. */
+  async function cost(ids: string[], c: CostInput | null) {
+    await api("/api/cost-override", { method: c ? "POST" : "DELETE", json: c ? { resultIds: ids, cost: c } : { resultIds: ids } });
+    load();
+  }
   async function rescreen(ids?: string[]) {
     setBusy(true);
     try {
@@ -235,6 +241,7 @@ export default function FavouritesPage() {
               await unstar(favs.map((i) => i.favourite.id));
             }}
             onWaive={(gate, reason) => bulkWaive(gate, "waive", reason)} onUnwaive={(gate) => bulkWaive(gate, "unwaive")}
+            onSetCost={(c) => cost([...selected], c)} onClearCost={() => cost([...selected], null)}
             onRescreen={() => rescreen(itemsOf(selected).map((i) => i.favourite.id))} onExport={() => exportXlsx(selected)} />
           <FilterBar value={filters} onChange={setFilters} options={options} favouritesAvailable={false}
             matching={shown.length} total={all.length} unit="favourites" gateLabels={GATE_LABELS} />
@@ -258,13 +265,13 @@ export default function FavouritesPage() {
                 </div>
               );
             }}
-            renderDetail={(r) => <Detail r={r} fav={favOf(r)} onNote={saveNote} onWaive={waive} onWatch={watch} budgetGbp={lineBudget} />}
+            renderDetail={(r) => <Detail r={r} fav={favOf(r)} onNote={saveNote} onWaive={waive} onWatch={watch} onCost={(r, c) => cost([r.id], c)} budgetGbp={lineBudget} />}
             empty="Nothing matches these filters."
             lineCapGbp={lineBudget} maxMonths={cfg.gates.demand.maxMonthsToSell} />
           {active && (
             <DetailDrawer r={active} index={activeIndex} count={displayRows.length} sparks={active.product?.asin ? sparks[active.product.asin] : null}
               onStep={step} onClose={() => setActiveId(null)}>
-              <Detail r={active} fav={favOf(active)} onNote={saveNote} onWaive={waive} onWatch={watch} stacked budgetGbp={lineBudget} />
+              <Detail r={active} fav={favOf(active)} onNote={saveNote} onWaive={waive} onWatch={watch} onCost={(r, c) => cost([r.id], c)} stacked budgetGbp={lineBudget} />
             </DetailDrawer>
           )}
         </>

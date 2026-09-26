@@ -46,6 +46,7 @@ Click a row to open its details in a side drawer. Use Up and Down (or K and J) t
 
 - **Favourite note**: saves a moment after you stop typing, and when you click away. It can be up to 500 characters.
 - **Watchlist**: set a flip condition and choose **Watch**, or **Save** to change it. See [Watchlist](/help/pages/watchlist).
+- **Set your cost**: your own cost for the product; this favourite's result is re-scored now. See [Override a cost](/help/howto/override-a-cost).
 - **Waive**: waives a gate for this product. It applies when the product is next screened ("… waived: it applies when the product is next screened"). See [Waive a gate](/help/howto/waive-a-gate).
 
 ### The bulk bar
@@ -56,6 +57,7 @@ Tick rows (or the header checkbox to select every row shown) and a bar appears:
 |---|---|
 | **Unstar** | Removes the selected favourites. If any have notes, you're asked first. |
 | Gate selector, **Reason for all (optional)**, **Waive**, **Un-waive** | Waives or un-waives the chosen gate for every selected product. See [Waive a gate](/help/howto/waive-a-gate). |
+| **Set cost…**, **Clear cost** | Sets (or clears) a cost override for every selected product, re-scoring their results now. See [Override a cost](/help/howto/override-a-cost). |
 | **Re-screen selected** | Like **Re-screen favourites**, but only for the selected rows. |
 | **Export selected** | Downloads just the selected rows as xlsx. |
 | **Clear selection** | Unticks everything. |

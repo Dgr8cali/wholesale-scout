@@ -293,6 +293,47 @@ describe("ingest → process", () => {
     expect(fake.tables.runs.find((r) => r.id === runId)!.profile_id).toBe(testOrder.id);
   });
 
+  it("scores a cost override when it's cheaper, in every run, and goes back to the sheet when cleared", async () => {
+    const { setCostOverride, clearCostOverride } = await import("./costOverrides");
+    await import("./db").then((m) => m.ensureSeed());
+    const tape = (price: string) => file("henbrandt.xlsx", [["EAN", "Name", "Price", "MOQ"], ["4006381333931", "Walker Tape 25mm", price, 12]],
+      { name: "Henbrandt", vatBasis: "ex_vat", vatRate: 20, currency: "GBP" });
+    const { runId } = await ingest({ files: [tape("5.00")] });
+    while (!(await processRun(runId)).done);
+    const row = () => fake.tables.results.find((r) => r.run_id === runId)!;
+    const sheetOffer = row().offer_id, sheetLanded = Number(row().landed_cost);
+    const before = { ...calls };
+
+    // Cheaper landed cost: scored straight away, from stored data (no calls), and says what it replaced.
+    await setCostOverride([row().id as string], { landedGbp: 4, supplierName: "Makro", note: "cash and carry" });
+    expect(calls).toEqual(before);
+    expect(Number(row().landed_cost)).toBeCloseTo(4, 2);
+    expect(row().offer_id).not.toBe(sheetOffer);
+    expect(row().sheet_offer_id).toBe(sheetOffer);
+    expect(row().cost_override).toMatchObject({ active: true, supplier: "Makro", note: "cash and carry", landedGbp: 4, original: { supplier: "Henbrandt", unitGbp: 5, costKnown: true } });
+    expect(fake.tables.offers.filter((o) => o.manual)).toHaveLength(1);
+
+    // Dearer than the sheet: the sheet's price is scored again.
+    await setCostOverride([row().id as string], { priceGbp: 9, vatBasis: "inc_vat" });
+    expect(fake.tables.offers.filter((o) => o.manual)).toHaveLength(1);
+    expect(row().offer_id).toBe(sheetOffer);
+    expect(row().cost_override).toMatchObject({ active: false, priceGbp: 9, vatBasis: "inc_vat", unitGbp: 7.5 });
+    expect(Number(row().landed_cost)).toBeCloseTo(sheetLanded, 2);
+
+    // A supplier price inc VAT is scored ex VAT; a new run of the same product picks it up too.
+    await setCostOverride([row().id as string], { priceGbp: 3.6, vatBasis: "inc_vat" });
+    expect(row().cost_override).toMatchObject({ active: true, unitGbp: 3, priceGbp: 3.6, vatBasis: "inc_vat" });
+    const second = await ingest({ files: [tape("5.00")] });
+    while (!(await processRun(second.runId)).done);
+    expect(fake.tables.results.find((r) => r.run_id === second.runId)!.cost_override).toMatchObject({ unitGbp: 3 });
+
+    await clearCostOverride([row().id as string]);
+    expect(fake.tables.offers.filter((o) => o.manual)).toHaveLength(0);
+    expect(row().offer_id).toBe(sheetOffer);
+    expect(row().cost_override).toBeNull();
+    expect(Number(row().landed_cost)).toBeCloseTo(sheetLanded, 2);
+  });
+
   it("keeps an EAN's sibling ASINs on a second upload and on Re-screen (Onagrine doubtful match)", async () => {
     const sebium = () => file("pharmazon.xlsx", [
       ["EAN", "Name", "Price", "MOQ"],

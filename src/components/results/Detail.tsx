@@ -20,6 +20,8 @@ import { useState } from "react";
 import Link from "next/link";
 import type { Fav, Result, Seller } from "./types";
 import { WatchEditor } from "./WatchEditor";
+import { CostOverrideControl } from "./CostOverride";
+import type { CostInput } from "@/lib/costOverride";
 import { FindOnQogita } from "./FindOnQogita";
 import { Checked } from "@/components/check/Checked";
 import { useHelp } from "@/components/help/HelpPanel";
@@ -124,7 +126,7 @@ function FromExtension({ r }: { r: Result }) {
 }
 
 /** Everything about one result: gates (with waive), per-unit money, fee sources, score groups, note, sellers. */
-export function Detail({ r, fav, onNote, onWaive, onWatch, stacked = false, budgetGbp }: {
+export function Detail({ r, fav, onNote, onWaive, onWatch, onCost, stacked = false, budgetGbp }: {
   stacked?: boolean;
   /** The profile's budget for one line (budget × max line share), for the cart quantity. */
   budgetGbp?: number;
@@ -134,6 +136,8 @@ export function Detail({ r, fav, onNote, onWaive, onWatch, stacked = false, budg
   onWaive: (r: Result, gate: GateId, action: "waive" | "unwaive", reason?: string) => Promise<void>;
   /** Put it on the watchlist with a flip condition (absent where there's no watchlist). */
   onWatch?: (r: Result, condition: WatchCondition | null, noSupplier: boolean) => Promise<void>;
+  /** Set (a cost) or clear (null) the product's cost override; the row is re-scored. */
+  onCost?: (r: Result, cost: CostInput | null) => Promise<void>;
 }) {
   const help = useHelp();
   const asin = r.product?.asin;
@@ -229,6 +233,9 @@ export function Detail({ r, fav, onNote, onWaive, onWatch, stacked = false, budg
           <p className="mt-1 text-xs text-muted-foreground">
             Quoted {r.offer.unit_cost} {r.offer.currency}/unit → {gbp(r.offer.unit_cost_gbp)} ex-VAT · MOQ {r.offer.moq ?? "—"} · {r.offer.source_ref}
           </p>
+        )}
+        {onCost && r.product && r.status === "done" && (
+          <CostOverrideControl override={r.cost_override} onSet={(c) => onCost(r, c)} onClear={() => onCost(r, null)} />
         )}
         {r.inputs?.pack && (
           <p className="mt-1 text-xs font-medium text-warn">

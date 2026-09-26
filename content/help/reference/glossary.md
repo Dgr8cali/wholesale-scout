@@ -47,6 +47,10 @@ How long your first order would take to sell at [your share](#your-share):
 
 The [Demand gate](/help/gates/demand) fails a row over **Max months to sell the order** (default 3), e.g. "40 units at 5/mo = 8 months, over 3". The why-line of a scored row ends "First order 30 units sells in 2.5 months."
 
+## Cost override
+
+Your own cost for a product: a landed cost, or a supplier price with its VAT basis, plus a supplier name and note. It's stored as an offer from the **Manual** supplier and competes with the sheet's price on every screening, in every run; the cheaper is scored, and the row shows **cost overridden**. See [Override a cost](/help/howto/override-a-cost).
+
 ## Dormant
 
 A listing that exists and has Keepa history, but that nobody is selling now: no current Buy Box, no current sales rank, no current offers, and no offer live in the history today.

@@ -32,6 +32,9 @@ function amazonOnListing(r: ResultLike): "yes" | "no" | null {
   return null;
 }
 
+/** The row is scored on your cost override. */
+export const isCostOverridden = (r: { cost_override?: { active: boolean } | null }) => !!r.cost_override?.active;
+
 /** A gate on this row was waived by you. */
 export const isWaived = (r: Pick<ResultLike, "gate_outcomes">) => !!r.gate_outcomes?.some((o) => o.tags?.includes("WAIVED"));
 

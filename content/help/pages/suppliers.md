@@ -15,7 +15,7 @@ Suppliers are created for you. A new one appears the first time you upload a pri
 
 | Column | What it shows |
 |---|---|
-| **Supplier** | The name, which links to the supplier's page, plus a website link if you've added one. Underneath is the source (Upload, Qogita or Manual) and when their last offer was seen. |
+| **Supplier** | The name, which links to the supplier's page, plus a website link if you've added one. Underneath is the source (Upload, Qogita or Manual) and when their last offer was seen. The **Manual** supplier holds your [cost overrides](/help/howto/override-a-cost). |
 | **Runs** | How many runs included their offers. |
 | **Products** | Distinct products they've offered. |
 | **Pass / warn** | Their products that pass or warn on your default profile. Only products with a price are counted. |
