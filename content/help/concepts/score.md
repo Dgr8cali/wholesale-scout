@@ -90,7 +90,7 @@ The money comes from the [fee engine](/help/concepts/fees).
 | **Gating (0 open, 1 unknown, 2 approval needed)** | 0 open (or a brand you've recorded as approved), 1 unknown, 2 approval needed or blocked | 0 → 100, 1 → 70, 2 → 35 |
 | **Brand-lock pattern (1 = one seller holds ≥ 90%)** | 1 if a likely brand distributor was flagged, or one seller held 90% or more of the Buy Box; else 0 | 0 → 100, 1 → 20 |
 | **Variation count** | Listings in the variation family | 1 → 100, 10 → 75, 50 → 30 |
-| **Other warn-mode gates tripped** | Gates that warned, apart from compliance, mirage, gating and match quality. Waived gates count here | 0 → 100, 1 → 65, 2 → 40, 4 → 0 |
+| **Other warn-mode gates tripped** | Gates that warned, apart from compliance, mirage, gating and match quality. Waived fails count here (a waived warning is a pass and doesn't) | 0 → 100, 1 → 65, 2 → 40, 4 → 0 |
 
 ### Fit
 

@@ -688,11 +688,11 @@ function Waived() {
     }
   };
   return (
-    <Section title="Waived gates" note={<>A waived gate turns that product&apos;s fail into a warning in every run, so later gates, fees and the score still run. Waive or un-waive from a result&apos;s details; removing one here applies the next time a run is screened or re-screened.</>}>
+    <Section title="Waived gates" note={<>A waived gate turns that product&apos;s fail into a warning in every run, so later gates, fees and the score still run; a waived warning stops counting, so the row can go green. Waive or un-waive from a result&apos;s details; removing one here applies the next time a run is screened or re-screened.</>}>
       {msg && <p className="rounded-md bg-warn-soft px-3 py-2 text-sm text-warn">{msg}</p>}
       {!items.length ? (
         <EmptyState icon={<UndoIcon />} title="No gates waived" className="border-dashed shadow-none">
-          Open a result, find a failed gate, and choose Waive to accept it for that product.
+          Open a result, find a failed or warning gate, and choose Waive to accept it for that product.
         </EmptyState>
       ) : (
         <div className="overflow-hidden rounded-lg border">

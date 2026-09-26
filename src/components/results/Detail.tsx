@@ -168,8 +168,8 @@ export function Detail({ r, fav, onNote, onWaive, onWatch, stacked = false, budg
                       applyUrl={applyLinks((g as { links?: Parameters<typeof applyLinks>[0] }).links)[0]?.resource ?? approvalRequestUrl(r.product.asin)} />
                   </span>
                 )}
-                {r.product && (g.status === "fail" || g.tags?.includes("WAIVED")) && (
-                  <WaiveControl waived={!!g.tags?.includes("WAIVED")}
+                {r.product && (g.status === "fail" || g.status === "warn" || g.tags?.includes("WAIVED")) && (
+                  <WaiveControl waived={!!g.tags?.includes("WAIVED")} failed={g.status === "fail"}
                     onWaive={(reason) => onWaive(r, g.gate as GateId, "waive", reason)}
                     onUnwaive={() => onWaive(r, g.gate as GateId, "unwaive")} />
                 )}

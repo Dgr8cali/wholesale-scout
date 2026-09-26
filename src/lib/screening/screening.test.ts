@@ -477,6 +477,18 @@ describe("gate waivers", () => {
     expect(w.why).toContain("Watch: Amazon sold 30 days ago (waived by you");
   });
 
+  it("waives a warning too: the row can go green, and the why-line says so", () => {
+    const c = ctx({ market: market({ amazonLastSeenDays: 30 }) });
+    const warnOnly = structuredClone(DEFAULT_PROFILE);
+    warnOnly.gates.amazonPresence.mode = "warn";
+    const plain = runGates(c, warnOnly);
+    expect(plain.outcomes.find((o) => o.gate === "amazonPresence")!.status).toBe("warn");
+    const run = runGates(ctx({ ...c, waivers: new Map([["amazonPresence", null]]) }), warnOnly);
+    const g = run.outcomes.find((o) => o.gate === "amazonPresence")!;
+    expect(g).toMatchObject({ status: "pass", detail: "Amazon sold 30 days ago (waived by you)", tags: expect.arrayContaining(["WAIVED"]) });
+    expect(verdictOf(run.outcomes.filter((o) => o.gate === "amazonPresence"))).toBe("pass");
+  });
+
   it("doesn't touch a gate that passed, or other gates", () => {
     const c = ctx({ waivers: new Map([["fees", null]]), market: market({ amazonLastSeenDays: 30 }) });
     expect(runGates(c, DEFAULT_PROFILE).failedGate).toBe("amazonPresence");

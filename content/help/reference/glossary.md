@@ -83,9 +83,9 @@ When the fall is steeper than **Max Buy Box decline** (default 20% a year), the 
 
 ## Waiver
 
-Your decision to let one product through one gate. Waiving turns that gate's fail into a warning with "(waived by you: <your reason>)" after the detail. Because the row no longer stops there, the later gates, fees and score all run. A waived gate counts towards the Risk group's **Other warn-mode gates tripped**, and the why-line shows it under "Watch".
+Your decision to let one product through one gate. Waiving a fail turns it into a warning with "(waived by you: <your reason>)" after the detail. Because the row no longer stops there, the later gates, fees and score all run. A waived fail counts towards the Risk group's **Other warn-mode gates tripped**, and the why-line shows it under "Watch". Waiving a warning turns it into a pass with the same "(waived by you…)" note, so it no longer counts against the verdict or the score and the row can go green.
 
-A waiver belongs to the product (its EAN and ASIN) and the gate, not to a run, so it applies in every run. It takes effect the next time the product is screened or re-screened. You waive a gate from a failed gate in the row's details. All waivers are listed in [Settings](/help/pages/settings) → **Waived**, where you can remove them. See [Waive a gate](/help/howto/waive-a-gate).
+A waiver belongs to the product (its EAN and ASIN) and the gate, not to a run, so it applies in every run. It takes effect the next time the product is screened or re-screened. You waive a gate from a failed or warning gate in the row's details, or for many rows from the bulk bar. All waivers are listed in [Settings](/help/pages/settings) → **Waived**, where you can remove them. See [Waive a gate](/help/howto/waive-a-gate).
 
 ## Doubtful match
 

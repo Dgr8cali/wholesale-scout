@@ -5,11 +5,13 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 /**
- * "Waive" on a failed gate (asks for an optional reason inline), "Un-waive" on a waived one.
+ * "Waive" on a failed or warning gate (asks for an optional reason inline), "Un-waive" on a waived one.
  * The parent does the saving; a rejected promise shows its message here.
  */
-export function WaiveControl({ waived, onWaive, onUnwaive }: {
+export function WaiveControl({ waived, failed = true, onWaive, onUnwaive }: {
   waived: boolean;
+  /** The gate failed (its waiver makes it a warning) rather than warned (its waiver clears it). */
+  failed?: boolean;
   onWaive: (reason: string) => Promise<void>;
   onUnwaive: () => Promise<void>;
 }) {
@@ -44,7 +46,9 @@ export function WaiveControl({ waived, onWaive, onUnwaive }: {
     return (
       <button type="button" onClick={(e) => { stop(e); setAsking(true); }}
         className="ml-2 flex-none text-2xs font-medium text-brand hover:underline"
-        title="Waive this gate for this product in every run: its fail becomes a warning and later gates run">
+        title={failed
+          ? "Waive this gate for this product in every run: its fail becomes a warning and later gates run"
+          : "Waive this warning for this product in every run: it stops counting against the row, which can go green"}>
         Waive
       </button>
     );

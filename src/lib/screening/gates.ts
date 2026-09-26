@@ -155,7 +155,7 @@ export interface ScreenContext {
   };
   /** Top Buy Box sellers' profiles, looked up for rows that pass every gate. */
   sellers?: SellerView[];
-  /** Gates you've waived for this product, with your reason: a fail becomes a warn. */
+  /** Gates you've waived for this product, with your reason: a fail becomes a warn, a warn a pass. */
   waivers?: Map<GateId, string | null>;
   market: MarketData | null;
   /** A brand you've recorded as approved on the Brands page, with the date. */
@@ -601,10 +601,11 @@ export function runGates(ctx: ScreenContext, p: ProfileConfig, only?: GateId[]):
       continue;
     }
     let r = EVALUATORS[id](ctx, p, run);
-    // Waived for this product: the fail stays visible as a warn, and later gates still run.
-    if (r.status === "fail" && ctx.waivers?.has(id)) {
+    // Waived for this product: a fail stays visible as a warn (later gates still run); a warn
+    // stops counting against the row (it can go green). Either way the why-line says so.
+    if ((r.status === "fail" || r.status === "warn") && ctx.waivers?.has(id)) {
       const why = ctx.waivers.get(id);
-      r = { ...r, status: "warn", detail: `${r.detail} (waived by you${why ? `: ${why}` : ""})`, tags: [...(r.tags ?? []), "WAIVED"] };
+      r = { ...r, status: r.status === "fail" ? "warn" : "pass", detail: `${r.detail} (waived by you${why ? `: ${why}` : ""})`, tags: [...(r.tags ?? []), "WAIVED"] };
     }
     run.outcomes.push({ gate: id, label: GATE_LABELS[id], ...r });
     if (r.status === "fail") {

@@ -115,7 +115,7 @@ Shared by every profile. It holds Amazon's size tiers, FBA fees, storage and ref
 
 ## Waived tab
 
-"A waived gate turns that product's fail into a warning in every run, so later gates, fees and the score still run." The table lists each [waiver](/help/reference/glossary#waiver): the product (EAN, and ASIN or "any ASIN"), the gate, your reason and the date. **Remove** deletes it; that applies the next time a run is screened or re-screened. You add waivers from a result's details, not here. See [Waive a gate](/help/howto/waive-a-gate).
+"A waived gate turns that product's fail into a warning in every run, so later gates, fees and the score still run; a waived warning stops counting, so the row can go green." The table lists each [waiver](/help/reference/glossary#waiver): the product (EAN, and ASIN or "any ASIN"), the gate, your reason and the date. **Remove** deletes it; that applies the next time a run is screened or re-screened. You add waivers from a result's details, not here. See [Waive a gate](/help/howto/waive-a-gate).
 
 ## IP risk tab
 
