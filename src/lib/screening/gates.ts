@@ -411,10 +411,10 @@ const EVALUATORS: Record<GateId, Evaluator> = {
   demand(ctx, p) {
     const g = p.gates.demand;
     const m = ctx.market;
-    // All must hold: enough sales in total, enough of them for you once shared with the other
-    // sellers (your share), and a good average rank. Sales come from the Keepa history (the
-    // same figure as the Sales / mo column), so without history there's nothing to count:
-    // skip rather than pass on the current rank alone.
+    // Enough sales in total and enough of them for you once shared with the other sellers (your
+    // share), with the first order selling through in time. The rank ceiling only decides when
+    // there's no sales figure at all. Sales come from the Keepa history (the same figure as the
+    // Sales / mo column), so without history there's nothing to count: skip.
     if (!m?.hasHistory) return skipped(m?.rankNow != null ? `Needs Keepa history to count sales (current rank ${m.rankNow.toLocaleString("en-GB")})` : "Needs Keepa history");
     const share = yourShare(m);
     const plan = firstOrder(ctx, p, share.value);
@@ -432,31 +432,44 @@ const EVALUATORS: Record<GateId, Evaluator> = {
     // The rank ceiling for the product's category (Keepa's, else the catalog's), else the profile's.
     const ceil = rankCeiling(g, m.rootCategory ?? ctx.amazonCategory);
     const over = () => `over ${ceil.max.toLocaleString("en-GB")}${ceil.category ? ` for ${ceil.category}` : ""}`;
+    const rankNote = (label: string, value: number) => `${label} ${value.toLocaleString("en-GB")} (shown, not gated: sales decide)`;
     if (isDormant(m)) {
       // No rank now: judge the past year instead, as a monthly rate.
+      if (m.rankDrops12m == null && m.avgRank12m != null) {
+        // No sales data at all: the 12-month rank has to stand in.
+        if (m.avgRank12m > ceil.max) return { status: failAs(g.mode), detail: `dormant, no sales data: 12-month average rank ${m.avgRank12m.toLocaleString("en-GB")}, ${over()}`, tags: ["DORMANT"] };
+        return { status: "pass", detail: `dormant, no sales data: judged on rank, 12-month average ${m.avgRank12m.toLocaleString("en-GB")} (${ceil.category ? `${ceil.category} ` : ""}max ${ceil.max.toLocaleString("en-GB")})`, tags: ["DORMANT"] };
+      }
       const drops = m.rankDrops12m ?? 0;
       if (drops === 0) {
-        const why = m.rankDrops12m == null && m.avgRank12m == null ? "Keepa has no sales rank for it in 12 months" : "no rank drops in 12 months";
+        const why = m.rankDrops12m == null ? "Keepa has no sales rank for it in 12 months" : "no rank drops in 12 months";
         return { status: failAs(g.mode), detail: `dormant: no sales history (${why})`, tags: ["DORMANT"] };
       }
       const perMonth = Math.round((drops / 12) * 10) / 10;
       const reasons: string[] = [];
       if (perMonth < g.minRankDrops30d) reasons.push(`${drops} rank drops in 12 months (${perMonth}/mo), under ${g.minRankDrops30d}/mo`);
       shareCheck(reasons);
-      if (m.avgRank12m != null && m.avgRank12m > ceil.max) reasons.push(`12-month average rank ${m.avgRank12m.toLocaleString("en-GB")}, ${over()}`);
-      if (reasons.length) return { status: failAs(g.mode), detail: `dormant: ${reasons.join("; ")}`, tags: ["DORMANT"] };
-      return { status: "pass", detail: `dormant: ${drops} rank drops in 12 months (${perMonth}/mo)${m.avgRank12m != null ? `, 12-month average rank ${m.avgRank12m.toLocaleString("en-GB")}` : ""}${orderText}`, tags: ["DORMANT"] };
+      const rank12 = m.avgRank12m != null ? `; ${rankNote("12-month average rank", m.avgRank12m)}` : "";
+      if (reasons.length) return { status: failAs(g.mode), detail: `dormant: ${reasons.join("; ")}${rank12}`, tags: ["DORMANT"] };
+      return { status: "pass", detail: `dormant: ${drops} rank drops in 12 months (${perMonth}/mo)${orderText}${rank12}`, tags: ["DORMANT"] };
     }
-    const sales = salesPerMonth(m).value ?? 0;
+    const figure = salesPerMonth(m);
     const rank = m.avgRank90d ?? m.rankNow ?? null;
     const rankLabel = m.avgRank90d != null ? "90-day average rank" : "current rank";
+    // Sales known (rank drops, Keepa's count or Amazon's "bought in past month"): sales and your
+    // share decide, and the rank is only shown. No sales data at all: the rank ceiling decides.
+    if (figure.sources.every((x) => x.value == null)) {
+      if (rank == null) return { status: failAs(g.mode), detail: "no sales data and no rank in the last 90 days" };
+      if (rank > ceil.max) return { status: failAs(g.mode), detail: `no sales data: ${rankLabel} ${rank.toLocaleString("en-GB")}, ${over()}` };
+      return { status: "pass", detail: `no sales data: judged on rank, ${rankLabel} ${rank.toLocaleString("en-GB")} (${ceil.category ? `${ceil.category} ` : ""}max ${ceil.max.toLocaleString("en-GB")})` };
+    }
+    const sales = figure.value ?? 0;
     const reasons: string[] = [];
     if (sales < g.minRankDrops30d) reasons.push(`${sales} sales in 30 days, under ${g.minRankDrops30d}`);
     shareCheck(reasons);
-    if (rank == null) reasons.push("no rank in the last 90 days");
-    else if (rank > ceil.max) reasons.push(`${rankLabel} ${rank.toLocaleString("en-GB")}, ${over()}`);
-    if (reasons.length) return { status: failAs(g.mode), detail: reasons.join("; ") };
-    return { status: "pass", detail: `${sales} sales/mo${shareText}, ${m.avgRank90d != null ? "avg" : "current"} rank ${rank!.toLocaleString("en-GB")}${ceil.category ? ` (${ceil.category} max ${ceil.max.toLocaleString("en-GB")})` : ""}${orderText}` };
+    const rankText = rank != null ? `; ${rankNote(rankLabel, rank)}` : "";
+    if (reasons.length) return { status: failAs(g.mode), detail: `${reasons.join("; ")}${rankText}` };
+    return { status: "pass", detail: `${sales} sales/mo${shareText}${orderText}${rankText}` };
   },
 
   priceRegime(ctx, p) {

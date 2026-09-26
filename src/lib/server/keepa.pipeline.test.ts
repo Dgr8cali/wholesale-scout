@@ -182,7 +182,7 @@ describe("Keepa path", () => {
     for (const r of results(runId)) {
       expect((r.inputs as { market: { hasHistory: boolean; monthlySold: number } }).market).toMatchObject({ hasHistory: true, monthlySold: 300 });
       for (const g of ["mirage", "amazonPresence", "priceRegime", "priceDrift"]) expect(gate(r, g)?.status, g).not.toBe("skipped");
-      expect(gate(r, "demand")!.detail).toMatch(/300 sales\/mo, your share 60\/mo, avg rank 6,562/);
+      expect(gate(r, "demand")!.detail).toMatch(/^300 sales\/mo, your share 60\/mo; .*90-day average rank 6,562 \(shown, not gated: sales decide\)$/);
       expect(r.why).not.toMatch(/No Keepa history/);
     }
     expect(fake.tables.products.every((p) => p.keepa_updated_at)).toBe(true);

@@ -23,7 +23,7 @@ export function CategoryRanks({ value, fallback, onChange }: { value: Record<str
         <button type="button" className="text-xs font-medium text-brand hover:underline" onClick={() => onChange({ ...DEFAULT_RANK_BY_CATEGORY })}>Reset to suggested</button>
       </div>
       <p className="text-xs text-muted-foreground">
-        Keepa&apos;s top-level category (the one the rank is in). Any other category uses the max above ({Number.isFinite(fallback) ? fallback.toLocaleString("en-GB") : "—"}).
+        Only for products with no sales figure: when sales are known, sales and your share decide and the rank is just shown. Keepa&apos;s top-level category (the one the rank is in); any other category uses the max above ({Number.isFinite(fallback) ? fallback.toLocaleString("en-GB") : "—"}).
       </p>
       {rows.length > 0 && (
         <ul className="grid max-w-md grid-cols-1 gap-y-1.5">

@@ -47,7 +47,7 @@ const GATE_PARAMS: Record<GateId, { key: string; label: string; unit?: string; s
   mirage: [{ key: "minHistoryDays", label: "Min rank history", unit: "days" }, { key: "maxReviewJumpPct", label: "Max one-day review jump", unit: "%" }],
   amazonPresence: [{ key: "days", label: "Amazon held an offer in the last", unit: "days" }],
   competition: [{ key: "minSellers", label: "Min FBA sellers" }, { key: "maxSellers", label: "Max FBA sellers" }, { key: "maxBbSharePct", label: "Max top-seller Buy Box share", unit: "%" }],
-  demand: [{ key: "minRankDrops30d", label: "Min sales / month (total)" }, { key: "minSharePerMonth", label: "Min your share", unit: "sales / month" }, { key: "maxAvgRank90d", label: "Max 90-day average rank", step: 1000 }, { key: "maxMonthsToSell", label: "Max months to sell the order", step: 0.5 }],
+  demand: [{ key: "minRankDrops30d", label: "Min sales / month (total)" }, { key: "minSharePerMonth", label: "Min your share", unit: "sales / month" }, { key: "maxAvgRank90d", label: "Max 90-day average rank (no sales data only)", step: 1000 }, { key: "maxMonthsToSell", label: "Max months to sell the order", step: 0.5 }],
   priceRegime: [{ key: "spikePct", label: "Spike tolerance over median", unit: "%" }],
   priceDrift: [{ key: "maxDeclinePctYr", label: "Max Buy Box decline", unit: "% / year" }],
   gating: [],

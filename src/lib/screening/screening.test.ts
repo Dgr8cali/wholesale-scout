@@ -193,33 +193,33 @@ describe("gates", () => {
     expect(w.band).not.toBe("green");
   });
 
-  describe("Demand needs sales AND rank", () => {
+  describe("Demand: sales and your share decide; the rank only when there's no sales data", () => {
     const demand = (m: MarketData) => runGates(ctx({ market: m }), noMonths).outcomes.find((o) => o.gate === "demand")!;
 
-    it("fails 0 rank drops in 30 days even with a good 90-day rank", () => {
+    it("fails 0 sales in 30 days even with a good rank, which is shown but not gated", () => {
       const d = demand(market({ rankDrops30d: 0, keepaRankDrops30: 0, monthlySold: null, avgRank90d: 1200 }));
       expect(d.status).toBe("fail");
-      expect(d.detail).toMatch(/0 sales in 30 days, under 30/);
-      expect(d.detail).not.toMatch(/rank/);
+      expect(d.detail).toMatch(/^0 sales in 30 days, under 30/);
+      expect(d.detail).toMatch(/90-day average rank 1,200 \(shown, not gated: sales decide\)$/);
     });
 
-    it("fails a good sales count with a poor 90-day rank", () => {
-      expect(demand(market({ rankDrops30d: 90, avgRank90d: 120_000, rootCategory: "Toys & Games" })).status).toBe("fail");
+    it("passes on good sales and share whatever the rank", () => {
+      const d = demand(market({ rankDrops30d: 90, avgRank90d: 120_000, rootCategory: "Toys & Games" }));
+      expect(d.status).toBe("pass");
+      expect(d.detail).toMatch(/^90 sales\/mo, your share 18\/mo/);
+      expect(d.detail).toMatch(/90-day average rank 120,000 \(shown, not gated: sales decide\)$/);
     });
 
-    it("uses the category's rank ceiling (Keepa's category, else the catalog's), else the profile's", () => {
+    it("judges on the rank ceiling (the category's, else the profile's) only when there's no sales data", () => {
+      const none = { rankDrops30d: null, keepaRankDrops30: null, monthlySold: null };
       // Beauty is tighter (60,000), DIY & Tools looser (150,000), Toys & Games uses the profile's 50,000.
-      expect(demand(market({ rankDrops30d: 90, avgRank90d: 70_000, rootCategory: "Beauty" }))).toMatchObject({ status: "fail", detail: "90-day average rank 70,000, over 60,000 for Beauty" });
-      expect(demand(market({ rankDrops30d: 90, avgRank90d: 120_000, rootCategory: "DIY & Tools" }))).toMatchObject({ status: "pass", detail: expect.stringContaining("(DIY & Tools max 150,000)") });
-      expect(demand(market({ rankDrops30d: 90, avgRank90d: 60_000, rootCategory: "Toys & Games" })).detail).toBe("90-day average rank 60,000, over 50,000");
+      expect(demand(market({ ...none, avgRank90d: 70_000, rootCategory: "Beauty" }))).toMatchObject({ status: "fail", detail: "no sales data: 90-day average rank 70,000, over 60,000 for Beauty" });
+      expect(demand(market({ ...none, avgRank90d: 120_000, rootCategory: "DIY & Tools" }))).toMatchObject({ status: "pass", detail: "no sales data: judged on rank, 90-day average rank 120,000 (DIY & Tools max 150,000)" });
+      expect(demand(market({ ...none, avgRank90d: 60_000, rootCategory: "Toys & Games" })).detail).toBe("no sales data: 90-day average rank 60,000, over 50,000");
+      expect(demand(market({ ...none, avgRank90d: 8_000, rootCategory: "Toys & Games" })).detail).toBe("no sales data: judged on rank, 90-day average rank 8,000 (max 50,000)");
       // No Keepa category on an older snapshot: the catalog's ("DIY & Tools" in these tests).
-      expect(demand(market({ rankDrops30d: 90, avgRank90d: 120_000 })).status).toBe("pass");
-    });
-
-    it("fails history with no recorded sales at all, rather than skipping the count", () => {
-      const d = demand(market({ rankDrops30d: null, keepaRankDrops30: null, monthlySold: null }));
-      expect(d.status).toBe("fail");
-      expect(d.detail).toMatch(/^0 sales/);
+      expect(demand(market({ ...none, avgRank90d: 120_000 })).status).toBe("pass");
+      expect(demand(market({ ...none, avgRank90d: null, rankNow: null }))).toMatchObject({ status: "fail", detail: "no sales data and no rank in the last 90 days" });
     });
 
     it("counts sales the way the Sales / mo column does (the highest source)", () => {
@@ -251,13 +251,13 @@ describe("gates", () => {
       expect(demand(m).status).toBe("fail"); // 18 is under the default 30 total
       const d = demand(m, lowTotal);
       expect(d.status).toBe("pass");
-      expect(d.detail).toMatch(/^18 sales\/mo, your share 9\/mo, avg rank 20,000 \(DIY & Tools max 150,000\); order \d+ sells in /);
+      expect(d.detail).toMatch(/^18 sales\/mo, your share 9\/mo; order \d+ sells in [\d.]+ months?; 90-day average rank 20,000 \(shown, not gated: sales decide\)$/);
     });
 
     it("flags a high-volume product split twenty ways", () => {
       const d = demand(market({ rankDrops30d: 100, keepaRankDrops30: null, monthlySold: null, fbaOffers: 20, amazonLastSeenDays: 400 }));
       expect(d.status).toBe("fail");
-      expect(d.detail).toBe("your share 4.8/mo, under 5 (100 sales ÷ 20 other sellers + you)");
+      expect(d.detail).toBe("your share 4.8/mo, under 5 (100 sales ÷ 20 other sellers + you); 90-day average rank 3,500 (shown, not gated: sales decide)");
     });
 
     it("feeds your profit a month into the Margin group", () => {
@@ -278,7 +278,7 @@ describe("gates", () => {
       const run = runGates(ctx({ market: slow }), cap25(3));
       const d = run.outcomes.find((o) => o.gate === "demand")!;
       expect(run.failedGate).toBe("demand");
-      expect(d.detail).toMatch(/^(\d+) units at 5\/mo = (\d+(\.\d)?) months, over 3$/);
+      expect(d.detail).toMatch(/^(\d+) units at 5\/mo = (\d+(\.\d)?) months, over 3; 90-day average rank 20,000 \(shown, not gated: sales decide\)$/);
       const [, units, months] = d.detail.match(/^(\d+) units at 5\/mo = ([\d.]+) months/)!;
       expect(Number(months)).toBeCloseTo(Number(units) / 5, 1);
     });
@@ -286,12 +286,12 @@ describe("gates", () => {
     it("passes when the order sells in time, and says how long", () => {
       const d = runGates(ctx({ market: slow }), cap25(12)).outcomes.find((o) => o.gate === "demand")!;
       expect(d.status).toBe("pass");
-      expect(d.detail).toMatch(/; order \d+ sells in [\d.]+ months$/);
+      expect(d.detail).toMatch(/; order \d+ sells in [\d.]+ months; 90-day average rank 20,000 \(shown, not gated: sales decide\)$/);
     });
 
     it("orders the MOQ when it's over the line cap, and flags it", () => {
       const d = runGates(ctx({ market: slow, offer: { unitCostGbp: 5, moq: 200, goodsVatRatePct: 20, supplierMovGbp: null } }), withDefaults({ ...cap25(3), gates: { ...cap25(3).gates, budgetFit: { mode: "off", maxLineSharePct: 25 } } })).outcomes.find((o) => o.gate === "demand")!;
-      expect(d.detail).toBe("200 units (MOQ) at 5/mo = 40 months, over 3");
+      expect(d.detail).toBe("200 units (MOQ) at 5/mo = 40 months, over 3; 90-day average rank 20,000 (shown, not gated: sales decide)");
     });
   });
 
@@ -313,13 +313,20 @@ describe("gates", () => {
       ...over,
     });
 
+    it("judges a dormant listing on its 12-month rank only when there are no rank drops to count", () => {
+      const d = (over: Partial<MarketData>) => runGates(ctx({ market: dormant(over) }), noMonths).outcomes.find((o) => o.gate === "demand")!;
+      expect(d({ rankDrops12m: null, avgRank12m: 9000 })).toMatchObject({ status: "pass", detail: "dormant, no sales data: judged on rank, 12-month average 9,000 (DIY & Tools max 150,000)" });
+      expect(d({ rankDrops12m: null, avgRank12m: 400_000 })).toMatchObject({ status: "fail", detail: "dormant, no sales data: 12-month average rank 400,000, over 150,000 for DIY & Tools" });
+      expect(d({ rankDrops12m: null, avgRank12m: null }).detail).toBe("dormant: no sales history (Keepa has no sales rank for it in 12 months)");
+    });
+
     it("scores on the last Buy Box seen in 12 months and 12 months of rank drops", () => {
       const c = ctx({ market: dormant() });
       expect(resolveScoringPrice(c.market, DEFAULT_PROFILE)).toEqual({ price: 18.5, source: "last seen £18.50 on 3 Mar 2026" });
       const run = runGates(c, noMonths);
       const demand = run.outcomes.find((o) => o.gate === "demand")!;
       expect(demand.status).toBe("pass");
-      expect(demand.detail).toMatch(/^dormant: 600 rank drops in 12 months \(50\/mo\), 12-month average rank 9,000; order \d+ sells in /);
+      expect(demand.detail).toMatch(/^dormant: 600 rank drops in 12 months \(50\/mo\); order \d+ sells in [\d.]+ months?; 12-month average rank 9,000 \(shown, not gated: sales decide\)$/);
       expect(demand.tags).toContain("DORMANT");
       expect(run.outcomes.find((o) => o.gate === "competition")!.detail).toBe("dormant: no sellers now, none for 206 days");
       const w = winScore(c, run, noMonths, fit);
