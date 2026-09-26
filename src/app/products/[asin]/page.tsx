@@ -166,6 +166,9 @@ export default function ProductPage() {
                 <ul className="list-disc pl-5">{j.doubts.map((x, i) => <li key={i}>{x}</li>)}</ul>
               </div>
             )}
+            {j.notes?.length > 0 && (
+              <ul className="list-disc pl-5 text-xs text-muted-foreground">{j.notes.map((x, i) => <li key={i}>{x}</li>)}</ul>
+            )}
           </div>
           {needsApproval && <ApplyKit brand={p.brand} supplierId={cheapest?.supplier?.id ?? null} applyUrl={applyUrl} />}
         </div>

@@ -6,15 +6,31 @@
  */
 export interface SalesInputs {
   hasHistory: boolean;
+  /** Mean daily rank over 90 days, in the top-level category (Keepa's sales rank). */
+  avgRank90d?: number | null;
   rankDrops30d?: number | null;
   keepaRankDrops30?: number | null;
   monthlySold?: number | null;
 }
 
+/** Under this 90-day average rank a listing sells faster than rank drops can count. */
+export const FAST_RANK = 5000;
+/** Sales a month where every source counts reliably: the only range where a gap means disagreement. */
+export const MID_SALES = { min: 10, max: 300 };
+
+/**
+ * Fast sellers: the rank barely moves between sales, so rank-drop counts undercount them and
+ * Amazon's "bought in past month" is the figure to trust.
+ */
+export const fastVelocity = (m: Pick<SalesInputs, "avgRank90d"> | null | undefined) => m?.avgRank90d != null && m.avgRank90d > 0 && m.avgRank90d < FAST_RANK;
+export const UNDERCOUNT_NOTE = "rank drops undercount at this velocity";
+
 export interface SalesFigure {
   /** null without history; 0 when there is history but none of the sources recorded a sale. */
   value: number | null;
   sources: { label: string; value: number | null; plus?: boolean; best: boolean }[];
+  /** Set for a fast seller whose bought-in-past-month figure is used. */
+  note?: string;
 }
 
 export function salesPerMonth(m: SalesInputs | null | undefined): SalesFigure {
@@ -25,8 +41,12 @@ export function salesPerMonth(m: SalesInputs | null | undefined): SalesFigure {
     { label: `Amazon "bought in past month" (via Keepa)`, value: m.monthlySold ?? null, plus: true },
   ];
   const known = raw.filter((s) => s.value != null);
-  const best = known.length ? known.reduce((a, b) => (b.value! > a.value! ? b : a)) : null;
-  return { value: best ? best.value : 0, sources: raw.map((s) => ({ ...s, best: s === best })) };
+  // A fast seller: Amazon's bought-in-past-month figure is preferred (rank drops undercount).
+  const bought = raw[2];
+  const best = fastVelocity(m) && bought.value != null ? bought
+    : known.length ? known.reduce((a, b) => (b.value! > a.value! ? b : a)) : null;
+  const note = fastVelocity(m) && best === bought ? `${m.avgRank90d!.toLocaleString("en-GB")} average rank: ${UNDERCOUNT_NOTE}, so Amazon's bought-in-past-month is used` : undefined;
+  return { value: best ? best.value : 0, sources: raw.map((s) => ({ ...s, best: s === best })), ...(note ? { note } : {}) };
 }
 
 /** What your share needs on top of sales: who else sells, and whether Amazon does. */

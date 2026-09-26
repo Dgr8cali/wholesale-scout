@@ -28,7 +28,7 @@ The sales a month you can expect once you're one of the sellers:
 
 **your share = sales a month ÷ (other sellers + 1 for you)**, to one decimal.
 
-- **Sales a month** is the highest of three figures: rank drops in the last 30 days (from the Keepa history), Keepa's own 30-day rank-drop count, and Amazon's "bought in past month" (via Keepa). It needs Keepa history.
+- **Sales a month** is the highest of three figures: rank drops in the last 30 days (from the Keepa history), Keepa's own 30-day rank-drop count, and Amazon's "bought in past month" (via Keepa). For a fast seller (90-day average rank under 5,000) it's the bought-in-past-month figure when known, since rank drops undercount at that velocity. It needs Keepa history.
 - **Other sellers** is Keepa's FBA offer count. When Amazon is selling now, it counts as 3 sellers, because it takes the Buy Box far more than its share. Without an FBA count, all offers are used, with Amazon adding 2 more (it's already in that count once).
 - A [dormant](#dormant) listing's share is its past year's rank drops ÷ 12, shared with nobody.
 

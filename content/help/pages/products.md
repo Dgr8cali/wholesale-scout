@@ -24,11 +24,13 @@ A badge says **Buy**, **Wait** or **Skip**, with the reasons:
 **Confidence** (high, medium, low) says how far to trust the figures, and **Why not more confident** lists what lowered it:
 
 - no Keepa history, or under 90 days (low) or 6 months (medium);
-- the three sales signals (rank drops, Keepa's 30-day count, Amazon's "bought in past month") differ by more than 1.8× (medium) or 3× (low);
+- the three sales signals (rank drops, Keepa's 30-day count, Amazon's "bought in past month") differ by more than 2× (medium) or 4× (low). This is only checked when every signal is mid-range (10 to 300 a month) and the listing isn't a fast seller. A handful of sales make big ratios by chance, and a fast seller is explained below;
 - the FBA seller count moved by more than half in 90 days;
 - Keepa data over 7 days old (medium) or 30 (low); screened over 14 days ago;
 - Amazon's fee estimate and the rate card differing by more than 15%;
 - a [dormant](/help/reference/glossary#dormant) listing.
+
+**Fast sellers.** When the 90-day average rank in the top-level category is under 5,000, the rank hardly moves between sales, so rank-drop counts undercount them. A gap between the rank drops and Amazon's "bought in past month" is expected there, not a disagreement. The bought-in-past-month figure is used for sales, and a note under the confidence says so, for example: "1,114 average rank (90 days): rank drops undercount at this velocity, so Amazon's bought-in-past-month (2000+) is used".
 
 Under it, the key figures each say where they came from and how old they are: profit at the landed cost, [max landed](/help/reference/glossary#max-landed), sell price, sales and [your share](/help/reference/glossary#your-share) a month, fees per unit, Amazon, and when it was screened. **Re-check** screens it again now.
 

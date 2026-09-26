@@ -11,7 +11,7 @@ Demand checks that the product sells, and sells enough for you once you share th
 
 When the product has a sales figure, these must hold (the rank is shown on the line but doesn't decide):
 
-- **Sales a month (total)** at least **Min sales / month (total)**. Sales are the highest of three figures from Keepa: rank drops in 30 days counted from the history, Keepa's own 30-day rank-drop count, and Amazon's "bought in past month". This is the same figure as the **Sales / mo** column.
+- **Sales a month (total)** at least **Min sales / month (total)**. Sales are the highest of three figures from Keepa: rank drops in 30 days counted from the history, Keepa's own 30-day rank-drop count, and Amazon's "bought in past month". For a fast seller (90-day average rank under 5,000) Amazon's bought-in-past-month is used whenever it's known, because rank drops undercount at that velocity. This is the same figure as the **Sales / mo** column; its tooltip says which was used.
 - **[Your share](/help/reference/glossary#your-share)** at least **Min your share**. Your share = sales ÷ (other FBA sellers + 1 for you). When Amazon is on the listing it counts as three sellers.
 - **[Months to sell](/help/reference/glossary#months-to-sell)** the first order no more than **Max months to sell the order**. The first order is what one line's share of the budget buys at the landed cost (see [Budget fit](/help/gates/budgetFit)), raised to the MOQ if that's larger. Months to sell = that quantity ÷ your share. This part needs a cost, so an ASIN check with no cost skips it.
 

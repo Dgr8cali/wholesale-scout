@@ -40,7 +40,7 @@ export function estSales(m: StoredMarket | null | undefined): Figure {
   const f = salesPerMonth(m);
   if (f.sources.every((s) => s.value == null)) return { value: 0, note: "Keepa history shows no rank drops and no bought-in-past-month figure" };
   const lines = f.sources.map((s) => `${s.best ? "▶ " : "  "}${s.label}: ${s.value == null ? "—" : `${s.value}${s.plus ? "+" : ""}`}`);
-  return { value: f.value, note: `Highest of:\n${lines.join("\n")}` };
+  return { value: f.value, note: f.note ? `${f.note[0].toUpperCase()}${f.note.slice(1)}:\n${lines.join("\n")}` : `Highest of:\n${lines.join("\n")}` };
 }
 
 /** Your share of sales a month: sales ÷ (sellers + you), Amazon counted as three. */

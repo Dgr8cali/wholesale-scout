@@ -1,3 +1,5 @@
+import { fastVelocity, MID_SALES, UNDERCOUNT_NOTE } from "./screening/sales";
+
 /**
  * The product page's judgement: Buy / Wait / Skip with reasons, and how far to trust the
  * figures (high / medium / low) from how much data there is, how fresh it is and whether the
@@ -22,6 +24,7 @@ export interface JudgeInput {
   market: {
     hasHistory: boolean;
     historyDays?: number | null;
+    avgRank90d?: number | null;
     rankDrops30d?: number | null;
     keepaRankDrops30?: number | null;
     monthlySold?: number | null;
@@ -42,6 +45,8 @@ export interface Judgement {
   confidence: Confidence;
   /** Why confidence isn't high (empty when it is). */
   doubts: string[];
+  /** How the figures were read, where that isn't obvious (not doubts). */
+  notes: string[];
 }
 
 const DAY = 86_400_000;
@@ -49,9 +54,9 @@ const days = (iso: string | null, now: number) => (iso ? Math.floor((now - Date.
 const rank: Record<Confidence, number> = { high: 2, medium: 1, low: 0 };
 
 /** How far to trust the figures, and why not further. */
-export function confidenceOf(x: JudgeInput, now = Date.now()): { confidence: Confidence; doubts: string[] } {
+export function confidenceOf(x: JudgeInput, now = Date.now()): { confidence: Confidence; doubts: string[]; notes: string[] } {
   let level: Confidence = "high";
-  const doubts: string[] = [];
+  const doubts: string[] = [], notes: string[] = [];
   const lower = (to: Confidence, why: string) => {
     doubts.push(why);
     if (rank[to] < rank[level]) level = to;
@@ -62,12 +67,18 @@ export function confidenceOf(x: JudgeInput, now = Date.now()): { confidence: Con
     const h = m.historyDays ?? null;
     if (h != null && h < 90) lower("low", `only ${h} days of history`);
     else if (h != null && h < 180) lower("medium", `${h} days of history (under 6 months)`);
-    // The three sales signals should roughly agree.
+    // The sales signals should roughly agree, but only where each counts reliably. A fast
+    // seller's rank barely moves between sales, so its rank drops undercount: a gap to Amazon's
+    // bought-in-past-month is expected, not disagreement. At the low end a few sales either way
+    // make big ratios. So: flag only when every source is mid-range and they differ over 2×.
     const signals = [m.rankDrops30d, m.keepaRankDrops30, m.monthlySold].filter((v): v is number => v != null && v > 0);
-    if (signals.length >= 2) {
+    const fast = fastVelocity(m);
+    if (fast && m.monthlySold != null) notes.push(`${m.avgRank90d!.toLocaleString("en-GB")} average rank (90 days): ${UNDERCOUNT_NOTE}, so Amazon's bought-in-past-month (${m.monthlySold}+) is used`);
+    const mid = !fast && signals.every((v) => v >= MID_SALES.min && v <= MID_SALES.max);
+    if (signals.length >= 2 && mid) {
       const hi = Math.max(...signals), lo = Math.min(...signals);
-      if (hi / lo > 3) lower("low", `sales signals disagree (${lo} to ${hi} a month)`);
-      else if (hi / lo > 1.8) lower("medium", `sales signals differ (${lo} to ${hi} a month)`);
+      if (hi / lo > 4) lower("low", `sales signals disagree (${lo} to ${hi} a month)`);
+      else if (hi / lo > 2) lower("medium", `sales signals differ (${lo} to ${hi} a month)`);
     }
     if (m.offersNow != null && m.offers90dAgo != null && Math.max(m.offersNow, m.offers90dAgo) >= 3) {
       const a = m.offersNow, b = m.offers90dAgo;
@@ -84,15 +95,15 @@ export function confidenceOf(x: JudgeInput, now = Date.now()): { confidence: Con
     const diff = Math.abs(x.fees.amazon - x.fees.rateCard) / x.fees.rateCard;
     if (diff > 0.15) lower("medium", `Amazon's fee estimate and the rate card differ by ${Math.round(diff * 100)}%`);
   }
-  return { confidence: level, doubts };
+  return { confidence: level, doubts, notes };
 }
 
 /** Buy, Wait or Skip, with the reasons in plain words. */
 export function judge(x: JudgeInput, now = Date.now()): Judgement {
-  const { confidence, doubts } = confidenceOf(x, now);
-  if (!x.verdict) return { decision: "wait", reasons: ["Not screened to the end yet: check it or wait for its run."], confidence, doubts };
+  const { confidence, doubts, notes } = confidenceOf(x, now);
+  if (!x.verdict) return { decision: "wait", reasons: ["Not screened to the end yet: check it or wait for its run."], confidence, doubts, notes };
   if (x.verdict === "fail") {
-    return { decision: "skip", reasons: [x.failedGate ? `Fails ${x.failedGate.label}: ${x.failedGate.detail}` : "Fails a gate."], confidence, doubts };
+    return { decision: "skip", reasons: [x.failedGate ? `Fails ${x.failedGate.label}: ${x.failedGate.detail}` : "Fails a gate."], confidence, doubts, notes };
   }
   const reasons: string[] = [];
   if (x.gating === "approval_required") reasons.push("Needs brand or category approval before you can list it.");
@@ -100,6 +111,6 @@ export function judge(x: JudgeInput, now = Date.now()): Judgement {
   if (!x.costKnown) reasons.push("No supplier price yet: find one (the most it can cost landed is below).");
   for (const w of x.warns.filter((w) => w.label !== "Gating and blocks")) reasons.push(`${w.label}: ${w.detail}`);
   if (confidence === "low") reasons.push("The data is too thin to rely on (see confidence).");
-  if (!reasons.length) return { decision: "buy", reasons: ["Passes every gate with a known cost, and you can list it."], confidence, doubts };
-  return { decision: "wait", reasons, confidence, doubts };
+  if (!reasons.length) return { decision: "buy", reasons: ["Passes every gate with a known cost, and you can list it."], confidence, doubts, notes };
+  return { decision: "wait", reasons, confidence, doubts, notes };
 }
