@@ -66,7 +66,7 @@ Click a brand to open its page.
 - If it's on your IP-risk list, a line such as "IP risk (high): Files counterfeit complaints · score halved", with an **edit** link to the IP-risk tab in [Settings](/help/pages/settings).
 - The gating badge and "Carried by …", or "No supplier offers it yet".
 - **Apply on Amazon**: opens Amazon's request-approval page, when there is one. See [Apply for brand approval](/help/howto/apply-for-brand-approval).
-- **Mark approved**: records the brand as approved with today's date. You'll see "<Brand> marked approved; runs treat it as open when next screened". The button disappears once the brand is approved.
+- **Mark approved**: records the brand as approved with today's date. The brand's products are re-scored in every current run straight away, so Gating reads it as open, and you'll see "<Brand> marked approved; N rows re-scored". Changing the status or date the same way re-scores them too. The button disappears once the brand is approved.
 
 ### Stats
 

@@ -59,8 +59,9 @@ export default function BrandPage() {
       status_date: patch.status_date ?? a?.status_date ?? (patch.status ? new Date().toISOString().slice(0, 10) : ""),
     };
     try {
-      await api("/api/brands", { method: "PUT", json: body });
-      toast.success(patch.status === "approved" ? `${data.summary.brand} marked approved; runs treat it as open when next screened` : "Saved");
+      const r = await api<{ rescored?: number }>("/api/brands", { method: "PUT", json: body });
+      const again = r.rescored ? `; ${r.rescored} row${r.rescored === 1 ? "" : "s"} re-scored` : "";
+      toast.success(patch.status === "approved" ? `${data.summary.brand} marked approved${again}` : `Saved${again}`);
       load();
     } catch (e) {
       toast.error((e as Error).message);

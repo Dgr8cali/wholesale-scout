@@ -679,6 +679,32 @@ export async function finishFromStored(runId: string, resultIds: string[]): Prom
   return done;
 }
 
+/**
+ * Finished rows re-gated from stored data on the run's own profile snapshot and saved, with no
+ * API calls. Unlike a re-screen it leaves the run (its profile, status and any re-screen in
+ * progress) alone: for a change to one product (a waiver, a brand approval, a cost override)
+ * reaching every run it's in. Rows still being screened, or with nothing stored, are skipped.
+ */
+export async function rescoreStored(runId: string, resultIds: string[]): Promise<number> {
+  if (!resultIds.length) return 0;
+  const d = db();
+  const run = must(await d.from("runs").select("profile_snapshot").eq("id", runId).single(), "run") as { profile_snapshot: ProfileConfig };
+  const cfg = withDefaults(run.profile_snapshot);
+  const [card, rules, approved] = await Promise.all([activeRateCard(), loadRules(), approvedBrands()]);
+  let done = 0;
+  for (const c of chunks(resultIds, 250)) {
+    const results = must(await d.from("results").select("id, product_id, offer_id, inputs, status").in("id", c), "results") as (PendingRow & { status: string })[];
+    const rows = await loadRows(results.filter((r) => r.status === "done" && r.inputs), maxAgeMs(cfg));
+    const work = rows.map((row) => {
+      const ctx = context(row, card, rules, cfg, approved);
+      return { row, ctx, run: runGates(ctx, cfg) };
+    });
+    await saveResults(runId, work, cfg);
+    done += work.length;
+  }
+  return done;
+}
+
 /** A stored result re-gated on a profile, without saving anything (the brand map). */
 export interface StoredEvaluation {
   resultId: string;

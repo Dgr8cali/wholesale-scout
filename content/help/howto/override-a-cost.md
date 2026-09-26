@@ -26,8 +26,8 @@ Tick rows on a run or on Favourites. In the bulk bar, **Set cost…** opens the 
 - A landed cost is worked back to a unit cost using each run's profile, so the row's landed cost comes out as the figure you entered.
 - A row scored on your cost gets a **cost overridden** badge next to its verdict. Hover over it to see your cost and the sheet's original (supplier, ex-VAT price and landed cost). Its MOQ and the supplier's minimum order don't apply, and no multipack ratio is applied: your cost is per listing.
 - When your cost isn't the cheaper, the details say "Your cost isn't cheaper than the sheet's; the sheet's is scored". Hover for both figures.
-- Other runs of the same product pick it up the next time they're screened or re-screened. The row you set it on, and the rows selected in the bulk bar, are re-scored now.
+- The product's rows are re-scored now in every current run (not archived), from stored data, each on its run's own profile. Brands, Suppliers and the order planner catch up a moment later.
 
 ## Change or clear it
 
-In the row's details, next to **cost overridden**, **Edit** opens the form with your figures, and **Clear** removes the override. Clearing puts every run back on the sheet's offer. The rows you cleared it from are re-scored now; other runs change when next re-screened.
+In the row's details, next to **cost overridden**, **Edit** opens the form with your figures, and **Clear** removes the override. Clearing puts every run back on the sheet's offer. Its rows in every current run are re-scored now.

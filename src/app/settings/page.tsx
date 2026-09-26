@@ -172,11 +172,11 @@ function useProfileEditor() {
   const weightSum = draft ? Object.values(draft.score.weights).reduce((a, b) => a + (Number(b) || 0), 0) : 0;
   const weightsOk = Math.abs(weightSum - 100) <= 0.01;
 
-  async function act(fn: () => Promise<unknown>, ok: string, select?: string) {
+  async function act<T>(fn: () => Promise<T>, ok: string | ((r: T) => string), select?: string) {
     try {
-      await fn();
+      const r = await fn();
       await load(select ?? id);
-      toast.success(ok);
+      toast.success(typeof ok === "string" ? ok : ok(r));
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -193,7 +193,8 @@ function useProfileEditor() {
       setDraft(structuredClone(p.config));
     },
     discard: () => current && setDraft(structuredClone(current.config)),
-    save: () => act(() => api(`/api/profiles/${id}`, { method: "PUT", json: { config: draft } }), "Saved"),
+    save: () => act(() => api<{ rescreening?: number }>(`/api/profiles/${id}`, { method: "PUT", json: { config: draft } }),
+      (r) => (r.rescreening ? `Saved; re-screening ${r.rescreening} run${r.rescreening === 1 ? "" : "s"} on this profile from stored data` : "Saved")),
     saveAsNew: async () => {
       const name = await prompt({ title: "Save as a new profile", label: "Name", confirmLabel: "Save" });
       if (!name) return;
@@ -688,7 +689,7 @@ function Waived() {
     }
   };
   return (
-    <Section title="Waived gates" note={<>A waived gate turns that product&apos;s fail into a warning in every run, so later gates, fees and the score still run; a waived warning stops counting, so the row can go green. Waive or un-waive from a result&apos;s details; removing one here applies the next time a run is screened or re-screened.</>}>
+    <Section title="Waived gates" note={<>A waived gate turns that product&apos;s fail into a warning in every run, so later gates, fees and the score still run; a waived warning stops counting, so the row can go green. Waive or un-waive from a result&apos;s details; removing one here re-scores that product in every current run.</>}>
       {msg && <p className="rounded-md bg-warn-soft px-3 py-2 text-sm text-warn">{msg}</p>}
       {!items.length ? (
         <EmptyState icon={<UndoIcon />} title="No gates waived" className="border-dashed shadow-none">

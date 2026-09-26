@@ -20,7 +20,7 @@ On the **Gates**, **Score**, **Fees** and **Profiles** tabs a bar sits at the to
 | **Score weights total N, not 100** | Appears in red when the group weights on the Score tab don't add up to 100. You can't save until they do. |
 | **Discard** | Throws away your edits and reloads the stored profile. Only shown when there are changes. |
 | **Save as new profile** | Only on the Profiles tab. Asks for a name and saves the current draft as a new profile, leaving the original untouched. |
-| **Save** | Saves the draft over the profile you are editing. |
+| **Save** | Saves the draft over the profile you are editing. If the settings changed, every current run on that profile is re-screened from stored data in the background ("Saved; re-screening N runs on this profile from stored data"). See [A run's profile](/help/concepts/profiles). |
 
 Changes don't touch runs already screened. A run keeps its own copy of the profile it was screened with; re-screen the run on the [Runs](/help/pages/runs) page to apply new settings.
 
@@ -115,7 +115,7 @@ Shared by every profile. It holds Amazon's size tiers, FBA fees, storage and ref
 
 ## Waived tab
 
-"A waived gate turns that product's fail into a warning in every run, so later gates, fees and the score still run; a waived warning stops counting, so the row can go green." The table lists each [waiver](/help/reference/glossary#waiver): the product (EAN, and ASIN or "any ASIN"), the gate, your reason and the date. **Remove** deletes it; that applies the next time a run is screened or re-screened. You add waivers from a result's details, not here. See [Waive a gate](/help/howto/waive-a-gate).
+"A waived gate turns that product's fail into a warning in every run, so later gates, fees and the score still run; a waived warning stops counting, so the row can go green." The table lists each [waiver](/help/reference/glossary#waiver): the product (EAN, and ASIN or "any ASIN"), the gate, your reason and the date. **Remove** deletes it and re-scores that product in every current run. You add waivers from a result's details, not here. See [Waive a gate](/help/howto/waive-a-gate).
 
 ## IP risk tab
 

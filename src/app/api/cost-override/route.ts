@@ -14,7 +14,7 @@ export const POST = handle(async (req: NextRequest) => {
   const resultIds = ids(b);
   if (!resultIds.length) return Response.json({ error: "No rows" }, { status: 400 });
   try {
-    return Response.json({ ok: true, ...(await setCostOverride(resultIds, b.cost ?? {})) });
+    return Response.json({ ok: true, ...(await setCostOverride(resultIds, b.cost ?? {}, req.nextUrl.origin)) });
   } catch (e) {
     return Response.json({ error: (e as Error).message }, { status: 400 });
   }
@@ -24,5 +24,5 @@ export const POST = handle(async (req: NextRequest) => {
 export const DELETE = handle(async (req: NextRequest) => {
   const resultIds = ids((await req.json()) as { resultIds?: unknown });
   if (!resultIds.length) return Response.json({ error: "No rows" }, { status: 400 });
-  return Response.json({ ok: true, ...(await clearCostOverride(resultIds)) });
+  return Response.json({ ok: true, ...(await clearCostOverride(resultIds, req.nextUrl.origin)) });
 });

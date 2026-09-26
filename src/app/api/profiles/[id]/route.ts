@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { invalidNumbers, withDefaults, type ProfileConfig } from "@/lib/screening/config";
 import { db, must } from "@/lib/server/db";
 import { handle } from "@/lib/server/http";
+import { rescreenProfileRuns } from "@/lib/server/rescore";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -25,10 +26,14 @@ export const PUT = handle(async (req: NextRequest, ctx: Ctx) => {
   if (body.name?.trim()) update.name = body.name.trim();
   if (body.config) update.config = withDefaults(body.config);
   if (body.is_default) update.is_default = true;
+  const before = body.config ? (must(await db().from("profiles").select("config").eq("id", id).single(), "profile") as { config: ProfileConfig }).config : null;
   const res = await db().from("profiles").update(update).eq("id", id);
   if (res.error?.code === "23505") return Response.json({ error: "That name is taken" }, { status: 409 });
   must(res, "update profile");
-  return Response.json({ ok: true });
+  // Changed settings: every current run on this profile is re-screened from stored data, in the background.
+  const changed = !!before && JSON.stringify(withDefaults(before)) !== JSON.stringify(update.config);
+  const rescreening = changed ? await rescreenProfileRuns(id, req.nextUrl.origin) : 0;
+  return Response.json({ ok: true, rescreening });
 });
 
 export const DELETE = handle(async (_req: NextRequest, ctx: Ctx) => {

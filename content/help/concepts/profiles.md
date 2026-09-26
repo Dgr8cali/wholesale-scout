@@ -125,11 +125,19 @@ Profiles saved by an older version of the app are filled in with the defaults fo
 
 ## A run's profile
 
-When you start a run, the **Profile** you choose on Upload, Qogita or Check is copied into the run. The run keeps that copy. Changing the profile later doesn't change runs already made. The run page's header shows which profile it used and when, e.g. "First order (version saved 12 Sept, 09:30; applied 14 Sept, 16:05)".
+When you start a run, the **Profile** you choose on Upload, Qogita or Check is copied into the run. The run keeps that copy until the profile's settings change.
+
+**Saving a profile re-screens its runs.** When **Save** changes a profile's settings, every current run on that profile (not archived, not paused, finished screening) is re-screened in the background from stored data, with no Amazon or Keepa calls. The toast says how many, e.g. "Saved; re-screening 12 runs on this profile from stored data". A run still screening, or paused, keeps its copy until you re-screen it. Renaming a profile or making it the default doesn't re-screen anything.
+
+## When a product changes
+
+Some changes belong to a product, not a run: a [waiver](/help/howto/waive-a-gate), a brand's approval ([Brands](/help/pages/brands)) and a [cost override](/help/howto/override-a-cost). Each one re-scores that product's finished rows in every current run straight away, from stored data, each on its run's own profile. Brands, Suppliers and the order planner catch up in the background a moment later. Product pages and Favourites show the new verdict as soon as they reload. Archived runs aren't touched.
+
+The run page's header shows which profile it used and when, e.g. "First order (version saved 12 Sept, 09:30; applied 14 Sept, 16:05)".
 
 ## Re-screening with another profile
 
-To apply changed settings, or a different profile, to a run you've already screened:
+To apply a different profile to a run, or to re-screen one that was paused or still screening when you saved:
 
 1. Open the run.
 2. In the profile list next to **Re-screen**, choose "<this run's profile> (as saved now)" to use its current settings, or pick another profile.

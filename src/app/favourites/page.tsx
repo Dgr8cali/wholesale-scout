@@ -172,11 +172,13 @@ export default function FavouritesPage() {
     const f = favOf(r);
     if (!f) return;
     await api("/api/overrides", { method: "POST", json: { items: [{ ean: f.ean, asin: f.asin }], gate, action, reason } });
-    toast.success(`${GATE_LABELS[gate]} ${action === "waive" ? "waived" : "un-waived"}: it applies when the product is next screened.`);
+    toast.success(`${GATE_LABELS[gate]} ${action === "waive" ? "waived" : "un-waived"}; re-scored in every current run`);
+    load();
   }
   async function bulkWaive(gate: GateId, action: "waive" | "unwaive", reason?: string) {
     const items = itemsOf(selected).map((i) => ({ ean: i.favourite.ean, asin: i.favourite.asin }));
     await api("/api/overrides", { method: "POST", json: { items, gate, action, reason } });
+    load();
   }
   /** Set or clear the cost override for these rows' products; their latest results are re-scored now. */
   async function cost(ids: string[], c: CostInput | null) {

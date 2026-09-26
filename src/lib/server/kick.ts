@@ -40,3 +40,16 @@ export function scheduleCall(origin: string, path: string): void {
     }
   })());
 }
+
+/** Start a stored-data (or full) re-screen of a run in the background; its chain carries on by itself. */
+export function scheduleRescreen(origin: string, runId: string, body: { profileId?: string; storedOnly?: boolean }): void {
+  waitUntil((async () => {
+    try {
+      await fetch(`${origin}/api/runs/${runId}/rescreen`, {
+        method: "POST", headers: { "content-type": "application/json", ...auth() }, body: JSON.stringify(body), signal: AbortSignal.timeout(5_000),
+      });
+    } catch {
+      // Timed out waiting, as intended; the called route carries on.
+    }
+  })());
+}

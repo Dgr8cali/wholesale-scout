@@ -1,12 +1,12 @@
 import "server-only";
 import { exVat, unitFromLanded, validCost, type CostInput } from "../costOverride";
 import { chunks, db, loadProfile, must } from "./db";
-import { rescreenRun } from "./process";
+import { rescoreProducts } from "./rescore";
 
 /**
  * Cost overrides: one offer per product from the "Manual" supplier. Screening weighs it against
  * the sheet's offer on every run and re-screen (process.ts, loadRows and context); the cheaper
- * is scored. Setting or clearing one re-scores the given rows now, from stored data.
+ * is scored. Setting or clearing one re-scores the product in every current run, from stored data.
  */
 
 const MANUAL = "Manual";
@@ -26,17 +26,13 @@ async function rowsOf(resultIds: string[]) {
   return out;
 }
 
-/** Re-score these rows from stored data, run by run. */
-async function rescore(rows: { id: string; run_id: string }[]): Promise<number> {
-  let rescored = 0;
-  const byRun = new Map<string, string[]>();
-  for (const r of rows) byRun.set(r.run_id, [...(byRun.get(r.run_id) ?? []), r.id]);
-  for (const [runId, ids] of byRun) rescored += (await rescreenRun(runId, null, { resultIds: ids, storedOnly: true })).rescored;
-  return rescored;
+/** Re-score the rows' products in every current run, from stored data. */
+async function rescore(rows: { product_id: string }[], origin?: string): Promise<number> {
+  return (await rescoreProducts(rows.map((r) => r.product_id), { origin })).rescored;
 }
 
 /** Set (or change) the cost override for these rows' products, and re-score the rows. */
-export async function setCostOverride(resultIds: string[], input: CostInput): Promise<{ products: number; rescored: number }> {
+export async function setCostOverride(resultIds: string[], input: CostInput, origin?: string): Promise<{ products: number; rescored: number }> {
   const bad = validCost(input);
   if (bad) throw new Error(bad);
   const rows = await rowsOf(resultIds);
@@ -65,11 +61,11 @@ export async function setCostOverride(resultIds: string[], input: CostInput): Pr
       else must(await d.from("offers").insert({ ...fields, product_id: pid }), "save cost override");
     }
   }
-  return { products: productIds.length, rescored: await rescore(rows) };
+  return { products: productIds.length, rescored: await rescore(rows, origin) };
 }
 
 /** Clear the cost override for these rows' products: every run goes back to the sheet's offer. */
-export async function clearCostOverride(resultIds: string[]): Promise<{ products: number; rescored: number }> {
+export async function clearCostOverride(resultIds: string[], origin?: string): Promise<{ products: number; rescored: number }> {
   const rows = await rowsOf(resultIds);
   const d = db();
   const productIds = [...new Set(rows.map((r) => r.product_id))];
@@ -86,5 +82,5 @@ export async function clearCostOverride(resultIds: string[]): Promise<{ products
       cleared++;
     }
   }
-  return { products: cleared, rescored: await rescore(rows) };
+  return { products: cleared, rescored: await rescore(rows, origin) };
 }

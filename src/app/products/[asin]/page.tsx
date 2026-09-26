@@ -113,7 +113,7 @@ export default function ProductPage() {
   }
   async function waive(_r: Result, gate: GateId, action: "waive" | "unwaive", reason?: string) {
     await api("/api/overrides", { method: "POST", json: { items: [{ ean: p.ean, asin: v!.asin }], gate, action, reason } });
-    toast.success(`${GATE_LABELS[gate]} ${action === "waive" ? "waived" : "un-waived"}: it applies when the product is next screened (Re-check).`);
+    toast.success(`${GATE_LABELS[gate]} ${action === "waive" ? "waived" : "un-waived"}; re-scored in every current run`);
     load();
   }
   async function cost(r: Result, c: CostInput | null) {

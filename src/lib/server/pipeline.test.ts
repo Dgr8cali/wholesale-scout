@@ -334,6 +334,36 @@ describe("ingest → process", () => {
     expect(Number(row().landed_cost)).toBeCloseTo(sheetLanded, 2);
   });
 
+  it("re-scores a changed product in every current run from stored data, leaving archived runs and the runs' profiles alone", async () => {
+    const { setCostOverride } = await import("./costOverrides");
+    const { rescoreProducts } = await import("./rescore");
+    await import("./db").then((m) => m.ensureSeed());
+    const tape = () => file("henbrandt.xlsx", [["EAN", "Name", "Price", "MOQ"], ["4006381333931", "Walker Tape 25mm", "5.00", 12]],
+      { name: "Henbrandt", vatBasis: "ex_vat", vatRate: 20, currency: "GBP" });
+    const runs = [];
+    for (let i = 0; i < 3; i++) {
+      const { runId } = await ingest({ files: [tape()] });
+      while (!(await processRun(runId)).done);
+      runs.push(runId);
+    }
+    const [a, b, archived] = runs;
+    fake.tables.runs.find((r) => r.id === archived)!.archived_at = new Date().toISOString();
+    const row = (runId: string) => fake.tables.results.find((r) => r.run_id === runId)!;
+    const snapshot = JSON.stringify(fake.tables.runs.find((r) => r.id === b)!.profile_snapshot);
+    const before = { ...calls };
+
+    await setCostOverride([row(a).id as string], { landedGbp: 4 });
+    expect(calls).toEqual(before);
+    expect(row(a).cost_override).toMatchObject({ active: true });
+    expect(row(b).cost_override).toMatchObject({ active: true });
+    expect(Number(row(b).landed_cost)).toBeCloseTo(4, 2);
+    expect(row(archived).cost_override ?? null).toBeNull();
+    // Re-scored on its own profile: the run isn't re-screened, its snapshot and status stay.
+    expect(JSON.stringify(fake.tables.runs.find((r) => r.id === b)!.profile_snapshot)).toBe(snapshot);
+    expect(fake.tables.runs.find((r) => r.id === b)!.status).toBe("done");
+    expect(await rescoreProducts([row(a).product_id as string], { skipRun: a })).toEqual({ runs: 1, rescored: 1 });
+  });
+
   it("keeps an EAN's sibling ASINs on a second upload and on Re-screen (Onagrine doubtful match)", async () => {
     const sebium = () => file("pharmazon.xlsx", [
       ["EAN", "Name", "Price", "MOQ"],

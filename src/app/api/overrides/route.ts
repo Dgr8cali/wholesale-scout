@@ -6,6 +6,7 @@ import { scheduleNext } from "@/lib/server/kick";
 import { addOverride, listOverrides, OVERRIDES_MIGRATION, removeOverride } from "@/lib/server/overrides";
 import { rescreenRun } from "@/lib/server/process";
 import { resultIdsFor } from "@/lib/server/runRows";
+import { productIdsFor, refreshViews, rescoreProducts } from "@/lib/server/rescore";
 
 interface Item {
   ean: string;
@@ -14,14 +15,23 @@ interface Item {
 
 const needsMigration = (e: unknown) => e instanceof Error && e.message === OVERRIDES_MIGRATION;
 
-/** Re-score a run's rows for these products now; fetch in the background if any need data. */
+/**
+ * Re-score these products everywhere: on the run you're on, re-screened (fetching in the
+ * background what later gates need); in every other current run, from stored data.
+ */
 async function refresh(req: NextRequest, runId: string | undefined, items: Item[]) {
-  if (!runId || !items.length) return { rescored: 0, requeued: 0 };
-  const resultIds = await resultIdsFor(runId, items);
-  if (!resultIds.length) return { rescored: 0, requeued: 0 };
-  const r = await rescreenRun(runId, null, { resultIds });
-  if (r.requeued) scheduleNext(req.nextUrl.origin, runId);
-  return r;
+  const origin = req.nextUrl.origin;
+  let here = { rescored: 0, requeued: 0 };
+  if (runId && items.length) {
+    const resultIds = await resultIdsFor(runId, items);
+    if (resultIds.length) {
+      here = await rescreenRun(runId, null, { resultIds });
+      if (here.requeued) scheduleNext(origin, runId);
+    }
+  }
+  const elsewhere = await rescoreProducts(await productIdsFor(items.map((i) => ({ ean: i.ean, asin: i.asin ?? null }))), { skipRun: runId, origin });
+  refreshViews(origin);
+  return { rescored: here.rescored + elsewhere.rescored, requeued: here.requeued, runs: elsewhere.runs + (runId ? 1 : 0) };
 }
 
 /** Every waiver, with the product's name when known. */
@@ -68,5 +78,6 @@ export const DELETE = handle(async (req: NextRequest) => {
   const id = req.nextUrl.searchParams.get("id");
   if (!id) return Response.json({ error: "id required" }, { status: 400 });
   const removed = await removeOverride({ id });
-  return Response.json({ ok: true, removed: removed.length });
+  const r = await rescoreProducts(await productIdsFor(removed.map((o) => ({ ean: o.ean, asin: o.asin }))), { origin: req.nextUrl.origin });
+  return Response.json({ ok: true, removed: removed.length, ...r });
 });

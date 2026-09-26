@@ -6,6 +6,7 @@ import { db, loadProfile, must } from "@/lib/server/db";
 import { handle } from "@/lib/server/http";
 import { forget, memo } from "@/lib/server/memo";
 import { scheduleCall } from "@/lib/server/kick";
+import { rescoreProducts } from "@/lib/server/rescore";
 
 /**
  * The brand map: one row per brand seen in any run, on the current default profile, sorted
@@ -28,7 +29,7 @@ export const GET = handle(async (req: NextRequest) => {
 });
 
 /** Save a brand's approval requirement, status and date. */
-export const PUT = handle(async (req: Request) => {
+export const PUT = handle(async (req: NextRequest) => {
   const body = (await req.json()) as { brand?: string; status?: string; requirement?: string | null; status_date?: string | null };
   const brand = body.brand?.trim();
   const key = brandKey(brand);
@@ -44,6 +45,9 @@ export const PUT = handle(async (req: Request) => {
     ),
     "save approval",
   );
+  // Gating reads approvals: the brand's rows in every current run are re-scored from stored data.
+  const products = must(await db().from("brand_products").select("product_id").eq("brand_key", key), "brand's products") as { product_id: string }[];
+  const r = await rescoreProducts(products.map((p) => p.product_id), { origin: req.nextUrl.origin });
   forget("brands:");
-  return Response.json({ ok: true });
+  return Response.json({ ok: true, ...r });
 });
