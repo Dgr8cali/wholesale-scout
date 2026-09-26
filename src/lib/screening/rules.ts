@@ -59,7 +59,8 @@ export const DEFAULT_RULES: CategoryRule[] = [
   {
     key: "medicalDevice",
     name: "Medical device",
-    keywords: ["treatment", "medicated", "antifungal", "anti-fungal", "antiseptic", "anti-septic", "wound", "wounds", "first aid", "plasters", "bandage", "bandages", "cold sore", "verruca", "athlete's foot", "haemorrhoid", "haemorrhoids"],
+    // Amazon's signals (below) are the main trigger; these words are the fallback on the title.
+    keywords: ["fungal", "nail fungus", "dermatitis", "eczema", "psoriasis", "scar", "scars", "wound", "wounds", "keratosis", "haemorrhoid", "haemorrhoids", "hemorrhoid", "hemorrhoids", "antifungal", "anti-fungal", "antiseptic", "anti-septic", "medicated"],
     // Amazon's browse path, item-type keyword or product type saying medical, OTC, pharmacy or first aid.
     amazon_categories: ["/medical|first[ -]?aid|pharmac|over[ -]the[ -]counter|\\botc\\b|medicat/"],
     note: "Medical devices and medicines: UKCA or CE marking (MHRA-registered), Amazon category approval, and FBA's minimum 105 days of shelf life left on arrival.",

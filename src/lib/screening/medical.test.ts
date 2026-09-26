@@ -33,8 +33,14 @@ describe("Medical device rule", () => {
     expect(o.detail).toContain("Cosmetic (category Beauty)");
     expect(o.detail).toContain("Medical device (keyword match: Medicated)");
   });
-  it("hair and scalp treatments stay cosmetic (Medical device's exclusion words)", () => {
-    const o = comp(ctx("Nioxin 3-Part System, Hair Thickening Treatment, Scalp Therapy, Conditioner 300ml", "Beauty", ["Hair Care", "Beauty", "conditioner"]));
+  it("a treatment isn't medical by that word alone; specific medical words are", () => {
+    for (const t of ["Kundal Protein Treatment 500ml", "Goldwell Dualsenses Color 60sec Treatment 200ml", "Millers Oils Diesel Fuel Additive Treatment"])
+      expect(comp(ctx(t)).tags ?? []).not.toContain("MEDICALDEVICE");
+    for (const t of ["Emtrix Fungal Nail Treatment Cream", "Grahams Eczema Relief Cream", "SVR Cicavit+ Scar Cream", "HEMAPRO Cream to Treat Hemorrhoids", "Aktuva Cream for Actinic Keratosis"])
+      expect(comp(ctx(t)).tags).toContain("MEDICALDEVICE");
+  });
+  it("hair and scalp products stay cosmetic (Medical device's exclusion words)", () => {
+    const o = comp(ctx("Nioxin Scalp Therapy for eczema-prone scalp, Hair Conditioner 300ml", "Beauty", ["Hair Care", "Beauty", "conditioner"]));
     expect(o.tags).not.toContain("MEDICALDEVICE");
     expect(o.tags).toContain("COSMETIC");
   });
