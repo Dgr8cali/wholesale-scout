@@ -47,4 +47,27 @@ describe("planner candidates", () => {
     // With warns: the competition warn joins.
     expect((await planCandidates({ warns: true })).candidates.map((c) => c.key)).toContain("p3|hen");
   });
+
+  it("plans your Set your cost offers (MOQ 1, no MOV unless set), never a check's cost, and lists products with no offer", async () => {
+    const bp = (id: string, over: Record<string, unknown> = {}) => fake.tables.brand_products.push({
+      product_id: id, brand_key: "brite", brand: "Brite", ean: `50${id}`, asin: `B0${id}`, title: `Item ${id}`, verdict: "pass", priced: true,
+      sell_price: 25, proceeds: 16, share_month: 10, warn_gates: [], restriction: "open", qogita: null, result_id: `r-${id}`, max_landed: 9.5, ...over,
+    });
+    bp("p5"); bp("p6"); bp("p7");
+    for (const id of ["p5", "p6", "p7"]) fake.tables.products.push({ id, ean: `50${id}`, asin: `B0${id}` });
+    fake.tables.offers.push(
+      // Set your cost: a landed cost from Makro, and a price with your own MOQ and MOV.
+      { id: "m5", product_id: "p5", supplier_id: "man", manual: true, manual_supplier: "Makro", landed_gbp: 6, unit_cost_gbp: 4.5, cost_known: true, moq: null, stock: null, fx_rate: 1 },
+      { id: "m6", product_id: "p6", supplier_id: "man", manual: true, manual_supplier: null, landed_gbp: null, unit_cost_gbp: 4, moq: 24, mov_gbp: 200, cost_known: true, stock: null, fx_rate: 1 },
+      // A cost typed into Check ASINs: not a supplier's offer.
+      { id: "c7", product_id: "p7", supplier_id: "man", unit_cost_gbp: 4, cost_known: true, moq: null, stock: null, fx_rate: 1 },
+    );
+    const r = await planCandidates();
+    expect(r.candidates.find((c) => c.key === "p5|manual")).toMatchObject({ supplierName: "Makro", supplierKey: "manual:makro", landedGbp: 6, moq: 1, movGbp: null, manual: true });
+    expect(r.candidates.find((c) => c.key === "p6|manual")).toMatchObject({ supplierName: "Your cost", moq: 24, movGbp: 200, unitCostGbp: 4 });
+    expect(r.candidates.some((c) => c.productId === "p7")).toBe(false);
+    // p1's check cost (o3) still isn't a candidate; p7 has no supplier offer at all.
+    expect(r.candidates.some((c) => c.key.startsWith("p1|man"))).toBe(false);
+    expect(r.noOffer).toEqual([expect.objectContaining({ productId: "p7", resultId: "r-p7", maxLandedGbp: 9.5, verdict: "pass" })]);
+  });
 });

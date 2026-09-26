@@ -40,6 +40,23 @@ export interface PlanCandidate {
   /** Warns only because it needs brand approval: listed separately, not planned. */
   approvalOnly: boolean;
   qogita?: { qid: string; unit: number } | null;
+  /** Your cost (Set your cost): MOQ 1 and no MOV unless you set them. */
+  manual?: boolean;
+}
+
+/** Passes (or warns) but has no supplier offer to buy from: set a cost to plan it. */
+export interface NoOffer {
+  productId: string;
+  /** Its latest result, for Set your cost. */
+  resultId: string | null;
+  ean: string;
+  asin: string | null;
+  title: string | null;
+  brand: string;
+  sellPrice: number;
+  /** The most it can cost landed and clear the floors. */
+  maxLandedGbp: number | null;
+  verdict: "pass" | "warn";
 }
 
 export interface PlanLimits {

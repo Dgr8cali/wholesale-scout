@@ -47,7 +47,7 @@ export async function setCostOverride(resultIds: string[], input: CostInput, ori
     supplier_id: sup.id, manual: true, unit_cost: landed ?? price, currency: "GBP", fx_rate: 1,
     unit_cost_gbp: Math.round(unitGbp * 10000) / 10000, landed_gbp: landed, vat_basis: landed != null ? null : input.vatBasis,
     manual_supplier: input.supplierName?.trim() || null, note: input.note?.trim() || null,
-    moq: null, stock: null, title: null, brand: null, category: null, source_ref: "Cost override", seen_at: new Date().toISOString(),
+    moq: input.moq != null ? Number(input.moq) : null, mov_gbp: input.movGbp != null && Number(input.movGbp) > 0 ? Number(input.movGbp) : null, stock: null, title: null, brand: null, category: null, source_ref: "Cost override", seen_at: new Date().toISOString(),
   };
   const d = db();
   const productIds = [...new Set(rows.map((r) => r.product_id))];

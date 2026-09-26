@@ -1,10 +1,15 @@
 import "server-only";
 import type { BrandProduct } from "../brandMap";
 import { landedCost } from "../fees/engine";
-import type { PlanCandidate, PlanLimits } from "../plan";
+import { unitFromLanded } from "../costOverride";
+import type { NoOffer, PlanCandidate, PlanLimits } from "../plan";
 import { chunks, db, loadProfile, must } from "./db";
 
-type Offer = { id: string; product_id: string; supplier_id: string; unit_cost_gbp: number; cost_known?: boolean; moq: number | null; stock: number | null; fx_rate: number };
+type Offer = {
+  id: string; product_id: string; supplier_id: string; unit_cost_gbp: number; cost_known?: boolean; moq: number | null; stock: number | null; fx_rate: number;
+  /** Set your cost (the Manual supplier), with the supplier you named, its landed cost or price, and any MOV. */
+  manual?: boolean; manual_supplier?: string | null; landed_gbp?: number | null; mov_gbp?: number | null;
+};
 type Supplier = { id: string; name: string; source_type: string; vat_rate: number; mov: number | null };
 
 /**
@@ -13,7 +18,7 @@ type Supplier = { id: string; name: string; source_type: string; vat_rate: numbe
  * landed cost and held to the profile's profit floors. Products that warn only for brand
  * approval come back flagged, to list separately.
  */
-export async function planCandidates(opts: { warns?: boolean } = {}): Promise<{ limits: PlanLimits; profile: string; candidates: PlanCandidate[]; updatedAt: string | null }> {
+export async function planCandidates(opts: { warns?: boolean } = {}): Promise<{ limits: PlanLimits; profile: string; candidates: PlanCandidate[]; noOffer: NoOffer[]; updatedAt: string | null }> {
   const d = db();
   const profile = await loadProfile(null);
   const cfg = profile.config;
@@ -38,7 +43,11 @@ export async function planCandidates(opts: { warns?: boolean } = {}): Promise<{ 
   }
   const offers: Offer[] = [];
   for (const c of chunks([...productEan.keys()], 200)) {
-    offers.push(...(must(await d.from("offers").select("id, product_id, supplier_id, unit_cost_gbp, cost_known, moq, stock, fx_rate").in("product_id", c), "offers") as Offer[]));
+    const res = await d.from("offers").select("id, product_id, supplier_id, unit_cost_gbp, cost_known, moq, stock, fx_rate, manual, manual_supplier, landed_gbp, mov_gbp").in("product_id", c);
+    // Before the cost-override migrations: the offers without those columns.
+    offers.push(...(res.error && /manual|landed_gbp|mov_gbp/.test(res.error.message)
+      ? must(await d.from("offers").select("id, product_id, supplier_id, unit_cost_gbp, cost_known, moq, stock, fx_rate").in("product_id", c), "offers") as Offer[]
+      : must(res, "offers") as Offer[]));
   }
   const suppliers = new Map<string, Supplier>();
   for (const c of chunks([...new Set(offers.map((o) => o.supplier_id))], 200)) {
@@ -51,7 +60,10 @@ export async function planCandidates(opts: { warns?: boolean } = {}): Promise<{ 
   }
 
   const out: PlanCandidate[] = [];
+  const noOffer: NoOffer[] = [];
   for (const r of picked) {
+    const before = out.length;
+    let offered = !!r.qogita;
     const approvalOnly = r.verdict === "warn" && isApprovalOnly(r);
     const base = {
       productId: r.product_id, ean: r.ean, asin: r.asin, title: r.title, brand: r.brand, sellPrice: Number(r.sell_price),
@@ -80,7 +92,23 @@ export async function planCandidates(opts: { warns?: boolean } = {}): Promise<{ 
     const best = new Map<string, Offer>();
     for (const o of offersByEan.get(r.ean) ?? []) {
       const s = suppliers.get(o.supplier_id);
+      // Your cost (Set your cost) is a buyable offer; a cost typed into a check or the extension isn't.
+      if (o.manual && s && (Number(o.landed_gbp) > 0 || Number(o.unit_cost_gbp) > 0)) {
+        offered = true;
+        const vat = Number(s.vat_rate);
+        const unit = o.landed_gbp != null ? unitFromLanded(Number(o.landed_gbp), cfg.fees, vat) : Number(o.unit_cost_gbp);
+        const p = priced(unit, vat);
+        if (!p.ok) continue;
+        const name = o.manual_supplier?.trim() || "Your cost";
+        out.push({
+          ...base, key: `${r.product_id}|manual`, supplierKey: `manual:${name.toLowerCase()}`, supplierName: name, supplierId: null,
+          movGbp: o.mov_gbp == null ? null : Number(o.mov_gbp), unitCostGbp: Math.round(unit * 10000) / 10000, landedGbp: p.landed, profitUnit: p.profit,
+          moq: o.moq ?? 1, step: 1, maxUnits: null, qogita: null, manual: true,
+        });
+        continue;
+      }
       if (!s || s.source_type === "manual" || o.cost_known === false || !(Number(o.unit_cost_gbp) > 0)) continue;
+      offered = true;
       if (s.source_type === "qogita" && r.qogita) continue; // covered by the seller's offer above
       const cur = best.get(o.supplier_id);
       if (!cur || Number(o.unit_cost_gbp) < Number(cur.unit_cost_gbp)) best.set(o.supplier_id, o);
@@ -96,9 +124,16 @@ export async function planCandidates(opts: { warns?: boolean } = {}): Promise<{ 
         moq: o.moq, step: 1, maxUnits: o.stock != null && o.stock > 0 ? o.stock : null, qogita: null,
       });
     }
+    // Passes, but nobody offers it at a price (a check or hunt with no cost): say so, to set one.
+    if (!offered && out.length === before && !isApprovalOnly(r)) {
+      noOffer.push({
+        productId: r.product_id, resultId: r.result_id ?? null, ean: r.ean, asin: r.asin, title: r.title, brand: r.brand,
+        sellPrice: Number(r.sell_price), maxLandedGbp: r.max_landed == null ? null : Number(r.max_landed), verdict: r.verdict as "pass" | "warn",
+      });
+    }
   }
   const updatedAt = rows.reduce<string | null>((m, r) => (r.evaluated_at && (!m || r.evaluated_at > m) ? r.evaluated_at : m), null);
-  return { limits, profile: profile.name, candidates: out, updatedAt };
+  return { limits, profile: profile.name, candidates: out, noOffer, updatedAt };
 }
 
 /** It warns, and only because the brand needs approval. */

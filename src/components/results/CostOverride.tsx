@@ -11,7 +11,7 @@ import { overrideTitle, validCost, type CostInput, type CostOverride, type VatBa
  * Set your own cost for a product (one row, or every selected row's product): a landed cost, or a
  * supplier price and its VAT basis, with a supplier name and note. The parent saves it.
  */
-export function CostOverrideDialog({ open, onOpenChange, count = 1, initial, onSave, onClear }: {
+export function CostOverrideDialog({ open, onOpenChange, count = 1, initial, onSave, onClear, title, hint }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** Rows it applies to (the bulk bar). */
@@ -20,18 +20,28 @@ export function CostOverrideDialog({ open, onOpenChange, count = 1, initial, onS
   onSave: (cost: CostInput) => Promise<void>;
   /** Offered when there's an override to clear. */
   onClear?: () => Promise<void>;
+  /** In place of "Set your cost" (the planner names the product). */
+  title?: string;
+  /** A line under the description, e.g. the most it can cost landed. */
+  hint?: string;
 }) {
   const [mode, setMode] = useState<"landed" | "price">(initial?.priceGbp != null ? "price" : "landed");
   const [amount, setAmount] = useState(initial ? String(initial.landedGbp ?? initial.priceGbp ?? "") : "");
   const [basis, setBasis] = useState<VatBasis>(initial?.vatBasis ?? "ex_vat");
   const [supplier, setSupplier] = useState(initial?.supplier ?? "");
   const [note, setNote] = useState(initial?.note ?? "");
+  const [moq, setMoq] = useState(initial?.moq != null ? String(initial.moq) : "");
+  const [mov, setMov] = useState(initial?.movGbp != null ? String(initial.movGbp) : "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const cost = (): CostInput => {
     const v = amount.trim() === "" ? NaN : Number(amount.replace(/[£,\s]/g, ""));
-    return { ...(mode === "landed" ? { landedGbp: v } : { priceGbp: v, vatBasis: basis }), supplierName: supplier.trim() || null, note: note.trim() || null };
+    const opt = (s: string) => (s.trim() === "" ? null : Number(s.replace(/[£,\s]/g, "")));
+    return {
+      ...(mode === "landed" ? { landedGbp: v } : { priceGbp: v, vatBasis: basis }), supplierName: supplier.trim() || null, note: note.trim() || null,
+      moq: opt(moq), movGbp: opt(mov),
+    };
   };
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);
@@ -56,9 +66,10 @@ export function CostOverrideDialog({ open, onOpenChange, count = 1, initial, onS
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent onClick={(e) => e.stopPropagation()}>
         <DialogHeader>
-          <DialogTitle>{count > 1 ? `Set cost for ${count} rows` : "Set your cost"}</DialogTitle>
+          <DialogTitle>{title ?? (count > 1 ? `Set cost for ${count} rows` : "Set your cost")}</DialogTitle>
           <DialogDescription>
             Kept for the product in every run and re-screen, as an offer from the Manual supplier. It competes with the sheet&apos;s price; the cheaper is scored.
+            {hint && <span className="mt-1 block font-medium text-foreground">{hint}</span>}
           </DialogDescription>
         </DialogHeader>
         <form className="grid gap-3 text-sm" onSubmit={(e) => { e.preventDefault(); save(); }}>
@@ -79,6 +90,10 @@ export function CostOverrideDialog({ open, onOpenChange, count = 1, initial, onS
           )}
           <Input placeholder="Supplier (optional)" maxLength={120} value={supplier} onChange={(e) => setSupplier(e.target.value)} aria-label="Supplier name" />
           <Input placeholder="Note (optional)" maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} aria-label="Cost note" />
+          <div className="grid grid-cols-2 gap-2">
+            <Input inputMode="numeric" placeholder="MOQ (optional, units)" value={moq} onChange={(e) => setMoq(e.target.value)} aria-label="Minimum order quantity" />
+            <Input inputMode="decimal" placeholder="MOV (optional, £)" value={mov} onChange={(e) => setMov(e.target.value)} aria-label="Minimum order value (£)" />
+          </div>
           {error && <p className="text-xs text-fail">{error}</p>}
           <DialogFooter className="gap-2">
             {onClear && <Button type="button" variant="outline" className="mr-auto text-fail hover:text-fail" disabled={busy} onClick={() => run(onClear)}>Clear override</Button>}

@@ -13,6 +13,9 @@ export interface CostInput {
   vatBasis?: VatBasis | null;
   supplierName?: string | null;
   note?: string | null;
+  /** Units a minimum order (default 1), and the supplier's minimum order value in £ (default none). */
+  moq?: number | null;
+  movGbp?: number | null;
 }
 
 /** On a result whose product has an override: it, whether it's scored, and the sheet's cost. */
@@ -28,6 +31,9 @@ export interface CostOverride {
   vatBasis: VatBasis | null;
   /** Per unit, ex-VAT, as scored. */
   unitGbp: number;
+  /** As you set them (null: MOQ 1, no MOV). */
+  moq?: number | null;
+  movGbp?: number | null;
   /** The sheet's cost (null for a product with no sheet offer). */
   original: { supplier: string | null; unitGbp: number | null; landedGbp: number | null; costKnown: boolean } | null;
 }
@@ -41,6 +47,8 @@ export function validCost(c: CostInput): string | null {
   if (price != null && c.vatBasis !== "ex_vat" && c.vatBasis !== "inc_vat") return "Say whether the price includes VAT";
   if ((c.supplierName ?? "").length > 120) return "Keep the supplier name under 120 characters";
   if ((c.note ?? "").length > 500) return "Keep the note under 500 characters";
+  if (c.moq != null && !(Number.isInteger(Number(c.moq)) && Number(c.moq) >= 1 && Number(c.moq) <= 100_000)) return "MOQ must be a whole number of units, 1 or more";
+  if (c.movGbp != null && !(Number.isFinite(Number(c.movGbp)) && Number(c.movGbp) >= 0 && Number(c.movGbp) <= 1_000_000)) return "MOV must be a number of pounds";
   return null;
 }
 

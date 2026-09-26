@@ -79,6 +79,7 @@ interface Offer {
   vat_basis?: "ex_vat" | "inc_vat" | null;
   manual_supplier?: string | null;
   note?: string | null;
+  mov_gbp?: number | null;
   [k: string]: unknown;
 }
 
@@ -253,6 +254,8 @@ function context(row: Row, card: RateCard, rules: CategoryRule[], cfg: ProfileCo
       priceGbp: m.offer.landed_gbp == null ? Number(m.offer.unit_cost) : null,
       vatBasis: m.offer.vat_basis ?? null,
       unitGbp: Math.round(mUnit * 10000) / 10000,
+      moq: m.offer.moq ?? null,
+      movGbp: m.offer.mov_gbp == null ? null : Number(m.offer.mov_gbp),
       original: o.manual ? null : {
         supplier: q ? `Qogita · ${q.seller}` : s.name,
         unitGbp: sheetKnown ? Math.round(offer.unitCostGbp * 10000) / 10000 : null,
@@ -261,7 +264,7 @@ function context(row: Row, card: RateCard, rules: CategoryRule[], cfg: ProfileCo
       },
     };
     if (active) {
-      offer = { unitCostGbp: mUnit, costKnown: true, moq: null, goodsVatRatePct: mVat, supplierMovGbp: null };
+      offer = { unitCostGbp: mUnit, costKnown: true, moq: m.offer.moq ?? null, goodsVatRatePct: mVat, supplierMovGbp: m.offer.mov_gbp == null ? null : Number(m.offer.mov_gbp) };
       packCtx = null;
     }
   }

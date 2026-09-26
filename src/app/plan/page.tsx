@@ -18,11 +18,13 @@ import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { GATE_LABELS, type GateId } from "@/lib/screening/config";
 import { monthsLabel } from "@/lib/screening/order";
-import { planOrder, type PlanCandidate, type PlanLimits, type PlanLine } from "@/lib/plan";
+import { planOrder, type NoOffer, type PlanCandidate, type PlanLimits, type PlanLine } from "@/lib/plan";
+import { CostOverrideDialog } from "@/components/results/CostOverride";
+import type { CostInput } from "@/lib/costOverride";
 import { api, gbp, when } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
 
-interface Data { limits: PlanLimits; profile: string; candidates: PlanCandidate[]; updatedAt: string | null }
+interface Data { limits: PlanLimits; profile: string; candidates: PlanCandidate[]; noOffer?: NoOffer[]; updatedAt: string | null }
 
 const STORE = "ws.plan.controls";
 const gates = (g?: string[]) => (g ?? []).map((x) => GATE_LABELS[x as GateId] ?? x).join(", ");
@@ -55,12 +57,22 @@ export default function PlanPage() {
   const [excluded, setExcluded] = useState<Set<string>>(() => new Set(load().excluded));
   const [qty, setQty] = useState<Map<string, number>>(() => new Map(load().qty));
   const [adding, setAdding] = useState(false);
+  const [costFor, setCostFor] = useState<NoOffer | null>(null);
+  const [reload, setReload] = useState(0);
 
   useEffect(() => {
     let stale = false;
     api<Data>(`/api/plan${warns ? "?warns=1" : ""}`).then((d) => { if (!stale) { setData(d); setError(null); } }).catch((e) => !stale && setError(e.message));
     return () => { stale = true; };
-  }, [warns]);
+  }, [warns, reload]);
+  /** Set your cost for a product with no supplier offer, then plan it (pinned). */
+  async function setCostAndPlan(n: NoOffer, cost: CostInput) {
+    if (!n.resultId) throw new Error("No screening to attach the cost to: check the product first");
+    await api("/api/cost-override", { method: "POST", json: { resultIds: [n.resultId], cost } });
+    setPinned((s) => new Set(s).add(`${n.productId}|manual`));
+    setReload((x) => x + 1);
+    toast.success(`${n.title ?? n.ean}: cost set and pinned into the plan`);
+  }
   useEffect(() => {
     try {
       localStorage.setItem(STORE, JSON.stringify({ pinned: [...pinned], excluded: [...excluded], qty: [...qty] }));
@@ -220,10 +232,19 @@ export default function PlanPage() {
         </section>
       )}
 
-      {plan.skipped.length > 0 && (
+      {(plan.skipped.length > 0 || (data.noOffer?.length ?? 0) > 0) && (
         <details className="panel p-4">
-          <summary className="cursor-pointer text-sm font-semibold">Not in the plan <span className="font-normal text-muted-foreground">{plan.skipped.length}</span></summary>
+          <summary className="cursor-pointer text-sm font-semibold">Not in the plan <span className="font-normal text-muted-foreground">{plan.skipped.length + (data.noOffer?.length ?? 0)}</span></summary>
           <ul className="mt-3 space-y-1.5 text-sm">
+            {(data.noOffer ?? []).map((n) => (
+              <li key={`no-offer:${n.productId}`} className="flex flex-wrap items-center justify-between gap-2">
+                <span className="min-w-0">
+                  <span className="font-medium">{n.title ?? n.ean}</span>
+                  <span className="text-xs text-muted-foreground"> · <span className="font-semibold text-warn">no supplier offer</span>{n.maxLandedGbp != null ? ` · clears the floors up to ${gbp(n.maxLandedGbp)} landed` : ""}</span>
+                </span>
+                <Button size="sm" variant="ghost" disabled={!n.resultId} onClick={() => setCostFor(n)}>Set cost &amp; plan</Button>
+              </li>
+            ))}
             {plan.skipped.map(({ c, reason }) => (
               <li key={c.key} className="flex flex-wrap items-center justify-between gap-2">
                 <span className="min-w-0">
@@ -239,6 +260,11 @@ export default function PlanPage() {
             ))}
           </ul>
         </details>
+      )}
+      {costFor && (
+        <CostOverrideDialog open onOpenChange={(o) => { if (!o) setCostFor(null); }} title={`Set cost & plan: ${costFor.title ?? costFor.ean}`}
+          hint={costFor.maxLandedGbp != null ? `Clears the profit floors up to ${gbp(costFor.maxLandedGbp)} landed.` : undefined}
+          onSave={(c) => setCostAndPlan(costFor, c)} />
       )}
     </div>
   );

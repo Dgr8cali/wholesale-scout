@@ -11,8 +11,11 @@ The Order plan page turns your passing products into an order. It picks the prod
 
 The candidates are every product whose latest result **passes** on your **default profile** (shown in the page description, with "as of" the time of the latest figures). To be a candidate, a product needs at least one costed offer. For each product the planner considers:
 
-- the cheapest offer from **each** supplier that offers its EAN (uploaded price lists and Qogita; Check ASINs and seller scans have no cost, so they're left out), and
-- for Qogita, the offer from the Qogita seller chosen for it. Each Qogita seller counts as its own order, with its own MOV and case size.
+- the cheapest offer from **each** supplier that offers its EAN (uploaded price lists and Qogita),
+- for Qogita, the offer from the Qogita seller chosen for it. Each Qogita seller counts as its own order, with its own MOV and case size, and
+- your own cost, set with **Set your cost** ([Override a cost](/help/howto/override-a-cost)). It's planned under the supplier name you gave, or "Your cost" if you gave none, with MOQ 1 and no MOV unless you set them. Lines with the same supplier name make one order.
+
+A cost typed into Check ASINs or read by the extension isn't a supplier's offer, so it's left out. Seller scans have no cost.
 
 Each supplier's price is turned into a landed cost with your default profile's fees. It must still clear the profile's profit floors (minimum profit, ROI and margin) at that price, or that supplier isn't offered for it. The figures come from the stored results, so nothing is fetched and the page is quick. To bring them up to date, re-screen. See [Runs](/help/pages/runs).
 
@@ -80,6 +83,7 @@ This lists products that warn **only** because the brand needs approval. They ar
 
 Open this to see every candidate left out, and why:
 
+- "**no supplier offer**": it passes, but nobody offers it at a price (it came from Check ASINs, a hunt or a seller scan). The line says how much it can cost landed and still clear the floors. **Set cost & plan** opens the Set your cost form (landed cost or supplier price, supplier name, note, and optional MOQ and MOV). Saving it re-scores the product and pins it into the plan under that supplier.
 - "excluded by you"
 - "no profit at this supplier's price"
 - "no sales share to size an order"
