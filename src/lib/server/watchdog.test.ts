@@ -26,6 +26,14 @@ describe("watchdog: restart dead processing chains", () => {
     expect(await stalledRuns()).toEqual([{ runId: "dead", path: "process" }, { runId: "rescreen", path: "rescreen" }]);
   });
 
+  it("times a re-screen from its start: one that has just begun isn't stalled", async () => {
+    fake.tables.runs = [
+      { id: "fresh", status: "processing", lease_until: null, last_progress_at: ago(60), started_at: ago(90), stats: { rescreen: { startedAt: ago(0.2), finishedAt: null } } },
+      { id: "old", status: "processing", lease_until: null, last_progress_at: ago(60), started_at: ago(90), stats: { rescreen: { startedAt: ago(10), finishedAt: null } } },
+    ];
+    expect(await stalledRuns()).toEqual([{ runId: "old", path: "rescreen" }]);
+  });
+
   it("leaves a run alone when all it has left is Keepa work and it isn't its turn", async () => {
     fake.tables.runs = [
       { id: "first", status: "processing", lease_until: null, last_progress_at: ago(10), started_at: ago(90), stats: {} },

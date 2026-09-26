@@ -804,6 +804,11 @@ export async function rescreenRun(
   const stats: RunStats = { ...(runRow.stats ?? {}) };
   let cfg: ProfileConfig;
   let job = stats.rescreen;
+  if (opts.continuing && (!job || job.finishedAt)) {
+    // A late "carry on" (the watchdog, the run page) for a re-screen that has already finished
+    // must never start a new one: that would re-screen everything again, fetching what it lacks.
+    return { rescored: 0, requeued: 0, remaining: 0, profile: { name: stats.profile?.name ?? "", savedAt: stats.profile?.savedAt ?? null } };
+  }
   if (opts.continuing && job && !job.finishedAt) {
     // Carry on with the config the re-screen started with.
     cfg = withDefaults(runRow.profile_snapshot);

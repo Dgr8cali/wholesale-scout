@@ -23,9 +23,10 @@ export async function stalledRuns(now = Date.now()): Promise<Stalled[]> {
   for (const r of runs) {
     if (r.paused_at) continue;
     if (r.lease_until && Date.parse(r.lease_until) > now) continue; // a worker is on it
-    const last = Date.parse(r.last_progress_at ?? r.started_at);
-    if (now - last < STALL_MS) continue;
     const job = r.stats?.rescreen;
+    // A re-screen that has just begun hasn't made progress yet: time it from its start.
+    const last = Math.max(Date.parse(r.last_progress_at ?? r.started_at), job && !job.finishedAt ? Date.parse(job.startedAt) : 0);
+    if (now - last < STALL_MS) continue;
     if (job && !job.finishedAt) {
       out.push({ runId: r.id, path: "rescreen" });
       continue;

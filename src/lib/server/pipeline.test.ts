@@ -237,6 +237,12 @@ describe("ingest → process", () => {
     expect(calls.restrictions).toBe(before + 1);
     expect(((byAsin("B0MULTIB01").inputs as { restriction: { links: unknown[] } }).restriction.links)).toEqual([APPLY]);
 
+    // A late "carry on" for a re-screen that has finished does nothing (it once started a new,
+    // full re-screen that fetched missing data).
+    const statsBefore = JSON.stringify(fake.tables.runs.find((r) => r.id === runId)!.stats);
+    expect(await rescreenRun(runId, null, { continuing: true })).toMatchObject({ rescored: 0, requeued: 0, remaining: 0 });
+    expect(JSON.stringify(fake.tables.runs.find((r) => r.id === runId)!.stats)).toBe(statsBefore);
+
     // Recording the brand as approved opens gate 11 on the next re-screen, with no calls.
     fake.tables.brand_approvals = [{ id: "a1", brand_key: "brand", brand: "Brand", status: "approved", status_date: "2026-09-26" }];
     const callsBefore = { ...calls };
