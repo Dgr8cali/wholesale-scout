@@ -30,6 +30,8 @@ try {
   const [{ exists }] = await sql`select to_regclass('public.schema_migrations') is not null as exists`;
   if (!exists) {
     await sql`create table schema_migrations (name text primary key, applied_at timestamptz not null default now())`;
+    // Like every other table: RLS on, no policies, so the public API roles can't read it.
+    await sql`alter table schema_migrations enable row level security`;
     const [{ runs }] = await sql`select to_regclass('public.runs') is not null as runs`;
     if (runs) {
       const base = files.filter((f) => f < BASELINE_BEFORE);

@@ -1,5 +1,5 @@
 -- Wholesale Scout schema, dumped by scripts/schema-backup.mjs. No data.
--- Dumped 2026-09-25T22:16:53.912Z. Safe to re-run. Restore: npm run schema:restore
+-- Dumped 2026-10-01T21:44:16.125Z. Safe to re-run. Restore: npm run schema:restore
 
 -- @section extensions
 create extension if not exists "pg_cron";
@@ -10,6 +10,74 @@ create extension if not exists "supabase_vault";
 create extension if not exists "uuid-ossp";
 
 -- @section tables
+create table if not exists "amazon_fee_estimates" (
+  "asin" text not null,
+  "price" numeric not null,
+  "referral" numeric,
+  "fba" numeric,
+  "total" numeric,
+  "fetched_at" timestamp with time zone default now() not null
+);
+alter table "amazon_fee_estimates" add column if not exists "asin" text;
+alter table "amazon_fee_estimates" add column if not exists "price" numeric;
+alter table "amazon_fee_estimates" add column if not exists "referral" numeric;
+alter table "amazon_fee_estimates" add column if not exists "fba" numeric;
+alter table "amazon_fee_estimates" add column if not exists "total" numeric;
+alter table "amazon_fee_estimates" add column if not exists "fetched_at" timestamp with time zone default now();
+alter table "amazon_fee_estimates" enable row level security;
+
+create table if not exists "amazon_inventory" (
+  "sku" text not null,
+  "asin" text not null,
+  "fulfillable" integer default 0 not null,
+  "inbound" integer default 0 not null,
+  "reserved" integer default 0 not null,
+  "unsellable" integer default 0 not null,
+  "total" integer default 0 not null,
+  "updated_at" timestamp with time zone default now() not null
+);
+alter table "amazon_inventory" add column if not exists "sku" text;
+alter table "amazon_inventory" add column if not exists "asin" text;
+alter table "amazon_inventory" add column if not exists "fulfillable" integer default 0;
+alter table "amazon_inventory" add column if not exists "inbound" integer default 0;
+alter table "amazon_inventory" add column if not exists "reserved" integer default 0;
+alter table "amazon_inventory" add column if not exists "unsellable" integer default 0;
+alter table "amazon_inventory" add column if not exists "total" integer default 0;
+alter table "amazon_inventory" add column if not exists "updated_at" timestamp with time zone default now();
+alter table "amazon_inventory" enable row level security;
+
+create table if not exists "amazon_sales" (
+  "asin" text not null,
+  "day" date not null,
+  "channel" text not null,
+  "units" integer default 0 not null,
+  "orders" integer default 0 not null,
+  "revenue" numeric default 0 not null
+);
+alter table "amazon_sales" add column if not exists "asin" text;
+alter table "amazon_sales" add column if not exists "day" date;
+alter table "amazon_sales" add column if not exists "channel" text;
+alter table "amazon_sales" add column if not exists "units" integer default 0;
+alter table "amazon_sales" add column if not exists "orders" integer default 0;
+alter table "amazon_sales" add column if not exists "revenue" numeric default 0;
+alter table "amazon_sales" enable row level security;
+
+create table if not exists "amazon_sync" (
+  "id" integer default 1 not null,
+  "state" jsonb default '{"stage": "idle"}'::jsonb not null,
+  "started_at" timestamp with time zone,
+  "finished_at" timestamp with time zone,
+  "error" text,
+  "updated_at" timestamp with time zone default now() not null
+);
+alter table "amazon_sync" add column if not exists "id" integer default 1;
+alter table "amazon_sync" add column if not exists "state" jsonb default '{"stage": "idle"}'::jsonb;
+alter table "amazon_sync" add column if not exists "started_at" timestamp with time zone;
+alter table "amazon_sync" add column if not exists "finished_at" timestamp with time zone;
+alter table "amazon_sync" add column if not exists "error" text;
+alter table "amazon_sync" add column if not exists "updated_at" timestamp with time zone default now();
+alter table "amazon_sync" enable row level security;
+
 create table if not exists "auth_failures" (
   "ip" text not null,
   "failures" integer default 0 not null,
@@ -126,7 +194,8 @@ create table if not exists "category_rules" (
   "checklist" text[] default '{}'::text[] not null,
   "sort" integer default 0 not null,
   "created_at" timestamp with time zone default now() not null,
-  "updated_at" timestamp with time zone default now() not null
+  "updated_at" timestamp with time zone default now() not null,
+  "exclusions" text[] default '{}'::text[] not null
 );
 alter table "category_rules" add column if not exists "id" uuid default gen_random_uuid();
 alter table "category_rules" add column if not exists "key" text;
@@ -138,6 +207,7 @@ alter table "category_rules" add column if not exists "checklist" text[] default
 alter table "category_rules" add column if not exists "sort" integer default 0;
 alter table "category_rules" add column if not exists "created_at" timestamp with time zone default now();
 alter table "category_rules" add column if not exists "updated_at" timestamp with time zone default now();
+alter table "category_rules" add column if not exists "exclusions" text[] default '{}'::text[];
 alter table "category_rules" enable row level security;
 
 create table if not exists "documents" (
@@ -256,6 +326,7 @@ alter table "keepa_categories" add column if not exists "id" bigint;
 alter table "keepa_categories" add column if not exists "name" text;
 alter table "keepa_categories" add column if not exists "products" integer;
 alter table "keepa_categories" add column if not exists "fetched_at" timestamp with time zone default now();
+alter table "keepa_categories" enable row level security;
 
 create table if not exists "keepa_sellers" (
   "seller_id" text not null,
@@ -347,7 +418,13 @@ create table if not exists "offers" (
   "seen_at" timestamp with time zone default now() not null,
   "source_ref" text,
   "external_ref" text,
-  "cost_known" boolean default true not null
+  "cost_known" boolean default true not null,
+  "manual" boolean default false not null,
+  "landed_gbp" numeric(12,4),
+  "vat_basis" text,
+  "manual_supplier" text,
+  "note" text,
+  "mov_gbp" numeric(12,2)
 );
 alter table "offers" add column if not exists "id" uuid default gen_random_uuid();
 alter table "offers" add column if not exists "product_id" uuid;
@@ -367,7 +444,143 @@ alter table "offers" add column if not exists "seen_at" timestamp with time zone
 alter table "offers" add column if not exists "source_ref" text;
 alter table "offers" add column if not exists "external_ref" text;
 alter table "offers" add column if not exists "cost_known" boolean default true;
+alter table "offers" add column if not exists "manual" boolean default false;
+alter table "offers" add column if not exists "landed_gbp" numeric(12,4);
+alter table "offers" add column if not exists "vat_basis" text;
+alter table "offers" add column if not exists "manual_supplier" text;
+alter table "offers" add column if not exists "note" text;
+alter table "offers" add column if not exists "mov_gbp" numeric(12,2);
 alter table "offers" enable row level security;
+
+create table if not exists "pl_candidate_asins" (
+  "candidate_id" uuid not null,
+  "asin" text not null,
+  "position" smallint not null,
+  "is_reference" boolean default false not null,
+  "title" text,
+  "brand" text,
+  "image" text,
+  "price" numeric,
+  "rating" numeric,
+  "review_count" integer,
+  "rank" integer,
+  "avg_rank_90d" integer,
+  "rank_drops_90d" integer,
+  "bought_past_month" integer,
+  "offer_count" integer,
+  "buybox_price" numeric,
+  "amazon_ever_seller" boolean,
+  "amazon_brand" boolean,
+  "dimensions" jsonb,
+  "weight" integer,
+  "first_seen" timestamp with time zone,
+  "history" jsonb,
+  "snapshot_at" timestamp with time zone
+);
+alter table "pl_candidate_asins" add column if not exists "candidate_id" uuid;
+alter table "pl_candidate_asins" add column if not exists "asin" text;
+alter table "pl_candidate_asins" add column if not exists "position" smallint;
+alter table "pl_candidate_asins" add column if not exists "is_reference" boolean default false;
+alter table "pl_candidate_asins" add column if not exists "title" text;
+alter table "pl_candidate_asins" add column if not exists "brand" text;
+alter table "pl_candidate_asins" add column if not exists "image" text;
+alter table "pl_candidate_asins" add column if not exists "price" numeric;
+alter table "pl_candidate_asins" add column if not exists "rating" numeric;
+alter table "pl_candidate_asins" add column if not exists "review_count" integer;
+alter table "pl_candidate_asins" add column if not exists "rank" integer;
+alter table "pl_candidate_asins" add column if not exists "avg_rank_90d" integer;
+alter table "pl_candidate_asins" add column if not exists "rank_drops_90d" integer;
+alter table "pl_candidate_asins" add column if not exists "bought_past_month" integer;
+alter table "pl_candidate_asins" add column if not exists "offer_count" integer;
+alter table "pl_candidate_asins" add column if not exists "buybox_price" numeric;
+alter table "pl_candidate_asins" add column if not exists "amazon_ever_seller" boolean;
+alter table "pl_candidate_asins" add column if not exists "amazon_brand" boolean;
+alter table "pl_candidate_asins" add column if not exists "dimensions" jsonb;
+alter table "pl_candidate_asins" add column if not exists "weight" integer;
+alter table "pl_candidate_asins" add column if not exists "first_seen" timestamp with time zone;
+alter table "pl_candidate_asins" add column if not exists "history" jsonb;
+alter table "pl_candidate_asins" add column if not exists "snapshot_at" timestamp with time zone;
+alter table "pl_candidate_asins" enable row level security;
+
+create table if not exists "pl_candidate_fields" (
+  "candidate_id" uuid not null,
+  "key" text not null,
+  "value" text,
+  "source" text not null,
+  "updated_at" timestamp with time zone default now() not null
+);
+alter table "pl_candidate_fields" add column if not exists "candidate_id" uuid;
+alter table "pl_candidate_fields" add column if not exists "key" text;
+alter table "pl_candidate_fields" add column if not exists "value" text;
+alter table "pl_candidate_fields" add column if not exists "source" text;
+alter table "pl_candidate_fields" add column if not exists "updated_at" timestamp with time zone default now();
+alter table "pl_candidate_fields" enable row level security;
+
+create table if not exists "pl_candidates" (
+  "id" uuid default gen_random_uuid() not null,
+  "name" text not null,
+  "niche_keyword" text,
+  "category" text default 'Everything else'::text not null,
+  "status" text default 'draft'::text not null,
+  "notes" text,
+  "token_cost" integer default 0 not null,
+  "keepa_by_day" jsonb default '{}'::jsonb not null,
+  "refreshed_at" timestamp with time zone,
+  "created_at" timestamp with time zone default now() not null,
+  "updated_at" timestamp with time zone default now() not null
+);
+alter table "pl_candidates" add column if not exists "id" uuid default gen_random_uuid();
+alter table "pl_candidates" add column if not exists "name" text;
+alter table "pl_candidates" add column if not exists "niche_keyword" text;
+alter table "pl_candidates" add column if not exists "category" text default 'Everything else'::text;
+alter table "pl_candidates" add column if not exists "status" text default 'draft'::text;
+alter table "pl_candidates" add column if not exists "notes" text;
+alter table "pl_candidates" add column if not exists "token_cost" integer default 0;
+alter table "pl_candidates" add column if not exists "keepa_by_day" jsonb default '{}'::jsonb;
+alter table "pl_candidates" add column if not exists "refreshed_at" timestamp with time zone;
+alter table "pl_candidates" add column if not exists "created_at" timestamp with time zone default now();
+alter table "pl_candidates" add column if not exists "updated_at" timestamp with time zone default now();
+alter table "pl_candidates" enable row level security;
+
+create table if not exists "pl_poe_snapshots" (
+  "id" uuid default gen_random_uuid() not null,
+  "candidate_id" uuid,
+  "niche_id" text,
+  "niche_title" text,
+  "captured_at" timestamp with time zone default now() not null,
+  "raw" jsonb not null,
+  "search_volume_360" numeric,
+  "search_volume_growth" numeric,
+  "products_in_niche" integer,
+  "top3_click_share" numeric,
+  "search_conversion" numeric,
+  "avg_units_per_product" numeric,
+  "search_terms" jsonb default '[]'::jsonb not null
+);
+alter table "pl_poe_snapshots" add column if not exists "id" uuid default gen_random_uuid();
+alter table "pl_poe_snapshots" add column if not exists "candidate_id" uuid;
+alter table "pl_poe_snapshots" add column if not exists "niche_id" text;
+alter table "pl_poe_snapshots" add column if not exists "niche_title" text;
+alter table "pl_poe_snapshots" add column if not exists "captured_at" timestamp with time zone default now();
+alter table "pl_poe_snapshots" add column if not exists "raw" jsonb;
+alter table "pl_poe_snapshots" add column if not exists "search_volume_360" numeric;
+alter table "pl_poe_snapshots" add column if not exists "search_volume_growth" numeric;
+alter table "pl_poe_snapshots" add column if not exists "products_in_niche" integer;
+alter table "pl_poe_snapshots" add column if not exists "top3_click_share" numeric;
+alter table "pl_poe_snapshots" add column if not exists "search_conversion" numeric;
+alter table "pl_poe_snapshots" add column if not exists "avg_units_per_product" numeric;
+alter table "pl_poe_snapshots" add column if not exists "search_terms" jsonb default '[]'::jsonb;
+alter table "pl_poe_snapshots" enable row level security;
+
+create table if not exists "pl_settings" (
+  "key" text not null,
+  "value" numeric not null,
+  "updated_at" timestamp with time zone default now() not null
+);
+alter table "pl_settings" add column if not exists "key" text;
+alter table "pl_settings" add column if not exists "value" numeric;
+alter table "pl_settings" add column if not exists "updated_at" timestamp with time zone default now();
+alter table "pl_settings" enable row level security;
 
 create table if not exists "products" (
   "id" uuid default gen_random_uuid() not null,
@@ -393,7 +606,8 @@ create table if not exists "products" (
   "amazon_dg" jsonb,
   "competitor_stock" jsonb,
   "sc_dg" jsonb,
-  "dg_lookup" jsonb
+  "dg_lookup" jsonb,
+  "amazon_signals" text[]
 );
 alter table "products" add column if not exists "id" uuid default gen_random_uuid();
 alter table "products" add column if not exists "ean" text;
@@ -419,6 +633,7 @@ alter table "products" add column if not exists "amazon_dg" jsonb;
 alter table "products" add column if not exists "competitor_stock" jsonb;
 alter table "products" add column if not exists "sc_dg" jsonb;
 alter table "products" add column if not exists "dg_lookup" jsonb;
+alter table "products" add column if not exists "amazon_signals" text[];
 alter table "products" enable row level security;
 
 create table if not exists "profiles" (
@@ -436,6 +651,42 @@ alter table "profiles" add column if not exists "is_default" boolean default fal
 alter table "profiles" add column if not exists "created_at" timestamp with time zone default now();
 alter table "profiles" add column if not exists "updated_at" timestamp with time zone default now();
 alter table "profiles" enable row level security;
+
+create table if not exists "purchases" (
+  "id" uuid default gen_random_uuid() not null,
+  "asin" text not null,
+  "ean" text,
+  "product_id" uuid,
+  "supplier_id" uuid,
+  "supplier_name" text,
+  "units" integer not null,
+  "unit_cost_gbp" numeric,
+  "landed_gbp" numeric not null,
+  "ordered_on" date default CURRENT_DATE not null,
+  "status" text default 'ordered'::text not null,
+  "status_dates" jsonb default '{}'::jsonb not null,
+  "note" text,
+  "prediction" jsonb not null,
+  "created_at" timestamp with time zone default now() not null,
+  "updated_at" timestamp with time zone default now() not null
+);
+alter table "purchases" add column if not exists "id" uuid default gen_random_uuid();
+alter table "purchases" add column if not exists "asin" text;
+alter table "purchases" add column if not exists "ean" text;
+alter table "purchases" add column if not exists "product_id" uuid;
+alter table "purchases" add column if not exists "supplier_id" uuid;
+alter table "purchases" add column if not exists "supplier_name" text;
+alter table "purchases" add column if not exists "units" integer;
+alter table "purchases" add column if not exists "unit_cost_gbp" numeric;
+alter table "purchases" add column if not exists "landed_gbp" numeric;
+alter table "purchases" add column if not exists "ordered_on" date default CURRENT_DATE;
+alter table "purchases" add column if not exists "status" text default 'ordered'::text;
+alter table "purchases" add column if not exists "status_dates" jsonb default '{}'::jsonb;
+alter table "purchases" add column if not exists "note" text;
+alter table "purchases" add column if not exists "prediction" jsonb;
+alter table "purchases" add column if not exists "created_at" timestamp with time zone default now();
+alter table "purchases" add column if not exists "updated_at" timestamp with time zone default now();
+alter table "purchases" enable row level security;
 
 create table if not exists "qogita_presets" (
   "id" uuid default gen_random_uuid() not null,
@@ -519,7 +770,9 @@ create table if not exists "results" (
   "band" text,
   "error" text,
   "updated_at" timestamp with time zone default now() not null,
-  "inputs" jsonb
+  "inputs" jsonb,
+  "sheet_offer_id" uuid,
+  "cost_override" jsonb
 );
 alter table "results" add column if not exists "id" uuid default gen_random_uuid();
 alter table "results" add column if not exists "run_id" uuid;
@@ -545,6 +798,8 @@ alter table "results" add column if not exists "band" text;
 alter table "results" add column if not exists "error" text;
 alter table "results" add column if not exists "updated_at" timestamp with time zone default now();
 alter table "results" add column if not exists "inputs" jsonb;
+alter table "results" add column if not exists "sheet_offer_id" uuid;
+alter table "results" add column if not exists "cost_override" jsonb;
 alter table "results" enable row level security;
 
 create table if not exists "runs" (
@@ -595,6 +850,7 @@ create table if not exists "schema_migrations" (
 );
 alter table "schema_migrations" add column if not exists "name" text;
 alter table "schema_migrations" add column if not exists "applied_at" timestamp with time zone default now();
+alter table "schema_migrations" enable row level security;
 
 create table if not exists "supplier_mappings" (
   "id" uuid default gen_random_uuid() not null,
@@ -706,6 +962,26 @@ alter table "watchlist" enable row level security;
 
 -- @section constraints
 do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'amazon_fee_estimates_pkey' and conrelid = '"amazon_fee_estimates"'::regclass) then
+    alter table "amazon_fee_estimates" add constraint "amazon_fee_estimates_pkey" PRIMARY KEY (asin);
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'amazon_inventory_pkey' and conrelid = '"amazon_inventory"'::regclass) then
+    alter table "amazon_inventory" add constraint "amazon_inventory_pkey" PRIMARY KEY (sku);
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'amazon_sales_pkey' and conrelid = '"amazon_sales"'::regclass) then
+    alter table "amazon_sales" add constraint "amazon_sales_pkey" PRIMARY KEY (asin, day, channel);
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'amazon_sync_pkey' and conrelid = '"amazon_sync"'::regclass) then
+    alter table "amazon_sync" add constraint "amazon_sync_pkey" PRIMARY KEY (id);
+  end if;
+end $$;
+do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'auth_failures_pkey' and conrelid = '"auth_failures"'::regclass) then
     alter table "auth_failures" add constraint "auth_failures_pkey" PRIMARY KEY (ip);
   end if;
@@ -776,6 +1052,31 @@ do $$ begin
   end if;
 end $$;
 do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'pl_candidate_asins_pkey' and conrelid = '"pl_candidate_asins"'::regclass) then
+    alter table "pl_candidate_asins" add constraint "pl_candidate_asins_pkey" PRIMARY KEY (candidate_id, asin);
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'pl_candidate_fields_pkey' and conrelid = '"pl_candidate_fields"'::regclass) then
+    alter table "pl_candidate_fields" add constraint "pl_candidate_fields_pkey" PRIMARY KEY (candidate_id, key);
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'pl_candidates_pkey' and conrelid = '"pl_candidates"'::regclass) then
+    alter table "pl_candidates" add constraint "pl_candidates_pkey" PRIMARY KEY (id);
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'pl_poe_snapshots_pkey' and conrelid = '"pl_poe_snapshots"'::regclass) then
+    alter table "pl_poe_snapshots" add constraint "pl_poe_snapshots_pkey" PRIMARY KEY (id);
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'pl_settings_pkey' and conrelid = '"pl_settings"'::regclass) then
+    alter table "pl_settings" add constraint "pl_settings_pkey" PRIMARY KEY (key);
+  end if;
+end $$;
+do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'products_pkey' and conrelid = '"products"'::regclass) then
     alter table "products" add constraint "products_pkey" PRIMARY KEY (id);
   end if;
@@ -783,6 +1084,11 @@ end $$;
 do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'profiles_pkey' and conrelid = '"profiles"'::regclass) then
     alter table "profiles" add constraint "profiles_pkey" PRIMARY KEY (id);
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'purchases_pkey' and conrelid = '"purchases"'::regclass) then
+    alter table "purchases" add constraint "purchases_pkey" PRIMARY KEY (id);
   end if;
 end $$;
 do $$ begin
@@ -886,6 +1192,11 @@ do $$ begin
   end if;
 end $$;
 do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'amazon_sync_id_check' and conrelid = '"amazon_sync"'::regclass) then
+    alter table "amazon_sync" add constraint "amazon_sync_id_check" CHECK ((id = 1));
+  end if;
+end $$;
+do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'brand_approvals_status_check' and conrelid = '"brand_approvals"'::regclass) then
     alter table "brand_approvals" add constraint "brand_approvals_status_check" CHECK ((status = ANY (ARRAY['not_applied'::text, 'applied'::text, 'approved'::text, 'refused'::text])));
   end if;
@@ -903,6 +1214,41 @@ end $$;
 do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'ip_risk_brands_level_check' and conrelid = '"ip_risk_brands"'::regclass) then
     alter table "ip_risk_brands" add constraint "ip_risk_brands_level_check" CHECK ((level = ANY (ARRAY['low'::text, 'medium'::text, 'high'::text])));
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'offers_vat_basis_check' and conrelid = '"offers"'::regclass) then
+    alter table "offers" add constraint "offers_vat_basis_check" CHECK ((vat_basis = ANY (ARRAY['ex_vat'::text, 'inc_vat'::text])));
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'pl_candidate_asins_position_check' and conrelid = '"pl_candidate_asins"'::regclass) then
+    alter table "pl_candidate_asins" add constraint "pl_candidate_asins_position_check" CHECK ((("position" >= 1) AND ("position" <= 10)));
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'pl_candidate_fields_source_check' and conrelid = '"pl_candidate_fields"'::regclass) then
+    alter table "pl_candidate_fields" add constraint "pl_candidate_fields_source_check" CHECK ((source = ANY (ARRAY['keepa'::text, 'poe'::text, 'manual'::text, 'fees'::text])));
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'pl_candidates_status_check' and conrelid = '"pl_candidates"'::regclass) then
+    alter table "pl_candidates" add constraint "pl_candidates_status_check" CHECK ((status = ANY (ARRAY['draft'::text, 'researching'::text, 'samples'::text, 'dropped'::text, 'launched'::text])));
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'purchases_landed_gbp_check' and conrelid = '"purchases"'::regclass) then
+    alter table "purchases" add constraint "purchases_landed_gbp_check" CHECK ((landed_gbp >= (0)::numeric));
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'purchases_status_check' and conrelid = '"purchases"'::regclass) then
+    alter table "purchases" add constraint "purchases_status_check" CHECK ((status = ANY (ARRAY['ordered'::text, 'received'::text, 'sent'::text, 'live'::text, 'closed'::text])));
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'purchases_units_check' and conrelid = '"purchases"'::regclass) then
+    alter table "purchases" add constraint "purchases_units_check" CHECK ((units > 0));
   end if;
 end $$;
 do $$ begin
@@ -986,6 +1332,31 @@ do $$ begin
   end if;
 end $$;
 do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'pl_candidate_asins_candidate_id_fkey' and conrelid = '"pl_candidate_asins"'::regclass) then
+    alter table "pl_candidate_asins" add constraint "pl_candidate_asins_candidate_id_fkey" FOREIGN KEY (candidate_id) REFERENCES pl_candidates(id) ON DELETE CASCADE;
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'pl_candidate_fields_candidate_id_fkey' and conrelid = '"pl_candidate_fields"'::regclass) then
+    alter table "pl_candidate_fields" add constraint "pl_candidate_fields_candidate_id_fkey" FOREIGN KEY (candidate_id) REFERENCES pl_candidates(id) ON DELETE CASCADE;
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'pl_poe_snapshots_candidate_id_fkey' and conrelid = '"pl_poe_snapshots"'::regclass) then
+    alter table "pl_poe_snapshots" add constraint "pl_poe_snapshots_candidate_id_fkey" FOREIGN KEY (candidate_id) REFERENCES pl_candidates(id) ON DELETE SET NULL;
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'purchases_product_id_fkey' and conrelid = '"purchases"'::regclass) then
+    alter table "purchases" add constraint "purchases_product_id_fkey" FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE SET NULL;
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'purchases_supplier_id_fkey' and conrelid = '"purchases"'::regclass) then
+    alter table "purchases" add constraint "purchases_supplier_id_fkey" FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE SET NULL;
+  end if;
+end $$;
+do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'qogita_presets_profile_id_fkey' and conrelid = '"qogita_presets"'::regclass) then
     alter table "qogita_presets" add constraint "qogita_presets_profile_id_fkey" FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE SET NULL;
   end if;
@@ -1042,6 +1413,8 @@ do $$ begin
 end $$;
 
 -- @section indexes
+CREATE INDEX IF NOT EXISTS amazon_inventory_asin ON amazon_inventory USING btree (asin);
+CREATE INDEX IF NOT EXISTS amazon_sales_day ON amazon_sales USING btree (day);
 CREATE INDEX IF NOT EXISTS auth_failures_blocked ON auth_failures USING btree (blocked_until) WHERE (blocked_until IS NOT NULL);
 CREATE INDEX IF NOT EXISTS brand_products_brand_idx ON brand_products USING btree (brand_key);
 CREATE INDEX IF NOT EXISTS brand_products_verdict ON brand_products USING btree (brand_key, verdict);
@@ -1052,13 +1425,18 @@ CREATE UNIQUE INDEX IF NOT EXISTS favourites_ean_asin_key ON favourites USING bt
 CREATE UNIQUE INDEX IF NOT EXISTS gate_overrides_key ON gate_overrides USING btree (ean, COALESCE(asin, ''::text), gate);
 CREATE INDEX IF NOT EXISTS keepa_sellers_scanned_idx ON keepa_sellers USING btree (last_scan_at DESC) WHERE (storefront_fetched_at IS NOT NULL);
 CREATE INDEX IF NOT EXISTS keepa_snapshots_asin_fetched_idx ON keepa_snapshots USING btree (asin, fetched_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS offers_one_manual ON offers USING btree (product_id) WHERE manual;
 CREATE INDEX IF NOT EXISTS offers_product_idx ON offers USING btree (product_id);
 CREATE INDEX IF NOT EXISTS offers_seen ON offers USING btree (supplier_id, seen_at DESC);
 CREATE INDEX IF NOT EXISTS offers_supplier_idx ON offers USING btree (supplier_id);
+CREATE INDEX IF NOT EXISTS pl_candidate_asins_asin ON pl_candidate_asins USING btree (asin, snapshot_at DESC);
+CREATE INDEX IF NOT EXISTS pl_poe_snapshots_candidate ON pl_poe_snapshots USING btree (candidate_id, captured_at DESC);
 CREATE INDEX IF NOT EXISTS products_asin_idx ON products USING btree (asin);
 CREATE INDEX IF NOT EXISTS products_ean ON products USING btree (ean);
 CREATE UNIQUE INDEX IF NOT EXISTS products_ean_asin_key ON products USING btree (ean, COALESCE(asin, ''::text));
 CREATE UNIQUE INDEX IF NOT EXISTS profiles_one_default ON profiles USING btree (is_default) WHERE is_default;
+CREATE INDEX IF NOT EXISTS purchases_asin ON purchases USING btree (asin);
+CREATE INDEX IF NOT EXISTS purchases_status ON purchases USING btree (status);
 CREATE INDEX IF NOT EXISTS qogita_pulls_preset_idx ON qogita_pulls USING btree (preset_id, started_at DESC);
 CREATE UNIQUE INDEX IF NOT EXISTS rate_cards_one_active ON rate_cards USING btree (is_active) WHERE is_active;
 CREATE INDEX IF NOT EXISTS results_offer ON results USING btree (offer_id);
@@ -1220,10 +1598,12 @@ drop trigger if exists "results_touch" on "results";
 CREATE TRIGGER results_touch BEFORE UPDATE ON results FOR EACH ROW EXECUTE FUNCTION results_touch();
 
 -- @section grants
+revoke all on function "supplier_stats"(ids uuid[]) from public, anon, authenticated;
+revoke all on function "record_auth_failure"(p_ip text, p_max integer, p_window interval, p_block interval) from public, anon, authenticated;
 revoke all on function "wholesale_scout_watchdog"() from public, anon, authenticated;
 revoke all on function "refresh_run_keepa"(p_run uuid, p_older_than timestamp with time zone) from public, anon, authenticated;
+revoke all on function "results_touch"() from public, anon, authenticated;
 revoke all on function "run_summaries"(run_ids uuid[]) from public, anon, authenticated;
-revoke all on function "record_auth_failure"(p_ip text, p_max integer, p_window interval, p_block interval) from public, anon, authenticated;
 
 -- @section supabase
 insert into storage.buckets (id, name, public) values ('documents', 'documents', false) on conflict (id) do nothing;
@@ -1264,3 +1644,12 @@ insert into schema_migrations (name) values ('20260927001700_documents.sql') on 
 insert into schema_migrations (name) values ('20260927001800_speed.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20260927001900_run_summaries_fast.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20260927002000_auth_failures.sql') on conflict do nothing;
+insert into schema_migrations (name) values ('20260927002100_purchases.sql') on conflict do nothing;
+insert into schema_migrations (name) values ('20260927002200_amazon_sync.sql') on conflict do nothing;
+insert into schema_migrations (name) values ('20260927002300_medical_device.sql') on conflict do nothing;
+insert into schema_migrations (name) values ('20260927002400_medical_keywords.sql') on conflict do nothing;
+insert into schema_migrations (name) values ('20260927002500_cost_override.sql') on conflict do nothing;
+insert into schema_migrations (name) values ('20260927002600_manual_offer_mov.sql') on conflict do nothing;
+insert into schema_migrations (name) values ('20260927002700_private_label.sql') on conflict do nothing;
+insert into schema_migrations (name) values ('20261001000000_enable_rls_all.sql') on conflict do nothing;
+insert into schema_migrations (name) values ('20261001000100_revoke_public_execute.sql') on conflict do nothing;
