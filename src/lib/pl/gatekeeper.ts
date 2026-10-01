@@ -389,19 +389,65 @@ export function verdict(sc: Scorecard, gates: { status: Status }[]): Verdict {
   return { cls: "fail", title: "Drop it", text: `${sc.total}/30. However much you like it.` };
 }
 
+/** A waiver on a candidate: one check (by its label), or the whole gate when check_label is null. */
+export interface Waiver { id: string; gate_id: GateId; check_label: string | null; reason: string; created_at: string }
+
+/** A check with the waiver that overrides it, if any (its own status stays as computed). */
+export interface GateRow extends Check { waiver?: Waiver }
+
+export interface GateResult {
+  g: GateDef;
+  rows: GateRow[];
+  /** The status the verdict uses: waived checks count as passes. */
+  status: Status;
+  /** The status before waivers. */
+  rawStatus: Status;
+  /** Set when the whole gate is waived. */
+  waiver?: Waiver;
+}
+
 export interface Evaluation {
-  gates: { g: GateDef; rows: Check[]; status: Status }[];
+  gates: GateResult[];
   sc: Scorecard;
   v: Verdict;
   passed: number;
+  /** Every failed or warned check a waiver turned into a pass, so the verdict always shows them. */
+  waived: { gate: GateDef; label: string; status: Status; waiver: Waiver }[];
+  /** "2 checks waived: Sell price £18–35, Not in an avoid category"; null when none. */
+  waivedLine: string | null;
+  /** Waived checks, plus whole-gate waivers with nothing failing under them (the list's count). */
+  waivedCount: number;
 }
 
-export function evaluate(f: Fields, category: string | null | undefined, S: Settings, card: RateCard, date: Date = new Date()): Evaluation {
-  const cat = category || "Everything else";
-  const gates = GATES.map((g) => {
-    const rows = gateChecks(g.id, f, S, cat, card, date);
-    return { g, rows, status: gateStatus(rows) };
+/**
+ * Labels with their numbers taken out: a waiver on "Sell ÷ landed ≥ 3.5×" still applies after the
+ * threshold in Settings becomes 4×.
+ */
+export const checkKey = (label: string) => label.replace(/£?\d[\d.,]*\s*(%|×|g|kg)?/g, "#").replace(/\s+/g, " ").trim().toLowerCase();
+
+/** A gate's checks with waivers applied: a waived fail or warn counts as a pass; a waived gate passes. */
+export function applyWaivers(g: GateDef, rows: Check[], waivers: Waiver[]): GateResult {
+  const mine = waivers.filter((w) => w.gate_id === g.id);
+  const whole = mine.find((w) => w.check_label == null);
+  const byKey = new Map(mine.filter((w) => w.check_label != null).map((w) => [checkKey(w.check_label!), w]));
+  const out: GateRow[] = rows.map((r) => {
+    const w = r.status === "fail" || r.status === "warn" ? byKey.get(checkKey(r.label)) ?? whole : undefined;
+    return w ? { ...r, waiver: w } : r;
   });
+  const rawStatus = gateStatus(rows);
+  const status = whole ? "pass" : gateStatus(out.map((r) => (r.waiver ? { ...r, status: "pass" as Status } : r)));
+  return { g, rows: out, status, rawStatus, ...(whole ? { waiver: whole } : {}) };
+}
+
+export function evaluate(f: Fields, category: string | null | undefined, S: Settings, card: RateCard, date: Date = new Date(), waivers: Waiver[] = []): Evaluation {
+  const cat = category || "Everything else";
+  const gates = GATES.map((g) => applyWaivers(g, gateChecks(g.id, f, S, cat, card, date), waivers));
   const sc = scorecard(f, S, cat, card, date);
-  return { gates, sc, v: verdict(sc, gates), passed: gates.filter((x) => x.status === "pass").length };
+  const waived = gates.flatMap((x) => x.rows.filter((r) => r.waiver).map((r) => ({ gate: x.g, label: r.label, status: r.status, waiver: r.waiver! })));
+  // A whole-gate waiver with nothing failing under it still shows.
+  const idle = gates.filter((x) => x.waiver && !x.rows.some((r) => r.waiver)).map((x) => `Gate ${x.g.n} (whole gate)`);
+  const labels = [...waived.map((w) => w.label), ...idle];
+  const n = waived.length;
+  const waivedLine = labels.length ? `${n} check${n === 1 ? "" : "s"} waived: ${labels.join(", ")}` : null;
+  return { gates, sc, v: verdict(sc, gates), passed: gates.filter((x) => x.status === "pass").length, waived, waivedLine, waivedCount: labels.length };
 }

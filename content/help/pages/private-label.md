@@ -99,6 +99,17 @@ The **verdict** appears once all ten lines are scored:
 | **Samples only if you can move the weak lines** | 18–23, and the weak lines (1 point or less) aren't structural. |
 | **Drop it** | 18–23 with a weak structural line, or under 18. |
 
+### Waiving a gate
+
+Sometimes a check fails for a reason that doesn't apply to you. Every failed or warned check has **Waive**, and a failed or warned gate has **Waive gate** in its header. Either asks for a one-line reason, which is required. A waived check counts as a pass for its gate. The row keeps its own colour, struck through, with a **Waived** chip (the reason shows on hover). A waived gate shows **Waived** in its header.
+
+Waive only when you know why the rule doesn't fit this product. For example:
+
+- **Not in an avoid category**, when you already hold the compliance documents (test reports, a responsible person, the right labelling) for that category.
+- **Sell price £18–35**, when you're deliberately testing a higher-ticket product and have checked the economics in Gate 6.
+
+A waiver never hides anything. The verdict card always adds a line such as "2 checks waived: Sell price £18–35, Not in an avoid category". The candidate list shows a small waived count next to the score, and a **Waivers** section at the bottom of the candidate lists every waiver with its reason and date. **Remove waiver** on a row, a gate header or that list takes it back. Scorecard lines can't be waived: they're the score, not a gate. A waiver on a check follows it when you change a threshold in Settings (for example "Sell ÷ landed ≥ 3.5×" becoming 4×). It stops mattering once the check passes on its own; the Waivers list says when.
+
 The thresholds and cost assumptions (budget, VAT, digital services fee, inbound, prep, storage months, returns, and the Gate 6 floors) are under [Settings → Private label](/help/pages/settings#private-label-tab).
 
 ## What it costs

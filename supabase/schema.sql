@@ -1,5 +1,5 @@
 -- Wholesale Scout schema, dumped by scripts/schema-backup.mjs. No data.
--- Dumped 2026-10-01T22:17:29.960Z. Safe to re-run. Restore: npm run schema:restore
+-- Dumped 2026-10-01T22:39:21.598Z. Safe to re-run. Restore: npm run schema:restore
 
 -- @section extensions
 create extension if not exists "pg_cron";
@@ -542,6 +542,22 @@ alter table "pl_candidates" add column if not exists "created_at" timestamp with
 alter table "pl_candidates" add column if not exists "updated_at" timestamp with time zone default now();
 alter table "pl_candidates" enable row level security;
 
+create table if not exists "pl_gate_waivers" (
+  "id" uuid default gen_random_uuid() not null,
+  "candidate_id" uuid not null,
+  "gate_id" text not null,
+  "check_label" text,
+  "reason" text not null,
+  "created_at" timestamp with time zone default now() not null
+);
+alter table "pl_gate_waivers" add column if not exists "id" uuid default gen_random_uuid();
+alter table "pl_gate_waivers" add column if not exists "candidate_id" uuid;
+alter table "pl_gate_waivers" add column if not exists "gate_id" text;
+alter table "pl_gate_waivers" add column if not exists "check_label" text;
+alter table "pl_gate_waivers" add column if not exists "reason" text;
+alter table "pl_gate_waivers" add column if not exists "created_at" timestamp with time zone default now();
+alter table "pl_gate_waivers" enable row level security;
+
 create table if not exists "pl_poe_snapshots" (
   "id" uuid default gen_random_uuid() not null,
   "candidate_id" uuid,
@@ -1067,6 +1083,11 @@ do $$ begin
   end if;
 end $$;
 do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'pl_gate_waivers_pkey' and conrelid = '"pl_gate_waivers"'::regclass) then
+    alter table "pl_gate_waivers" add constraint "pl_gate_waivers_pkey" PRIMARY KEY (id);
+  end if;
+end $$;
+do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'pl_poe_snapshots_pkey' and conrelid = '"pl_poe_snapshots"'::regclass) then
     alter table "pl_poe_snapshots" add constraint "pl_poe_snapshots_pkey" PRIMARY KEY (id);
   end if;
@@ -1237,6 +1258,16 @@ do $$ begin
   end if;
 end $$;
 do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'pl_gate_waivers_gate_id_check' and conrelid = '"pl_gate_waivers"'::regclass) then
+    alter table "pl_gate_waivers" add constraint "pl_gate_waivers_gate_id_check" CHECK ((gate_id = ANY (ARRAY['g0'::text, 'g1'::text, 'g2'::text, 'g3'::text, 'g4'::text, 'g5'::text, 'g6'::text, 'g7'::text])));
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'pl_gate_waivers_reason_check' and conrelid = '"pl_gate_waivers"'::regclass) then
+    alter table "pl_gate_waivers" add constraint "pl_gate_waivers_reason_check" CHECK ((length(TRIM(BOTH FROM reason)) > 0));
+  end if;
+end $$;
+do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'purchases_landed_gbp_check' and conrelid = '"purchases"'::regclass) then
     alter table "purchases" add constraint "purchases_landed_gbp_check" CHECK ((landed_gbp >= (0)::numeric));
   end if;
@@ -1342,6 +1373,11 @@ do $$ begin
   end if;
 end $$;
 do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'pl_gate_waivers_candidate_id_fkey' and conrelid = '"pl_gate_waivers"'::regclass) then
+    alter table "pl_gate_waivers" add constraint "pl_gate_waivers_candidate_id_fkey" FOREIGN KEY (candidate_id) REFERENCES pl_candidates(id) ON DELETE CASCADE;
+  end if;
+end $$;
+do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'pl_poe_snapshots_candidate_id_fkey' and conrelid = '"pl_poe_snapshots"'::regclass) then
     alter table "pl_poe_snapshots" add constraint "pl_poe_snapshots_candidate_id_fkey" FOREIGN KEY (candidate_id) REFERENCES pl_candidates(id) ON DELETE SET NULL;
   end if;
@@ -1430,6 +1466,7 @@ CREATE INDEX IF NOT EXISTS offers_product_idx ON offers USING btree (product_id)
 CREATE INDEX IF NOT EXISTS offers_seen ON offers USING btree (supplier_id, seen_at DESC);
 CREATE INDEX IF NOT EXISTS offers_supplier_idx ON offers USING btree (supplier_id);
 CREATE INDEX IF NOT EXISTS pl_candidate_asins_asin ON pl_candidate_asins USING btree (asin, snapshot_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS pl_gate_waivers_key ON pl_gate_waivers USING btree (candidate_id, gate_id, COALESCE(check_label, ''::text));
 CREATE INDEX IF NOT EXISTS pl_poe_snapshots_candidate ON pl_poe_snapshots USING btree (candidate_id, captured_at DESC);
 CREATE INDEX IF NOT EXISTS products_asin_idx ON products USING btree (asin);
 CREATE INDEX IF NOT EXISTS products_ean ON products USING btree (ean);
@@ -1661,3 +1698,4 @@ insert into schema_migrations (name) values ('20261001000100_revoke_public_execu
 insert into schema_migrations (name) values ('20261001000200_seller_storefront_floor.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261001000300_pl_settings_no_q4.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261001000400_pin_search_path.sql') on conflict do nothing;
+insert into schema_migrations (name) values ('20261001000500_pl_gate_waivers.sql') on conflict do nothing;

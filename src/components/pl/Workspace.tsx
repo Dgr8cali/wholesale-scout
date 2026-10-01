@@ -13,12 +13,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import type { RateCard } from "@/lib/fees/rateCard";
 import { monthlySales, priceOf } from "@/lib/pl/fill";
-import { budget, econ, evaluate, money, pct, referralOptions, type Evaluation, type FieldDef, type GateDef, type Settings, type Status } from "@/lib/pl/gatekeeper";
+import { budget, econ, evaluate, money, pct, referralOptions, type Evaluation, type FieldDef, type GateDef, type GateResult, type Settings, type Status, type Waiver } from "@/lib/pl/gatekeeper";
 import { api } from "@/lib/ui/client";
 import { ago } from "@/lib/ui/when";
 import { cn } from "@/lib/utils";
 import { Readout, SourceChip, StatusPill } from "./bits";
 import { STATUSES, TONE, valuesOf, type CandidateDetail, type FieldMap } from "./types";
+import { WaivePopover } from "./WaivePopover";
 
 const CHECK_BG: Record<Status, string> = { pass: "bg-pass", warn: "bg-warn", fail: "bg-fail", empty: "bg-empty" };
 const n0 = (v: number | null | undefined) => (v == null ? "—" : Math.round(v).toLocaleString("en-GB"));
@@ -27,7 +28,7 @@ const n0 = (v: number | null | undefined) => (v == null ? "—" : Math.round(v).
 export function Workspace({ id, settings, card, onChanged, onDeleted }: {
   id: string; settings: Settings; card: RateCard;
   /** The list re-scores as you type. */
-  onChanged: (id: string, patch: { fields?: FieldMap; name?: string; status?: string; refreshed_at?: string | null; category?: string }) => void;
+  onChanged: (id: string, patch: { fields?: FieldMap; name?: string; status?: string; refreshed_at?: string | null; category?: string; waivers?: Waiver[] }) => void;
   onDeleted: (id: string) => void;
 }) {
   const [data, setData] = useState<CandidateDetail | null>(null);
@@ -56,7 +57,8 @@ export function Workspace({ id, settings, card, onChanged, onDeleted }: {
   }, [id]);
 
   const category = data?.candidate.category ?? "Everything else";
-  const ev: Evaluation | null = useMemo(() => (data ? evaluate(valuesOf(fields), category, settings, card) : null), [data, fields, category, settings, card]);
+  const waivers = data?.waivers;
+  const ev: Evaluation | null = useMemo(() => (data ? evaluate(valuesOf(fields), category, settings, card, new Date(), waivers) : null), [data, fields, category, settings, card, waivers]);
 
   if (error) return <ErrorState title="Couldn't load the candidate" message={error} onRetry={load} />;
   if (!data || !ev) return <div className="space-y-3"><Skeleton className="h-28 rounded-xl" /><Skeleton className="h-64 rounded-xl" /><Skeleton className="h-64 rounded-xl" /></div>;
@@ -106,20 +108,49 @@ export function Workspace({ id, settings, card, onChanged, onDeleted }: {
     await api(`/api/pl/candidates/${id}`, { method: "DELETE" });
     onDeleted(id);
   };
+  const setWaivers = (next: Waiver[]) => {
+    setData((d) => d && { ...d, waivers: next });
+    onChanged(id, { waivers: next });
+  };
+  const waive = async (gate_id: string, check_label: string | null, reason: string) => {
+    const r = await api<{ waiver: Waiver }>(`/api/pl/candidates/${id}/waivers`, { method: "POST", json: { gate_id, check_label, reason } });
+    setWaivers([...(data.waivers ?? []).filter((w) => w.id !== r.waiver.id), r.waiver]);
+  };
+  const unwaive = async (w: Waiver) => {
+    try {
+      await api(`/api/pl/candidates/${id}/waivers?waiver=${w.id}`, { method: "DELETE" });
+      setWaivers((data.waivers ?? []).filter((x) => x.id !== w.id));
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
   const toggle = (g: string) => setOpen((s) => { const n = new Set(s); if (n.has(g)) n.delete(g); else n.add(g); return n; });
 
   return (
     <div className="flex min-w-0 flex-col gap-3.5">
       <Header data={data} ev={ev} card={card} busy={busy} onRefresh={refresh} onPatch={patch} />
-      {ev.gates.map(({ g, rows, status }) => (
+      {ev.gates.map(({ g, rows, status, rawStatus, waiver: gateWaiver }) => (
         <section key={g.id} className={cn("panel overflow-hidden")}>
-          <button type="button" aria-expanded={open.has(g.id)} onClick={() => toggle(g.id)} className="flex w-full items-center gap-3 border-b px-4 py-3 text-left">
-            <span className={cn("flex size-8 flex-none items-center justify-center rounded-lg font-heading text-sm font-bold", TONE[status].solid)}>{g.n}</span>
-            <h2 className="min-w-0 flex-1 font-heading text-base font-bold">{g.title}</h2>
-            <span className="hidden text-xs text-muted-foreground sm:inline">{g.tool}</span>
-            <StatusPill status={status} />
-            <ChevronRightIcon className={cn("size-4 flex-none text-muted-foreground transition-transform", open.has(g.id) && "rotate-90")} />
-          </button>
+          <div className="flex w-full items-center gap-3 border-b px-4 py-3">
+            <button type="button" aria-expanded={open.has(g.id)} onClick={() => toggle(g.id)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+              <span className={cn("flex size-8 flex-none items-center justify-center rounded-lg font-heading text-sm font-bold", TONE[status].solid)}>{g.n}</span>
+              <h2 className="min-w-0 flex-1 font-heading text-base font-bold">{g.title}</h2>
+              <span className="hidden text-xs text-muted-foreground sm:inline">{g.tool}</span>
+            </button>
+            {gateWaiver ? (
+              <span className="flex items-center gap-1.5">
+                <WaivedChip waiver={gateWaiver} />
+                <button type="button" className="text-xs font-medium text-brand hover:underline" onClick={() => unwaive(gateWaiver)}>Remove waiver</button>
+              </span>
+            ) : (rawStatus === "fail" || rawStatus === "warn") && (
+              <WaivePopover title={`Waive Gate ${g.n}: ${g.title}`} onWaive={(reason) => waive(g.id, null, reason)}
+                trigger={<button type="button" className="text-xs font-medium text-brand hover:underline">Waive gate</button>} />
+            )}
+            <StatusPill status={status} label={gateWaiver ? "Waived" : undefined} />
+            <button type="button" aria-label={open.has(g.id) ? "Collapse" : "Expand"} onClick={() => toggle(g.id)}>
+              <ChevronRightIcon className={cn("size-4 flex-none text-muted-foreground transition-transform", open.has(g.id) && "rotate-90")} />
+            </button>
+          </div>
           {open.has(g.id) && (
             <div className={cn("flex flex-col gap-3.5 border-l-[3px] px-4 pt-3.5 pb-4", TONE[status].border)}>
               <p className="max-w-[70ch] text-sm text-ink-2">{g.blurb}</p>
@@ -132,11 +163,7 @@ export function Workspace({ id, settings, card, onChanged, onDeleted }: {
               <GateExtras g={g} data={data} fields={fields} settings={settings} card={card} />
               <div className="overflow-hidden rounded-lg border">
                 {rows.map((r, i) => (
-                  <div key={i} className="grid grid-cols-[22px_1fr_auto] items-center gap-2.5 border-t px-3 py-2 text-sm first:border-t-0">
-                    <span className={cn("flex size-[18px] items-center justify-center rounded-full text-[11px] font-bold text-white", CHECK_BG[r.status])}>{r.status === "pass" ? "✓" : r.status === "fail" ? "✕" : r.status === "warn" ? "!" : "·"}</span>
-                    <span>{r.label}</span>
-                    <span className="num text-xs whitespace-nowrap text-muted-foreground">{r.detail}</span>
-                  </div>
+                  <CheckRow key={i} row={r} gate={g} gateWaived={!!gateWaiver} onWaive={(reason) => waive(g.id, r.label, reason)} onUnwaive={unwaive} />
                 ))}
               </div>
             </div>
@@ -144,6 +171,7 @@ export function Workspace({ id, settings, card, onChanged, onDeleted }: {
         </section>
       ))}
       <ScorecardPanel ev={ev} />
+      <WaiversPanel waivers={data.waivers ?? []} ev={ev} onUnwaive={unwaive} />
       <div className="flex flex-wrap items-center gap-2">
         <Button variant="outline" size="sm" className="text-fail hover:text-fail" onClick={remove}><Trash2Icon /> Delete candidate</Button>
         <span className="ml-auto text-xs text-muted-foreground">24–30 order samples · 18–23 only if weak lines are movable · under 18 drop</span>
@@ -423,6 +451,67 @@ function ScorecardPanel({ ev }: { ev: Evaluation }) {
       <div className={cn("mt-3.5 rounded-xl border px-4 py-3.5", ev.v.cls === "empty" ? "bg-surface-2" : cn(TONE[ev.v.cls].soft, TONE[ev.v.cls].border))}>
         <b className="mb-0.5 block font-heading text-base">{ev.v.title}</b>
         <p className="text-sm text-ink-2">{ev.v.text}</p>
+        {ev.waivedLine && <p className="mt-1.5 text-sm font-medium text-warn">{ev.waivedLine}.</p>}
+      </div>
+    </section>
+  );
+}
+
+function WaivedChip({ waiver }: { waiver: Waiver }) {
+  return <span title={`Waived: ${waiver.reason}`} className="cursor-help rounded bg-warn-soft px-1.5 py-px text-[10px] font-semibold tracking-wide text-warn uppercase">Waived</span>;
+}
+
+/**
+ * One check: its own pass / warn / fail, struck through when a waiver counts it as a pass (the
+ * reason on hover). Failed and warned checks can be waived; waived ones un-waived.
+ */
+function CheckRow({ row: r, gate, gateWaived, onWaive, onUnwaive }: { row: GateResult["rows"][number]; gate: GateDef; gateWaived: boolean; onWaive: (reason: string) => Promise<void>; onUnwaive: (w: Waiver) => void }) {
+  const waivable = r.status === "fail" || r.status === "warn";
+  // Waived on its own (not only under a whole-gate waiver): it can be removed here.
+  const own = r.waiver && r.waiver.check_label != null ? r.waiver : null;
+  return (
+    <div className="grid grid-cols-[22px_1fr_auto] items-center gap-2.5 border-t px-3 py-2 text-sm first:border-t-0">
+      <span className={cn("flex size-[18px] items-center justify-center rounded-full text-[11px] font-bold text-white", CHECK_BG[r.status], r.waiver && "opacity-60")}>{r.status === "pass" ? "✓" : r.status === "fail" ? "✕" : r.status === "warn" ? "!" : "·"}</span>
+      <span className="flex min-w-0 flex-wrap items-center gap-1.5">
+        <span className={cn(r.waiver && cn("line-through decoration-2", TONE[r.status].text))} title={r.waiver ? `Waived: ${r.waiver.reason}` : undefined}>{r.label}</span>
+        {r.waiver && <WaivedChip waiver={r.waiver} />}
+      </span>
+      <span className="flex items-center gap-2">
+        <span className="num text-xs whitespace-nowrap text-muted-foreground">{r.detail}</span>
+        {own ? <button type="button" className="text-xs font-medium text-brand hover:underline" onClick={() => onUnwaive(own)}>Remove waiver</button>
+          : waivable && !r.waiver && !gateWaived && (
+            <WaivePopover title={`Waive “${r.label}” (Gate ${gate.n})`} onWaive={onWaive}
+              trigger={<button type="button" className="text-xs font-medium text-brand hover:underline">Waive</button>} />
+          )}
+      </span>
+    </div>
+  );
+}
+
+/** Every waiver on the candidate, with its reason and date; one no longer needed says so. */
+function WaiversPanel({ waivers, ev, onUnwaive }: { waivers: Waiver[]; ev: Evaluation; onUnwaive: (w: Waiver) => void }) {
+  if (!waivers.length) return null;
+  const inEffect = (w: Waiver) => (w.check_label == null ? true : ev.waived.some((x) => x.waiver.id === w.id));
+  return (
+    <section className="panel p-4">
+      <h2 className="mb-1 font-heading text-base font-bold">Waivers</h2>
+      <p className="mb-3 text-xs text-muted-foreground">Each waived check counts as a pass for its gate. The scorecard isn&apos;t affected, and the verdict lists every waived check.</p>
+      <div className="overflow-x-auto rounded-lg border">
+        <table className="w-full text-sm">
+          <thead><tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase"><th className="px-2 py-1.5">Gate</th><th className="px-2 py-1.5">Check</th><th className="px-2 py-1.5">Reason</th><th className="px-2 py-1.5">Waived</th><th /></tr></thead>
+          <tbody>{waivers.map((w) => {
+            const g = ev.gates.find((x) => x.g.id === w.gate_id)?.g;
+            return (
+              <tr key={w.id} className="border-b last:border-b-0 align-top">
+                <td className="px-2 py-2 whitespace-nowrap">{g ? `${g.n} · ${g.title}` : w.gate_id}</td>
+                <td className="px-2 py-2">{w.check_label ?? <em>Whole gate</em>}{!inEffect(w) && <span className="block text-xs text-muted-foreground">Passes now: the waiver isn&apos;t needed</span>}</td>
+                <td className="px-2 py-2 text-muted-foreground">{w.reason}</td>
+                <td className="px-2 py-2 whitespace-nowrap text-muted-foreground">{new Date(w.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</td>
+                <td className="px-2 py-2 text-right"><button type="button" className="text-xs font-medium text-brand hover:underline" onClick={() => onUnwaive(w)}>Remove waiver</button></td>
+              </tr>
+            );
+          })}</tbody>
+        </table>
       </div>
     </section>
   );

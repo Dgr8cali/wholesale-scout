@@ -1,6 +1,6 @@
 import type { RateCard } from "@/lib/fees/rateCard";
 import type { PlAsin } from "@/lib/pl/fill";
-import type { Fields, Settings, Status } from "@/lib/pl/gatekeeper";
+import type { Fields, Settings, Status, Waiver } from "@/lib/pl/gatekeeper";
 import type { PoeTerm } from "@/lib/pl/poe";
 
 export type FieldSource = "keepa" | "poe" | "manual" | "fees";
@@ -9,11 +9,12 @@ export type FieldMap = Record<string, PlField>;
 
 export interface CandidateRow {
   id: string; name: string; niche_keyword: string | null; category: string; status: string; notes: string | null;
-  token_cost: number; refreshed_at: string | null; created_at: string; updated_at: string; fields: FieldMap;
+  token_cost: number; refreshed_at: string | null; created_at: string; updated_at: string; fields: FieldMap; waivers: Waiver[];
 }
 
 export interface CandidateDetail {
-  candidate: Omit<CandidateRow, "fields">;
+  candidate: Omit<CandidateRow, "fields" | "waivers">;
+  waivers: Waiver[];
   fields: FieldMap;
   asins: PlAsin[];
   poe: { id: string; niche_title: string | null; captured_at: string; search_terms: PoeTerm[]; search_volume_360: number | null } | null;

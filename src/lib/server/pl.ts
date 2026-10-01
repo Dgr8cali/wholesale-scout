@@ -4,7 +4,7 @@ import { getKeepa, type KeepaProduct, type OnKeepaResponse, type Point } from ".
 import { rankDrops } from "../keepa/summarize";
 import { isAmazonBrand } from "../pl/amazon-brands";
 import { keepaFill, type Fill, type PlAsin, type PlHistory } from "../pl/fill";
-import { DEFAULT_SETTINGS, FIELD_KEYS, SETTINGS_DEF, type Settings } from "../pl/gatekeeper";
+import { DEFAULT_SETTINGS, FIELD_KEYS, GATES, SETTINGS_DEF, type Settings, type Waiver } from "../pl/gatekeeper";
 import { bbTrend, offerTrend, rankTrend } from "../pl/history";
 import { extractPoe, poeFill, type PoeExtract } from "../pl/poe";
 import { activeRateCard, db, must } from "./db";
@@ -80,7 +80,39 @@ async function fieldsOf(ids: string[]): Promise<Map<string, Record<string, PlFie
   return out;
 }
 
-/** Every candidate with its fields (the list scores them), newest first. */
+const WAIVER_COLS = "id, candidate_id, gate_id, check_label, reason, created_at";
+
+async function waiversOf(ids: string[]): Promise<Map<string, Waiver[]>> {
+  const out = new Map<string, Waiver[]>(ids.map((id) => [id, []]));
+  if (!ids.length) return out;
+  const res = await db().from("pl_gate_waivers").select(WAIVER_COLS).in("candidate_id", ids).order("created_at");
+  if (res.error) return out; // before the migration
+  for (const w of res.data as (Waiver & { candidate_id: string })[]) out.get(w.candidate_id)?.push(w);
+  return out;
+}
+
+/** Waive one check of a gate (by its label) or, with no label, the whole gate. A reason is required. */
+export async function addWaiver(candidateId: string, input: { gate_id?: string; check_label?: string | null; reason?: string }): Promise<Waiver> {
+  const gate = GATES.find((g) => g.id === input.gate_id);
+  if (!gate) throw new Error("gate_id must be g0–g7");
+  const reason = input.reason?.trim();
+  if (!reason) throw new Error("Give a reason for the waiver");
+  const label = input.check_label?.trim() || null;
+  const d = db();
+  // One waiver per check (or gate): a second replaces the first's reason.
+  const cur = must(await d.from("pl_gate_waivers").select("id").eq("candidate_id", candidateId).eq("gate_id", gate.id)[label ? "eq" : "is"]("check_label", label), "waiver") as { id: string }[];
+  const row = cur[0]
+    ? must(await d.from("pl_gate_waivers").update({ reason: reason.slice(0, 300) }).eq("id", cur[0].id).select(WAIVER_COLS).single(), "waiver")
+    : must(await d.from("pl_gate_waivers").insert({ candidate_id: candidateId, gate_id: gate.id, check_label: label, reason: reason.slice(0, 300) }).select(WAIVER_COLS).single(), "waiver");
+  must(await d.from("pl_candidates").update({ updated_at: now() }).eq("id", candidateId), "touch candidate");
+  return row as Waiver;
+}
+
+export async function removeWaiver(candidateId: string, waiverId: string) {
+  must(await db().from("pl_gate_waivers").delete().eq("id", waiverId).eq("candidate_id", candidateId), "remove waiver");
+}
+
+/** Every candidate with its fields and waivers (the list scores them), newest first. */
 export async function listCandidates() {
   const [rows, settings, card] = await Promise.all([
     db().from("pl_candidates").select("*").order("created_at", { ascending: false }),
@@ -88,8 +120,9 @@ export async function listCandidates() {
     activeRateCard(),
   ]);
   const candidates = must(rows, "candidates") as PlCandidate[];
-  const fields = await fieldsOf(candidates.map((c) => c.id));
-  return { candidates: candidates.map((c) => ({ ...c, fields: fields.get(c.id) ?? {} })), settings, card };
+  const ids = candidates.map((c) => c.id);
+  const [fields, waivers] = await Promise.all([fieldsOf(ids), waiversOf(ids)]);
+  return { candidates: candidates.map((c) => ({ ...c, fields: fields.get(c.id) ?? {}, waivers: waivers.get(c.id) ?? [] })), settings, card };
 }
 
 export async function getCandidate(id: string) {
@@ -104,11 +137,12 @@ export async function getCandidate(id: string) {
   const list = (must(asins, "asins") as Record<string, unknown>[]).map(asinRow);
   const latestPoe = ((must(poe, "poe") as PoeSnapshot[])[0]) ?? null;
   const fields = (await fieldsOf([id])).get(id) ?? {};
+  const waivers = (await waiversOf([id])).get(id) ?? [];
   // Why each automatic value is what it is, worked out again from the stored data.
   const why: Record<string, string> = {};
   for (const [k, v] of Object.entries(keepaFill(list))) why[k] = v.why;
   if (latestPoe) for (const [k, v] of Object.entries(poeFill(latestPoe as unknown as PoeExtract))) why[k] = v.why;
-  return { candidate, fields, asins: list, poe: latestPoe, why };
+  return { candidate, fields, asins: list, poe: latestPoe, why, waivers };
 }
 
 /* ===================== writes ===================== */

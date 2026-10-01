@@ -43,7 +43,7 @@ function PrivateLabel() {
     if (list && !selected && list.candidates.length) select(list.candidates[0].id);
   }, [list, selected, select]);
 
-  const scored = useMemo(() => (list ? list.candidates.map((c) => ({ c, ev: evaluate(valuesOf(c.fields), c.category, list.settings, list.card) })) : []), [list]);
+  const scored = useMemo(() => (list ? list.candidates.map((c) => ({ c, ev: evaluate(valuesOf(c.fields), c.category, list.settings, list.card, new Date(), c.waivers ?? []) })) : []), [list]);
 
   if (error) return <ErrorState title="Couldn't load Private label" message={error} onRetry={load} />;
   if (!list) return <div className="grid gap-5 lg:grid-cols-[260px_1fr]"><Skeleton className="h-80 rounded-xl" /><Skeleton className="h-[70vh] rounded-xl" /></div>;
@@ -70,6 +70,7 @@ function PrivateLabel() {
                     <span className="flex items-center gap-2">
                       <Dot status={ev.v.cls} />
                       <span className="min-w-0 flex-1 truncate text-sm font-medium" title={ev.v.title}>{c.name}</span>
+                      {ev.waivedCount > 0 && <span className="rounded bg-warn-soft px-1 text-[10px] font-semibold text-warn" title={ev.waivedLine ?? ""}>{ev.waivedCount} waived</span>}
                       <span className="num text-xs text-muted-foreground">{ev.sc.answered === 10 ? ev.sc.total : `${ev.sc.answered}/10`}</span>
                     </span>
                     <span className="flex items-center gap-2 pl-4 text-[11px] text-muted-foreground">
