@@ -1,6 +1,7 @@
 // Opportunity Explorer, page world: watches the responses Seller Central's own page receives from
-// its niche API (POST /ox-api/graphql, operation getNiche) and growth widget
-// (/insightswidget-api/growth) and hands a copy to the extension's panel (poe.js) by postMessage.
+// its GraphQL API (POST /ox-api/graphql: getNiche, and whatever the page's tabs load later) and its
+// insights widget (/insightswidget-api/growth), and hands a copy of each, with its operation name,
+// to the extension's panel (poe.js) by postMessage.
 // It never changes a request or a response, never sends anything anywhere and never acts on the
 // page: it only reads what the page already fetched. Nothing leaves the browser until you click
 // "Send to Gatekeeper" in the panel.
@@ -23,9 +24,9 @@
     }
   }
 
-  function hand(kind, url, data, variables) {
+  function hand(kind, url, data, variables, op) {
     try {
-      window.postMessage({ source: "wholesale-scout-poe", kind, url: String(url), data, variables: variables || null }, location.origin);
+      window.postMessage({ source: "wholesale-scout-poe", kind, op: op || null, url: String(url), data, variables: variables || null }, location.origin);
     } catch { /* a payload the structured clone can't copy: ignore it */ }
   }
 
@@ -34,8 +35,9 @@
     let data;
     try { data = JSON.parse(text); } catch { return; }
     if (isGraphql(url)) {
+      // Every operation: the panel keeps them all for the niche page (tabs load data lazily).
       const op = operation(reqBody);
-      if (op && /getNiche/i.test(op.name)) hand("niche", url, data, op.variables);
+      hand("graphql", url, data, op ? op.variables : null, op ? op.name : "(unnamed)");
     } else if (isGrowth(url)) {
       hand("growth", url, data, null);
     }
@@ -45,14 +47,19 @@
 
   const origFetch = window.fetch;
   window.fetch = function (input, init) {
-    const p = origFetch.apply(this, arguments);
+    let url = null, body = null;
     try {
-      const url = typeof input === "string" ? input : input && input.url ? input.url : String(input);
+      url = typeof input === "string" ? input : input && input.url ? input.url : String(input);
       if (watched(url)) {
-        const body = init && typeof init.body === "string" ? init.body : null;
-        p.then((res) => res.clone().text().then((t) => observe(url, body, t))).catch(() => {});
-      }
-    } catch { /* never get in the page's way */ }
+        // The operation name is in the request body: in init, or on a Request object passed in.
+        // A Request's body must be copied before the page's fetch reads it.
+        body = init && typeof init.body === "string" ? Promise.resolve(init.body)
+          : input && typeof input === "object" && typeof input.clone === "function" ? input.clone().text().catch(() => null)
+          : Promise.resolve(null);
+      } else url = null;
+    } catch { url = null; /* never get in the page's way */ }
+    const p = origFetch.apply(this, arguments);
+    if (url) p.then((res) => Promise.all([body, res.clone().text()]).then(([b, t]) => observe(url, b, t))).catch(() => {});
     return p;
   };
 

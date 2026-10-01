@@ -6,7 +6,7 @@ import { isAmazonBrand } from "../pl/amazon-brands";
 import { keepaFill, type Fill, type PlAsin, type PlHistory } from "../pl/fill";
 import { DEFAULT_SETTINGS, FIELD_KEYS, GATES, SETTINGS_DEF, type Settings, type Waiver } from "../pl/gatekeeper";
 import { bbTrend, offerTrend, rankTrend } from "../pl/history";
-import { extractPoe, poeFill, type PoeExtract } from "../pl/poe";
+import { extractPoe, poeFill, unreadFields, type PoeExtract } from "../pl/poe";
 import { activeRateCard, db, must } from "./db";
 import { saveSnapshot } from "./process";
 
@@ -349,14 +349,43 @@ export async function refreshCandidate(id: string, opts: { force?: boolean } = {
 
 const norm = (s: string | null | undefined) => (s ?? "").trim().toLowerCase().replace(/\s+/g, " ");
 
-/** Attach a capture to a candidate and fill Gates 3 and 5 from it (never over your own values). */
-export async function attachPoe(snapshotId: string, candidateId: string): Promise<string[]> {
+/**
+ * Attach a capture to a candidate and fill Gates 3 and 5 from it (never over your own values).
+ * Says which of the eight fields the capture didn't have, so a capture that read nothing can't
+ * look like a success.
+ */
+export async function attachPoe(snapshotId: string, candidateId: string): Promise<{ filled: string[]; unread: string[] }> {
   const d = db();
   must(await d.from("pl_poe_snapshots").update({ candidate_id: candidateId }).eq("id", snapshotId), "attach capture");
   const snap = must(await d.from("pl_poe_snapshots").select(POE_COLS).eq("id", snapshotId).single(), "capture") as PoeSnapshot;
   const filled = await applyAuto(candidateId, poeFill(snap as unknown as PoeExtract), "poe");
   must(await d.from("pl_candidates").update({ updated_at: now() }).eq("id", candidateId), "touch candidate");
-  return filled;
+  return { filled, unread: unreadFields(snap as unknown as PoeExtract) };
+}
+
+const extractColumns = (x: PoeExtract) => ({
+  niche_id: x.niche_id, niche_title: x.niche_title,
+  search_volume_360: x.search_volume_360, search_volume_growth: x.search_volume_growth, products_in_niche: x.products_in_niche,
+  top3_click_share: x.top3_click_share, search_conversion: x.search_conversion, avg_units_per_product: x.avg_units_per_product,
+  search_terms: x.search_terms,
+});
+
+/**
+ * Read every stored capture again with the current parser (the raw payload is kept for this),
+ * and fill Gates 3 and 5 again for the candidates they're attached to.
+ */
+export async function reparsePoe(): Promise<{ id: string; candidate_id: string | null; captured_at: string; extracted: PoeExtract; unread: string[]; filled: string[] }[]> {
+  const d = db();
+  const rows = must(await d.from("pl_poe_snapshots").select("id, candidate_id, niche_id, captured_at, raw").order("captured_at", { ascending: false }), "captures") as
+    { id: string; candidate_id: string | null; niche_id: string | null; captured_at: string; raw: unknown }[];
+  const out = [];
+  for (const r of rows) {
+    const x = extractPoe(r.raw, { nicheId: r.niche_id });
+    must(await d.from("pl_poe_snapshots").update(extractColumns(x)).eq("id", r.id), "re-read capture");
+    const filled = r.candidate_id ? await applyAuto(r.candidate_id, poeFill(x), "poe") : [];
+    out.push({ id: r.id, candidate_id: r.candidate_id, captured_at: r.captured_at, extracted: x, unread: unreadFields(x), filled });
+  }
+  return out;
 }
 
 /**
@@ -370,19 +399,17 @@ export async function savePoe(input: { nicheId?: string | null; title?: string |
   if (size > 3_000_000) throw new Error("The capture is too large to store");
   const x = extractPoe(input.raw, { nicheId: input.nicheId ?? null, title: input.title ?? null });
   const d = db();
-  const snap = must(await d.from("pl_poe_snapshots").insert({
-    niche_id: x.niche_id, niche_title: x.niche_title, raw: input.raw,
-    search_volume_360: x.search_volume_360, search_volume_growth: x.search_volume_growth, products_in_niche: x.products_in_niche,
-    top3_click_share: x.top3_click_share, search_conversion: x.search_conversion, avg_units_per_product: x.avg_units_per_product,
-    search_terms: x.search_terms,
-  }).select("id").single(), "save capture") as { id: string };
+  const snap = must(await d.from("pl_poe_snapshots").insert({ raw: input.raw, ...extractColumns(x) }).select("id").single(), "save capture") as { id: string };
+  const unread = unreadFields(x);
   const candidates = must(await d.from("pl_candidates").select("id, name, niche_keyword, status").order("updated_at", { ascending: false }), "candidates") as
     { id: string; name: string; niche_keyword: string | null; status: string }[];
   const match = x.niche_title ? candidates.find((c) => norm(c.niche_keyword) && norm(c.niche_keyword) === norm(x.niche_title)) : undefined;
-  const filled = match ? await attachPoe(snap.id, match.id) : [];
+  // A capture with nothing readable isn't attached by title (there's no title): it's saved for re-reading.
+  const filled = match ? (await attachPoe(snap.id, match.id)).filled : [];
   return {
     snapshotId: snap.id,
     extracted: x,
+    unread,
     attached: match ? { id: match.id, name: match.name, filled } : null,
     candidates: match ? [] : candidates.filter((c) => c.status !== "dropped").map((c) => ({ id: c.id, name: c.name, niche_keyword: c.niche_keyword })),
   };

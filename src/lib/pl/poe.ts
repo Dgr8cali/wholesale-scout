@@ -1,6 +1,8 @@
 /**
- * Product Opportunity Explorer: Gate 3 and Gate 5 from a niche the extension captured (the
- * getNiche GraphQL response and the growth widget's response, as Seller Central sent them).
+ * Product Opportunity Explorer: Gate 3 and Gate 5 from a niche the extension captured: the
+ * getNiche GraphQL response (exactly that operation; the niche is at data.niche, with
+ * nicheSummary, searchTermMetrics, asinMetrics and trendsMetrics), every other /ox-api/graphql
+ * response on the same niche page (tabs load their data lazily), and the insights widget's.
  *
  * Seller Central's field names aren't documented and can change, so this reads by name pattern
  * rather than by fixed path: the 360-day figure is preferred where several windows are present,
@@ -82,7 +84,8 @@ function pick(ls: Leaf[], patterns: RegExp[]): { key: string; n: number } | null
 
 function pickString(ls: Leaf[], patterns: RegExp[]): string | null {
   for (const re of patterns) {
-    const hit = ls.filter((l) => typeof l.value === "string" && re.test(l.key) && (l.value as string).trim())
+    // Not from inside a list (a product's or a term's name isn't the niche's).
+    const hit = ls.filter((l) => typeof l.value === "string" && re.test(l.key) && (l.value as string).trim() && !l.path.some((p) => /^\d+$/.test(p)))
       .sort((a, b) => a.path.length - b.path.length)[0];
     if (hit) return (hit.value as string).trim();
   }
@@ -141,14 +144,35 @@ function top3FromProducts(arrays: Record<string, unknown>[][]): number | null {
   return shares.length ? r1(shares.slice(0, 3).reduce((a, b) => a + b, 0)) : null;
 }
 
-export function extractPoe(raw: { niche?: unknown; growth?: unknown } | unknown, hint: { nicheId?: string | null; title?: string | null } = {}): PoeExtract {
-  const body = raw && typeof raw === "object" && ("niche" in raw || "growth" in raw) ? (raw as { niche?: unknown; growth?: unknown }) : { niche: raw };
-  const ls = leaves(body.niche);
+/** What the extension sends: getNiche's response, every ox-api response on the page by operation, the insights widget's. */
+export interface PoeRaw { niche?: unknown; operations?: Record<string, unknown>; growth?: unknown; seen?: string[] }
+
+type Obj = Record<string, unknown>;
+const obj = (x: unknown): Obj | null => (x && typeof x === "object" && !Array.isArray(x) ? (x as Obj) : null);
+
+/** The niche object in a getNiche response (data.niche); older test shapes (data.getNiche) too. */
+export function nicheOf(x: unknown): unknown {
+  const d = obj(obj(x)?.data) ?? obj(x);
+  if (!d) return null;
+  if ("niche" in d) return d.niche ?? null;
+  if ("getNiche" in d) return d.getNiche ?? null;
+  // A list operation (getNiches and the like) isn't a niche.
+  if (Object.values(d).some(Array.isArray) && Object.keys(d).length === 1) return null;
+  return d;
+}
+
+export function extractPoe(raw: PoeRaw | unknown, hint: { nicheId?: string | null; title?: string | null } = {}): PoeExtract {
+  const body: PoeRaw = obj(raw) && ("niche" in obj(raw)! || "growth" in obj(raw)! || "operations" in obj(raw)!) ? (raw as PoeRaw) : { niche: raw };
+  // The niche's own figures come only from getNiche's niche object, never from other operations' lists.
+  const niche = nicheOf(body.niche) ?? nicheOf(body.operations?.getNiche);
+  const ls = leaves(niche);
   const gls = leaves(body.growth);
-  const arrays = rowArrays(body.niche);
+  // Search terms can arrive in a later operation (the Search terms tab): look there too.
+  const others = Object.entries(body.operations ?? {}).filter(([op]) => op !== "getNiche").map(([, v]) => v);
+  const arrays = [...rowArrays(niche), ...others.flatMap((o) => rowArrays(o))];
 
   const sv = pick(ls, [/searchVolume.*(T360|360)/i, /searchVolume.*(T365|annual|year)/i]);
-  const growth = pick(ls, [/searchVolumeGrowth.*(T360|360)/i, /searchVolumeGrowth/i]) ?? pick(gls, [/growth.*(T360|360)/i, /growth/i]);
+  const growth = pick(ls, [/searchVolumeGrowth.*(T360|360)/i, /searchVolumeGrowth/i]) ?? pick(gls, [/searchVolumeGrowth.*(T360|360)/i, /searchVolumeGrowth/i]);
   const products = pick(ls, [/^productCount$/i, /(numberOf|num|total)Products/i, /productsInNiche/i, /productCount/i]);
   const top3 = pick(ls, [/top_?3.*clickShare/i, /clickShare.*top_?3/i, /topThree.*clickShare/i]);
   const conv = pick(ls, [/searchConversionRate.*(T360|360)/i, /searchConversionRate/i, /conversionRate/i]);
@@ -167,6 +191,20 @@ export function extractPoe(raw: { niche?: unknown; growth?: unknown } | unknown,
     search_terms: terms,
   };
 }
+
+/** The eight things read from a capture, by name, for saying which weren't found. */
+export const POE_FIELDS: { label: string; read: (x: PoeExtract) => boolean }[] = [
+  { label: "niche title", read: (x) => !!x.niche_title },
+  { label: "search volume", read: (x) => x.search_volume_360 != null },
+  { label: "search volume growth", read: (x) => x.search_volume_growth != null },
+  { label: "products in niche", read: (x) => x.products_in_niche != null },
+  { label: "top-3 click share", read: (x) => x.top3_click_share != null },
+  { label: "search conversion", read: (x) => x.search_conversion != null },
+  { label: "units per product", read: (x) => x.avg_units_per_product != null },
+  { label: "search terms", read: (x) => x.search_terms.length > 0 },
+];
+
+export const unreadFields = (x: PoeExtract) => POE_FIELDS.filter((f) => !f.read(x)).map((f) => f.label);
 
 /** Gatekeeper's growth select from the 360-day growth %: under −5% declining, over +5% growing. */
 export const growthBand = (g: number | null): "declining" | "flat" | "growing" | null =>
