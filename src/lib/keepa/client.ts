@@ -44,12 +44,20 @@ interface RawSeller {
   buyBoxNewOwnershipRate?: number | null;
   asinList?: string[] | null;
   sellerBrandStatistics?: { brand?: string; productCount?: number }[] | null;
+  /** Products per root category (current, unlike totalStorefrontAsins). */
+  sellerCategoryStatistics?: { catId?: number; productCount?: number }[] | null;
 }
 
 export function parseSeller(id: string, s: RawSeller): SellerProfile {
   // The history's last count is the latest; totalStorefrontAsins alone can be months old.
   const store = s.totalStorefrontAsinsCSV?.length ? s.totalStorefrontAsinsCSV : s.totalStorefrontAsins ?? [];
-  const size = store.length >= 2 ? store[store.length - 1] : null;
+  const counted = store.length >= 2 ? store[store.length - 1] : null;
+  // Keepa's brand and category statistics are current, while the storefront count can be years
+  // old (a seller with a count of 9 from 2024 had 113 products in both): the storefront holds at
+  // least as many listings as they add up to.
+  const sum = (xs: { productCount?: number }[] | null | undefined) => (xs ?? []).reduce((a, x) => a + Math.max(0, x.productCount ?? 0), 0);
+  const floor = Math.max(sum(s.sellerBrandStatistics), sum(s.sellerCategoryStatistics));
+  const size = counted != null && counted >= 0 ? Math.max(counted, floor) : floor || null;
   const pos = (n: number | null | undefined) => (n != null && n >= 0 ? n : null);
   return {
     sellerId: s.sellerId ?? id,

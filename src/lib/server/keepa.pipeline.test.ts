@@ -201,8 +201,9 @@ describe("Keepa path", () => {
     expect(k.sellerCalls).toEqual([["S1", "S2", "S3"]]);
     const sellers = (r.inputs as { sellers: { sellerId: string; brandSharePct: number }[] }).sellers;
     expect(sellers.map((x) => [x.sellerId, x.brandSharePct])).toEqual([["S1", 78], ["S2", 14.4], ["S3", null]]);
+    expect((r.inputs as { sellers: { brandCount: number | null }[] }).sellers.map((x) => x.brandCount)).toEqual([312, 110, null]);
     expect(gate(r, "competition")).toMatchObject({ status: "warn" });
-    expect(gate(r, "competition")!.detail).toMatch(/^likely brand distributor: Pierre Fabre UK \(78% of 400 storefront listings are Bioderma/);
+    expect(gate(r, "competition")!.detail).toMatch(/^likely brand distributor: Pierre Fabre UK \(312 of 400 storefront listings \(78%\) are Bioderma/);
     expect(r.why).toContain("Watch: likely brand distributor: Pierre Fabre UK");
 
     // A second run within 7 days reuses the cached profiles: no seller tokens.

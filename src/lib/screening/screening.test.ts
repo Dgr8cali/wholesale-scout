@@ -386,17 +386,17 @@ describe("Keepa extras in the gates", () => {
   });
 
   it("flags a likely brand distributor as a warning and counts it against Risk", () => {
-    const seller = { sellerId: "S1", sharePct: 62, name: "Pierre Fabre UK", ratingPct: 99, ratingCount: 5000, storefrontSize: 400, brandSharePct: 78 };
+    const seller = { sellerId: "S1", sharePct: 62, name: "Pierre Fabre UK", ratingPct: 99, ratingCount: 5000, storefrontSize: 400, brandCount: 312, brandSharePct: 78 };
     const c = ctx({ product: { ...ctx().product, brand: "Bioderma" }, sellers: [seller] });
     const run = runGates(c, DEFAULT_PROFILE);
     const comp = run.outcomes.find((o) => o.gate === "competition")!;
     expect(comp).toMatchObject({ status: "warn", tags: ["BRAND_DISTRIBUTOR"] });
-    expect(comp.detail).toBe("likely brand distributor: Pierre Fabre UK (78% of 400 storefront listings are Bioderma, 62% of the Buy Box)");
+    expect(comp.detail).toBe("likely brand distributor: Pierre Fabre UK (312 of 400 storefront listings (78%) are Bioderma, 62% of the Buy Box)");
     const flagged = winScore(c, run, DEFAULT_PROFILE, fit);
     const clean = winScore(ctx(), runGates(ctx(), DEFAULT_PROFILE), DEFAULT_PROFILE, fit);
     expect(flagged.groups.risk.score!).toBeLessThan(clean.groups.risk.score!);
     expect(flagged.why).toContain("Watch: likely brand distributor: Pierre Fabre UK");
-    const below = ctx({ sellers: [{ ...seller, brandSharePct: 14 }] });
+    const below = ctx({ sellers: [{ ...seller, brandCount: 56, brandSharePct: 14 }] });
     expect(runGates(below, DEFAULT_PROFILE).outcomes.find((o) => o.gate === "competition")!.status).toBe("pass");
   });
 

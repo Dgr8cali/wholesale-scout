@@ -57,7 +57,7 @@ export interface Run {
 
 export interface Seller {
   sellerId: string; sharePct: number; name: string | null; ratingPct: number | null; ratingCount: number | null;
-  storefrontSize: number | null; brandSharePct: number | null;
+  storefrontSize: number | null; brandCount?: number | null; brandSharePct: number | null;
 }
 
 export interface Fav {

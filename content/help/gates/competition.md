@@ -11,7 +11,7 @@ Competition shape checks that a listing has a healthy number of sellers: enough 
 
 - **FBA seller count**: under **Min FBA sellers** or over **Max FBA sellers** trips the gate. Before Keepa this is Amazon's FBA offer count, not counting Amazon's own offer; with Keepa history it's Keepa's FBA count (or all offers when that's missing).
 - **Top-seller Buy Box share**: one seller held the Buy Box more than **Max top-seller Buy Box share** of the past year. This needs Keepa's Buy Box seller data, which is only fetched (3 tokens) for rows that pass every gate on the cheaper history.
-- **Likely brand distributor**: for rows that pass every gate, the top Buy Box sellers' Keepa profiles are looked up. A seller whose storefront is at least **Distributor when brand is at least** % this product's brand is flagged. On its own this only ever warns.
+- **Likely brand distributor**: for rows that pass every gate, the top Buy Box sellers' Keepa profiles are looked up. A seller whose storefront is at least **Distributor when brand is at least** % this product's brand is flagged. On its own this only ever warns. The share is the brand's listings over the storefront's size. Keepa's storefront count can be years out of date while its brand counts are current, so the size is never taken as smaller than Keepa's brand and category counts add up to, and the share never passes 100%.
 
 A [dormant](/help/reference/glossary#dormant) listing (nobody selling now) is skipped.
 
@@ -58,7 +58,7 @@ Because every shipped profile has this gate on **warn**, it never rules a row ou
 | warn / fail | 2 sellers, under 3 | Fewer FBA sellers than your minimum. |
 | warn / fail | 15 sellers, over 12 | More than your maximum. |
 | warn / fail | one seller held the Buy Box 82% of the year | One seller dominates. |
-| warn | likely brand distributor: Acme Beauty Ltd (64% of 1,250 storefront listings are Nuxe, 71% of the Buy Box) | A top seller looks like the brand's distributor. Tagged BRAND_DISTRIBUTOR. |
+| warn | likely brand distributor: Acme Beauty Ltd (800 of 1,250 storefront listings (64%) are Nuxe, 71% of the Buy Box) | A top seller looks like the brand's distributor. Tagged BRAND_DISTRIBUTOR. |
 | pass | 5 sellers, top Buy Box share 38% | |
 | pass | 5 sellers | Before the Buy Box data is in. |
 | skipped | dormant: no sellers now, none for 60 days | Nobody sells it now. |

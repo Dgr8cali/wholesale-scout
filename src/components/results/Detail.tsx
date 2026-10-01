@@ -70,9 +70,9 @@ function Sellers({ sellers, flaggedText }: { sellers: Seller[]; flaggedText: str
             <a className="font-medium text-brand hover:underline" href={`https://www.amazon.co.uk/sp?seller=${s.sellerId}`} target="_blank" rel="noreferrer">{s.name ?? s.sellerId}</a>
             <span className="text-muted-foreground"> · {s.sharePct}% of Buy Box</span>
             {s.ratingPct != null && <span className="text-muted-foreground"> · {s.ratingPct}% of {s.ratingCount?.toLocaleString("en-GB")} ratings</span>}
-            {s.storefrontSize != null && <span className="text-muted-foreground"> · {s.storefrontSize.toLocaleString("en-GB")} listings</span>}
+            {s.storefrontSize != null && <span className="text-muted-foreground"> · {Math.max(s.storefrontSize, s.brandCount ?? 0).toLocaleString("en-GB")} listings</span>}
             {s.brandSharePct != null && (
-              <span className={flagged(s) ? "font-semibold text-warn" : "text-muted-foreground"}> · {s.brandSharePct}% this brand{flagged(s) ? " (likely distributor)" : ""}</span>
+              <span className={flagged(s) ? "font-semibold text-warn" : "text-muted-foreground"}> · {s.brandCount != null ? `${s.brandCount.toLocaleString("en-GB")} (${Math.round(s.brandSharePct)}%)` : `${Math.round(Math.min(100, s.brandSharePct))}%`} this brand{flagged(s) ? " (likely distributor)" : ""}</span>
             )}
             <span className="text-muted-foreground"> · </span>
             <Link className="font-medium text-brand hover:underline" href={`/sellers/scan?seller=${s.sellerId}`} onClick={(e) => e.stopPropagation()}>Scan this seller</Link>

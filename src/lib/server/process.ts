@@ -10,6 +10,7 @@ import { finishWatchRun } from "./watchlist";
 import { getKeepa, type KeepaProduct, type KeepaResponseMeta, type KeepaSummary, type KeepaTokens, type OnKeepaResponse, type SellerProfile } from "../keepa/client";
 import { dormancy, trimSeries, type Dormancy } from "../keepa/summarize";
 import type { Point } from "../keepa/types";
+import { brandShare } from "../screening/distributor";
 import { isDormant } from "../screening/dormant";
 import { getQogita, variantFid } from "../qogita/client";
 import { chooseOffer, toSupplierOffer, type QogitaOffers, type SupplierOffer } from "../qogita/offers";
@@ -609,16 +610,17 @@ async function sellerProfiles(ids: string[], onResponse: OnKeepaResponse): Promi
 
 /** A row's top sellers with profiles, and how much of each storefront is this product's brand. */
 function sellerViews(row: Row, cfg: ProfileConfig, profiles: Map<string, SellerProfile>): SellerView[] {
-  const brand = brandKey(row.product.brand ?? row.offer.brand);
+  const brand = row.product.brand ?? row.offer.brand;
   return wantedSellers(row, cfg).map(({ sellerId, sharePct }) => {
     const p = profiles.get(sellerId);
-    // No brand breakdown from Keepa means unknown, not 0%.
-    const count = brand && p?.brands.length ? p.brands.filter((b) => brandKey(b.brand) === brand).reduce((a, b) => a + b.count, 0) : null;
+    const share = p ? brandShare(p.brands, brand, p.storefrontSize) : null;
     return {
       sellerId, sharePct,
       name: p?.name ?? null, ratingPct: p?.ratingPct ?? null, ratingCount: p?.ratingCount ?? null,
-      storefrontSize: p?.storefrontSize ?? null,
-      brandSharePct: count != null && p?.storefrontSize ? Math.round((count / p.storefrontSize) * 1000) / 10 : null,
+      // A stale storefront count below the brand's own count is raised to it (see brandShare).
+      storefrontSize: share ? share.size : p?.storefrontSize ?? null,
+      brandCount: share?.count ?? null,
+      brandSharePct: share?.pct ?? null,
     };
   });
 }

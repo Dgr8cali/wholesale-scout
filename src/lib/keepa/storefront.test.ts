@@ -29,6 +29,18 @@ describe("storefront", () => {
     expect(parseSeller("X", { totalStorefrontAsins: [1, 383], totalStorefrontAsinsCSV: [1, 383, 2, 577] }).storefrontSize).toBe(577);
     expect(parseSeller("X", { totalStorefrontAsins: [1, 383] }).storefrontSize).toBe(383);
   });
+
+  it("doesn't trust a stale storefront count below Keepa's own brand and category counts", () => {
+    // LILIWAIWAI-EU as Keepa returned it on 1 Oct 2026: a count of 9 from Sept 2024, no history,
+    // and 113 products in its current brand and category statistics.
+    const s = parseSeller("A1TTGISSVBVXZI", {
+      sellerName: "LILIWAIWAI-EU",
+      totalStorefrontAsins: [7216260, 9],
+      sellerBrandStatistics: [{ brand: "kitsure", productCount: 113 }],
+      sellerCategoryStatistics: [{ catId: 3146281, productCount: 106 }, { catId: 79903031, productCount: 6 }, { catId: 560798, productCount: 1 }],
+    });
+    expect(s.storefrontSize).toBe(113);
+  });
 });
 
 describe("Buy Box holder from current offers", () => {

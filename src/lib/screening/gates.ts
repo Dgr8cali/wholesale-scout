@@ -2,6 +2,7 @@
  * The twelve screening gates. Pure: each reads a ScreenContext and returns an outcome.
  * A gate whose data isn't available (no Keepa yet, no price) is "skipped", never failed.
  */
+import { distributorNote } from "./distributor";
 import { isDormant, lastSeenLabel } from "./dormant";
 import { monthsLabel, orderPlan, volumeMl, type OrderPlan } from "./order";
 import { salesPerMonth, yourShare } from "./sales";
@@ -98,6 +99,8 @@ export interface SellerView {
   ratingPct: number | null;
   ratingCount: number | null;
   storefrontSize: number | null;
+  /** Listings of this product's brand on the storefront; absent on results screened before it was kept. */
+  brandCount?: number | null;
   /** How much of the storefront is this product's brand, %. null when unknown. */
   brandSharePct: number | null;
 }
@@ -405,8 +408,7 @@ const EVALUATORS: Record<GateId, Evaluator> = {
     if (m?.buyBoxFetched !== false && m?.topSellerBbSharePct != null && m.topSellerBbSharePct > g.maxBbSharePct) reasons.push(`one seller held the Buy Box ${pct(m.topSellerBbSharePct)} of the year`);
     const threshold = p.sellerLookup.distributorBrandSharePct;
     const distributors = (ctx.sellers ?? []).filter((s) => s.brandSharePct != null && s.brandSharePct >= threshold);
-    const flag = distributors.map((s) =>
-      `likely brand distributor: ${s.name ?? s.sellerId} (${pct(s.brandSharePct!)} of ${s.storefrontSize?.toLocaleString("en-GB") ?? "?"} storefront listings are ${ctx.product.brand ?? "this brand"}, ${pct(s.sharePct)} of the Buy Box)`);
+    const flag = distributors.map((s) => distributorNote(s, ctx.product.brand));
     const tags = distributors.length ? ["BRAND_DISTRIBUTOR"] : undefined;
     if (reasons.length) return { status: failAs(g.mode), detail: [...reasons, ...flag].join("; "), tags };
     if (flag.length) return { status: "warn", detail: flag.join("; "), tags };
