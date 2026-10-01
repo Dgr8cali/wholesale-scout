@@ -10,7 +10,27 @@ const DEFAULTS = {
   autoCheck: true,
   // The stock reader's Debug section (what Amazon sent back at each step), for fixing the reader.
   showDebug: false,
+  // Opportunity Explorer on sellercentral.amazon.com and .de as well as .co.uk (off: .co.uk only).
+  poeOtherMarkets: false,
 };
+
+const POE_OTHER = ["https://sellercentral.amazon.com/opportunity-explorer/*", "https://sellercentral.amazon.de/opportunity-explorer/*"];
+
+/** The .com/.de Opportunity Explorer scripts: registered only while the setting is on and allowed. */
+async function syncPoeMarkets() {
+  const s = await chrome.storage.local.get({ poeOtherMarkets: false });
+  const allowed = await chrome.permissions.contains({ origins: ["https://sellercentral.amazon.com/*", "https://sellercentral.amazon.de/*"] }).catch(() => false);
+  const ids = ["ws-poe-page", "ws-poe-panel"];
+  const have = (await chrome.scripting.getRegisteredContentScripts({ ids }).catch(() => [])).map((x) => x.id);
+  if (have.length) await chrome.scripting.unregisterContentScripts({ ids: have });
+  if (!s.poeOtherMarkets || !allowed) return;
+  await chrome.scripting.registerContentScripts([
+    { id: "ws-poe-page", matches: POE_OTHER, js: ["poe-page.js"], world: "MAIN", runAt: "document_start" },
+    { id: "ws-poe-panel", matches: POE_OTHER, js: ["shared.js", "poe.js"], runAt: "document_start" },
+  ]);
+}
+chrome.runtime.onInstalled.addListener(() => { syncPoeMarkets(); });
+chrome.runtime.onStartup.addListener(() => { syncPoeMarkets(); });
 
 async function settings() {
   const s = await chrome.storage.local.get(DEFAULTS);
@@ -40,6 +60,10 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
     if (msg.type === "settings") {
       const s = await settings();
       return reply({ appUrl: s.appUrl, dgUrl: s.dgUrl, configured: !!s.password, autoCheck: s.autoCheck !== false, showDebug: !!s.showDebug });
+    }
+    if (msg.type === "poeMarkets") {
+      await syncPoeMarkets();
+      return reply({ ok: true });
     }
     if (msg.type === "open") {
       await chrome.tabs.create({ url: msg.url });

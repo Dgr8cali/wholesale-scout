@@ -1,0 +1,822 @@
+<title>Gatekeeper</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --ground:#F4F6F7; --surface:#FFFFFF; --surface-2:#EDF1F3; --line:#D6DEE3; --line-strong:#B9C5CC;
+  --ink:#1C2534; --ink-2:#3E4B58; --muted:#6B7883;
+  --accent:#0B8CA0; --accent-ink:#FFFFFF; --accent-soft:#DDF1F4;
+  --pass:#1E8E5A; --pass-soft:#DDF3E7; --warn:#B86E00; --warn-soft:#FCEBCF; --fail:#C2382F; --fail-soft:#F9DEDB; --empty:#8A97A2; --empty-soft:#E9EDF0;
+  --focus:#0B8CA0;
+  --display:"Bricolage Grotesque","IBM Plex Sans",system-ui,sans-serif;
+  --body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --ground:#111820; --surface:#18212B; --surface-2:#1F2A36; --line:#2C3946; --line-strong:#3D4C5B;
+    --ink:#E7ECF0; --ink-2:#C2CCD5; --muted:#8E9CAA;
+    --accent:#2FB3C7; --accent-ink:#0B1418; --accent-soft:#163A42;
+    --pass:#3FC07E; --pass-soft:#153826; --warn:#E39A2E; --warn-soft:#3E2B0C; --fail:#EF6B62; --fail-soft:#44201D; --empty:#7C8894; --empty-soft:#232E39;
+    --focus:#2FB3C7;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --ground:#111820; --surface:#18212B; --surface-2:#1F2A36; --line:#2C3946; --line-strong:#3D4C5B;
+  --ink:#E7ECF0; --ink-2:#C2CCD5; --muted:#8E9CAA;
+  --accent:#2FB3C7; --accent-ink:#0B1418; --accent-soft:#163A42;
+  --pass:#3FC07E; --pass-soft:#153826; --warn:#E39A2E; --warn-soft:#3E2B0C; --fail:#EF6B62; --fail-soft:#44201D; --empty:#7C8894; --empty-soft:#232E39;
+  --focus:#2FB3C7;
+}
+*{box-sizing:border-box}
+body{background:var(--ground);color:var(--ink);font-family:var(--body);font-size:14px;line-height:1.45;margin:0}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+h1,h2,h3{font-family:var(--display);margin:0;text-wrap:balance;line-height:1.15}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.eyebrow{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+
+/* ---------- header ---------- */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--surface);border-bottom:1px solid var(--line)}
+.top-in{max-width:1240px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.brand{display:flex;align-items:baseline;gap:8px;min-width:0}
+.brand h1{font-size:20px;font-weight:700;letter-spacing:-.01em}
+.brand .sub{color:var(--muted);font-size:12px;white-space:nowrap}
+.summary{display:flex;align-items:center;gap:10px;margin-left:auto;flex-wrap:wrap}
+.stat{display:flex;flex-direction:column;align-items:flex-end;line-height:1.1}
+.stat .v{font-family:var(--display);font-size:22px;font-weight:700;font-variant-numeric:tabular-nums}
+.stat .v small{font-size:13px;color:var(--muted);font-weight:500}
+.stat .l{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap;border:1px solid transparent}
+.pill.pass{background:var(--pass-soft);color:var(--pass)}
+.pill.warn{background:var(--warn-soft);color:var(--warn)}
+.pill.fail{background:var(--fail-soft);color:var(--fail)}
+.pill.empty{background:var(--empty-soft);color:var(--empty)}
+.pill.big{font-size:13px;padding:6px 12px}
+.dot{width:8px;height:8px;border-radius:50%;background:currentColor;flex:none}
+
+/* ---------- layout ---------- */
+.wrap{max-width:1240px;margin:0 auto;padding:18px 16px 60px;display:grid;grid-template-columns:260px 1fr;gap:22px;align-items:start}
+@media (max-width:860px){.wrap{grid-template-columns:1fr;gap:14px}}
+.rail{position:sticky;top:calc(env(safe-area-inset-top,0px) + 66px);display:flex;flex-direction:column;gap:14px}
+@media (max-width:860px){.rail{position:static}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px}
+.rail .card{padding:12px}
+.rail h2{font-size:13px;font-weight:700;margin-bottom:8px}
+.clist{display:flex;flex-direction:column;gap:4px;max-height:44vh;overflow:auto}
+@media (max-width:860px){.clist{max-height:none}}
+.citem{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;border:1px solid transparent;background:transparent;text-align:left;width:100%}
+.citem:hover{background:var(--surface-2)}
+.citem.on{background:var(--accent-soft);border-color:var(--accent)}
+.citem .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}
+.citem .sc{font-family:var(--mono);font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.citem .tag{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:1px 5px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:8px 12px;border-radius:8px;border:1px solid var(--line-strong);background:var(--surface);font-weight:600;font-size:13px}
+.btn:hover{background:var(--surface-2)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.primary:hover{filter:brightness(1.05)}
+.btn.danger{color:var(--fail);border-color:var(--fail)}
+.btn.sm{padding:5px 9px;font-size:12px}
+.btn.block{width:100%}
+.rail .actions{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.settings-grid{display:grid;grid-template-columns:1fr 84px;gap:6px 8px;align-items:center;font-size:12.5px}
+.settings-grid input{width:100%;padding:5px 7px;border:1px solid var(--line-strong);border-radius:6px;background:var(--surface);text-align:right;font-family:var(--mono);font-size:12.5px}
+.store{font-size:11.5px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.store .dot{width:7px;height:7px}
+
+/* ---------- main ---------- */
+.main{display:flex;flex-direction:column;gap:14px;min-width:0}
+.cand-head{padding:14px 16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px 14px}
+.ro .v.small{font-size:13.5px;font-family:var(--body);font-weight:600}
+.ratecard{font-size:11.5px;color:var(--muted);line-height:1.4}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field label{font-size:12px;color:var(--ink-2);font-weight:500}
+.field .in{display:flex;align-items:center;border:1px solid var(--line-strong);border-radius:8px;background:var(--surface);overflow:hidden}
+.field .in:focus-within{border-color:var(--focus);box-shadow:0 0 0 2px var(--accent-soft)}
+.field .in .u{padding:0 8px;color:var(--muted);font-family:var(--mono);font-size:12px;background:var(--surface-2);align-self:stretch;display:flex;align-items:center;border-right:1px solid var(--line)}
+.field .in .u.r{border-right:0;border-left:1px solid var(--line)}
+.field input,.field select{flex:1;min-width:0;border:0;background:transparent;padding:8px 10px;font-family:var(--mono);font-size:13.5px;font-variant-numeric:tabular-nums}
+.field select{font-family:var(--body);appearance:auto}
+.field input.text{font-family:var(--body)}
+.seg{display:flex;border:1px solid var(--line-strong);border-radius:8px;overflow:hidden}
+.seg button{flex:1;padding:7px 8px;background:var(--surface);border:0;font-size:13px;font-weight:500;color:var(--muted)}
+.seg button + button{border-left:1px solid var(--line-strong)}
+.seg button.on{background:var(--ink);color:var(--surface)}
+.seg button.on.yes{background:var(--pass);color:#fff}
+.seg button.on.no{background:var(--ink-2);color:#fff}
+.field .hint{font-size:11.5px;color:var(--muted)}
+
+.gate{overflow:hidden}
+.gate-h{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line);cursor:pointer;user-select:none;background:var(--surface)}
+.gate-h .n{font-family:var(--display);font-weight:700;font-size:13px;width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;background:var(--surface-2);color:var(--ink-2);flex:none}
+.gate.pass .gate-h .n{background:var(--pass);color:#fff}
+.gate.warn .gate-h .n{background:var(--warn);color:#fff}
+.gate.fail .gate-h .n{background:var(--fail);color:#fff}
+.gate-h h2{font-size:16px;font-weight:700;flex:1;min-width:0}
+.gate-h .tool{font-size:11.5px;color:var(--muted);white-space:nowrap}
+.gate-h .chev{color:var(--muted);transition:transform .15s;flex:none}
+.gate.open .gate-h .chev{transform:rotate(90deg)}
+.gate-b{display:none;padding:14px 16px 16px;gap:14px;flex-direction:column;border-left:3px solid var(--line)}
+.gate.open .gate-b{display:flex}
+.gate.pass .gate-b{border-left-color:var(--pass)}
+.gate.warn .gate-b{border-left-color:var(--warn)}
+.gate.fail .gate-b{border-left-color:var(--fail)}
+.gate .blurb{color:var(--ink-2);font-size:13px;max-width:70ch}
+.fgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px 14px}
+@media (max-width:900px){.fgrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:560px){.fgrid{grid-template-columns:1fr}}
+.checks{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.chk{display:grid;grid-template-columns:22px 1fr auto;gap:10px;align-items:center;padding:8px 12px;border-top:1px solid var(--line);font-size:13px}
+.chk:first-child{border-top:0}
+.chk .ic{width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff}
+.chk.pass .ic{background:var(--pass)}.chk.warn .ic{background:var(--warn)}.chk.fail .ic{background:var(--fail)}.chk.empty .ic{background:var(--empty)}
+.chk .d{color:var(--muted);font-family:var(--mono);font-size:12px;white-space:nowrap}
+.readouts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+.ro{background:var(--surface-2);border-radius:8px;padding:10px 12px;display:flex;flex-direction:column;gap:2px}
+.ro .l{font-size:11px;color:var(--muted);letter-spacing:.04em;text-transform:uppercase}
+.ro .v{font-family:var(--mono);font-size:17px;font-weight:500;font-variant-numeric:tabular-nums}
+.ro .v.pass{color:var(--pass)}.ro .v.warn{color:var(--warn)}.ro .v.fail{color:var(--fail)}
+.ro .s{font-size:11.5px;color:var(--muted)}
+
+/* ---------- scorecard ---------- */
+.score{padding:16px}
+.score-h{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:12px}
+.score-h h2{font-size:18px;font-weight:700}
+.score-h .total{margin-left:auto;display:flex;align-items:baseline;gap:6px;font-family:var(--display)}
+.score-h .total b{font-size:34px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1}
+.score-h .total span{color:var(--muted);font-size:14px}
+.bar{height:10px;border-radius:999px;background:var(--surface-2);overflow:hidden;margin-bottom:14px;position:relative}
+.bar i{display:block;height:100%;background:var(--accent);border-radius:999px;transition:width .2s}
+.bar .m{position:absolute;top:-3px;width:2px;height:16px;background:var(--line-strong)}
+.stable{width:100%;border-collapse:collapse;font-size:13px}
+.stable th{text-align:left;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:6px 8px;border-bottom:1px solid var(--line)}
+.stable td{padding:8px;border-bottom:1px solid var(--line);vertical-align:middle}
+.stable td.pts{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:center;width:52px}
+.stable td.pts b{display:inline-flex;width:28px;height:28px;border-radius:7px;align-items:center;justify-content:center;font-weight:600}
+.pts b.p0{background:var(--fail-soft);color:var(--fail)}.pts b.p1{background:var(--warn-soft);color:var(--warn)}.pts b.p2{background:var(--accent-soft);color:var(--accent)}.pts b.p3{background:var(--pass-soft);color:var(--pass)}.pts b.pe{background:var(--empty-soft);color:var(--empty)}
+.stable td.why{color:var(--muted);font-size:12.5px}
+.stable td.struct{color:var(--muted);font-size:11px;white-space:nowrap}
+.verdict{margin-top:14px;padding:14px 16px;border-radius:10px;display:flex;gap:12px;align-items:flex-start;border:1px solid var(--line)}
+.verdict.pass{background:var(--pass-soft);border-color:var(--pass)}.verdict.warn{background:var(--warn-soft);border-color:var(--warn)}.verdict.fail{background:var(--fail-soft);border-color:var(--fail)}.verdict.empty{background:var(--surface-2)}
+.verdict b{font-family:var(--display);font-size:17px;display:block;margin-bottom:3px}
+.verdict p{margin:0;font-size:13px;color:var(--ink-2)}
+.tablewrap{overflow-x:auto}
+
+/* ---------- empty / dialogs ---------- */
+.empty-state{padding:40px 20px;text-align:center;color:var(--muted)}
+.empty-state h2{font-size:18px;color:var(--ink);margin-bottom:6px}
+.confirm{display:flex;gap:8px;align-items:center;font-size:12.5px;padding:8px 10px;background:var(--fail-soft);border-radius:8px;color:var(--fail)}
+.toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 16px);transform:translateX(-50%);background:var(--ink);color:var(--surface);padding:8px 14px;border-radius:8px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:50}
+.toast.show{opacity:1}
+.note{font-size:12px;color:var(--muted);padding:10px 12px;background:var(--surface-2);border-radius:8px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<header class="top">
+  <div class="top-in">
+    <div class="brand"><h1>Gatekeeper</h1><span class="sub">Private label research · Amazon UK</span></div>
+    <div class="summary" id="summary"></div>
+  </div>
+</header>
+
+<div class="wrap">
+  <aside class="rail">
+    <div class="card">
+      <h2>Candidates</h2>
+      <div class="clist" id="clist"></div>
+      <div class="actions">
+        <button class="btn primary block" id="addBtn">+ New candidate</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Thresholds</h2>
+      <div class="settings-grid" id="settings"></div>
+      <div class="ratecard" style="margin-top:10px">Rate card: Amazon UK FBA fees and referral table effective 1 July 2026. Size tier, weight band, dimensional weight, low-price rates under £20 and storage by volume are all applied automatically.</div>
+      <div class="store" id="store" style="margin-top:10px"></div>
+    </div>
+  </aside>
+
+  <main class="main" id="main"></main>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ===================== schema ===================== */
+const YN = [['yes','Yes'],['no','No']];
+const GATES = [
+ {id:'g0', n:'0', title:'Your filter', tool:'Written before you search',
+  blurb:'The constraints you commit to before opening any tool. A product that fails here is dropped whatever the revenue looks like.',
+  fields:[
+   {k:'sell',label:'Sell price',type:'num',unit:'£',step:'0.01',hint:'£18–35 band'},
+   {k:'landed',label:'Landed cost per unit',type:'num',unit:'£',step:'0.01',hint:'Product + freight + duty + import VAT + inspection, per unit'},
+   {k:'weight',label:'Packed weight',type:'num',unit:'g',hint:'As it ships to Amazon'},
+   {k:'dimL',label:'Packed length',type:'num',unit:'cm',step:'0.1'},
+   {k:'dimW',label:'Packed width',type:'num',unit:'cm',step:'0.1'},
+   {k:'dimH',label:'Packed height',type:'num',unit:'cm',step:'0.1',hint:'The FBA tier is set from these three'},
+   {k:'seasonal',label:'Seasonal?',type:'yn'},
+   {k:'excluded',label:'In an avoid category?',type:'yn',hint:'Electrical, cosmetic, supplement, food, under-3s, medical, glass, liquid, IP'},
+   {k:'simple',label:'Simple and hard to break?',type:'yn'},
+   {k:'differentiable',label:'Differentiable without re-tooling?',type:'yn'},
+  ]},
+ {id:'g1', n:'1', title:'Find the market', tool:'Jungle Scout',
+  blurb:'Opportunity Finder, then the top 10 listings in Product Database. You are judging whether £1,000 can buy a place on page one.',
+  fields:[
+   {k:'reviewsBand',label:'Reviews on page one',type:'sel',opts:[['','—'],['0','Most over 1,000'],['1','Most 500–1,000'],['2','Most 200–500'],['3','Several under 200 selling well']]},
+   {k:'avgRating',label:'Average rating, page one',type:'num',step:'0.1',hint:'3.8–4.3 leaves room'},
+   {k:'top10Sales',label:'Top-10 monthly sales, each',type:'num',unit:'units',hint:'JS estimate'},
+   {k:'top3Share',label:'Top 3 revenue share',type:'num',unit:'%',hint:'Under 50%'},
+   {k:'amazonBrand',label:'Amazon-brand in top 10?',type:'yn'},
+   {k:'priceTight',label:'Price spread holds £18–35?',type:'yn'},
+  ]},
+ {id:'g2', n:'2', title:'Validate history', tool:'Keepa · All view',
+  blurb:'Jungle Scout estimates from today\'s rank. Keepa shows whether today is normal. Top 5 listings, one year.',
+  fields:[
+   {k:'rankTrend',label:'Sales rank, 12 months',type:'sel',opts:[['','—'],['0','Spike or decline'],['1','Seasonal'],['2','Flat'],['3','Growing']]},
+   {k:'rankDrops',label:'Rank drops / month, top listing',type:'num',hint:'Keepa footer'},
+   {k:'bought',label:'Bought in past month',type:'num',hint:'Amazon\'s figure'},
+   {k:'offerTrend',label:'New offer count',type:'sel',opts:[['','—'],['steady','Steady, low'],['climbing','Climbing']]},
+   {k:'bbTrend',label:'Buy Box price, 12 months',type:'sel',opts:[['','—'],['holds','Holds the band'],['sliding','Sliding down']]},
+   {k:'amazonSeller',label:'Amazon ever a seller?',type:'yn'},
+  ]},
+ {id:'g3', n:'3', title:"Amazon's own data", tool:'Product Opportunity Explorer',
+  blurb:'Seller Central → Growth → Product Opportunity Explorer. Amazon\'s number settles any disagreement between the other two.',
+  fields:[
+   {k:'sv360',label:'Search volume, 360 days',type:'num',hint:'0 if the niche isn\'t listed'},
+   {k:'svGrowth',label:'Search volume growth',type:'sel',opts:[['','—'],['declining','Declining'],['flat','Flat'],['growing','Growing']]},
+   {k:'products',label:'Products in niche',type:'num'},
+   {k:'clickShare',label:'Click share, top 3',type:'num',unit:'%'},
+   {k:'conv',label:'Search conversion rate',type:'num',unit:'%'},
+   {k:'unitsPer',label:'Avg units sold per product',type:'num',unit:'/mo'},
+  ]},
+ {id:'g4', n:'4', title:'Mine the reviews', tool:'By hand · 50 per listing',
+  blurb:'One-, two- and three-star reviews on the top 5. You are looking for one complaint that repeats, that a factory can fix cheaply, that you can say in six words.',
+  fields:[
+   {k:'fixable',label:'A complaint a factory can fix?',type:'yn'},
+   {k:'complaintPct',label:'Share of negative reviews with it',type:'num',unit:'%',hint:'10%+ across most listings'},
+   {k:'fixCostPct',label:'Cost of the fix',type:'num',unit:'% of unit',hint:'Under 15%'},
+   {k:'sixWords',label:'Sayable in six words?',type:'yn',hint:'"the only X with Y"'},
+  ]},
+ {id:'g5', n:'5', title:'Keywords', tool:'Keyword Scout',
+  blurb:'Seed search on the head term plus reverse-ASIN on the top 5. Demand you can\'t reach is not demand.',
+  fields:[
+   {k:'headVol',label:'Head term volume, UK',type:'num',unit:'/mo'},
+   {k:'longtail',label:'Terms with 300–2,000 volume',type:'num',unit:'count'},
+   {k:'headBid',label:'Suggested bid, head term',type:'num',unit:'£',step:'0.01'},
+   {k:'ltBid',label:'Suggested bid, long-tail',type:'num',unit:'£',step:'0.01'},
+   {k:'sponsored',label:'Sponsored slots on page one',type:'num'},
+  ]},
+ {id:'g6', n:'6', title:'Unit economics', tool:'Alibaba × 3 · FBA calculator · SellerAmp',
+  blurb:'Sell price, landed cost, size and weight carry over from Gate 0. The FBA fee is read from the July 2026 rate card by size tier and weight band; referral comes from the category; storage from the volume. Launch and steady-state must both clear.',
+  fields:[
+   {k:'fbaOverride',label:'FBA fee override (ex-VAT)',type:'num',unit:'£',step:'0.01',hint:'Leave blank to use the rate card. Enter Amazon\'s own figure if you have it'},
+   {k:'adsLaunch',label:'Ads per unit, launch',type:'num',unit:'£',step:'0.01',hint:'£4–6 first 60–90 days'},
+   {k:'adsSteady',label:'Ads per unit, steady state',type:'num',unit:'£',step:'0.01',hint:'£1–2 once ranked'},
+  ]},
+ {id:'g7', n:'7', title:'Launch budget', tool:'The whole cost, not the stock',
+  blurb:'Stock is about 60% of a launch. A 10% buffer is added automatically.',
+  fields:[
+   {k:'units',label:'First order units',type:'num'},
+   {k:'samples',label:'Samples, shipped',type:'num',unit:'£'},
+   {k:'inspection',label:'Pre-shipment inspection',type:'num',unit:'£'},
+   {k:'photography',label:'Photography',type:'num',unit:'£'},
+   {k:'trademark',label:'UK trademark',type:'num',unit:'£',hint:'£170; can follow launch'},
+   {k:'launchAds',label:'Launch advertising, 60 days',type:'num',unit:'£'},
+  ]},
+];
+
+const SETTINGS_DEF = [
+ {k:'budget',label:'Budget available',unit:'£',d:1000},
+ {k:'vat',label:'VAT rate',unit:'%',d:20},
+ {k:'dst',label:'Digital services fee on fees',unit:'%',d:2},
+ {k:'inbound',label:'Inbound shipping to FBA',unit:'£/unit',d:0.30},
+ {k:'prep',label:'Prep, bag and label',unit:'£/unit',d:0.15},
+ {k:'storageMonths',label:'Avg months in storage',unit:'mo',d:2},
+ {k:'q4',label:'Q4 rates (Oct–Dec)',unit:'0/1',d:0},
+ {k:'returnsPct',label:'Returns allowance',unit:'% of sale',d:2},
+ {k:'minMultiple',label:'Min price multiple',unit:'×',d:3.5},
+ {k:'minLaunchMargin',label:'Min launch margin',unit:'%',d:20},
+ {k:'minSteadyMargin',label:'Min steady margin',unit:'%',d:30},
+ {k:'minProfit',label:'Min profit / unit',unit:'£',d:6},
+];
+
+/* ===================== state ===================== */
+let candidates = [];   // [{id, name, asin, niche, category, created, updated, f:{}}]
+let settings = Object.fromEntries(SETTINGS_DEF.map(s=>[s.k,s.d]));
+let selectedId = null;
+let openGates = new Set(['g0']);
+let db = null, unsubC = null, unsubS = null, storeMode = 'memory';
+let pendingDelete = null;
+const saveTimers = {};
+
+const num = v => (v===''||v==null||isNaN(+v)) ? null : +v;
+const money = v => v==null ? '—' : '£'+(+v).toFixed(2);
+const pct = v => v==null ? '—' : (+v).toFixed(1)+'%';
+const fmt = v => v==null ? '—' : (+v).toLocaleString('en-GB');
+
+/* ===================== Amazon UK rate card — effective 1 July 2026 ===================== */
+/* Source: Amazon UK FBA rate card (260630-FBA-Rate-Card-EN1.pdf) and sell.amazon.co.uk/pricing, read 24 Sep 2026. */
+const RATES = {
+  storageCuFt: {std:0.62, q4:0.82},            // £ per cubic foot per month, standard size
+  lowPriceThreshold: 20, lowPriceThresholdBHPC: 10,
+  tiers: [ // dims are max sorted L≥W≥H in cm; bands are [maxGrams, fee]; useDim = dimensional weight applies
+    {id:'lightEnv',  name:'Light envelope',       max:[33,23,2.5],  maxG:100,  useDim:false, bands:[[20,1.83],[40,1.87],[60,1.89],[80,2.07],[100,2.08]],      low:[[20,1.46],[40,1.50],[60,1.52],[80,1.67],[100,1.70]]},
+    {id:'stdEnv',    name:'Standard envelope',    max:[33,23,2.5],  maxG:460,  useDim:false, bands:[[210,2.10],[460,2.16]],                                     low:[[210,1.73],[460,1.87]]},
+    {id:'largeEnv',  name:'Large envelope',       max:[33,23,4],    maxG:960,  useDim:false, bands:[[960,2.72]],                                                low:[[960,2.42]]},
+    {id:'xlEnv',     name:'Extra-large envelope', max:[33,23,6],    maxG:960,  useDim:false, bands:[[960,2.94]],                                                low:[[960,2.65]]},
+    {id:'smallPcl',  name:'Small parcel',         max:[35,25,12],   maxG:3900, useDim:true,  bands:[[150,2.91],[400,3.00],[900,3.04],[1400,3.05],[1900,3.25],[3900,3.27]], low:[[150,2.67],[400,2.70]], peakAdd:0.11},
+    {id:'stdPcl',    name:'Standard parcel',      max:[45,34,26],   maxG:11900,useDim:true,  bands:[[150,2.94],[400,3.01],[900,3.06],[1400,3.26],[1900,3.48],[2900,3.49],[3900,3.54],[5900,3.56],[8900,3.57],[11900,3.58]]},
+  ],
+  oversize: [
+    {id:'smallOS', name:'Small oversize',          max:[61,46,46],  maxUnitG:1760,  maxDimG:25820, base:3.49, baseG:760,   perKg:0.22},
+    {id:'stdOSL',  name:'Standard oversize light', max:[101,60,60], maxUnitG:15000, maxDimG:72720, base:4.35, baseG:760,   perKg:0.15},
+    {id:'stdOSH',  name:'Standard oversize heavy', max:[101,60,60], maxUnitG:23000, maxDimG:72720, base:6.58, baseG:15760, perKg:0.08},
+  ]
+};
+/* Referral fee by category — [maxPrice, pct] bands, applied to the whole price. */
+const REFERRAL = [
+  ['Everything else', [[Infinity,15]]],
+  ['Home Products', [[20,8],[Infinity,15]]],
+  ['Kitchen', [[Infinity,15]]],
+  ['Home Linen and Rugs', [[Infinity,15]]],
+  ['Lawn and Garden', [[Infinity,15]]],
+  ['Sports and Outdoors', [[Infinity,15]]],
+  ['Pet Supplies', [[Infinity,15]]],
+  ['Pet Clothing and Food', [[10,5],[Infinity,15]]],
+  ['Office Products', [[Infinity,15]]],
+  ['Toys and Games', [[Infinity,15]]],
+  ['Tools and Home Improvement', [[Infinity,13]]],
+  ['Home Adhesives and Cable Ties', [[Infinity,13]]],
+  ['Door, Window and Shower Accessories', [[Infinity,13]]],
+  ['Baby Products', [[10,8],[Infinity,15]]],
+  ['Baby Pushchairs and Safety Equipment', [[10,8],[Infinity,15]]],
+  ['Beauty, Health and Personal Care', [[10,8],[Infinity,15]]],
+  ['Vitamins, Minerals & Supplements', [[10,5],[Infinity,15]]],
+  ['Grocery and Gourmet', [[10,5],[Infinity,15]]],
+  ['Clothing and Accessories', [[15,5],[20,10],[Infinity,15]]],
+  ['Footwear', [[Infinity,15]]],
+  ['Rucksacks and Handbags', [[Infinity,15]]],
+  ['Luggage', [[Infinity,15]]],
+  ['Luggage Accessories', [[Infinity,15]]],
+  ['Eyewear', [[Infinity,15]]],
+  ['Jewellery', [[225,20],[Infinity,5]]],
+  ['Watches', [[225,15],[Infinity,5]]],
+  ['Furniture', [[175,15],[Infinity,10]]],
+  ['Furniture Accessories', [[Infinity,13]]],
+  ['Mattresses', [[Infinity,15]]],
+  ['Compact Appliances', [[Infinity,15]]],
+  ['Full-Size Appliances', [[Infinity,7]]],
+  ['Electronic Accessories', [[100,15],[Infinity,8]]],
+  ['Consumer Electronics', [[Infinity,7]]],
+  ['Computers', [[Infinity,7]]],
+  ['Printer and Scanner Accessories', [[100,15],[Infinity,8]]],
+  ['Commercial Electrical and Energy Supplies', [[Infinity,12]]],
+  ['Business, Industrial, and Scientific Supplies', [[Infinity,15]]],
+  ['Automotive and Powersports', [[45,15],[Infinity,9]]],
+  ['Cycling Accessories', [[Infinity,15]]],
+  ['Musical Instruments and AV Production', [[Infinity,12]]],
+  ['Packing Materials', [[Infinity,15]]],
+  ['Handmade', [[Infinity,12]]],
+];
+const BHPC_LOW = new Set(['Beauty, Health and Personal Care','Office Products','Grocery and Gourmet']);
+
+function referralPct(cat, sell){
+  const row = REFERRAL.find(r=>r[0]===cat) || REFERRAL[0];
+  for(const [max,pct] of row[1]) if(sell<=max) return pct;
+  return 15;
+}
+function sizeTier(f){
+  const L=num(f.dimL),W=num(f.dimW),H=num(f.dimH),g=num(f.weight);
+  if(L==null||W==null||H==null||g==null) return null;
+  const d=[L,W,H].sort((a,b)=>b-a);
+  const dimG = d[0]*d[1]*d[2]/5000*1000;
+  const fits = m => d[0]<=m[0]&&d[1]<=m[1]&&d[2]<=m[2];
+  for(const t of RATES.tiers){
+    const shipG = t.useDim ? Math.max(g,dimG) : g;
+    if(fits(t.max) && shipG<=t.maxG){
+      const band = t.bands.find(b=>shipG<=b[0]);
+      const lowBand = t.low ? t.low.find(b=>shipG<=b[0]) : null;
+      return {tier:t, name:t.name, shipG, dimG, band, fee:band[1], lowFee: lowBand?lowBand[1]:null, peakAdd:t.peakAdd||0, oversize:false};
+    }
+  }
+  for(const o of RATES.oversize){
+    if(fits(o.max) && g<=o.maxUnitG && dimG<=o.maxDimG && (o.id!=='stdOSH' || g>15000)){
+      const shipG=Math.max(g,dimG);
+      const fee = o.base + Math.max(0,(shipG-o.baseG)/1000)*o.perKg;
+      return {tier:o, name:o.name, shipG, dimG, band:null, fee, lowFee:null, peakAdd:0, oversize:true};
+    }
+  }
+  return {tier:null, name:'Outside standard tiers', shipG:g, dimG, band:null, fee:null, lowFee:null, peakAdd:0, oversize:true};
+}
+function storagePerUnit(f,S){
+  const L=num(f.dimL),W=num(f.dimW),H=num(f.dimH);
+  if(L==null||W==null||H==null) return null;
+  const cuft = L*W*H/28316.8;
+  const rate = S.q4>=1 ? RATES.storageCuFt.q4 : RATES.storageCuFt.std;
+  return cuft*rate*(S.storageMonths||0);
+}
+function econ(f,S,cat){
+  const sell=num(f.sell), landed=num(f.landed), aL=num(f.adsLaunch), aS=num(f.adsSteady), ov=num(f.fbaOverride);
+  const vat=1+S.vat/100, dst=1+(S.dst||0)/100;
+  if(sell==null) return null;
+  const pct = referralPct(cat||'Everything else', sell);
+  const referralBase = Math.max(sell*pct/100, 0.25);
+  const referral = referralBase*vat*dst;
+  const tier = sizeTier(f);
+  const lowThreshold = BHPC_LOW.has(cat) ? RATES.lowPriceThresholdBHPC : RATES.lowPriceThreshold;
+  const lowPrice = sell<=lowThreshold;
+  let fbaBase=null, fbaSource='';
+  if(ov!=null){ fbaBase=ov; fbaSource='override'; }
+  else if(tier&&tier.fee!=null){
+    if(lowPrice && tier.lowFee!=null){ fbaBase=tier.lowFee; fbaSource='low-price'; }
+    else { fbaBase=tier.fee + (S.q4>=1?tier.peakAdd:0); fbaSource=S.q4>=1&&tier.peakAdd?'peak':'standard'; }
+  }
+  const fbaV = fbaBase==null?null:fbaBase*vat*dst;
+  const storage = storagePerUnit(f,S);
+  const inbound=S.inbound||0, prep=S.prep||0, returns=sell*(S.returnsPct||0)/100;
+  const over = (storage||0)+inbound+prep+returns;
+  const base = (fbaV==null||landed==null) ? null : sell-referral-fbaV-landed-over;
+  const pL = (base==null||aL==null)?null:base-aL;
+  const pS = (base==null||aS==null)?null:base-aS;
+  return {sell,landed,pct,referralBase,referral,tier,lowPrice,lowThreshold,fbaBase,fbaSource,fbaV,storage,inbound,prep,returns,over,pL,pS,
+    amazonTake: (fbaV==null)?null:referral+fbaV,
+    mL: pL==null?null:pL/sell*100, mS: pS==null?null:pS/sell*100,
+    multiple: (landed&&landed>0)?sell/landed:null};
+}
+function budget(f,S){
+  const units=num(f.units), landed=num(f.landed);
+  const items=['samples','inspection','photography','trademark','launchAds'].map(k=>num(f[k]));
+  if(units==null&&items.every(x=>x==null)) return null;
+  const stock=(units!=null&&landed!=null)?units*landed:null;
+  const sub=(stock||0)+items.reduce((a,b)=>a+(b||0),0);
+  const total=sub*1.1;
+  return {stock,sub,buffer:sub*0.1,total,budget:S.budget,ratio:total/S.budget};
+}
+
+function st(cond, warnCond){ return cond?'pass':(warnCond?'warn':'fail'); }
+const E = 'empty';
+
+function gateChecks(g,f,S,cat){
+  const rows=[]; const R=(label,status,detail)=>rows.push({label,status,detail});
+  const e=econ(f,S,cat), b=budget(f,S);
+  switch(g.id){
+    case 'g0':{
+      const s=num(f.sell),l=num(f.landed),w=num(f.weight), t=sizeTier(f);
+      R('Sell price £18–35', s==null?E:st(s>=18&&s<=35, s>=15&&s<=40), s==null?'':money(s));
+      R('Landed cost ≤ 30% of sell', (s==null||l==null)?E:st(l/s<=0.30, l/s<=0.35), (s&&l!=null)?(l/s*100).toFixed(0)+'%':'');
+      R('Packed weight under 500 g', w==null?E:st(w<=500,w<=700), w==null?'':w+' g');
+      R('Envelope or small parcel tier', t==null?E:st(!!t.tier&&['lightEnv','stdEnv','largeEnv','xlEnv','smallPcl'].includes(t.tier.id), !!t.tier&&t.tier.id==='stdPcl'), t==null?'':t.name);
+      R('Sells all year', !f.seasonal?E:st(f.seasonal==='no'), '');
+      R('Not in an avoid category', !f.excluded?E:st(f.excluded==='no'), '');
+      R('Simple, hard to break', !f.simple?E:st(f.simple==='yes'), '');
+      R('Differentiable without re-tooling', !f.differentiable?E:st(f.differentiable==='yes'), '');
+      break;}
+    case 'g1':{
+      const rb=f.reviewsBand===''||f.reviewsBand==null?null:+f.reviewsBand, ar=num(f.avgRating), ts=num(f.top10Sales), t3=num(f.top3Share);
+      R('Page-one reviews mostly under 500', rb==null?E:st(rb>=2, rb>=1), '');
+      R('Average rating 3.8–4.3', ar==null?E:st(ar>=3.8&&ar<=4.3, ar>=3.6&&ar<=4.5), ar==null?'':ar.toFixed(1));
+      R('Top-10 each 300+ / month', ts==null?E:st(ts>=300, ts>=150), ts==null?'':fmt(ts));
+      R('Top 3 hold under 50%', t3==null?E:st(t3<=50, t3<=60), t3==null?'':t3+'%');
+      R('No Amazon-brand in top 10', !f.amazonBrand?E:st(f.amazonBrand==='no'), '');
+      R('Price spread holds the band', !f.priceTight?E:st(f.priceTight==='yes', true), '');
+      break;}
+    case 'g2':{
+      const rt=f.rankTrend===''||f.rankTrend==null?null:+f.rankTrend, rd=num(f.rankDrops), bo=num(f.bought);
+      R('Rank flat or improving over 12 months', rt==null?E:st(rt>=2, rt===1), '');
+      R('100+ rank drops / month', rd==null?E:st(rd>=100, rd>=40), rd==null?'':fmt(rd));
+      R('200+ bought in past month', bo==null?E:st(bo>=200, true), bo==null?'':fmt(bo));
+      R('Offer count steady', !f.offerTrend?E:st(f.offerTrend==='steady'), '');
+      R('Buy Box price holds', !f.bbTrend?E:st(f.bbTrend==='holds'), '');
+      R('Amazon never on listing', !f.amazonSeller?E:st(f.amazonSeller==='no'), '');
+      break;}
+    case 'g3':{
+      const sv=num(f.sv360), pr=num(f.products), cs=num(f.clickShare), cv=num(f.conv), up=num(f.unitsPer);
+      R('Search volume ≥ 30,000 / year', sv==null?E:st(sv>=30000, sv>=15000), sv==null?'':fmt(sv));
+      R('Volume flat or growing', !f.svGrowth?E:st(f.svGrowth!=='declining'), '');
+      R('50–300 products in niche', pr==null?E:st(pr>=50&&pr<=300, pr>=30&&pr<=500), pr==null?'':fmt(pr));
+      R('Top-3 click share under 50%', cs==null?E:st(cs<=50, cs<=60), cs==null?'':cs+'%');
+      R('Conversion ≥ 10%', cv==null?E:st(cv>=10, cv>=7), cv==null?'':cv+'%');
+      R('100+ units / product / month', up==null?E:st(up>=100, true), up==null?'':fmt(up));
+      break;}
+    case 'g4':{
+      const cp=num(f.complaintPct), fc=num(f.fixCostPct);
+      R('A factory-fixable complaint exists', !f.fixable?E:st(f.fixable==='yes'), '');
+      R('Appears in 10%+ of negative reviews', cp==null?E:st(cp>=10, cp>=5), cp==null?'':cp+'%');
+      R('Fix costs under 15% of unit', fc==null?E:st(fc<=15, fc<=20), fc==null?'':fc+'%');
+      R('Sayable in six words', !f.sixWords?E:st(f.sixWords==='yes', true), '');
+      break;}
+    case 'g5':{
+      const hv=num(f.headVol), lt=num(f.longtail), hb=num(f.headBid), lb=num(f.ltBid), sp=num(f.sponsored);
+      R('Head term ≥ 5,000 / month', hv==null?E:st(hv>=5000, hv>=2500), hv==null?'':fmt(hv));
+      R('10+ long-tail terms', lt==null?E:st(lt>=10, lt>=5), lt==null?'':lt);
+      R('Head-term bid ≤ £1.20', hb==null?E:st(hb<=1.20, hb<=1.50), hb==null?'':money(hb));
+      R('Long-tail bid ≤ £0.60', lb==null?E:st(lb<=0.60, true), lb==null?'':money(lb));
+      R('Fewer than 6 sponsored slots', sp==null?E:st(sp<6, true), sp==null?'':sp);
+      break;}
+    case 'g6':{
+      if(!e){ R('Enter sell price in Gate 0',E,''); break; }
+      R('FBA tier identified from size and weight', e.fbaSource==='override'?'pass':(e.tier==null?E:(e.tier.fee==null?'fail':'pass')), e.fbaSource==='override'?'override':(e.tier?e.tier.name:''));
+      R('Sell ÷ landed ≥ '+S.minMultiple+'×', e.multiple==null?E:st(e.multiple>=S.minMultiple, e.multiple>=3), e.multiple==null?'':e.multiple.toFixed(2)+'×');
+      R('Launch margin ≥ '+S.minLaunchMargin+'% (ads in)', e.mL==null?E:st(e.mL>=S.minLaunchMargin, e.mL>=S.minLaunchMargin-5), e.mL==null?'':pct(e.mL));
+      R('Steady margin ≥ '+S.minSteadyMargin+'%', e.mS==null?E:st(e.mS>=S.minSteadyMargin, e.mS>=S.minSteadyMargin-5), e.mS==null?'':pct(e.mS));
+      R('Steady profit ≥ '+money(S.minProfit)+' / unit', e.pS==null?E:st(e.pS>=S.minProfit, e.pS>=S.minProfit-2), e.pS==null?'':money(e.pS));
+      break;}
+    case 'g7':{
+      if(!b){ R('Enter the launch lines',E,''); break; }
+      R('Whole launch fits '+money(S.budget)+' with buffer', st(b.total<=S.budget, b.total<=S.budget*1.15), money(b.total));
+      R('Landed cost known (Gate 0)', num(f.landed)==null?E:'pass', '');
+      break;}
+  }
+  return rows;
+}
+function gateStatus(rows){
+  if(rows.some(r=>r.status==='fail')) return 'fail';
+  if(rows.some(r=>r.status==='warn')) return 'warn';
+  if(rows.every(r=>r.status==='pass')) return 'pass';
+  return 'empty';
+}
+
+function scorecard(f,S,cat){
+  const e=econ(f,S,cat)||{}, b=budget(f,S);
+  const rb=f.reviewsBand===''||f.reviewsBand==null?null:+f.reviewsBand;
+  const rt=f.rankTrend===''||f.rankTrend==null?null:+f.rankTrend;
+  const rd=num(f.rankDrops), sv=num(f.sv360), lt=num(f.longtail), t3=num(f.top3Share), fc=num(f.fixCostPct);
+  const band=(v,cuts)=>v==null?null:(v<cuts[0]?0:v<cuts[1]?1:v<cuts[2]?2:3);
+  const rows=[];
+  rows.push({n:1,label:'Page-one review depth',pts:rb,why:['Most over 1,000','Most 500–1,000','Most 200–500','Several under 200 selling well'],structural:true});
+  rows.push({n:2,label:'Demand (Keepa rank drops)',pts:band(rd,[40,100,200]),why:['Under 40/mo','40–100','100–200','200+']});
+  rows.push({n:3,label:'Demand stability (12-month Keepa)',pts:rt,why:['Spike or decline','Seasonal','Flat','Growing'],structural:true});
+  rows.push({n:4,label:'Opportunity Explorer volume',pts:sv==null?null:(sv<=0?0:sv<15000?1:sv<30000?2:3),why:['Not listed','Under 15k','15–30k','30k+']});
+  let dp=null; if(f.fixable){ dp = f.fixable==='no'?0 : (fc!=null&&fc>15)?1 : (f.sixWords==='no')?2 : (f.sixWords==='yes'?3:null); }
+  rows.push({n:5,label:'Review-driven differentiation',pts:dp,why:['No fixable complaint','Weak or costly fix','Clear fix, hard to state','Clear fix, six words']});
+  rows.push({n:6,label:'Long-tail keywords (300–2,000)',pts:lt==null?null:(lt<5?0:lt<10?1:lt<=15?2:3),why:['Under 5','5–9','10–15','15+']});
+  rows.push({n:7,label:'Price multiple (sell ÷ landed)',pts:e.multiple==null?null:(e.multiple<3?0:e.multiple<3.5?1:e.multiple<=4?2:3),why:['Under 3×','3–3.5×','3.5–4×','Over 4×'],structural:true});
+  rows.push({n:8,label:'Steady-state net margin',pts:e.mS==null?null:(e.mS<25?0:e.mS<30?1:e.mS<=35?2:3),why:['Under 25%','25–30%','30–35%','Over 35%']});
+  rows.push({n:9,label:'Launch fits capital',pts:b==null?null:(b.total>S.budget*1.15?0:b.total>S.budget?1:b.total>S.budget*0.9?2:3),why:['No','With cuts','Just','Comfortably']});
+  let rp=null;
+  if(f.amazonBrand||f.amazonSeller||f.offerTrend||f.bbTrend||t3!=null){
+    const major=(f.amazonBrand==='yes')||(f.amazonSeller==='yes')||(t3!=null&&t3>60);
+    const minors=(f.offerTrend==='climbing'?1:0)+(f.bbTrend==='sliding'?1:0)+((t3!=null&&t3>50&&t3<=60)?1:0);
+    rp = major?0 : minors>=2?1 : minors===1?2 : 3;
+  }
+  rows.push({n:10,label:'Competitive risk',pts:rp,why:['Amazon present or dominant seller','Two concerns','One concern','None'],structural:true});
+  const answered=rows.filter(r=>r.pts!=null).length;
+  const total=rows.reduce((a,r)=>a+(r.pts||0),0);
+  return {rows,total,answered};
+}
+function verdict(sc,gates){
+  if(sc.answered<10) return {cls:'empty',title:`${sc.answered} of 10 scored`,text:'Fill the gates to score every line. The verdict only means something when all ten are in.'};
+  const fails=gates.filter(g=>g.status==='fail').length;
+  if(sc.total>=24 && fails===0) return {cls:'pass',title:'Order samples',text:`${sc.total}/30 with every gate clear. Get three quotes, order samples from two suppliers, and decide the differentiation before the container ships.`};
+  if(sc.total>=24) return {cls:'warn',title:'Strong score, but a gate failed',text:`${sc.total}/30 — yet ${fails} gate${fails>1?'s':''} failed outright. Fix the failing gate or drop it; the score doesn't override a failed gate.`};
+  if(sc.total>=18){
+    const weakStructural=sc.rows.filter(r=>r.structural&&r.pts!=null&&r.pts<=1).map(r=>r.n);
+    if(weakStructural.length) return {cls:'fail',title:'Drop it',text:`${sc.total}/30, and the weak lines are structural (${weakStructural.join(', ')}). Review depth, demand stability, price multiple and competitive risk can't be fixed by trying harder.`};
+    return {cls:'warn',title:'Samples only if you can move the weak lines',text:`${sc.total}/30. The low scores are on lines you can influence (volume, keywords, budget). Improve them or drop it — don't order on hope.`};
+  }
+  return {cls:'fail',title:'Drop it',text:`${sc.total}/30. However much you like it.`};
+}
+
+/* ===================== persistence ===================== */
+const LS_C='gatekeeper.candidates', LS_S='gatekeeper.settings', LS_SEL='gatekeeper.selected';
+function lsGet(k,d){ try{ const v=localStorage.getItem(k); return v?JSON.parse(v):d; }catch(e){ return d; } }
+function lsSet(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} }
+
+function newId(){ return 'c'+Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+
+async function persistCandidate(c){
+  c.updated=Date.now();
+  if(db){
+    clearTimeout(saveTimers[c.id]);
+    saveTimers[c.id]=setTimeout(async()=>{
+      try{ await db.doc('candidates/'+c.id).set(JSON.parse(JSON.stringify(c))); }
+      catch(e){ toast('Could not save: '+(e.code||'error')); }
+    },350);
+  } else { lsSet(LS_C,candidates); }
+}
+async function removeCandidate(id){
+  if(db){ try{ await db.doc('candidates/'+id).delete(); }catch(e){ toast('Could not delete'); } }
+  candidates=candidates.filter(c=>c.id!==id); lsSet(LS_C,candidates);
+  if(selectedId===id){ selectedId=candidates[0]?.id||null; lsSet(LS_SEL,selectedId); }
+  render();
+}
+async function persistSettings(){
+  if(db){ try{ await db.doc('settings/thresholds').set({...settings,updated:Date.now()}); }catch(e){ toast('Could not save thresholds'); } }
+  else lsSet(LS_S,settings);
+}
+
+async function boot(){
+  candidates=lsGet(LS_C,[]); settings={...settings,...lsGet(LS_S,{})}; selectedId=lsGet(LS_SEL,null);
+  if(!candidates.find(c=>c.id===selectedId)) selectedId=candidates[0]?.id||null;
+  render();
+  try{ db = await window.claude?.use?.('db') ?? null; }catch(e){ db=null; }
+  if(!db){ storeMode='local'; render(); return; }
+  storeMode='db';
+  unsubS = db.doc('settings/thresholds').onSnapshot(snap=>{
+    if(snap.exists){ const d=snap.data(); SETTINGS_DEF.forEach(s=>{ if(typeof d[s.k]==='number') settings[s.k]=d[s.k]; }); }
+    render();
+  }, err=>{ storeMode='local'; render(); });
+  unsubC = db.collection('candidates').orderBy('created','asc').onSnapshot(snap=>{
+    candidates = snap.docs.map(d=>({...d.data(), id:d.id}));
+    if(!candidates.find(c=>c.id===selectedId)) selectedId=candidates[0]?.id||null;
+    render();
+  }, err=>{ storeMode='local'; candidates=lsGet(LS_C,[]); render(); });
+}
+
+/* ===================== rendering ===================== */
+const $=s=>document.querySelector(s);
+function esc(s){ return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+let toastT; function toast(m){ const t=$('#toast'); t.textContent=m; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),2200); }
+
+function current(){ return candidates.find(c=>c.id===selectedId)||null; }
+
+function evaluate(c){
+  const f=c.f||{}; const cat=c.category||'Everything else';
+  const gates=GATES.map(g=>{ const rows=gateChecks(g,f,settings,cat); return {g,rows,status:gateStatus(rows)}; });
+  const sc=scorecard(f,settings,cat);
+  return {gates,sc,v:verdict(sc,gates),passed:gates.filter(x=>x.status==='pass').length};
+}
+
+function render(){ renderList(); renderSettings(); renderMain(); renderSummary(); }
+
+function renderList(){
+  const el=$('#clist');
+  if(!candidates.length){ el.innerHTML='<div class="note">No candidates yet. Add one to start scoring.</div>'; return; }
+  el.innerHTML=candidates.map(c=>{
+    const ev=evaluate(c);
+    return `<button class="citem ${c.id===selectedId?'on':''}" data-id="${c.id}">
+      <span class="dot" style="color:var(--${ev.v.cls})"></span>
+      <span class="nm">${esc(c.name||'Untitled')}</span>
+      ${c.example?'<span class="tag">example</span>':''}
+      <span class="sc">${ev.sc.answered===10?ev.sc.total:ev.sc.answered+'/10'}</span></button>`;
+  }).join('');
+  el.querySelectorAll('.citem').forEach(b=>b.onclick=()=>{ selectedId=b.dataset.id; lsSet(LS_SEL,selectedId); pendingDelete=null; render(); });
+}
+
+function renderSettings(){
+  const el=$('#settings');
+  if(!el.dataset.built){
+    el.innerHTML=SETTINGS_DEF.map(s=>`<label for="set_${s.k}">${s.label} <span class="num" style="color:var(--muted)">${s.unit}</span></label><input id="set_${s.k}" type="number" step="any" data-k="${s.k}">`).join('');
+    el.querySelectorAll('input').forEach(i=>i.onchange=()=>{ const v=num(i.value); if(v!=null){ settings[i.dataset.k]=v; persistSettings(); render(); } });
+    el.dataset.built='1';
+  }
+  SETTINGS_DEF.forEach(s=>{ const i=el.querySelector('#set_'+s.k); if(document.activeElement!==i) i.value=settings[s.k]; });
+  const st=$('#store');
+  st.innerHTML = storeMode==='db' ? '<span class="dot" style="color:var(--pass)"></span> Saved to this artifact — follows you across devices'
+    : storeMode==='local' ? '<span class="dot" style="color:var(--warn)"></span> Saving on this device only'
+    : '<span class="dot" style="color:var(--empty)"></span> Connecting…';
+}
+
+function renderSummary(){
+  const c=current(); const el=$('#summary');
+  if(!c){ el.innerHTML=''; return; }
+  const ev=evaluate(c);
+  el.innerHTML=`<div class="stat"><span class="v num">${ev.passed}<small>/8</small></span><span class="l">gates clear</span></div>
+    <div class="stat"><span class="v num">${ev.sc.answered===10?ev.sc.total:'–'}<small>/30</small></span><span class="l">score</span></div>
+    <span class="pill big ${ev.v.cls}"><span class="dot"></span>${esc(ev.v.title)}</span>`;
+}
+
+function renderMain(){
+  const c=current(); const m=$('#main');
+  if(!c){
+    m.innerHTML=`<div class="card empty-state"><h2>Score a product against the nine gates</h2><p>Add a candidate on the left. Each gate ticks pass, warn or fail as you type, and the scorecard totals to a verdict.</p><button class="btn primary" id="addBtn2" style="margin-top:12px">+ New candidate</button></div>`;
+    $('#addBtn2').onclick=addCandidate; return;
+  }
+  const f=c.f||{}; const ev=evaluate(c);
+  let html=`<div class="card cand-head">
+    <div class="field"><label for="c_name">Product</label><div class="in"><input class="text" id="c_name" data-meta="name" value="${esc(c.name)}" placeholder="Working name"></div></div>
+    <div class="field"><label for="c_niche">Niche / head term</label><div class="in"><input class="text" id="c_niche" data-meta="niche" value="${esc(c.niche)}" placeholder="e.g. weekly pill organiser"></div></div>
+    <div class="field"><label for="c_asin">Reference ASIN</label><div class="in"><input class="text" id="c_asin" data-meta="asin" value="${esc(c.asin)}" placeholder="Top competitor"></div></div>
+    <div class="field"><label for="c_cat">Amazon category (sets referral fee)</label><div class="in"><select id="c_cat" data-meta="category">${REFERRAL.map(r=>`<option value="${esc(r[0])}" ${(c.category||'Everything else')===r[0]?'selected':''}>${esc(r[0])} — ${r[1].map(b=>b[1]+'%').filter((v,i,a)=>a.indexOf(v)===i).join('/')}</option>`).join('')}</select></div></div>
+  </div>`;
+
+  ev.gates.forEach(({g,rows,status})=>{
+    const open=openGates.has(g.id);
+    html+=`<section class="card gate ${status} ${open?'open':''}" data-gate="${g.id}">
+      <div class="gate-h" role="button" tabindex="0" aria-expanded="${open}">
+        <span class="n">${g.n}</span><h2>${esc(g.title)}</h2><span class="tool">${esc(g.tool)}</span>
+        <span class="pill ${status}"><span class="dot"></span>${status==='empty'?'Not scored':status==='pass'?'Pass':status==='warn'?'Check':'Fail'}</span>
+        <svg class="chev" width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M5 3l4 4-4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="gate-b">
+        <p class="blurb">${esc(g.blurb)}</p>
+        <div class="fgrid">${g.fields.map(fd=>fieldHtml(fd,f)).join('')}</div>
+        ${g.id==='g6'?readoutsEcon(f,c.category):''}${g.id==='g7'?readoutsBudget(f):''}
+        <div class="checks">${rows.map(r=>`<div class="chk ${r.status}"><span class="ic">${r.status==='pass'?'✓':r.status==='fail'?'✕':r.status==='warn'?'!':'·'}</span><span>${esc(r.label)}</span><span class="d">${esc(r.detail)}</span></div>`).join('')}</div>
+      </div></section>`;
+  });
+
+  const sc=ev.sc;
+  html+=`<section class="card score">
+    <div class="score-h"><h2>Scorecard</h2><span class="pill ${sc.answered===10?'pass':'empty'}">${sc.answered}/10 lines scored</span>
+      <div class="total"><b class="num">${sc.answered===10?sc.total:'–'}</b><span>/ 30</span></div></div>
+    <div class="bar"><i style="width:${sc.total/30*100}%"></i><span class="m" style="left:60%"></span><span class="m" style="left:80%"></span></div>
+    <div class="tablewrap"><table class="stable"><thead><tr><th>#</th><th>Criterion</th><th>Pts</th><th>Reads as</th><th></th></tr></thead><tbody>
+    ${sc.rows.map(r=>`<tr><td class="num" style="color:var(--muted)">${r.n}</td><td>${esc(r.label)}</td><td class="pts"><b class="${r.pts==null?'pe':'p'+r.pts}">${r.pts==null?'–':r.pts}</b></td><td class="why">${r.pts==null?'Not scored':esc(r.why[r.pts])}</td><td class="struct">${r.structural?'structural':''}</td></tr>`).join('')}
+    </tbody></table></div>
+    <div class="verdict ${ev.v.cls}"><div><b>${esc(ev.v.title)}</b><p>${esc(ev.v.text)}</p></div></div>
+    <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;align-items:center">
+      ${pendingDelete===c.id
+        ? `<div class="confirm">Delete “${esc(c.name||'Untitled')}”? <button class="btn sm danger" id="delYes">Delete</button><button class="btn sm" id="delNo">Keep</button></div>`
+        : `<button class="btn sm danger" id="delBtn">Delete candidate</button>`}
+      <button class="btn sm" id="dupBtn">Duplicate</button>
+      <span style="font-size:11.5px;color:var(--muted);margin-left:auto">24–30 order samples · 18–23 only if weak lines are movable · under 18 drop</span>
+    </div>
+  </section>`;
+  m.innerHTML=html;
+  bindMain(c);
+}
+
+function fieldHtml(fd,f){
+  const v=f[fd.k]; const id='f_'+fd.k;
+  let ctl='';
+  if(fd.type==='num'){
+    const unitL = fd.unit==='£' ? `<span class="u">£</span>` : '';
+    const unitR = (fd.unit&&fd.unit!=='£') ? `<span class="u r">${esc(fd.unit)}</span>` : '';
+    ctl=`<div class="in">${unitL}<input type="number" inputmode="decimal" step="${fd.step||'any'}" id="${id}" data-k="${fd.k}" value="${v==null?'':esc(v)}">${unitR}</div>`;
+  } else if(fd.type==='sel'){
+    ctl=`<div class="in"><select id="${id}" data-k="${fd.k}">${fd.opts.map(([ov,ol])=>`<option value="${ov}" ${String(v??'')===String(ov)?'selected':''}>${esc(ol)}</option>`).join('')}</select></div>`;
+  } else {
+    ctl=`<div class="seg" id="${id}" data-k="${fd.k}" role="group" aria-label="${esc(fd.label)}">${YN.map(([ov,ol])=>`<button type="button" data-v="${ov}" class="${v===ov?'on '+ov:''}">${ol}</button>`).join('')}</div>`;
+  }
+  return `<div class="field"><label for="${id}">${esc(fd.label)}</label>${ctl}${fd.hint?`<span class="hint">${esc(fd.hint)}</span>`:''}</div>`;
+}
+function readoutsEcon(f,cat){
+  const e=econ(f,settings,cat); const S=settings;
+  const cls=(v,ok,w)=>v==null?'':(v>=ok?'pass':v>=w?'warn':'fail');
+  if(!e) return `<div class="note">Enter a sell price in Gate 0 to see the economics.</div>`;
+  const t=e.tier;
+  const tierLine = e.fbaSource==='override' ? 'Your override' : !t ? 'Enter L × W × H and weight in Gate 0' : t.fee==null ? 'Too large for standard FBA tiers' : `${t.name}${t.band?' · ≤'+(t.band[0]>=1000?(t.band[0]/1000)+' kg':t.band[0]+' g'):''}`;
+  const dimNote = t&&t.tier&&t.tier.useDim ? ` · ships as ${(t.shipG/1000).toFixed(2)} kg${t.dimG>num(f.weight)?' (dimensional)':''}` : '';
+  const srcNote = e.fbaSource==='low-price' ? ` · low-price rate (≤ £${e.lowThreshold})` : e.fbaSource==='peak' ? ' · peak rate' : '';
+  const vd=(1+S.vat/100)*(1+(S.dst||0)/100);
+  return `<div class="readouts">
+    <div class="ro"><span class="l">FBA size tier</span><span class="v small">${esc(tierLine)}</span><span class="s">${esc(dimNote.replace(/^ · /,''))}${srcNote?esc(srcNote):''}</span></div>
+    <div class="ro"><span class="l">FBA fee</span><span class="v">${money(e.fbaV)}</span><span class="s">${e.fbaBase==null?'':money(e.fbaBase)+' + VAT + DSF'}</span></div>
+    <div class="ro"><span class="l">Referral fee</span><span class="v">${money(e.referral)}</span><span class="s">${e.pct}% of ${money(e.sell)} + VAT + DSF</span></div>
+    <div class="ro"><span class="l">Storage</span><span class="v">${money(e.storage)}</span><span class="s">${e.storage==null?'needs dimensions':S.storageMonths+' mo × £'+(S.q4>=1?RATES.storageCuFt.q4:RATES.storageCuFt.std)+'/cu ft'}</span></div>
+    <div class="ro"><span class="l">Inbound, prep, returns</span><span class="v">${money(e.inbound+e.prep+e.returns)}</span><span class="s">${money(e.inbound)} + ${money(e.prep)} + ${S.returnsPct}% returns</span></div>
+    <div class="ro"><span class="l">Amazon's total take</span><span class="v">${money(e.amazonTake)}</span><span class="s">${e.amazonTake==null?'':(e.amazonTake/e.sell*100).toFixed(1)+'% of price'}</span></div>
+    <div class="ro"><span class="l">Multiple</span><span class="v ${cls(e.multiple,S.minMultiple,3)}">${e.multiple==null?'—':e.multiple.toFixed(2)+'×'}</span><span class="s">sell ÷ landed</span></div>
+    <div class="ro"><span class="l">Profit, launch</span><span class="v ${cls(e.mL,S.minLaunchMargin,S.minLaunchMargin-5)}">${money(e.pL)}</span><span class="s">${pct(e.mL)} margin, ads in</span></div>
+    <div class="ro"><span class="l">Profit, steady</span><span class="v ${cls(e.mS,S.minSteadyMargin,S.minSteadyMargin-5)}">${money(e.pS)}</span><span class="s">${pct(e.mS)} margin</span></div>
+  </div>`;
+}
+function readoutsBudget(f){
+  const b=budget(f,settings); const S=settings;
+  if(!b) return `<div class="note">Enter the launch lines to total the launch.</div>`;
+  const cls=b.total<=S.budget?'pass':b.total<=S.budget*1.15?'warn':'fail';
+  return `<div class="readouts">
+    <div class="ro"><span class="l">Stock</span><span class="v">${money(b.stock)}</span><span class="s">units × landed</span></div>
+    <div class="ro"><span class="l">Subtotal</span><span class="v">${money(b.sub)}</span></div>
+    <div class="ro"><span class="l">10% buffer</span><span class="v">${money(b.buffer)}</span></div>
+    <div class="ro"><span class="l">Whole launch</span><span class="v ${cls}">${money(b.total)}</span><span class="s">${(b.ratio*100).toFixed(0)}% of ${money(S.budget)}</span></div>
+  </div>`;
+}
+
+function bindMain(c){
+  const m=$('#main');
+  m.querySelectorAll('.gate-h').forEach(h=>{
+    const toggle=()=>{ const id=h.closest('.gate').dataset.gate; openGates.has(id)?openGates.delete(id):openGates.add(id); renderMain(); };
+    h.onclick=toggle; h.onkeydown=e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); toggle(); } };
+  });
+  m.querySelectorAll('input[data-meta],select[data-meta]').forEach(i=>i.oninput=()=>{ c[i.dataset.meta]=i.value; persistCandidate(c); if(i.dataset.meta==='category') refresh(c); else { renderList(); if(i.dataset.meta==='name') renderSummary(); } });
+  m.querySelectorAll('input[data-k],select[data-k]').forEach(i=>i.oninput=()=>{ c.f=c.f||{}; c.f[i.dataset.k]=i.value; persistCandidate(c); refresh(c); });
+  m.querySelectorAll('.seg').forEach(s=>s.querySelectorAll('button').forEach(b=>b.onclick=()=>{ c.f=c.f||{}; c.f[s.dataset.k]=b.dataset.v; persistCandidate(c); s.querySelectorAll('button').forEach(x=>x.className=''); b.className='on '+b.dataset.v; refresh(c); }));
+  const del=$('#delBtn'); if(del) del.onclick=()=>{ pendingDelete=c.id; renderMain(); };
+  const dy=$('#delYes'); if(dy) dy.onclick=()=>{ pendingDelete=null; removeCandidate(c.id); };
+  const dn=$('#delNo'); if(dn) dn.onclick=()=>{ pendingDelete=null; renderMain(); };
+  $('#dupBtn').onclick=()=>{ const d=JSON.parse(JSON.stringify(c)); d.id=newId(); d.name=(c.name||'Untitled')+' (copy)'; d.example=false; d.created=Date.now(); candidates.push(d); selectedId=d.id; lsSet(LS_SEL,selectedId); persistCandidate(d); render(); toast('Duplicated'); };
+}
+/* refresh statuses without rebuilding inputs (keeps focus) */
+function refresh(c){
+  const ev=evaluate(c);
+  ev.gates.forEach(({g,rows,status})=>{
+    const sec=$(`.gate[data-gate="${g.id}"]`); if(!sec) return;
+    sec.classList.remove('pass','warn','fail','empty'); sec.classList.add(status);
+    const pill=sec.querySelector('.gate-h .pill'); pill.className='pill '+status; pill.innerHTML=`<span class="dot"></span>${status==='empty'?'Not scored':status==='pass'?'Pass':status==='warn'?'Check':'Fail'}`;
+    const ck=sec.querySelector('.checks'); if(ck) ck.innerHTML=rows.map(r=>`<div class="chk ${r.status}"><span class="ic">${r.status==='pass'?'✓':r.status==='fail'?'✕':r.status==='warn'?'!':'·'}</span><span>${esc(r.label)}</span><span class="d">${esc(r.detail)}</span></div>`).join('');
+    if(g.id==='g6'||g.id==='g7'){ const old=sec.querySelector('.readouts,.note'); if(old){ const t=document.createElement('div'); t.innerHTML=g.id==='g6'?readoutsEcon(c.f||{},c.category):readoutsBudget(c.f||{}); old.replaceWith(t.firstElementChild); } }
+  });
+  const sc=ev.sc;
+  const score=$('.score'); if(score){
+    score.querySelector('.score-h .pill').className='pill '+(sc.answered===10?'pass':'empty'); score.querySelector('.score-h .pill').textContent=sc.answered+'/10 lines scored';
+    score.querySelector('.total b').textContent=sc.answered===10?sc.total:'–';
+    score.querySelector('.bar i').style.width=(sc.total/30*100)+'%';
+    const tb=score.querySelectorAll('tbody tr'); sc.rows.forEach((r,i)=>{ const tr=tb[i]; if(!tr) return; tr.querySelector('.pts b').className=r.pts==null?'pe':'p'+r.pts; tr.querySelector('.pts b').textContent=r.pts==null?'–':r.pts; tr.querySelector('.why').textContent=r.pts==null?'Not scored':r.why[r.pts]; });
+    const v=score.querySelector('.verdict'); v.className='verdict '+ev.v.cls; v.querySelector('b').textContent=ev.v.title; v.querySelector('p').textContent=ev.v.text;
+  }
+  renderSummary(); renderList();
+}
+
+function addCandidate(){
+  const c={id:newId(),name:'',niche:'',asin:'',created:Date.now(),updated:Date.now(),example:false,f:{}};
+  candidates.push(c); selectedId=c.id; lsSet(LS_SEL,selectedId); openGates=new Set(['g0']);
+  persistCandidate(c); render();
+  const n=$('#c_name'); if(n) n.focus();
+}
+$('#addBtn').onclick=addCandidate;
+
+boot();
+</script>

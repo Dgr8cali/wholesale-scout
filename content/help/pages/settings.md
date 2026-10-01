@@ -7,7 +7,7 @@ order: 12
 ---
 Settings is where you decide how products are screened: which gates run and how strict they are, how the 0–100 score is built, and how fees and landed cost are worked out. It also holds the lists shared by every profile: compliance rules, the rate card, your waivers and your IP-risk brands.
 
-The page has seven tabs: **Gates**, **Score**, **Fees**, **Profiles**, **Waived**, **IP risk** and **Filter sets**. You can open a tab directly with `?tab=`, for example `/settings?tab=ip` (the Brands page links there).
+The page has eight tabs: **Gates**, **Score**, **Fees**, **Profiles**, **Waived**, **IP risk**, **Filter sets** and **Private label**. You can open a tab directly with `?tab=`, for example `/settings?tab=ip` (the Brands page links there).
 
 ## The profile bar
 
@@ -129,3 +129,7 @@ Shared by every profile. It holds Amazon's size tiers, FBA fees, storage and ref
 ## Filter sets tab
 
 Filter sets are saved from a run's filter bar with **Save current filters…** and applied from **Saved filters** on any run or on [Favourites](/help/pages/favourites). This tab lists them with their filters as chips; the bin icon deletes one for every run.
+
+## Private label tab
+
+Gatekeeper's thresholds and cost assumptions for [Private label](/help/pages/private-label), shared by every candidate. They are budget available, VAT rate, digital services fee, inbound shipping per unit, prep per unit, average months in storage, Q4 rates (1 = peak storage rate and the small-parcel peak surcharge), returns allowance, min price multiple, min launch margin, min steady margin and min profit per unit. Each shows Gatekeeper's default. **Save** applies them to every candidate straight away. The fees themselves come from the rate card on the **Fees** tab.

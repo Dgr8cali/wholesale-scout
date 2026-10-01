@@ -1,15 +1,17 @@
 {
   "manifest_version": 3,
   "name": "Wholesale Scout",
-  "version": "0.1.0",
-  "description": "Wholesale Scout's verdict on Amazon UK product and search pages, competitor stock on request, and Seller Central DG look-ups.",
+  "version": "0.2.0",
+  "description": "Wholesale Scout's verdict on Amazon UK product and search pages, competitor stock on request, and Seller Central DG look-ups, and Opportunity Explorer niches sent to Gatekeeper when you click.",
   "action": { "default_popup": "popup.html", "default_title": "Wholesale Scout settings" },
   "background": { "service_worker": "background.js" },
-  "permissions": ["storage"],
+  "permissions": ["storage", "scripting"],
   "host_permissions": ["https://www.amazon.co.uk/*", "https://sellercentral.amazon.co.uk/*"],
-  "optional_host_permissions": ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"],
+  "optional_host_permissions": ["https://*/*", "http://localhost/*", "http://127.0.0.1/*", "https://sellercentral.amazon.com/*", "https://sellercentral.amazon.de/*"],
   "content_scripts": [
     { "matches": ["https://www.amazon.co.uk/*"], "js": ["shared.js", "product.js", "search.js"], "run_at": "document_idle" },
-    { "matches": ["https://sellercentral.amazon.co.uk/*"], "js": ["shared.js", "sellercentral.js"], "run_at": "document_idle" }
+    { "matches": ["https://sellercentral.amazon.co.uk/*"], "js": ["shared.js", "sellercentral.js"], "run_at": "document_idle" },
+    { "matches": ["https://sellercentral.amazon.co.uk/opportunity-explorer/*"], "js": ["poe-page.js"], "world": "MAIN", "run_at": "document_start" },
+    { "matches": ["https://sellercentral.amazon.co.uk/opportunity-explorer/*"], "js": ["shared.js", "poe.js"], "run_at": "document_start" }
   ]
 }

@@ -6,6 +6,7 @@ Wholesale Scout's verdict on Amazon UK, where you browse:
 - **Search results**: a badge on each product with its verdict colour and score, from what the app already knows (nothing is screened, 20 per request). A grey **?** hasn't been checked: click it to check it.
 - **Competitors' stock** (on request, per click): see below.
 - **Dangerous goods**: "Look up" opens Seller Central for the ASIN; a bar there reads the classification and, when you confirm it, saves it to the product in the app. Hazmat counts in the compliance gate the next time the product is screened.
+- **Opportunity Explorer → Gatekeeper** (on request, per click): send a Product Opportunity Explorer niche to the app's Private label page for Gates 3 and 5. See below.
 
 ## Install (load unpacked)
 
@@ -26,6 +27,7 @@ The password is kept in `chrome.storage.local` on this computer only and sent to
 
 - **Check product pages automatically** (on): the panel checks each product page as it opens. A new ASIN becomes a check run in the app (Runs) and can spend a few Keepa tokens; a repeat within 12 hours reuses the last check. Off: the panel shows a **Check** button instead.
 - **Show debug** (off): the stock reader's Debug section; see below.
+- **Opportunity Explorer on .com and .de too** (off): also watch Opportunity Explorer on sellercentral.amazon.com and sellercentral.amazon.de. Saving with it on asks Chrome for access to those two sites.
 - **Seller Central DG page**: the page "Look up" opens, with `{asin}` replaced. The default is Seller Central's product search; if another Seller Central page shows you the dangerous-goods classification, paste its address here.
 
 ## Competitors' stock: read this first
@@ -42,6 +44,14 @@ Each seller shows when it was read ("read 25 Sept 21:14"); a reading over 7 days
 
 Seller Central's pages can't be read reliably, so the bar suggests hazmat / not hazmat / unknown from the page's text ("not dangerous goods" beats a mention of dangerous goods) and shows the words it read. You choose and click **Save to the app**. The look-up is remembered for 15 minutes.
 
+## Opportunity Explorer capture: opt-in, per click
+
+- **What it reads**: `poe-page.js` runs in the page's own world on `sellercentral.amazon.co.uk/opportunity-explorer/*` and wraps `fetch` and `XMLHttpRequest` to *observe* the responses the page already receives: `POST /ox-api/graphql` with operation `getNiche`, and `/insightswidget-api/growth`. It never changes a request or a response, never makes a request of its own, and never reads the page's text or clicks anything. It passes a copy to `poe.js` by `postMessage`.
+- **What it keeps**: the latest niche (and growth) payload, in memory in that tab only. Closing or reloading the tab forgets it.
+- **When it sends**: only when you click **Send to Gatekeeper** in the panel at the bottom right, which appears only once a niche has been captured. Nothing is scheduled and nothing is sent automatically. The panel's **Dismiss** hides it.
+- **Where it goes**: `POST /api/pl/poe` on your app with `{ nicheId, title, raw }` and your password, through `background.js` like every other call. The app stores the capture, reads Gate 3 (search volume, growth, products, top-3 click share, conversion, units per product) and Gate 5 (head-term volume, long-tail count) from it, and attaches it to the candidate whose niche keyword is the niche's title. Otherwise the panel lists your candidates and **Attach** sends it to the one you pick (`/api/pl/poe/attach`).
+- **Markets**: `.co.uk` only by default. `.com` and `.de` are optional permissions, registered only while the popup option is on.
+
 ## Limits
 
 The app allows the extension 60 checks and 120 other requests a minute from one address; past that it answers 429 with the time to try again. Ten wrong passwords in 15 minutes block the address for 15 minutes.
@@ -55,6 +65,8 @@ The app allows the extension 60 checks and 120 other requests a minute from one 
 | `product.js` | The product-page panel, competitor stock |
 | `search.js` | Search-results badges |
 | `sellercentral.js` | The DG reading bar on Seller Central |
+| `poe-page.js` | Opportunity Explorer, page world: observes the niche and growth responses the page receives |
+| `poe.js` | Opportunity Explorer panel: Send to Gatekeeper, and the candidate picker |
 | `popup.html`, `popup.js` | Settings and the connection test |
 
-The app's endpoints are under `/api/extension/`: `check`, `lookup`, `star`, `watch`, `stock`, `dg` and `ping`.
+The app's endpoints are under `/api/extension/`: `check`, `lookup`, `star`, `watch`, `stock`, `dg` and `ping`; Opportunity Explorer captures go to `/api/pl/poe` and `/api/pl/poe/attach`.

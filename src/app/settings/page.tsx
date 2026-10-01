@@ -3,7 +3,8 @@
 import { useSearchParams } from "next/navigation";
 import { IpRiskTab } from "@/components/settings/IpRiskTab";
 import { CategoryRanks } from "@/components/settings/CategoryRanks";
-import { FilterIcon, GaugeIcon, ReceiptIcon, ShieldAlertIcon, ShieldCheckIcon, SlidersHorizontalIcon, Trash2Icon, UndoIcon } from "lucide-react";
+import { PlSettingsTab } from "@/components/settings/PlSettingsTab";
+import { FilterIcon, GaugeIcon, ReceiptIcon, ShieldAlertIcon, ShieldCheckIcon, SlidersHorizontalIcon, TagIcon, Trash2Icon, UndoIcon } from "lucide-react";
 import { Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { activeChips, normalizeFilters, type FilterSet } from "@/lib/filters";
 import type { RateCard } from "@/lib/fees/rateCard";
@@ -81,7 +82,7 @@ function ModeSelect({ value, onChange, allowOff = true }: { value: GateMode; onC
 }
 
 type ProfileTab = "gates" | "score" | "fees" | "profiles";
-const TABS: { id: ProfileTab | "waived" | "filters" | "ip"; label: string; icon: ReactNode }[] = [
+const TABS: { id: ProfileTab | "waived" | "filters" | "ip" | "pl"; label: string; icon: ReactNode }[] = [
   { id: "gates", label: "Gates", icon: <ShieldCheckIcon /> },
   { id: "score", label: "Score", icon: <GaugeIcon /> },
   { id: "fees", label: "Fees", icon: <ReceiptIcon /> },
@@ -89,6 +90,7 @@ const TABS: { id: ProfileTab | "waived" | "filters" | "ip"; label: string; icon:
   { id: "waived", label: "Waived", icon: <UndoIcon /> },
   { id: "ip", label: "IP risk", icon: <ShieldAlertIcon /> },
   { id: "filters", label: "Filter sets", icon: <FilterIcon /> },
+  { id: "pl", label: "Private label", icon: <TagIcon /> },
 ];
 
 /** A settings block: a titled card with an optional note and actions. */
@@ -124,7 +126,7 @@ function Settings() {
     <div className="space-y-5">
       <div>
         <h1 className="page-title">Settings</h1>
-        <p className="text-sm text-muted-foreground">Screening profiles (gates, score and fees), shared rules and rate card, waived gates and saved filter sets.</p>
+        <p className="text-sm text-muted-foreground">Screening profiles (gates, score and fees), shared rules and rate card, waived gates, saved filter sets and the private-label thresholds.</p>
       </div>
       <Tabs value={tab} onValueChange={setTab} className="gap-5">
         <TabsList variant="line" className="w-full justify-start overflow-x-auto border-b">
@@ -138,6 +140,7 @@ function Settings() {
         <TabsContent value="waived"><Waived /></TabsContent>
         <TabsContent value="ip"><IpRiskTab /></TabsContent>
         <TabsContent value="filters"><FilterSets /></TabsContent>
+        <TabsContent value="pl"><PlSettingsTab /></TabsContent>
       </Tabs>
     </div>
   );

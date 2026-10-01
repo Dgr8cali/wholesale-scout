@@ -1,0 +1,111 @@
+---
+title: "Private label: how Gatekeeper works"
+summary: Should ~£1,000 launch your own product into a niche? Eight gates, a 10-line scorecard and a verdict, with Keepa and Opportunity Explorer filling most of the numbers.
+synonyms: [gatekeeper, private label, pl, own brand, product launch, niche research, opportunity explorer, poe, scorecard, launch budget]
+route: /private-label
+order: 7
+---
+Private label answers one question: should you spend about £1,000 launching your own product into this niche? It is Gatekeeper, moved into Wholesale Scout. A candidate must clear **every gate** and **score well**. A good score never overrides a failed gate.
+
+You used to type about 45 numbers per candidate from Jungle Scout, Keepa and Seller Central. Here Keepa and the Chrome extension fill most of them. Jungle Scout isn't used.
+
+## The page
+
+- **Candidates** (left): each candidate with a dot in its verdict colour, its score (or how many of the 10 lines are scored, e.g. `6/10`), its status (draft, researching, samples, dropped, launched) and when Keepa last refreshed it.
+- **The workspace** (right): the selected candidate's header, the eight gates in order, the scorecard and the verdict.
+- **New candidate** asks for a name, a niche keyword, a referral category and up to ten ASINs from page one of the niche. Paste them one per line or comma-separated. The first is the **reference listing**. Keepa is fetched when you save.
+
+In the header you can rename the candidate and change its niche keyword, referral category and status. **Edit** changes the ASIN list; saving it refreshes from Keepa. **Refresh from Keepa** fetches again (see [What it costs](#what-it-costs)). The header also shows how many gates are clear, the score out of 30 and the verdict.
+
+## Where each number comes from
+
+Every field filled automatically shows a small chip:
+
+| Chip | Meaning |
+|---|---|
+| **Keepa** | Filled from Keepa when you saved or refreshed. |
+| **POE** | Filled from an Opportunity Explorer niche you sent with the extension. |
+| **Fees** | Worked out from the rate card (Gate 6's fee readouts). |
+| **Manual** | Typed by you. |
+
+An automatic field is read-only, with the figures it came from underneath it. Click **edit** to make it yours: it becomes **Manual**, and no refresh or capture will overwrite it. Clear a manual field to hand it back: the next refresh or capture fills it again.
+
+### Gate 0: Your filter (Keepa, then you)
+
+- **Sell price**: the median page-one price. A listing's price is its Buy Box price, or its lowest new offer when the Buy Box wasn't fetched.
+- **Packed weight, length, width, height**: the reference listing's package from Keepa. Overwrite them with your own product's if they differ.
+- **Landed cost** is yours to type. So are seasonal, avoid category, simple and differentiable.
+
+### Gate 1: Find the market (Keepa, every ASIN)
+
+| Field | How it's filled |
+|---|---|
+| Reviews on page one | From the review counts: most over 1,000; else most 500 or more; else, when two or more listings under 200 reviews each sell 150+ a month, "several under 200 selling well"; else "most 200–500". "Most" means more than half. |
+| Average rating | The mean of the listings' star ratings. |
+| Top-10 monthly sales, each | The median of the listings' sales a month. A listing's sales follow the wholesale rule: a fast seller (90-day average rank under 5,000) uses Amazon's bought-in-past-month, because rank drops undercount it. Otherwise it's the highest of rank drops (90-day ÷ 3), Keepa's 30-day drops and bought-in-past-month. |
+| Top 3 revenue share | The top three listings' share of the listings' summed monthly sales. With three ASINs or fewer this is always 100%, so add more. |
+| Amazon-brand in top 10 | Yes when any listing's brand is one of Amazon's own (Amazon Basics, Amazon Essentials, Solimo, Presto!, Umi, Eono, Amazon Aware, Happy Belly, Wag, Pinzon, Rivet, Stone & Beam). |
+| Price spread holds £18–35 | Yes when 70% or more of the prices sit within the band widened by 20% (£14.40–£42.00). |
+
+### Gate 2: Validate history (Keepa, the reference listing)
+
+| Field | How it's filled |
+|---|---|
+| Sales rank, 12 months | The year's rank in twelve 30-day months. A month over 5× the median is left out (out of stock, or before it sold). One month far better than the rest is a **spike**. Months that swing widely with no straight-line trend are **seasonal**. A last-three-months rank over 1.5× the first three's is a **decline**; under 0.67× is **growing**. Anything else is **flat**. The figures show under the field. |
+| Rank drops / month | Keepa's 90-day rank-drop count ÷ 3. |
+| Bought in past month | Amazon's figure, via Keepa. Blank when Amazon doesn't show one. |
+| New offer count | **Climbing** when the last 90 days average 1.5× the first 90 days of the year and at least two more offers. Otherwise **steady**. |
+| Buy Box price | **Sliding** when the last 90 days' median is under 90% of the first 90 days' median. Otherwise **holds**. |
+| Amazon ever a seller | Yes when Keepa's Amazon price history has any offer. |
+
+### Gate 3: Amazon's own data (the extension)
+
+Search volume (360 days), growth, products in the niche, top-3 click share, search conversion and average units per product. These come from an Opportunity Explorer niche you send with the extension (see [Capturing Opportunity Explorer](#capturing-opportunity-explorer)). Growth over +5% is growing, under −5% declining, otherwise flat. Where Opportunity Explorer gives several windows, the 360-day figure is used.
+
+### Gate 4: Mine the reviews (you)
+
+This gate is still by hand. To make the read faster, the gate lists the top five ASINs with their rating, review count and a link to Amazon's **critical reviews** (the 1–3★ ones). Keepa has the rating and review count but not the count per star, so the link is how you get to them.
+
+### Gate 5: Keywords (the extension, then you)
+
+From the same Opportunity Explorer niche: **Head term volume** is the top search term's searches a month, and **Terms with 300–2,000 volume** counts the search terms in that range. The gate lists the niche's top search terms, with the long-tail ones highlighted. Volumes over 90 or 360 days are turned into a month's. Bids and sponsored slots aren't in Opportunity Explorer. Type them from Seller Central's campaign manager.
+
+### Gate 6: Unit economics (the rate card, then you)
+
+Gatekeeper's economics, using the app's rate card (Amazon UK FBA, July 2026: the same card Gatekeeper carried). The FBA fee comes from the size tier and weight band (parcels bill on dimensional weight when it's heavier), with the low-price rate at £20 and under (£10 for Beauty, Health and Personal Care, Office and Grocery). Referral comes from the category. Storage comes from the volume. VAT and the digital services fee are added to referral and FBA. Storage, inbound, prep and returns are added ex-VAT, as Gatekeeper did. You type **landed cost** (Gate 0), **ads per unit at launch** and **ads per unit at steady state**. **FBA fee override** replaces the rate-card fee with Amazon's own figure.
+
+### Gate 7: Launch budget (you)
+
+First order units, samples, inspection, photography, trademark and launch ads. A 10% buffer is added. It must fit your budget.
+
+## Gates, scorecard and verdict
+
+Each check in a gate is **pass**, **warn**, **fail** or empty (not answered yet). A gate takes its worst check. It passes only when every check passes. The thresholds are Gatekeeper's. For example, the sell price passes at £18–35 and warns at £15–40; landed cost passes at 30% of the sell price or less and warns at up to 35%.
+
+The **scorecard** has 10 lines worth 0–3 points each, 30 in all: review depth, demand (rank drops), demand stability, Opportunity Explorer volume, review-driven differentiation, long-tail keywords, price multiple, steady-state margin, launch fits capital and competitive risk. Four lines are **structural**: review depth, demand stability, price multiple and competitive risk. Trying harder can't fix them.
+
+The **verdict** appears once all ten lines are scored:
+
+| Verdict | When |
+|---|---|
+| **Order samples** | 24 or more with no gate failed. |
+| **Strong score, but a gate failed** | 24 or more, but at least one gate failed. Fix the gate or drop it. |
+| **Samples only if you can move the weak lines** | 18–23, and the weak lines (1 point or less) aren't structural. |
+| **Drop it** | 18–23 with a weak structural line, or under 18. |
+
+The thresholds and cost assumptions (budget, VAT, digital services fee, inbound, prep, storage months, Q4 rates, returns, and the Gate 6 floors) are under [Settings → Private label](/help/pages/settings#private-label-tab).
+
+## What it costs
+
+Saving a candidate or clicking **Refresh from Keepa** fetches every ASIN without a snapshot under 7 days old. A snapshot taken for any candidate counts. Fetching costs about 3 tokens for the reference listing, which includes its Buy Box history, and 1 for each other ASIN, plus up to 1 each for the rating and review count. Ten ASINs come to roughly 20 tokens. The tokens are counted on the candidate and in Home's Keepa spend. See [Keepa tokens](/help/concepts/keepa-tokens). The snapshots also go into the wholesale history, so a later run can reuse them.
+
+## Capturing Opportunity Explorer
+
+The extension reads a niche **only when you ask it to**:
+
+1. In Seller Central, open **Growth → Product Opportunity Explorer** and open the niche.
+2. The extension watches the niche data the page itself loads from Amazon. It doesn't read the page's text, click anything or fetch anything on its own.
+3. Once a niche has loaded, a **Wholesale Scout · Gatekeeper** panel appears at the bottom right with **Send to Gatekeeper**. Nothing is sent before you click it. Nothing is scheduled. Closing the tab forgets the capture.
+4. On **Send to Gatekeeper**, the niche goes to the app. If a candidate's niche keyword equals the niche's title (ignoring case and spaces at the ends), it attaches there and fills Gates 3 and 5. Otherwise the panel lists your candidates to pick from.
+
+Only sellercentral.amazon.co.uk is on by default. The popup's **Opportunity Explorer on .com and .de too** option adds the US and German Seller Central. Every capture is kept with the raw data Amazon sent, so a correction to how it's read can be applied later. See [Chrome extension](/help/pages/extension#opportunity-explorer-capture).

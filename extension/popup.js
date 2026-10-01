@@ -1,6 +1,6 @@
 // Settings: the app's URL and password (kept in chrome.storage.local on this computer only),
 // the Seller Central DG page, and a connection test.
-const DEFAULTS = { appUrl: "https://wholesale-scout.vercel.app", password: "", dgUrl: "https://sellercentral.amazon.co.uk/product-search/search?q={asin}", autoCheck: true, showDebug: false };
+const DEFAULTS = { appUrl: "https://wholesale-scout.vercel.app", password: "", dgUrl: "https://sellercentral.amazon.co.uk/product-search/search?q={asin}", autoCheck: true, showDebug: false, poeOtherMarkets: false };
 const $ = (id) => document.getElementById(id);
 const msg = (text, ok) => { $("msg").textContent = text; $("msg").className = ok ? "ok" : "err"; };
 
@@ -10,6 +10,7 @@ chrome.storage.local.get(DEFAULTS, (s) => {
   $("dgUrl").value = s.dgUrl;
   $("autoCheck").checked = s.autoCheck !== false;
   $("showDebug").checked = !!s.showDebug;
+  $("poeOtherMarkets").checked = !!s.poeOtherMarkets;
 });
 
 async function save() {
@@ -18,9 +19,12 @@ async function save() {
   let origin;
   try { origin = new URL(appUrl).origin; } catch { msg("That isn't a URL."); return false; }
   // Calls go from the extension's background, so it needs permission for the app's address.
-  const granted = await chrome.permissions.request({ origins: [`${origin}/*`] });
-  if (!granted) { msg("Allow access to the app's address to connect."); return false; }
-  await chrome.storage.local.set({ appUrl, password: $("password").value, dgUrl: $("dgUrl").value.trim() || DEFAULTS.dgUrl, autoCheck: $("autoCheck").checked, showDebug: $("showDebug").checked });
+  const other = $("poeOtherMarkets").checked;
+  const origins = [`${origin}/*`, ...(other ? ["https://sellercentral.amazon.com/*", "https://sellercentral.amazon.de/*"] : [])];
+  const granted = await chrome.permissions.request({ origins });
+  if (!granted) { msg(other ? "Allow access to the app's address and Seller Central .com/.de, or untick that option." : "Allow access to the app's address to connect."); return false; }
+  await chrome.storage.local.set({ appUrl, password: $("password").value, dgUrl: $("dgUrl").value.trim() || DEFAULTS.dgUrl, autoCheck: $("autoCheck").checked, showDebug: $("showDebug").checked, poeOtherMarkets: other });
+  await new Promise((r) => chrome.runtime.sendMessage({ type: "poeMarkets" }, r));
   $("appUrl").value = appUrl;
   return true;
 }

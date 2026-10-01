@@ -1,0 +1,193 @@
+/**
+ * Product Opportunity Explorer: Gate 3 and Gate 5 from a niche the extension captured (the
+ * getNiche GraphQL response and the growth widget's response, as Seller Central sent them).
+ *
+ * Seller Central's field names aren't documented and can change, so this reads by name pattern
+ * rather than by fixed path: the 360-day figure is preferred where several windows are present,
+ * shares and rates given as fractions become percentages, and volumes over 90 or 360 days become
+ * a month's. The raw payload is kept on the snapshot, so a later fix here can re-read it.
+ */
+
+export interface PoeTerm { term: string; volume: number; click_share: number | null; conversion: number | null }
+
+export interface PoeExtract {
+  niche_title: string | null;
+  niche_id: string | null;
+  search_volume_360: number | null;
+  /** Growth of the 360-day search volume, %. */
+  search_volume_growth: number | null;
+  products_in_niche: number | null;
+  /** Click share of the top 3 products, %. */
+  top3_click_share: number | null;
+  /** Search conversion rate, %. */
+  search_conversion: number | null;
+  /** Average units sold per product, a month. */
+  avg_units_per_product: number | null;
+  /** Monthly search volume per term. */
+  search_terms: PoeTerm[];
+}
+
+type Leaf = { path: string[]; key: string; value: unknown };
+
+function leaves(x: unknown, path: string[] = [], out: Leaf[] = [], depth = 0): Leaf[] {
+  if (depth > 12 || x == null || typeof x !== "object") return out;
+  if (Array.isArray(x)) {
+    x.forEach((v, i) => leaves(v, [...path, String(i)], out, depth + 1));
+    return out;
+  }
+  for (const [k, v] of Object.entries(x as Record<string, unknown>)) {
+    out.push({ path: [...path, k], key: k, value: v });
+    leaves(v, [...path, k], out, depth + 1);
+  }
+  return out;
+}
+
+const toNum = (v: unknown): number | null => {
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string" && /^-?[\d.,]+%?$/.test(v.trim())) {
+    const n = Number(v.replace(/[,%]/g, ""));
+    return Number.isFinite(n) ? n : null;
+  }
+  if (v && typeof v === "object" && "value" in v) return toNum((v as { value: unknown }).value);
+  return null;
+};
+
+/** Fractions (0–1) to %, leaving values already in % alone. */
+const asPct = (n: number | null) => (n == null ? null : Math.abs(n) <= 1 ? n * 100 : n);
+const r1 = (n: number | null) => (n == null ? null : Math.round(n * 10) / 10);
+
+/** Per month from a window named in the key (T360, T90, …). */
+function monthly(key: string, n: number): number {
+  if (/360|365|annual|year/i.test(key)) return n / 12;
+  if (/180/.test(key)) return n / 6;
+  if (/90|quarter/i.test(key)) return n / 3;
+  if (/\b7\b|T7|week/i.test(key)) return (n * 30) / 7;
+  return n;
+}
+
+/**
+ * The first numeric leaf (outside per-term and per-product lists) whose key matches, trying the
+ * patterns in order. Leaves inside arrays belong to rows (terms, products), not to the niche.
+ */
+function pick(ls: Leaf[], patterns: RegExp[]): { key: string; n: number } | null {
+  const niche = ls.filter((l) => !l.path.some((p) => /^\d+$/.test(p)));
+  for (const re of patterns) {
+    for (const l of niche) {
+      const n = toNum(l.value);
+      if (n != null && re.test(l.key)) return { key: l.key, n };
+    }
+  }
+  return null;
+}
+
+function pickString(ls: Leaf[], patterns: RegExp[]): string | null {
+  for (const re of patterns) {
+    const hit = ls.filter((l) => typeof l.value === "string" && re.test(l.key) && (l.value as string).trim())
+      .sort((a, b) => a.path.length - b.path.length)[0];
+    if (hit) return (hit.value as string).trim();
+  }
+  return null;
+}
+
+/** Arrays of objects: the search-term table, and the product list (for top-3 click share). */
+function rowArrays(x: unknown, out: Record<string, unknown>[][] = [], depth = 0): Record<string, unknown>[][] {
+  if (depth > 12 || x == null || typeof x !== "object") return out;
+  if (Array.isArray(x)) {
+    if (x.length && x.every((v) => v && typeof v === "object" && !Array.isArray(v))) out.push(x as Record<string, unknown>[]);
+    for (const v of x) rowArrays(v, out, depth + 1);
+    return out;
+  }
+  for (const v of Object.values(x as Record<string, unknown>)) rowArrays(v, out, depth + 1);
+  return out;
+}
+
+/** A row's value for the first key matching any pattern (in pattern order), with that key. */
+function field(row: Record<string, unknown>, patterns: RegExp[]): { key: string; n: number } | null {
+  const flat = leaves(row).filter((l) => l.path.length <= 2);
+  for (const re of patterns) {
+    for (const l of flat) {
+      const n = toNum(l.value);
+      if (n != null && re.test(l.key)) return { key: l.key, n };
+    }
+  }
+  return null;
+}
+
+const VOLUME = [/searchVolume.*(T360|360)/i, /searchVolume.*(T90|90)/i, /searchVolume/i, /^volume$/i];
+const CLICK = [/clickShare.*(T360|360)/i, /clickShare/i];
+const CONV = [/conversion.*(T360|360)/i, /conversion/i];
+
+function searchTerms(arrays: Record<string, unknown>[][]): PoeTerm[] {
+  const termKey = (row: Record<string, unknown>) => Object.keys(row).find((k) => /^(searchTerm|searchQuery|query|keyword|term)(Text|Name)?$/i.test(k) && typeof row[k] === "string");
+  const table = arrays.filter((a) => a.filter((r) => termKey(r) && field(r, VOLUME)).length >= Math.max(1, a.length / 2))
+    .sort((a, b) => b.length - a.length)[0];
+  if (!table) return [];
+  const out: PoeTerm[] = [];
+  for (const row of table) {
+    const k = termKey(row), v = field(row, VOLUME);
+    if (!k || !v) continue;
+    const cs = field(row, CLICK), cv = field(row, CONV);
+    out.push({ term: String(row[k]).trim(), volume: Math.round(monthly(v.key, v.n)), click_share: r1(asPct(cs?.n ?? null)), conversion: r1(asPct(cv?.n ?? null)) });
+  }
+  return out.sort((a, b) => b.volume - a.volume);
+}
+
+/** Top-3 click share from a product list, when the niche doesn't state it. */
+function top3FromProducts(arrays: Record<string, unknown>[][]): number | null {
+  const products = arrays.filter((a) => a.some((r) => Object.keys(r).some((k) => /asin/i.test(k))) && a.some((r) => field(r, CLICK)))
+    .sort((a, b) => b.length - a.length)[0];
+  if (!products) return null;
+  const shares = products.map((r) => asPct(field(r, CLICK)?.n ?? null)).filter((n): n is number => n != null).sort((a, b) => b - a);
+  return shares.length ? r1(shares.slice(0, 3).reduce((a, b) => a + b, 0)) : null;
+}
+
+export function extractPoe(raw: { niche?: unknown; growth?: unknown } | unknown, hint: { nicheId?: string | null; title?: string | null } = {}): PoeExtract {
+  const body = raw && typeof raw === "object" && ("niche" in raw || "growth" in raw) ? (raw as { niche?: unknown; growth?: unknown }) : { niche: raw };
+  const ls = leaves(body.niche);
+  const gls = leaves(body.growth);
+  const arrays = rowArrays(body.niche);
+
+  const sv = pick(ls, [/searchVolume.*(T360|360)/i, /searchVolume.*(T365|annual|year)/i]);
+  const growth = pick(ls, [/searchVolumeGrowth.*(T360|360)/i, /searchVolumeGrowth/i]) ?? pick(gls, [/growth.*(T360|360)/i, /growth/i]);
+  const products = pick(ls, [/^productCount$/i, /(numberOf|num|total)Products/i, /productsInNiche/i, /productCount/i]);
+  const top3 = pick(ls, [/top_?3.*clickShare/i, /clickShare.*top_?3/i, /topThree.*clickShare/i]);
+  const conv = pick(ls, [/searchConversionRate.*(T360|360)/i, /searchConversionRate/i, /conversionRate/i]);
+  const units = pick(ls, [/(avg|average)UnitsSold.*(T360|360)/i, /(avg|average)UnitsSold/i, /unitsSoldPerProduct/i, /(avg|average)Units/i]);
+
+  const terms = searchTerms(arrays);
+  return {
+    niche_title: hint.title?.trim() || pickString(ls, [/^nicheTitle$/i, /^(niche)?(title|displayName|name)$/i]),
+    niche_id: hint.nicheId || pickString(ls, [/^nicheId$/i, /^id$/i]),
+    search_volume_360: sv ? Math.round(sv.n) : null,
+    search_volume_growth: r1(asPct(growth?.n ?? null)),
+    products_in_niche: products ? Math.round(products.n) : null,
+    top3_click_share: top3 ? r1(asPct(top3.n)) : top3FromProducts(arrays),
+    search_conversion: r1(asPct(conv?.n ?? null)),
+    avg_units_per_product: units ? Math.round(monthly(units.key, units.n)) : null,
+    search_terms: terms,
+  };
+}
+
+/** Gatekeeper's growth select from the 360-day growth %: under −5% declining, over +5% growing. */
+export const growthBand = (g: number | null): "declining" | "flat" | "growing" | null =>
+  g == null ? null : g < -5 ? "declining" : g > 5 ? "growing" : "flat";
+
+/** Gate 3 and the Gate 5 fields Opportunity Explorer carries (bids aren't in it). */
+export function poeFill(x: PoeExtract): Record<string, { value: string; why: string }> {
+  const out: Record<string, { value: string; why: string }> = {};
+  const src = `Opportunity Explorer${x.niche_title ? `: ${x.niche_title}` : ""}`;
+  if (x.search_volume_360 != null) out.sv360 = { value: String(x.search_volume_360), why: src };
+  const g = growthBand(x.search_volume_growth);
+  if (g) out.svGrowth = { value: g, why: `${x.search_volume_growth}% over 360 days (±5% is flat)` };
+  if (x.products_in_niche != null) out.products = { value: String(x.products_in_niche), why: src };
+  if (x.top3_click_share != null) out.clickShare = { value: String(x.top3_click_share), why: src };
+  if (x.search_conversion != null) out.conv = { value: String(x.search_conversion), why: src };
+  if (x.avg_units_per_product != null) out.unitsPer = { value: String(x.avg_units_per_product), why: src };
+  if (x.search_terms.length) {
+    const lt = x.search_terms.filter((t) => t.volume >= 300 && t.volume <= 2000);
+    out.longtail = { value: String(lt.length), why: `${lt.length} of ${x.search_terms.length} search terms with 300–2,000 searches a month` };
+    const head = x.search_terms[0];
+    out.headVol = { value: String(head.volume), why: `"${head.term}", the niche's top search term` };
+  }
+  return out;
+}

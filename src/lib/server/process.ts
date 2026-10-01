@@ -462,7 +462,7 @@ const SNAPSHOT_DAYS = 460;
 
 /** A write refused because the table or column isn't there yet (a migration not yet run). */
 
-async function saveSnapshot(k: KeepaProduct): Promise<void> {
+export async function saveSnapshot(k: KeepaProduct): Promise<void> {
   const since = Date.now() - SNAPSHOT_DAYS * DAY;
   const base = {
     asin: k.asin,

@@ -76,6 +76,13 @@ export interface KeepaProduct {
   summary: KeepaSummary;
   /** Buy Box holder changes: [unix ms, seller id]. */
   buyBoxSellers: [number, string][];
+  /** Star rating and review count today (fetched with rating=1 only; else null or absent). */
+  ratingNow?: number | null;
+  reviewsNow?: number | null;
+  /** Keepa's own count of rank drops in 90 days (stats.salesRankDrops90). */
+  rankDrops90?: number | null;
+  /** The earlier of Amazon's listing date and Keepa's first tracking. */
+  firstSeen?: string | null;
   series: {
     rank: Point[];
     buyBox: Point[];
@@ -163,7 +170,7 @@ export interface KeepaClient {
   readonly name: string;
   /** buyBox: include Buy Box price and seller history (3 tokens a product; 1 without). */
   lookupByEans(eans: string[], onResponse?: OnKeepaResponse, opts?: { buyBox?: boolean }): Promise<KeepaLookup>;
-  lookupByAsins(asins: string[], onResponse?: OnKeepaResponse, opts?: { buyBox?: boolean }): Promise<KeepaLookup>;
+  lookupByAsins(asins: string[], onResponse?: OnKeepaResponse, opts?: { buyBox?: boolean; rating?: boolean }): Promise<KeepaLookup>;
   lookupSellers(sellerIds: string[], onResponse?: OnKeepaResponse): Promise<SellerLookup>;
   /** A seller's storefront ASIN list and profile (10 tokens); null when Keepa doesn't know the seller. */
   storefront?(sellerId: string, onResponse?: OnKeepaResponse): Promise<Storefront | null>;

@@ -1,7 +1,7 @@
 ---
 title: Chrome extension
-summary: Wholesale Scout's verdict on Amazon UK product and search pages, competitor stock on request, and Seller Central dangerous-goods look-ups.
-synonyms: [chrome, browser extension, plugin, add-on, amazon panel, competitor stock, hazmat lookup, dg]
+summary: Wholesale Scout's verdict on Amazon UK product and search pages, competitor stock on request, Seller Central dangerous-goods look-ups, and Opportunity Explorer niches sent to Private label.
+synonyms: [chrome, browser extension, plugin, add-on, amazon panel, competitor stock, hazmat lookup, dg, opportunity explorer, poe, send to gatekeeper]
 order: 13
 ---
 The Chrome extension shows Wholesale Scout's verdict while you browse Amazon UK. A panel on each product page gives the verdict card. Search results get a small badge on each product. The panel can also read competitors' stock (only when you click) and look up the dangerous-goods classification in Seller Central. Everything it checks becomes a normal run in the app.
@@ -124,6 +124,15 @@ On that page a bar appears at the bottom: "Wholesale Scout · DG for B0…:" wit
 - **Dismiss**: closes the bar without saving.
 
 The bar only appears within 15 minutes of clicking **Look up**. The product must have been checked in the app first. For a whole Seller Central report instead of one ASIN at a time, see [Import a DG report](/help/howto/import-a-dg-report).
+
+## Opportunity Explorer capture
+
+On Seller Central's **Product Opportunity Explorer**, the extension can send a niche to [Private label](/help/pages/private-label) for Gates 3 and 5.
+
+- **What it reads.** A script watches the responses the page itself receives from Amazon: the niche data (`/ox-api/graphql`, operation `getNiche`) and the growth widget (`/insightswidget-api/growth`). It doesn't read the page's text, click anything, change any request or fetch anything itself. The latest niche is kept in memory in that tab only.
+- **When it sends.** Only when you click **Send to Gatekeeper** in the panel at the bottom right. The panel appears only after a niche has loaded. Nothing is sent before you click, and nothing is scheduled or repeated. Closing the tab forgets the capture.
+- **Where it goes.** To your app (`/api/pl/poe`) with the extension's password, like every other call. The niche attaches to the candidate whose niche keyword equals its title. Otherwise the panel lists your candidates to pick from and **Attach** sends it there.
+- **Markets.** sellercentral.amazon.co.uk only, unless you tick **Opportunity Explorer on .com and .de too** in the popup. Chrome then asks for access to those two Seller Central sites.
 
 ## Updating the extension
 

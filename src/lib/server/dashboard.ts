@@ -1,4 +1,5 @@
 import "server-only";
+import { plTokensByDay } from "./pl";
 import type { Eta } from "../eta";
 import { dailySpend, ukDay, type TokensByDay } from "../keepaLedger";
 import { db, must } from "./db";
@@ -69,6 +70,10 @@ async function slowTiles(): Promise<Pick<Dashboard, "keepa" | "qogita">> {
       .map((r) => ({ startedAt: r.started_at, tokenCost: Number(r.token_cost) || 0, keepaByDay: r.stats?.keepaByDay })),
     7,
   );
+  // Private-label refreshes have no run: their per-day ledger counts on its days.
+  for (const ledger of await plTokensByDay().catch(() => [])) {
+    for (const d of last7) d.tokens += ledger[d.day] ?? 0;
+  }
   const qogita = await nightlySummaries().catch(() => []);
   return { keepa: { spentToday: last7.at(-1)?.tokens ?? 0, day, last7 }, qogita };
 }

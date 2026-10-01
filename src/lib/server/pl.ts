@@ -1,0 +1,362 @@
+import "server-only";
+import { addDailyTokens, type TokensByDay } from "../keepaLedger";
+import { getKeepa, type KeepaProduct, type OnKeepaResponse, type Point } from "../keepa/client";
+import { rankDrops } from "../keepa/summarize";
+import { isAmazonBrand } from "../pl/amazon-brands";
+import { keepaFill, type Fill, type PlAsin, type PlHistory } from "../pl/fill";
+import { DEFAULT_SETTINGS, FIELD_KEYS, SETTINGS_DEF, type Settings } from "../pl/gatekeeper";
+import { bbTrend, offerTrend, rankTrend } from "../pl/history";
+import { extractPoe, poeFill, type PoeExtract } from "../pl/poe";
+import { activeRateCard, db, must } from "./db";
+import { saveSnapshot } from "./process";
+
+/**
+ * Private label (Gatekeeper) candidates: their page-one ASINs with a Keepa snapshot each, one row
+ * per Gatekeeper field with its source, and Opportunity Explorer captures. Automatic fills (Keepa,
+ * Opportunity Explorer) never overwrite a field you typed.
+ */
+
+const DAY = 86_400_000;
+/** A snapshot this recent is reused instead of asking Keepa again (the wholesale default). */
+const REUSE_MS = 7 * DAY;
+
+export const STATUSES = ["draft", "researching", "samples", "dropped", "launched"] as const;
+export type PlStatus = (typeof STATUSES)[number];
+export type FieldSource = "keepa" | "poe" | "manual" | "fees";
+
+export interface PlCandidate {
+  id: string; name: string; niche_keyword: string | null; category: string; status: PlStatus; notes: string | null;
+  token_cost: number; keepa_by_day: TokensByDay; refreshed_at: string | null; created_at: string; updated_at: string;
+}
+export interface PlField { value: string; source: FieldSource; updated_at: string }
+export interface PoeSnapshot extends Omit<PoeExtract, "niche_id" | "niche_title"> { id: string; candidate_id: string | null; niche_id: string | null; niche_title: string | null; captured_at: string }
+
+const isAsin = (s: string) => /^[A-Z0-9]{10}$/.test(s);
+
+/** ASINs pasted one per line or comma-separated, de-duplicated, first ten. */
+export function parseAsins(text: string): string[] {
+  const all = text.toUpperCase().split(/[\s,;]+/).map((s) => s.trim()).filter(Boolean);
+  const out: string[] = [];
+  for (const a of all) {
+    const m = a.match(/(?:\/DP\/|^)([A-Z0-9]{10})(?:\b|$)/);
+    const asin = m?.[1] ?? a;
+    if (isAsin(asin) && !out.includes(asin)) out.push(asin);
+  }
+  return out.slice(0, 10);
+}
+
+/* ===================== reads ===================== */
+
+const ASIN_COLS = "candidate_id, asin, position, is_reference, title, brand, image, price, rating, review_count, rank, avg_rank_90d, rank_drops_90d, bought_past_month, offer_count, buybox_price, amazon_ever_seller, amazon_brand, dimensions, weight, first_seen, history, snapshot_at";
+const POE_COLS = "id, candidate_id, niche_id, niche_title, captured_at, search_volume_360, search_volume_growth, products_in_niche, top3_click_share, search_conversion, avg_units_per_product, search_terms";
+
+const numOrNull = (v: unknown) => (v == null ? null : Number(v));
+const asinRow = (r: Record<string, unknown>): PlAsin => ({
+  ...(r as unknown as PlAsin),
+  price: numOrNull(r.price), rating: numOrNull(r.rating), buybox_price: numOrNull(r.buybox_price),
+});
+
+export async function plSettings(): Promise<Settings> {
+  const res = await db().from("pl_settings").select("key, value");
+  const rows = (must(res, "private label settings") as { key: string; value: number }[]);
+  const out = { ...DEFAULT_SETTINGS };
+  for (const r of rows) if (r.key in out) out[r.key as keyof Settings] = Number(r.value);
+  return out;
+}
+
+export async function savePlSettings(input: Partial<Record<string, unknown>>): Promise<Settings> {
+  const rows = SETTINGS_DEF.filter((s) => input[s.k] != null && Number.isFinite(Number(input[s.k])))
+    .map((s) => ({ key: s.k, value: Number(input[s.k]), updated_at: new Date().toISOString() }));
+  if (rows.length) must(await db().from("pl_settings").upsert(rows, { onConflict: "key" }), "save settings");
+  return plSettings();
+}
+
+async function fieldsOf(ids: string[]): Promise<Map<string, Record<string, PlField>>> {
+  const out = new Map<string, Record<string, PlField>>(ids.map((id) => [id, {}]));
+  if (!ids.length) return out;
+  const rows = must(await db().from("pl_candidate_fields").select("candidate_id, key, value, source, updated_at").in("candidate_id", ids), "fields") as
+    ({ candidate_id: string; key: string } & PlField)[];
+  for (const r of rows) if (r.value != null) out.get(r.candidate_id)![r.key] = { value: r.value, source: r.source, updated_at: r.updated_at };
+  return out;
+}
+
+/** Every candidate with its fields (the list scores them), newest first. */
+export async function listCandidates() {
+  const [rows, settings, card] = await Promise.all([
+    db().from("pl_candidates").select("*").order("created_at", { ascending: false }),
+    plSettings(),
+    activeRateCard(),
+  ]);
+  const candidates = must(rows, "candidates") as PlCandidate[];
+  const fields = await fieldsOf(candidates.map((c) => c.id));
+  return { candidates: candidates.map((c) => ({ ...c, fields: fields.get(c.id) ?? {} })), settings, card };
+}
+
+export async function getCandidate(id: string) {
+  const d = db();
+  const [c, asins, poe] = await Promise.all([
+    d.from("pl_candidates").select("*").eq("id", id).maybeSingle(),
+    d.from("pl_candidate_asins").select(ASIN_COLS).eq("candidate_id", id).order("position"),
+    d.from("pl_poe_snapshots").select(POE_COLS).eq("candidate_id", id).order("captured_at", { ascending: false }).limit(1),
+  ]);
+  const candidate = must(c, "candidate") as PlCandidate | null;
+  if (!candidate) return null;
+  const list = (must(asins, "asins") as Record<string, unknown>[]).map(asinRow);
+  const latestPoe = ((must(poe, "poe") as PoeSnapshot[])[0]) ?? null;
+  const fields = (await fieldsOf([id])).get(id) ?? {};
+  // Why each automatic value is what it is, worked out again from the stored data.
+  const why: Record<string, string> = {};
+  for (const [k, v] of Object.entries(keepaFill(list))) why[k] = v.why;
+  if (latestPoe) for (const [k, v] of Object.entries(poeFill(latestPoe as unknown as PoeExtract))) why[k] = v.why;
+  return { candidate, fields, asins: list, poe: latestPoe, why };
+}
+
+/* ===================== writes ===================== */
+
+const now = () => new Date().toISOString();
+
+export async function createCandidate(input: { name: string; niche_keyword?: string | null; category?: string | null; asins: string[] }) {
+  const name = input.name?.trim();
+  if (!name) throw new Error("Give the candidate a name");
+  const asins = input.asins.filter(isAsin).slice(0, 10);
+  const row = must(await db().from("pl_candidates").insert({
+    name: name.slice(0, 120),
+    niche_keyword: input.niche_keyword?.trim().slice(0, 200) || null,
+    category: input.category?.trim() || "Everything else",
+    status: asins.length ? "researching" : "draft",
+  }).select("*").single(), "create candidate") as PlCandidate;
+  if (asins.length) {
+    must(await db().from("pl_candidate_asins").insert(asins.map((asin, i) => ({ candidate_id: row.id, asin, position: i + 1, is_reference: i === 0 }))), "add ASINs");
+  }
+  return row;
+}
+
+export async function updateCandidate(id: string, patch: Partial<Pick<PlCandidate, "name" | "niche_keyword" | "category" | "status" | "notes">>) {
+  const upd: Record<string, unknown> = { updated_at: now() };
+  if (patch.name != null) upd.name = String(patch.name).trim().slice(0, 120) || "Untitled";
+  if (patch.niche_keyword !== undefined) upd.niche_keyword = patch.niche_keyword?.trim() || null;
+  if (patch.category != null) upd.category = String(patch.category);
+  if (patch.status != null) {
+    if (!STATUSES.includes(patch.status)) throw new Error(`Status must be one of ${STATUSES.join(", ")}`);
+    upd.status = patch.status;
+  }
+  if (patch.notes !== undefined) upd.notes = patch.notes || null;
+  must(await db().from("pl_candidates").update(upd).eq("id", id), "update candidate");
+}
+
+/** Replace the candidate's ASIN list (the first is the reference); snapshots of kept ASINs stay. */
+export async function setAsins(id: string, asins: string[]) {
+  const list = asins.filter(isAsin).slice(0, 10);
+  const d = db();
+  const cur = must(await d.from("pl_candidate_asins").select("asin").eq("candidate_id", id), "asins") as { asin: string }[];
+  const drop = cur.map((r) => r.asin).filter((a) => !list.includes(a));
+  if (drop.length) must(await d.from("pl_candidate_asins").delete().eq("candidate_id", id).in("asin", drop), "remove ASINs");
+  if (list.length) {
+    // Positions are unique per candidate only by convention; upsert by (candidate, asin).
+    must(await d.from("pl_candidate_asins").upsert(list.map((asin, i) => ({ candidate_id: id, asin, position: i + 1, is_reference: i === 0 })), { onConflict: "candidate_id,asin" }), "save ASINs");
+  }
+}
+
+export async function deleteCandidate(id: string) {
+  must(await db().from("pl_candidates").delete().eq("id", id), "delete candidate");
+}
+
+/** You typed it: a manual row, which no refresh overwrites. An empty value removes the row (automatic fills may then fill it again). */
+export async function setField(id: string, key: string, value: string | null) {
+  if (!FIELD_KEYS.has(key)) throw new Error(`Unknown field ${key}`);
+  const d = db();
+  if (value == null || String(value).trim() === "") must(await d.from("pl_candidate_fields").delete().eq("candidate_id", id).eq("key", key), "clear field");
+  else must(await d.from("pl_candidate_fields").upsert({ candidate_id: id, key, value: String(value).slice(0, 200), source: "manual", updated_at: now() }, { onConflict: "candidate_id,key" }), "save field");
+  must(await d.from("pl_candidates").update({ updated_at: now() }).eq("id", id), "touch candidate");
+}
+
+/** Write automatic values, skipping every field whose row is manual. Returns the keys written. */
+export async function applyAuto(id: string, fill: Fill, source: Exclude<FieldSource, "manual">): Promise<string[]> {
+  const d = db();
+  const manual = new Set((must(await d.from("pl_candidate_fields").select("key").eq("candidate_id", id).eq("source", "manual"), "manual fields") as { key: string }[]).map((r) => r.key));
+  const rows = Object.entries(fill).filter(([k]) => FIELD_KEYS.has(k) && !manual.has(k))
+    .map(([key, v]) => ({ candidate_id: id, key, value: v.value, source, updated_at: now() }));
+  if (rows.length) must(await d.from("pl_candidate_fields").upsert(rows, { onConflict: "candidate_id,key" }), "auto fill");
+  return rows.map((r) => r.key);
+}
+
+/* ===================== Keepa ===================== */
+
+/** The stored snapshot for one ASIN, from a Keepa product. */
+export function snapshotOf(k: KeepaProduct, at = Date.now()) {
+  const s = k.summary;
+  const bb = s.buyBoxFetched !== false;
+  const lastNew = [...k.series.newPrice].reverse().find(([, v]) => Number.isFinite(v) && v > 0)?.[1] ?? null;
+  const rt = rankTrend(k.series.rank, at), ot = offerTrend(k.series.offerCount, at), bt = bb ? bbTrend(k.series.buyBox, at) : null;
+  const history: PlHistory = {
+    rankTrend: rt.value, rankTrendWhy: rt.why,
+    offerTrend: ot.value, offerTrendWhy: ot.why,
+    bbTrend: bt?.value ?? null, bbTrendWhy: bt?.why ?? "Buy Box history not fetched for this listing",
+    keepaRankDrops30: s.keepaRankDrops30 ?? null,
+    buyBoxFetched: bb,
+  };
+  const drops90 = k.rankDrops90 ?? (k.series.rank.length ? rankDrops(k.series.rank, at - 90 * DAY, at) : null);
+  return {
+    title: k.title, brand: k.brand, image: k.imageUrl,
+    price: lastNew, rating: k.ratingNow ?? null, review_count: k.reviewsNow ?? null,
+    rank: s.rankNow, avg_rank_90d: s.avgRank90d, rank_drops_90d: drops90,
+    bought_past_month: s.monthlySold, offer_count: s.offersNow,
+    buybox_price: bb ? s.currentBuyBox : null,
+    amazon_ever_seller: s.amazonLastSeenDays != null,
+    amazon_brand: isAmazonBrand(k.brand),
+    dimensions: k.dimsCm, weight: k.weightG, first_seen: k.firstSeen ?? null,
+    history, snapshot_at: new Date(at).toISOString(),
+  };
+}
+
+type Snapshot = ReturnType<typeof snapshotOf>;
+
+/** The newest snapshot of each ASIN taken for any candidate in the last 7 days. */
+async function recentSnapshots(asins: string[]): Promise<Map<string, Snapshot>> {
+  const out = new Map<string, Snapshot>();
+  if (!asins.length) return out;
+  const since = new Date(Date.now() - REUSE_MS).toISOString();
+  const rows = must(await db().from("pl_candidate_asins").select(ASIN_COLS).in("asin", asins).gte("snapshot_at", since).order("snapshot_at", { ascending: false }), "recent snapshots") as Record<string, unknown>[];
+  for (const r of rows) {
+    const a = r.asin as string;
+    const cur = out.get(a);
+    const h = r.history as PlHistory | null;
+    // A snapshot with the Buy Box history beats a newer one without it.
+    if (!cur || (!cur.history.buyBoxFetched && h?.buyBoxFetched)) {
+      // The snapshot only: not which candidate or position it was taken for.
+      const snap: Record<string, unknown> = { ...asinRow(r) };
+      for (const k of ["candidate_id", "asin", "position", "is_reference"]) delete snap[k];
+      out.set(a, snap as unknown as Snapshot);
+    }
+  }
+  // The trends are worked out again from the stored series (free), so a change to how they're
+  // read applies at once rather than when the snapshot ages out.
+  const at = Date.now();
+  const series = must(await db().from("keepa_snapshots").select("asin, fetched_at, rank_series, offer_count_series, buybox_series, summary").in("asin", [...out.keys()]).gte("fetched_at", since).order("fetched_at", { ascending: false }), "stored series") as
+    { asin: string; rank_series: Point[] | null; offer_count_series: Point[] | null; buybox_series: Point[] | null; summary: { buyBoxFetched?: boolean } | null }[];
+  const done = new Set<string>();
+  for (const r of series) {
+    const snap = out.get(r.asin);
+    if (!snap || done.has(r.asin)) continue;
+    const bb = r.summary?.buyBoxFetched !== false;
+    // Only the series the reused snapshot had: a history-only row can't stand in for a Buy Box one.
+    if (snap.history.buyBoxFetched && !bb) continue;
+    done.add(r.asin);
+    const rt = rankTrend(r.rank_series ?? [], at), ot = offerTrend(r.offer_count_series ?? [], at), bt = bb ? bbTrend(r.buybox_series ?? [], at) : null;
+    snap.history = {
+      ...snap.history,
+      rankTrend: rt.value, rankTrendWhy: rt.why, offerTrend: ot.value, offerTrendWhy: ot.why,
+      ...(bt ? { bbTrend: bt.value, bbTrendWhy: bt.why } : {}),
+    };
+  }
+  return out;
+}
+
+export interface RefreshResult { tokensUsed: number; fetched: string[]; reused: string[]; missing: string[]; filled: string[]; skippedManual: string[]; exhausted: boolean; keepa: boolean }
+
+/**
+ * Keepa for the candidate's ASINs, then the Gate 0, 1 and 2 fill. Snapshots under 7 days old
+ * (from any candidate) are reused. Two stages, as in the wholesale pipeline: the reference listing
+ * with the Buy Box history (3 tokens), the rest history-only (1 token), both with the rating and
+ * review count. Tokens go on the candidate's ledger, which the dashboard counts. Fields you typed
+ * are left alone.
+ */
+export async function refreshCandidate(id: string, opts: { force?: boolean } = {}): Promise<RefreshResult> {
+  const d = db();
+  const rows = (must(await d.from("pl_candidate_asins").select("asin, is_reference").eq("candidate_id", id).order("position"), "asins") as { asin: string; is_reference: boolean }[]);
+  const keepa = getKeepa();
+  const result: RefreshResult = { tokensUsed: 0, fetched: [], reused: [], missing: [], filled: [], skippedManual: [], exhausted: false, keepa: keepa.available };
+  const recent = opts.force ? new Map<string, Snapshot>() : await recentSnapshots(rows.map((r) => r.asin));
+  const snaps = new Map<string, Snapshot>();
+  const needRef: string[] = [], needRest: string[] = [];
+  for (const r of rows) {
+    const s = recent.get(r.asin);
+    if (s && (!r.is_reference || s.history.buyBoxFetched)) { snaps.set(r.asin, s); result.reused.push(r.asin); }
+    else (r.is_reference ? needRef : needRest).push(r.asin);
+  }
+
+  let spent = 0;
+  const onResponse: OnKeepaResponse = (m) => { spent += m.tokensConsumed; };
+  const fetched = new Map<string, KeepaProduct>();
+  if (keepa.available) {
+    try {
+      for (const [list, buyBox] of [[needRef, true], [needRest, false]] as const) {
+        if (!list.length) continue;
+        const res = await keepa.lookupByAsins(list, onResponse, { buyBox, rating: true });
+        for (const [a, k] of res.byAsin) if (k.title || k.series.rank.length) fetched.set(a, k);
+        if (res.exhausted) result.exhausted = true;
+      }
+    } finally {
+      if (spent) {
+        const cur = must(await d.from("pl_candidates").select("token_cost, keepa_by_day").eq("id", id).single(), "ledger") as { token_cost: number; keepa_by_day: TokensByDay };
+        must(await d.from("pl_candidates").update({ token_cost: (cur.token_cost ?? 0) + spent, keepa_by_day: addDailyTokens(cur.keepa_by_day, spent) }).eq("id", id), "ledger");
+      }
+    }
+  }
+  result.tokensUsed = spent;
+  for (const [a, k] of fetched) {
+    snaps.set(a, snapshotOf(k));
+    result.fetched.push(a);
+    // The wholesale pipeline reuses these too.
+    await saveSnapshot(k).catch((e) => console.error(`[pl] keepa snapshot for ${a} not stored: ${(e as Error).message}`));
+  }
+  for (const r of rows) if (!snaps.has(r.asin)) result.missing.push(r.asin);
+  for (const [asin, s] of snaps) must(await d.from("pl_candidate_asins").update(s).eq("candidate_id", id).eq("asin", asin), "save snapshot");
+
+  const asins = (must(await d.from("pl_candidate_asins").select(ASIN_COLS).eq("candidate_id", id).order("position"), "asins") as Record<string, unknown>[]).map(asinRow);
+  const fill = keepaFill(asins);
+  result.filled = await applyAuto(id, fill, "keepa");
+  result.skippedManual = Object.keys(fill).filter((k) => !result.filled.includes(k));
+  must(await d.from("pl_candidates").update({ refreshed_at: now(), updated_at: now() }).eq("id", id), "refreshed");
+  return result;
+}
+
+/* ===================== Opportunity Explorer ===================== */
+
+const norm = (s: string | null | undefined) => (s ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+
+/** Attach a capture to a candidate and fill Gates 3 and 5 from it (never over your own values). */
+export async function attachPoe(snapshotId: string, candidateId: string): Promise<string[]> {
+  const d = db();
+  must(await d.from("pl_poe_snapshots").update({ candidate_id: candidateId }).eq("id", snapshotId), "attach capture");
+  const snap = must(await d.from("pl_poe_snapshots").select(POE_COLS).eq("id", snapshotId).single(), "capture") as PoeSnapshot;
+  const filled = await applyAuto(candidateId, poeFill(snap as unknown as PoeExtract), "poe");
+  must(await d.from("pl_candidates").update({ updated_at: now() }).eq("id", candidateId), "touch candidate");
+  return filled;
+}
+
+/**
+ * A niche the extension captured on Opportunity Explorer: stored with what was read from it, and
+ * attached to the candidate whose niche keyword is the niche's title (any case). Otherwise the
+ * extension shows the candidates to pick from.
+ */
+export async function savePoe(input: { nicheId?: string | null; title?: string | null; raw: unknown }) {
+  if (input.raw == null || typeof input.raw !== "object") throw new Error("Nothing captured to send");
+  const size = JSON.stringify(input.raw).length;
+  if (size > 3_000_000) throw new Error("The capture is too large to store");
+  const x = extractPoe(input.raw, { nicheId: input.nicheId ?? null, title: input.title ?? null });
+  const d = db();
+  const snap = must(await d.from("pl_poe_snapshots").insert({
+    niche_id: x.niche_id, niche_title: x.niche_title, raw: input.raw,
+    search_volume_360: x.search_volume_360, search_volume_growth: x.search_volume_growth, products_in_niche: x.products_in_niche,
+    top3_click_share: x.top3_click_share, search_conversion: x.search_conversion, avg_units_per_product: x.avg_units_per_product,
+    search_terms: x.search_terms,
+  }).select("id").single(), "save capture") as { id: string };
+  const candidates = must(await d.from("pl_candidates").select("id, name, niche_keyword, status").order("updated_at", { ascending: false }), "candidates") as
+    { id: string; name: string; niche_keyword: string | null; status: string }[];
+  const match = x.niche_title ? candidates.find((c) => norm(c.niche_keyword) && norm(c.niche_keyword) === norm(x.niche_title)) : undefined;
+  const filled = match ? await attachPoe(snap.id, match.id) : [];
+  return {
+    snapshotId: snap.id,
+    extracted: x,
+    attached: match ? { id: match.id, name: match.name, filled } : null,
+    candidates: match ? [] : candidates.filter((c) => c.status !== "dropped").map((c) => ({ id: c.id, name: c.name, niche_keyword: c.niche_keyword })),
+  };
+}
+
+/** Tokens spent on private-label refreshes per UK day (for the dashboard's Keepa tile). */
+export async function plTokensByDay(): Promise<TokensByDay[]> {
+  const res = await db().from("pl_candidates").select("keepa_by_day");
+  if (res.error) return []; // before the migration
+  return (res.data as { keepa_by_day: TokensByDay | null }[]).map((r) => r.keepa_by_day ?? {});
+}
