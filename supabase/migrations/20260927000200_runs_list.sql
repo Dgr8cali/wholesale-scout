@@ -16,6 +16,7 @@ returns table (
 )
 language sql
 stable
+set search_path = public, pg_temp
 as $$
   select
     r.id,

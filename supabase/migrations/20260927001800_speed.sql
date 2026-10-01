@@ -16,7 +16,7 @@ create index if not exists offers_seen on offers (supplier_id, seen_at desc);
 create index if not exists brand_products_verdict on brand_products (brand_key, verdict);
 
 -- Every update to a result moves updated_at, whoever writes it.
-create or replace function results_touch() returns trigger language plpgsql as $$
+create or replace function results_touch() returns trigger language plpgsql set search_path = public, pg_temp as $$
 begin
   new.updated_at := now();
   return new;
@@ -28,7 +28,7 @@ create trigger results_touch before update on results for each row execute funct
 -- result and brand row into the app.
 create or replace function supplier_stats(ids uuid[] default null)
 returns table (supplier_id uuid, runs int, products int, pass int, warn int, brands jsonb, last_seen timestamptz)
-language sql stable as $$
+language sql stable set search_path = public, pg_temp as $$
   with o as (
     select id, product_id, supplier_id, seen_at from offers where ids is null or supplier_id = any(ids)
   ),

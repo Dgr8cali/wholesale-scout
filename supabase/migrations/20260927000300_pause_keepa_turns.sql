@@ -11,6 +11,7 @@ alter table runs add column if not exists keepa_first_at timestamptz;
 create or replace function public.refresh_run_keepa(p_run uuid, p_older_than timestamptz)
 returns integer
 language plpgsql
+set search_path = public, pg_temp
 as $$
 declare
   n integer;

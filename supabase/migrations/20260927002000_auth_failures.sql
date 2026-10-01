@@ -12,7 +12,7 @@ alter table auth_failures enable row level security;
 -- One wrong password from an IP: count it (a new window after p_window), block when it reaches
 -- p_max. Returns when the block ends, or null.
 create or replace function record_auth_failure(p_ip text, p_max integer, p_window interval, p_block interval)
-returns timestamptz language plpgsql as $$
+returns timestamptz language plpgsql set search_path = public, pg_temp as $$
 declare
   r auth_failures;
 begin

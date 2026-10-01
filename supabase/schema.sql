@@ -1,5 +1,5 @@
 -- Wholesale Scout schema, dumped by scripts/schema-backup.mjs. No data.
--- Dumped 2026-10-01T21:57:46.539Z. Safe to re-run. Restore: npm run schema:restore
+-- Dumped 2026-10-01T22:17:29.960Z. Safe to re-run. Restore: npm run schema:restore
 
 -- @section extensions
 create extension if not exists "pg_cron";
@@ -1455,6 +1455,7 @@ CREATE INDEX IF NOT EXISTS watchlist_product_idx ON watchlist USING btree (produ
 CREATE OR REPLACE FUNCTION record_auth_failure(p_ip text, p_max integer, p_window interval, p_block interval)
  RETURNS timestamp with time zone
  LANGUAGE plpgsql
+ SET search_path TO 'public', 'pg_temp'
 AS $function$
 declare
   r auth_failures;
@@ -1474,6 +1475,7 @@ end $function$;
 CREATE OR REPLACE FUNCTION refresh_run_keepa(p_run uuid, p_older_than timestamp with time zone)
  RETURNS integer
  LANGUAGE plpgsql
+ SET search_path TO 'public', 'pg_temp'
 AS $function$
 declare
   n integer;
@@ -1499,6 +1501,7 @@ $function$;
 CREATE OR REPLACE FUNCTION results_touch()
  RETURNS trigger
  LANGUAGE plpgsql
+ SET search_path TO 'public', 'pg_temp'
 AS $function$
 begin
   new.updated_at := now();
@@ -1509,6 +1512,7 @@ CREATE OR REPLACE FUNCTION run_summaries(run_ids uuid[])
  RETURNS TABLE(run_id uuid, pass integer, warn integer, fail integer, error integer, pending integer, suppliers text[], newest_keepa timestamp with time zone)
  LANGUAGE sql
  STABLE
+ SET search_path TO 'public', 'pg_temp'
 AS $function$
   with x as (
     select r.run_id, r.status, r.verdict, r.offer_id, r.product_id from results r where r.run_id = any(run_ids)
@@ -1543,6 +1547,7 @@ CREATE OR REPLACE FUNCTION supplier_stats(ids uuid[] DEFAULT NULL::uuid[])
  RETURNS TABLE(supplier_id uuid, runs integer, products integer, pass integer, warn integer, brands jsonb, last_seen timestamp with time zone)
  LANGUAGE sql
  STABLE
+ SET search_path TO 'public', 'pg_temp'
 AS $function$
   with o as (
     select id, product_id, supplier_id, seen_at from offers where ids is null or supplier_id = any(ids)
@@ -1598,12 +1603,12 @@ drop trigger if exists "results_touch" on "results";
 CREATE TRIGGER results_touch BEFORE UPDATE ON results FOR EACH ROW EXECUTE FUNCTION results_touch();
 
 -- @section grants
-revoke all on function "supplier_stats"(ids uuid[]) from public, anon, authenticated;
 revoke all on function "record_auth_failure"(p_ip text, p_max integer, p_window interval, p_block interval) from public, anon, authenticated;
+revoke all on function "supplier_stats"(ids uuid[]) from public, anon, authenticated;
 revoke all on function "wholesale_scout_watchdog"() from public, anon, authenticated;
+revoke all on function "run_summaries"(run_ids uuid[]) from public, anon, authenticated;
 revoke all on function "refresh_run_keepa"(p_run uuid, p_older_than timestamp with time zone) from public, anon, authenticated;
 revoke all on function "results_touch"() from public, anon, authenticated;
-revoke all on function "run_summaries"(run_ids uuid[]) from public, anon, authenticated;
 
 -- @section supabase
 insert into storage.buckets (id, name, public) values ('documents', 'documents', false) on conflict (id) do nothing;
@@ -1655,3 +1660,4 @@ insert into schema_migrations (name) values ('20261001000000_enable_rls_all.sql'
 insert into schema_migrations (name) values ('20261001000100_revoke_public_execute.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261001000200_seller_storefront_floor.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261001000300_pl_settings_no_q4.sql') on conflict do nothing;
+insert into schema_migrations (name) values ('20261001000400_pin_search_path.sql') on conflict do nothing;

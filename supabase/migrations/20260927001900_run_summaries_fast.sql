@@ -4,6 +4,7 @@ create or replace function public.run_summaries(run_ids uuid[])
 returns table (run_id uuid, pass integer, warn integer, fail integer, error integer, pending integer, suppliers text[], newest_keepa timestamptz)
 language sql
 stable
+set search_path = public, pg_temp
 as $$
   with x as (
     select r.run_id, r.status, r.verdict, r.offer_id, r.product_id from results r where r.run_id = any(run_ids)
