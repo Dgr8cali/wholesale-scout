@@ -5,7 +5,7 @@ synonyms: [gatekeeper, private label, pl, own brand, product launch, niche resea
 route: /private-label
 order: 7
 ---
-Private label answers one question: should you spend about £1,000 launching your own product into this niche? It is Gatekeeper, moved into Wholesale Scout. A candidate must clear **every gate** and **score well**. A good score never overrides a failed gate.
+Private label answers one question: should you spend about £1,000 launching your own product into this niche? It is Gatekeeper, moved into Wholesale Scout, with two changes to the fees so they agree with the rest of the app: storage carries VAT and the digital services fee, and peak rates follow the calendar (see [Gate 6](#gate-6-unit-economics-the-rate-card-then-you)). A candidate must clear **every gate** and **score well**. A good score never overrides a failed gate.
 
 You used to type about 45 numbers per candidate from Jungle Scout, Keepa and Seller Central. Here Keepa and the Chrome extension fill most of them. Jungle Scout isn't used.
 
@@ -72,7 +72,13 @@ From the same Opportunity Explorer niche: **Head term volume** is the top search
 
 ### Gate 6: Unit economics (the rate card, then you)
 
-Gatekeeper's economics, using the app's rate card (Amazon UK FBA, July 2026: the same card Gatekeeper carried). The FBA fee comes from the size tier and weight band (parcels bill on dimensional weight when it's heavier), with the low-price rate at £20 and under (£10 for Beauty, Health and Personal Care, Office and Grocery). Referral comes from the category. Storage comes from the volume. VAT and the digital services fee are added to referral and FBA. Storage, inbound, prep and returns are added ex-VAT, as Gatekeeper did. You type **landed cost** (Gate 0), **ads per unit at launch** and **ads per unit at steady state**. **FBA fee override** replaces the rate-card fee with Amazon's own figure.
+Gatekeeper's economics, using the app's rate card (Amazon UK FBA, July 2026: the same card Gatekeeper carried). The FBA fee comes from the size tier and weight band (parcels bill on dimensional weight when it's heavier), with the low-price rate at £20 and under (£10 for Beauty, Health and Personal Care, Office and Grocery). Referral comes from the category. Storage comes from the volume and your months in storage. VAT and the digital services fee are added to referral, FBA and storage, as on every other page that works out fees. Inbound, prep and returns are added as they are.
+
+**Peak rates** apply automatically in October, November and December, as in screening: the peak storage rate (£0.82 instead of £0.62 per cubic foot a month) and the small-parcel peak surcharge (£0.11). Gate 6 shows **Peak rates in effect (Oct–Dec)** while they do. A product priced at the low-price rate keeps it in the peak months.
+
+Without packed dimensions and weight there's no FBA fee: the tier says **Enter dimensions and weight in Gate 0** instead of assuming a size. Profit and margins stay blank until they're in.
+
+You type **landed cost** (Gate 0), **ads per unit at launch** and **ads per unit at steady state**. **FBA fee override** replaces the rate-card fee with Amazon's own figure.
 
 ### Gate 7: Launch budget (you)
 
@@ -93,7 +99,7 @@ The **verdict** appears once all ten lines are scored:
 | **Samples only if you can move the weak lines** | 18–23, and the weak lines (1 point or less) aren't structural. |
 | **Drop it** | 18–23 with a weak structural line, or under 18. |
 
-The thresholds and cost assumptions (budget, VAT, digital services fee, inbound, prep, storage months, Q4 rates, returns, and the Gate 6 floors) are under [Settings → Private label](/help/pages/settings#private-label-tab).
+The thresholds and cost assumptions (budget, VAT, digital services fee, inbound, prep, storage months, returns, and the Gate 6 floors) are under [Settings → Private label](/help/pages/settings#private-label-tab).
 
 ## What it costs
 

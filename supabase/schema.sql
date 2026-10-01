@@ -1,5 +1,5 @@
 -- Wholesale Scout schema, dumped by scripts/schema-backup.mjs. No data.
--- Dumped 2026-10-01T21:44:16.125Z. Safe to re-run. Restore: npm run schema:restore
+-- Dumped 2026-10-01T21:57:46.539Z. Safe to re-run. Restore: npm run schema:restore
 
 -- @section extensions
 create extension if not exists "pg_cron";
@@ -1653,3 +1653,5 @@ insert into schema_migrations (name) values ('20260927002600_manual_offer_mov.sq
 insert into schema_migrations (name) values ('20260927002700_private_label.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261001000000_enable_rls_all.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261001000100_revoke_public_execute.sql') on conflict do nothing;
+insert into schema_migrations (name) values ('20261001000200_seller_storefront_floor.sql') on conflict do nothing;
+insert into schema_migrations (name) values ('20261001000300_pl_settings_no_q4.sql') on conflict do nothing;

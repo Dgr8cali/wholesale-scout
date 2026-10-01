@@ -23,15 +23,36 @@ type Ref = {
   econ: (f: Fields, S: Settings, cat: string) => Record<string, unknown> | null;
 };
 
-function reference(): Ref {
+/**
+ * The port's two intentional differences from Gatekeeper, applied to the reference so everything
+ * else can still be compared exactly:
+ *  1. Storage carries VAT and the digital services fee, like every other Amazon fee (the fee
+ *     engine's rule); Gatekeeper added it ex-VAT.
+ *  2. Peak rates follow the card's peak months (Oct–Dec) by date, as the fee engine does, instead
+ *     of Gatekeeper's manual Q4 setting: the reference is given q4 = 1 exactly when the date is in
+ *     them (see refSettings).
+ */
+const STORAGE_EX_VAT = "return cuft*rate*(S.storageMonths||0);";
+const STORAGE_WITH_VAT = "return cuft*rate*(S.storageMonths||0)*(1+S.vat/100)*(1+(S.dst||0)/100);";
+
+function reference(aligned: boolean): Ref {
   const html = readFileSync(join(process.cwd(), "docs/gatekeeper-reference.html"), "utf8");
   const start = html.indexOf("const YN");
   const end = html.indexOf("/* ===================== persistence");
-  const src = html.slice(start, end);
+  let src = html.slice(start, end);
+  if (aligned) {
+    if (!src.includes(STORAGE_EX_VAT)) throw new Error("Gatekeeper's storage line changed: update the alignment");
+    src = src.replace(STORAGE_EX_VAT, STORAGE_WITH_VAT);
+  }
   return new Function(`${src}; return { GATES, SETTINGS_DEF, RATES, REFERRAL, BHPC_LOW, gateChecks, gateStatus, scorecard, verdict, econ };`)() as Ref;
 }
 
-const ref = reference();
+/** Gatekeeper as it is, and with the two alignments. */
+const original = reference(false);
+const ref = reference(true);
+const peakOn = (date: Date) => [10, 11, 12].includes(date.getUTCMonth() + 1);
+/** Gatekeeper's settings for a date: its Q4 switch on exactly in the peak months. */
+const refSettings = (S: Settings, date: Date) => ({ ...S, q4: peakOn(date) ? 1 : 0 });
 const card = UK_RATE_CARD_2026_07;
 
 /** A seeded generator: the same inputs every run. */
@@ -40,7 +61,7 @@ function rng(seed: number) {
   return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 2 ** 32);
 }
 
-function randomCandidate(r: () => number): { f: Fields; S: Settings; cat: string } {
+function randomCandidate(r: () => number): { f: Fields; S: Settings; cat: string; date: Date } {
   const pick = <T,>(xs: T[]) => xs[Math.floor(r() * xs.length)];
   const maybe = (v: () => string) => (r() < 0.15 ? "" : v());
   const n = (lo: number, hi: number, dp = 0) => (lo + r() * (hi - lo)).toFixed(dp);
@@ -66,15 +87,18 @@ function randomCandidate(r: () => number): { f: Fields; S: Settings; cat: string
       });
     }
   }
-  const S = { ...DEFAULT_SETTINGS, q4: r() < 0.3 ? 1 : 0, storageMonths: Number(n(0, 4)), budget: Number(n(500, 3000)) };
-  return { f, S, cat: pick(ref.REFERRAL.map((x) => x[0])) };
+  const S = { ...DEFAULT_SETTINGS, storageMonths: Number(n(0, 4)), budget: Number(n(500, 3000)) };
+  // Any month of the year, so both standard and peak rates are exercised.
+  const date = new Date(Date.UTC(2026, Math.floor(r() * 12), 15));
+  return { f, S, cat: pick(ref.REFERRAL.map((x) => x[0])), date };
 }
 
 describe("Gatekeeper port", () => {
   it("has the same gates, fields and settings", () => {
     expect(GATES.map((g) => [g.id, g.fields.map((f) => [f.k, f.type, f.opts ?? null])]))
       .toEqual(ref.GATES.map((g) => [g.id, g.fields.map((f) => [f.k, f.type, f.opts ?? null])]));
-    expect(SETTINGS_DEF.map((s) => [s.k, s.d])).toEqual(ref.SETTINGS_DEF.map((s) => [s.k, s.d]));
+    // Every setting but the Q4 switch (peak rates now follow the date).
+    expect(SETTINGS_DEF.map((s) => [s.k, s.d])).toEqual(ref.SETTINGS_DEF.filter((s) => s.k !== "q4").map((s) => [s.k, s.d]));
   });
 
   it("reads the same rate tables as the app's July 2026 card", () => {
@@ -92,11 +116,12 @@ describe("Gatekeeper port", () => {
       .toEqual(ref.REFERRAL.map(([name, bands]) => [name, bands]));
   });
 
-  it("gives Gatekeeper's checks, gate statuses, scorecard, verdict and economics on 3,000 random candidates", () => {
+  it("gives Gatekeeper's checks, gate statuses, scorecard, verdict and economics (with the two alignments) on 3,000 random candidates", () => {
     const r = rng(20260701);
     for (let i = 0; i < 3000; i++) {
-      const { f, S, cat } = randomCandidate(r);
-      const ours = evaluate(f, cat, S, card);
+      const { f, S: ours_S, cat, date } = randomCandidate(r);
+      const S = refSettings(ours_S, date) as Settings;
+      const ours = evaluate(f, cat, ours_S, card, date);
       const theirsGates = ref.GATES.map((g) => {
         const rows = ref.gateChecks(g, f, S, cat);
         return { rows, status: ref.gateStatus(rows) };
@@ -109,7 +134,8 @@ describe("Gatekeeper port", () => {
       expect(ours.sc).toEqual(sc);
       expect(ours.v).toEqual(ref.verdict(sc, theirsGates));
 
-      const e = econ(f, S, cat, card), t = ref.econ(f, S, cat);
+      const e = econ(f, ours_S, cat, card, date), t = ref.econ(f, S, cat);
+      expect(e?.peak ?? peakOn(date)).toBe(peakOn(date));
       if (!t) { expect(e).toBeNull(); continue; }
       for (const k of ["sell", "landed", "pct", "referralBase", "referral", "lowPrice", "lowThreshold", "fbaBase", "fbaSource", "fbaV", "inbound", "prep", "returns", "pL", "pS", "amazonTake", "mL", "mS", "multiple"] as const) {
         const a = e![k as keyof typeof e], b = t[k];
@@ -124,6 +150,29 @@ describe("Gatekeeper port", () => {
       if (tt?.fee == null) expect(e!.tier?.fee ?? null).toBeNull();
       else expect(e!.tier!.fee!).toBeCloseTo(tt.fee, 9);
     }
+  });
+
+  it("differs from Gatekeeper only where intended: storage with VAT and DSF, peak by date", () => {
+    const f: Fields = { sell: "24", landed: "5", weight: "300", dimL: "30", dimW: "20", dimH: "8", adsLaunch: "4", adsSteady: "1.5" };
+    const S = { ...DEFAULT_SETTINGS };
+    const july = new Date(Date.UTC(2026, 6, 15)), nov = new Date(Date.UTC(2026, 10, 15));
+    const m = (1 + S.vat / 100) * (1 + S.dst / 100);
+    // 1. Storage: Gatekeeper's ex-VAT figure × (1 + VAT) × (1 + DSF), and the profit lower by the difference.
+    const g = original.econ(f, { ...S, q4: 0 } as Settings, "Home Products")!;
+    const e = econ(f, S, "Home Products", card, july)!;
+    expect(e.storageBase).toBeCloseTo(g.storage as number, 9);
+    expect(e.storage!).toBeCloseTo((g.storage as number) * m, 9);
+    expect(e.pS!).toBeCloseTo((g.pS as number) - (g.storage as number) * (m - 1), 9);
+    // 2. Peak: November is peak with no setting; July isn't.
+    expect(e.peak).toBe(false);
+    const p = econ(f, S, "Home Products", card, nov)!;
+    expect(p.peak).toBe(true);
+    expect(p.fbaSource).toBe("peak"); // a small parcel: the peak surcharge applies
+    expect(p.fbaBase).toBeCloseTo(e.fbaBase! + 0.11, 9);
+    expect(p.storageBase!).toBeCloseTo((original.econ(f, { ...S, q4: 1 } as Settings, "Home Products")!.storage as number), 9);
+    // Still Gatekeeper's: no dimensions, no FBA fee (no assumed tier).
+    const noDims = econ({ sell: "24", landed: "5" }, S, "Home Products", card, july)!;
+    expect([noDims.tier, noDims.fbaBase, noDims.fbaV, noDims.storage]).toEqual([null, null, null, null]);
   });
 
   it("never lets a good score override a failed gate", () => {

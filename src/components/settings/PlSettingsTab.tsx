@@ -37,7 +37,7 @@ export function PlSettingsTab() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
           <h2 className="section-label">Private label</h2>
-          <p className="max-w-3xl text-sm text-muted-foreground">Gatekeeper&apos;s budget, cost assumptions and Gate 6 floors, used for every candidate on the Private label page. Fees come from the rate card under Fees; Q4 rates (1) use the peak storage rate and the small-parcel peak surcharge.</p>
+          <p className="max-w-3xl text-sm text-muted-foreground">Gatekeeper&apos;s budget, cost assumptions and Gate 6 floors, used for every candidate on the Private label page. Fees come from the rate card under Fees. Peak rates (October–December) apply automatically by date, as in screening.</p>
         </div>
         <Button variant="outline" onClick={save} disabled={saving || bad.length > 0}>Save</Button>
       </div>

@@ -5,11 +5,16 @@
  * reference's functions side by side with these on random inputs.
  *
  * Fees come from the app's rate card (the same Amazon UK July 2026 card Gatekeeper carried), with
- * Gatekeeper's own composition in econ(): VAT and DSF on referral and FBA, storage ex-VAT.
+ * Gatekeeper's composition in econ() except for two deliberate alignments with the fee engine:
+ *  - storage carries VAT and the digital services fee like every other Amazon fee (Gatekeeper
+ *    added it ex-VAT);
+ *  - peak rates (storage, and the small-parcel surcharge) apply in the card's peak months, Oct–Dec,
+ *    by date as the engine does (Gatekeeper had a manual Q4 switch).
+ * Like Gatekeeper, and unlike the engine, there's no FBA fee until the dimensions and weight are in.
  *
  * Pure: browser and server.
  */
-import { sizeTier as cardSizeTier, referralPct as cardReferralPct } from "../fees/engine";
+import { inPeakMonths, sizeTier as cardSizeTier, referralPct as cardReferralPct } from "../fees/engine";
 import type { RateCard } from "../fees/rateCard";
 
 export type Fields = Record<string, string | undefined>;
@@ -109,7 +114,6 @@ export const SETTINGS_DEF = [
   { k: "inbound", label: "Inbound shipping to FBA", unit: "£/unit", d: 0.30 },
   { k: "prep", label: "Prep, bag and label", unit: "£/unit", d: 0.15 },
   { k: "storageMonths", label: "Avg months in storage", unit: "mo", d: 2 },
-  { k: "q4", label: "Q4 rates (Oct–Dec)", unit: "0/1", d: 0 },
   { k: "returnsPct", label: "Returns allowance", unit: "% of sale", d: 2 },
   { k: "minMultiple", label: "Min price multiple", unit: "×", d: 3.5 },
   { k: "minLaunchMargin", label: "Min launch margin", unit: "%", d: 20 },
@@ -171,11 +175,12 @@ export function referralPct(cat: string, sell: number, card: RateCard): number {
 export const referralOptions = (card: RateCard) =>
   card.referral.categories.map((c) => ({ name: c.name, rates: [...new Set(c.bands.map((b) => `${b.pct}%`))].join("/") }));
 
-export function storagePerUnit(f: Fields, S: Settings, card: RateCard): number | null {
+/** Storage per unit for the months in store, ex-VAT (econ adds VAT and DSF). */
+export function storagePerUnit(f: Fields, S: Settings, card: RateCard, peak: boolean): number | null {
   const L = num(f.dimL), W = num(f.dimW), H = num(f.dimH);
   if (L == null || W == null || H == null) return null;
   const cuft = (L * W * H) / 28316.8;
-  const rate = S.q4 >= 1 ? card.storage.peakPerCuFt : card.storage.standardPerCuFt;
+  const rate = peak ? card.storage.peakPerCuFt : card.storage.standardPerCuFt;
   return cuft * rate * (S.storageMonths || 0);
 }
 
@@ -183,11 +188,14 @@ export interface Econ {
   sell: number; landed: number | null; pct: number; referralBase: number; referral: number;
   tier: PlTier | null; lowPrice: boolean; lowThreshold: number;
   fbaBase: number | null; fbaSource: "" | "override" | "low-price" | "peak" | "standard"; fbaV: number | null;
-  storage: number | null; inbound: number; prep: number; returns: number; over: number;
+  /** The card's peak months (Oct–Dec): peak storage rate and small-parcel surcharge. */
+  peak: boolean;
+  /** Storage ex-VAT, and with VAT and DSF (what's charged; the figure the profit uses). */
+  storageBase: number | null; storage: number | null; inbound: number; prep: number; returns: number; over: number;
   pL: number | null; pS: number | null; amazonTake: number | null; mL: number | null; mS: number | null; multiple: number | null;
 }
 
-export function econ(f: Fields, S: Settings, cat: string, card: RateCard): Econ | null {
+export function econ(f: Fields, S: Settings, cat: string, card: RateCard, date: Date = new Date()): Econ | null {
   const sell = num(f.sell), landed = num(f.landed), aL = num(f.adsLaunch), aS = num(f.adsSteady), ov = num(f.fbaOverride);
   const vat = 1 + S.vat / 100, dst = 1 + (S.dst || 0) / 100;
   if (sell == null) return null;
@@ -195,23 +203,25 @@ export function econ(f: Fields, S: Settings, cat: string, card: RateCard): Econ 
   const referralBase = Math.max((sell * p) / 100, card.referral.minimumFee);
   const referral = referralBase * vat * dst;
   const tier = sizeTier(f, card);
+  const peak = inPeakMonths(card, date);
   const lowThreshold = card.lowPrice.reducedCategories.includes(cat) ? card.lowPrice.reducedThreshold : card.lowPrice.threshold;
   const lowPrice = sell <= lowThreshold;
   let fbaBase: number | null = null, fbaSource: Econ["fbaSource"] = "";
   if (ov != null) { fbaBase = ov; fbaSource = "override"; }
   else if (tier && tier.fee != null) {
     if (lowPrice && tier.lowFee != null) { fbaBase = tier.lowFee; fbaSource = "low-price"; }
-    else { fbaBase = tier.fee + (S.q4 >= 1 ? tier.peakAdd : 0); fbaSource = S.q4 >= 1 && tier.peakAdd ? "peak" : "standard"; }
+    else { fbaBase = tier.fee + (peak ? tier.peakAdd : 0); fbaSource = peak && tier.peakAdd ? "peak" : "standard"; }
   }
   const fbaV = fbaBase == null ? null : fbaBase * vat * dst;
-  const storage = storagePerUnit(f, S, card);
+  const storageBase = storagePerUnit(f, S, card, peak);
+  const storage = storageBase == null ? null : storageBase * vat * dst;
   const inbound = S.inbound || 0, prep = S.prep || 0, returns = (sell * (S.returnsPct || 0)) / 100;
   const over = (storage || 0) + inbound + prep + returns;
   const base = fbaV == null || landed == null ? null : sell - referral - fbaV - landed - over;
   const pL = base == null || aL == null ? null : base - aL;
   const pS = base == null || aS == null ? null : base - aS;
   return {
-    sell, landed, pct: p, referralBase, referral, tier, lowPrice, lowThreshold, fbaBase, fbaSource, fbaV, storage, inbound, prep, returns, over, pL, pS,
+    sell, landed, pct: p, referralBase, referral, tier, lowPrice, lowThreshold, fbaBase, fbaSource, fbaV, peak, storageBase, storage, inbound, prep, returns, over, pL, pS,
     amazonTake: fbaV == null ? null : referral + fbaV,
     mL: pL == null ? null : (pL / sell) * 100, mS: pS == null ? null : (pS / sell) * 100,
     multiple: landed && landed > 0 ? sell / landed : null,
@@ -238,10 +248,10 @@ const st = (cond: boolean, warnCond?: boolean): Status => (cond ? "pass" : warnC
 const E: Status = "empty";
 const SMALL_TIERS = ["lightEnv", "stdEnv", "largeEnv", "xlEnv", "smallPcl"];
 
-export function gateChecks(g: GateId, f: Fields, S: Settings, cat: string, card: RateCard): Check[] {
+export function gateChecks(g: GateId, f: Fields, S: Settings, cat: string, card: RateCard, date: Date = new Date()): Check[] {
   const rows: Check[] = [];
   const R = (label: string, status: Status, detail: string | number) => rows.push({ label, status, detail: String(detail) });
-  const e = econ(f, S, cat, card), b = budget(f, S);
+  const e = econ(f, S, cat, card, date), b = budget(f, S);
   switch (g) {
     case "g0": {
       const s = num(f.sell), l = num(f.landed), w = num(f.weight), t = sizeTier(f, card);
@@ -334,8 +344,8 @@ export function gateStatus(rows: Check[]): Status {
 export interface ScoreRow { n: number; label: string; pts: number | null; why: string[]; structural?: boolean }
 export interface Scorecard { rows: ScoreRow[]; total: number; answered: number }
 
-export function scorecard(f: Fields, S: Settings, cat: string, card: RateCard): Scorecard {
-  const e: Partial<Econ> = econ(f, S, cat, card) || {}, b = budget(f, S);
+export function scorecard(f: Fields, S: Settings, cat: string, card: RateCard, date: Date = new Date()): Scorecard {
+  const e: Partial<Econ> = econ(f, S, cat, card, date) || {}, b = budget(f, S);
   const rb = f.reviewsBand === "" || f.reviewsBand == null ? null : +f.reviewsBand;
   const rt = f.rankTrend === "" || f.rankTrend == null ? null : +f.rankTrend;
   const rd = num(f.rankDrops), sv = num(f.sv360), lt = num(f.longtail), t3 = num(f.top3Share), fc = num(f.fixCostPct);
@@ -386,12 +396,12 @@ export interface Evaluation {
   passed: number;
 }
 
-export function evaluate(f: Fields, category: string | null | undefined, S: Settings, card: RateCard): Evaluation {
+export function evaluate(f: Fields, category: string | null | undefined, S: Settings, card: RateCard, date: Date = new Date()): Evaluation {
   const cat = category || "Everything else";
   const gates = GATES.map((g) => {
-    const rows = gateChecks(g.id, f, S, cat, card);
+    const rows = gateChecks(g.id, f, S, cat, card, date);
     return { g, rows, status: gateStatus(rows) };
   });
-  const sc = scorecard(f, S, cat, card);
+  const sc = scorecard(f, S, cat, card, date);
   return { gates, sc, v: verdict(sc, gates), passed: gates.filter((x) => x.status === "pass").length };
 }

@@ -183,10 +183,13 @@ function lowPriceThreshold(category: string | null | undefined, card: RateCard):
     : card.lowPrice.threshold;
 }
 
+/** The card's peak season (Oct–Dec on the July 2026 card) by calendar month. */
+export const inPeakMonths = (card: RateCard, date: Date) => card.storage.peakMonths.includes(date.getUTCMonth() + 1);
+
 function isPeak(card: RateCard, a: FeeAssumptions, date: Date): boolean {
   if (a.season === "peak") return true;
   if (a.season === "standard") return false;
-  return card.storage.peakMonths.includes(date.getUTCMonth() + 1);
+  return inPeakMonths(card, date);
 }
 
 /** Monthly storage per unit × months, ex-VAT. null without dimensions. */

@@ -353,17 +353,20 @@ function GateExtras({ g, data, fields, settings, card }: { g: GateDef; data: Can
     if (!e) return <p className="rounded-lg bg-surface-2 px-3 py-2.5 text-xs text-muted-foreground">Enter a sell price in Gate 0 to see the economics.</p>;
     const S = settings, t = e.tier;
     const cls = (v: number | null, ok: number, w: number): Status | null => (v == null ? null : v >= ok ? "pass" : v >= w ? "warn" : "fail");
-    const tierLine = e.fbaSource === "override" ? "Your override" : !t ? "Enter L × W × H and weight in Gate 0" : t.fee == null ? "Too large for standard FBA tiers" : `${t.name}${t.bandMaxG ? ` · ≤${t.bandMaxG >= 1000 ? `${t.bandMaxG / 1000} kg` : `${t.bandMaxG} g`}` : ""}`;
+    const tierLine = e.fbaSource === "override" ? "Your override" : !t ? "Enter dimensions and weight in Gate 0" : t.fee == null ? "Too large for standard FBA tiers" : `${t.name}${t.bandMaxG ? ` · ≤${t.bandMaxG >= 1000 ? `${t.bandMaxG / 1000} kg` : `${t.bandMaxG} g`}` : ""}`;
     const dimNote = t && t.useDim ? `ships as ${(t.shipG / 1000).toFixed(2)} kg${t.dimG > Number(f.weight) ? " (dimensional)" : ""}` : "";
     const srcNote = e.fbaSource === "low-price" ? ` · low-price rate (≤ £${e.lowThreshold})` : e.fbaSource === "peak" ? " · peak rate" : "";
     return (
       <div className="flex flex-col gap-2">
-        <div className="flex items-center gap-1.5 text-xs text-muted-foreground"><SourceChip source="fees" /> {card.name}: size tier, weight band, dimensional weight, low-price rate and storage applied from Gate 0.</div>
+        <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+          <SourceChip source="fees" /> {card.name}: size tier, weight band, dimensional weight, low-price rate and storage applied from Gate 0.
+          {e.peak && <span className="rounded-full bg-warn-soft px-2 py-0.5 font-semibold text-warn" title="Amazon's peak season (October to December): the peak storage rate and the small-parcel peak surcharge apply. Set automatically from today's date.">Peak rates in effect (Oct–Dec)</span>}
+        </div>
         <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
           <Readout label="FBA size tier" value={<span className="font-sans text-sm font-semibold">{tierLine}</span>} sub={`${dimNote}${srcNote}`} />
-          <Readout label="FBA fee" value={money(e.fbaV)} sub={e.fbaBase == null ? "" : `${money(e.fbaBase)} + VAT + DSF`} />
+          <Readout label="FBA fee" value={e.fbaV == null ? "—" : money(e.fbaV)} sub={e.fbaBase == null ? "enter dimensions and weight in Gate 0" : `${money(e.fbaBase)} + VAT + DSF${e.fbaSource === "peak" ? " (peak)" : ""}`} />
           <Readout label="Referral fee" value={money(e.referral)} sub={`${e.pct}% of ${money(e.sell)} + VAT + DSF`} />
-          <Readout label="Storage" value={money(e.storage)} sub={e.storage == null ? "needs dimensions" : `${S.storageMonths} mo × £${S.q4 >= 1 ? card.storage.peakPerCuFt : card.storage.standardPerCuFt}/cu ft`} />
+          <Readout label="Storage" value={money(e.storage)} sub={e.storage == null ? "enter dimensions in Gate 0" : `${money(e.storageBase)} (${S.storageMonths} mo × £${e.peak ? card.storage.peakPerCuFt : card.storage.standardPerCuFt}/cu ft${e.peak ? ", peak" : ""}) + VAT + DSF`} />
           <Readout label="Inbound, prep, returns" value={money(e.inbound + e.prep + e.returns)} sub={`${money(e.inbound)} + ${money(e.prep)} + ${S.returnsPct}% returns`} />
           <Readout label="Amazon's total take" value={money(e.amazonTake)} sub={e.amazonTake == null ? "" : `${((e.amazonTake / e.sell) * 100).toFixed(1)}% of price`} />
           <Readout label="Multiple" value={e.multiple == null ? "—" : `${e.multiple.toFixed(2)}×`} sub="sell ÷ landed" tone={cls(e.multiple, S.minMultiple, 3)} />
