@@ -25,6 +25,7 @@ Every field filled automatically shows a small chip:
 |---|---|
 | **Keepa** | Filled from Keepa when you saved or refreshed. |
 | **POE** | Filled from an Opportunity Explorer niche you sent with the extension. |
+| **POE (derived)** | Worked out from that niche's data because Opportunity Explorer doesn't state it (see Gate 3's search conversion). How it was worked out shows under the field. |
 | **Fees** | Worked out from the rate card (Gate 6's fee readouts). |
 | **Manual** | Typed by you. |
 
@@ -60,7 +61,14 @@ An automatic field is read-only, with the figures it came from underneath it. Cl
 
 ### Gate 3: Amazon's own data (the extension)
 
-Search volume (360 days), growth, products in the niche, top-3 click share, search conversion and average units per product. These come from an Opportunity Explorer niche you send with the extension (see [Capturing Opportunity Explorer](#capturing-opportunity-explorer)). Growth over +5% is growing, under −5% declining, otherwise flat. Where Opportunity Explorer gives several windows, the 360-day figure is used.
+Search volume (360 days), growth, products in the niche, top-3 click share, search conversion and average units per product. These come from an Opportunity Explorer niche you send with the extension (see [Capturing Opportunity Explorer](#capturing-opportunity-explorer)). Growth over +5% is growing, under −5% declining, otherwise flat. Where Opportunity Explorer gives several windows, the 360-day figure is used. Average units sold per product comes as a yearly range (for example 3,000–4,000); Gatekeeper uses its midpoint, a month.
+
+**Search conversion** isn't given as a single niche figure. When Amazon's niche summary has one, it's used (**POE**). Otherwise it's worked out (**POE (derived)**):
+
+1. From the niche's own weekly search conversion over the last 52 weeks, each week weighted by its search volume. This is the niche-level figure Opportunity Explorer charts week by week.
+2. If the capture has no weekly trend, from its search terms: each term's 360-day conversion weighted by its 360-day search volume. This covers only the terms in the capture, so it can read lower than the niche as a whole.
+
+The niche summary's "purchase conversion post-launch" is a different measure (products launched in the last 90 days) and isn't used.
 
 ### Gate 4: Mine the reviews (you)
 

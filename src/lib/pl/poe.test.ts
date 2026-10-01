@@ -3,60 +3,90 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { extractPoe, nicheOf, poeFill, unreadFields } from "./poe";
 
+const fixture = (name: string) => JSON.parse(readFileSync(join(__dirname, "__fixtures__", name), "utf8"));
+
 /**
  * The first real capture (1 Oct 2026), verbatim: the old extension matched /getNiche/i, which also
  * caught a list operation (data.niches, here empty), so the niche itself never arrived.
  */
-const REAL = JSON.parse(readFileSync(join(__dirname, "__fixtures__/poe-capture-2026-10-01.json"), "utf8"));
+const EMPTY = fixture("poe-capture-2026-10-01.json");
 
 /**
- * The shape the extension now sends. getNiche's niche sits at data.niche with nicheSummary,
- * searchTermMetrics, asinMetrics and trendsMetrics (confirmed from an open-source capture of the
- * same call). The field names inside nicheSummary and the term rows are Amazon-style guesses
- * until a real getNiche is captured: replace this fixture with that capture when it is.
+ * A real getNiche capture (bottle brush, amazon.co.uk, 1 Oct 2026), trimmed to what the parser
+ * reads and anonymised (no niche id, ASINs replaced, no titles or images). Amazon's own field names:
+ * data.niche.{nicheTitle, nicheSummary, asinMetrics[], trendsMetrics[], searchTermMetrics[]};
+ * nicheSummary.{searchVolumeT360, productCount, minimum/maximumAverageUnitsSoldT360,
+ * searchVolumeGrowthT360, purchaseConversionRatePostLaunch90d (null), …}, no niche-level search
+ * conversion; trendsMetrics[].{datasetDate, searchVolumeT7, searchConversionRateT7} (104 weeks);
+ * searchTermMetrics[].{searchTerm, searchVolumeT360, clickShareT360, searchConversionRateT360};
+ * asinMetrics[].clickShareT360. Several numbers come as strings ("1484395").
  */
-const NICHE = {
-  data: {
-    niche: {
-      nicheId: "abc123",
-      nicheTitle: "bamboo cutlery tray",
-      obfuscatedMarketplaceId: "x",
-      nicheSummary: { searchVolumeT90: 12000, searchVolumeT360: 52000, searchVolumeGrowthT360: 0.08, productCount: 140, searchConversionRateT360: 0.112, avgUnitsSoldT360: 2400 },
-      asinMetrics: [{ asin: "B1", asinTitle: "Not the niche's title", clickShareT360: 0.2 }, { asin: "B2", clickShareT360: 0.15 }, { asin: "B3", clickShareT360: 0.1 }, { asin: "B4", clickShareT360: 0.05 }],
-      trendsMetrics: [{ startDate: "2025-10-01", searchVolume: 4000 }],
-    },
-  },
-};
-const TERMS = { data: { searchTermMetrics: [
-  { searchTerm: "cutlery tray", searchVolumeT360: 36000, clickShareT360: 0.31, searchConversionRateT360: 0.1 },
-  { searchTerm: "bamboo cutlery tray", searchVolumeT360: 9600 },
-  { searchTerm: "expandable cutlery tray", searchVolumeT360: 4800 },
-] } };
+const REAL = fixture("poe-bottle-brush-2026-10-01.json");
+const clone = <T,>(x: T): T => JSON.parse(JSON.stringify(x));
+const nicheIn = (raw: { niche: { data: { niche: Record<string, unknown> } } }) => raw.niche.data.niche;
 
 describe("Opportunity Explorer captures", () => {
-  it("reads nothing from the real first capture, and says so for all eight fields", () => {
-    expect(REAL).toEqual({ niche: { data: { niches: [] } }, growth: null });
-    expect(nicheOf(REAL.niche)).toBeNull(); // a list operation isn't a niche
-    const x = extractPoe(REAL);
-    expect(unreadFields(x)).toEqual(["niche title", "search volume", "search volume growth", "products in niche", "top-3 click share", "search conversion", "units per product", "search terms"]);
+  it("reads nothing from the first (empty) capture, and says so for all eight fields", () => {
+    expect(EMPTY).toEqual({ niche: { data: { niches: [] } }, growth: null });
+    expect(nicheOf(EMPTY.niche)).toBeNull(); // a list operation isn't a niche
+    const x = extractPoe(EMPTY);
+    expect(unreadFields(x)).toHaveLength(8);
     expect(poeFill(x)).toEqual({});
   });
 
-  it("reads getNiche's data.niche from the merged capture, ignoring list operations", () => {
-    const raw = { niche: NICHE, operations: { getNiche: NICHE, getNiches: { data: { niches: [{ nicheTitle: "some other niche", searchVolumeT360: 1 }] } } }, growth: [], seen: ["getNiche", "getNiches"] };
-    const x = extractPoe(raw);
-    expect(x).toMatchObject({ niche_title: "bamboo cutlery tray", niche_id: "abc123", search_volume_360: 52000, search_volume_growth: 8, products_in_niche: 140, top3_click_share: 45, search_conversion: 11.2, avg_units_per_product: 200 });
-    expect(unreadFields(x)).toEqual(["search terms"]);
-  });
-
-  it("takes search terms from a later operation when getNiche doesn't carry them", () => {
-    const x = extractPoe({ niche: NICHE, operations: { getNiche: NICHE, getNicheSearchTerms: TERMS }, growth: [], seen: [] });
-    expect(x.search_terms.map((t) => [t.term, t.volume])).toEqual([["cutlery tray", 3000], ["bamboo cutlery tray", 800], ["expandable cutlery tray", 400]]);
+  it("reads Amazon's real getNiche fields", () => {
+    const x = extractPoe(REAL);
+    expect(x).toMatchObject({
+      niche_title: "bottle brush",
+      search_volume_360: 1484395,
+      products_in_niche: 52,
+      top3_click_share: 22.8, // the three highest asinMetrics clickShareT360
+      // minimumAverageUnitsSoldT360 3,000 – maximum 4,000 a year: the midpoint, a month
+      avg_units_per_product: 292,
+      // No niche-level figure: the niche's weekly conversion, last 52 weeks, volume-weighted
+      search_conversion: 10.1,
+      search_conversion_source: "trends",
+    });
+    expect(x.search_terms).toHaveLength(20);
+    expect(x.search_terms[0]).toMatchObject({ term: "bottle brush", volume: 60624, click_share: 48.6, conversion: 7.7 });
     expect(unreadFields(x)).toEqual([]);
-    expect(poeFill(x)).toMatchObject({ sv360: { value: "52000" }, svGrowth: { value: "growing" }, longtail: { value: "2" }, headVol: { value: "3000" } });
   });
 
-  it("finds the niche when only the operations map has it", () => {
-    expect(extractPoe({ operations: { getNiche: NICHE } }).search_volume_360).toBe(52000);
+  it("marks a derived conversion as POE (derived), with how it was worked out", () => {
+    const f = poeFill(extractPoe(REAL));
+    expect(f.conv).toMatchObject({ value: "10.1", source: "poe_derived" });
+    expect(f.conv.why).toMatch(/weekly search conversion over the last 52 weeks/);
+    expect(f.sv360.source).toBeUndefined(); // read off the capture: plain POE
+  });
+
+  it("falls back to the search terms' volume-weighted conversion without the weekly trend", () => {
+    const raw = clone(REAL);
+    delete nicheIn(raw).trendsMetrics;
+    const x = extractPoe({ niche: raw.niche });
+    expect(x).toMatchObject({ search_conversion: 7.5, search_conversion_source: "terms" });
+    expect(poeFill(x).conv).toMatchObject({ source: "poe_derived" });
+    expect(poeFill(x).conv.why).toMatch(/search terms' 360-day conversion/);
+  });
+
+  it("uses the niche's own search conversion when Amazon gives one, and never the post-launch purchase rate", () => {
+    const raw = clone(REAL);
+    (nicheIn(raw).nicheSummary as Record<string, unknown>).purchaseConversionRatePostLaunch90d = 0.4;
+    expect(extractPoe({ niche: raw.niche })).toMatchObject({ search_conversion: 10.1, search_conversion_source: "trends" });
+    (nicheIn(raw).nicheSummary as Record<string, unknown>).searchConversionRateT360 = "0.0923";
+    const x = extractPoe({ niche: raw.niche });
+    expect(x).toMatchObject({ search_conversion: 9.2, search_conversion_source: "niche" });
+    expect(poeFill(x).conv.source).toBeUndefined();
+  });
+
+  it("ignores list operations and takes search terms from a later call when getNiche lacks them", () => {
+    const raw = clone(REAL);
+    const terms = nicheIn(raw).searchTermMetrics;
+    delete nicheIn(raw).searchTermMetrics;
+    const x = extractPoe({
+      niche: raw.niche,
+      operations: { getNiche: raw.niche, getNiches: { data: { niches: [{ nicheTitle: "another niche", nicheSummary: { searchVolumeT360: 1 } }] } }, getNicheSearchTerms: { data: { searchTermMetrics: terms } } },
+    });
+    expect(x).toMatchObject({ niche_title: "bottle brush", search_volume_360: 1484395 });
+    expect(x.search_terms).toHaveLength(20);
   });
 });

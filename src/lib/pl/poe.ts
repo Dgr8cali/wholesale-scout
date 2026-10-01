@@ -23,6 +23,12 @@ export interface PoeExtract {
   top3_click_share: number | null;
   /** Search conversion rate, %. */
   search_conversion: number | null;
+  /**
+   * Where search_conversion came from: the niche's own figure; its weekly trend (the last 52 weeks'
+   * searchConversionRateT7, weighted by each week's searchVolumeT7); or, failing both, its search
+   * terms (searchConversionRateT360 weighted by searchVolumeT360). The last two are derived.
+   */
+  search_conversion_source: "niche" | "trends" | "terms" | null;
   /** Average units sold per product, a month. */
   avg_units_per_product: number | null;
   /** Monthly search volume per term. */
@@ -144,6 +150,31 @@ function top3FromProducts(arrays: Record<string, unknown>[][]): number | null {
   return shares.length ? r1(shares.slice(0, 3).reduce((a, b) => a + b, 0)) : null;
 }
 
+/**
+ * The niche's search conversion when Amazon doesn't state it: from its weekly trend (the niche's own
+ * figure, week by week: the last 52 weeks weighted by search volume); else from its search terms
+ * (each term's 360-day conversion weighted by its 360-day volume). Both are percentages.
+ */
+function derivedConversion(arrays: Record<string, unknown>[][], terms: PoeTerm[]): { pct: number | null; source: "trends" | "terms" } | null {
+  const weekly = arrays.find((a) => a.length >= 4 && a.every((r) => field(r, [/^searchConversionRateT7$/i]) && field(r, [/^searchVolumeT7$/i])));
+  if (weekly) {
+    const date = (r: Record<string, unknown>) => String(r.datasetDate ?? r.startDate ?? r.weekStartDate ?? "");
+    const last = [...weekly].sort((a, b) => date(a).localeCompare(date(b))).slice(-52);
+    let num = 0, den = 0;
+    for (const r of last) {
+      const v = field(r, [/^searchVolumeT7$/i])!.n, c = field(r, [/^searchConversionRateT7$/i])!.n;
+      if (v > 0) { num += v * c; den += v; }
+    }
+    if (den > 0) return { pct: r1(asPct(num / den)), source: "trends" };
+  }
+  const known = terms.filter((t) => t.conversion != null && t.volume > 0);
+  if (known.length) {
+    const den = known.reduce((a, t) => a + t.volume, 0);
+    return { pct: r1(known.reduce((a, t) => a + t.volume * t.conversion!, 0) / den), source: "terms" };
+  }
+  return null;
+}
+
 /** What the extension sends: getNiche's response, every ox-api response on the page by operation, the insights widget's. */
 export interface PoeRaw { niche?: unknown; operations?: Record<string, unknown>; growth?: unknown; seen?: string[] }
 
@@ -175,10 +206,16 @@ export function extractPoe(raw: PoeRaw | unknown, hint: { nicheId?: string | nul
   const growth = pick(ls, [/searchVolumeGrowth.*(T360|360)/i, /searchVolumeGrowth/i]) ?? pick(gls, [/searchVolumeGrowth.*(T360|360)/i, /searchVolumeGrowth/i]);
   const products = pick(ls, [/^productCount$/i, /(numberOf|num|total)Products/i, /productsInNiche/i, /productCount/i]);
   const top3 = pick(ls, [/top_?3.*clickShare/i, /clickShare.*top_?3/i, /topThree.*clickShare/i]);
-  const conv = pick(ls, [/searchConversionRate.*(T360|360)/i, /searchConversionRate/i, /conversionRate/i]);
-  const units = pick(ls, [/(avg|average)UnitsSold.*(T360|360)/i, /(avg|average)UnitsSold/i, /unitsSoldPerProduct/i, /(avg|average)Units/i]);
-
+  // Only search conversion: nicheSummary's purchaseConversionRatePostLaunch90d is a different
+  // measure (newly launched products), so a bare "conversionRate" isn't taken.
+  const convNiche = pick(ls, [/^searchConversionRate.*(T360|360)$/i, /^searchConversionRate$/i]);
   const terms = searchTerms(arrays);
+  const conv = convNiche ? { pct: r1(asPct(convNiche.n)), source: "niche" as const } : derivedConversion(arrays, terms);
+  // Amazon gives units per product as a yearly range (minimum/maximumAverageUnitsSoldT360): its midpoint.
+  const uMin = pick(ls, [/^minimum(Average|Avg)UnitsSold.*(T360|360)$/i]), uMax = pick(ls, [/^maximum(Average|Avg)UnitsSold.*(T360|360)$/i]);
+  const units = uMin && uMax ? { key: uMax.key, n: (uMin.n + uMax.n) / 2 }
+    : pick(ls, [/^(avg|average)UnitsSold.*(T360|360)/i, /^(avg|average)UnitsSold/i, /unitsSoldPerProduct/i, /(avg|average)UnitsSold.*(T360|360)/i, /(avg|average)Units/i]);
+
   return {
     niche_title: hint.title?.trim() || pickString(ls, [/^nicheTitle$/i, /^(niche)?(title|displayName|name)$/i]),
     niche_id: hint.nicheId || pickString(ls, [/^nicheId$/i, /^id$/i]),
@@ -186,7 +223,8 @@ export function extractPoe(raw: PoeRaw | unknown, hint: { nicheId?: string | nul
     search_volume_growth: r1(asPct(growth?.n ?? null)),
     products_in_niche: products ? Math.round(products.n) : null,
     top3_click_share: top3 ? r1(asPct(top3.n)) : top3FromProducts(arrays),
-    search_conversion: r1(asPct(conv?.n ?? null)),
+    search_conversion: conv?.pct ?? null,
+    search_conversion_source: conv?.pct != null ? conv.source : null,
     avg_units_per_product: units ? Math.round(monthly(units.key, units.n)) : null,
     search_terms: terms,
   };
@@ -211,15 +249,27 @@ export const growthBand = (g: number | null): "declining" | "flat" | "growing" |
   g == null ? null : g < -5 ? "declining" : g > 5 ? "growing" : "flat";
 
 /** Gate 3 and the Gate 5 fields Opportunity Explorer carries (bids aren't in it). */
-export function poeFill(x: PoeExtract): Record<string, { value: string; why: string }> {
-  const out: Record<string, { value: string; why: string }> = {};
+/** A value from a capture; `source: "poe_derived"` when worked out rather than read off it. */
+export interface PoeFilled { value: string; why: string; source?: "poe_derived" }
+
+const CONV_WHY = {
+  niche: "the niche's own figure",
+  trends: "derived: the niche's weekly search conversion over the last 52 weeks, weighted by each week's search volume (Amazon gives no 360-day figure)",
+  terms: "derived: its search terms' 360-day conversion, weighted by each term's 360-day search volume (Amazon gives no niche figure or weekly trend)",
+};
+
+export function poeFill(x: PoeExtract): Record<string, PoeFilled> {
+  const out: Record<string, PoeFilled> = {};
   const src = `Opportunity Explorer${x.niche_title ? `: ${x.niche_title}` : ""}`;
   if (x.search_volume_360 != null) out.sv360 = { value: String(x.search_volume_360), why: src };
   const g = growthBand(x.search_volume_growth);
   if (g) out.svGrowth = { value: g, why: `${x.search_volume_growth}% over 360 days (±5% is flat)` };
   if (x.products_in_niche != null) out.products = { value: String(x.products_in_niche), why: src };
   if (x.top3_click_share != null) out.clickShare = { value: String(x.top3_click_share), why: src };
-  if (x.search_conversion != null) out.conv = { value: String(x.search_conversion), why: src };
+  if (x.search_conversion != null) {
+    const how = x.search_conversion_source ?? "niche";
+    out.conv = { value: String(x.search_conversion), why: `${src}, ${CONV_WHY[how]}`, ...(how === "niche" ? {} : { source: "poe_derived" as const }) };
+  }
   if (x.avg_units_per_product != null) out.unitsPer = { value: String(x.avg_units_per_product), why: src };
   if (x.search_terms.length) {
     const lt = x.search_terms.filter((t) => t.volume >= 300 && t.volume <= 2000);

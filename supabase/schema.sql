@@ -1,5 +1,5 @@
 -- Wholesale Scout schema, dumped by scripts/schema-backup.mjs. No data.
--- Dumped 2026-10-01T22:39:21.598Z. Safe to re-run. Restore: npm run schema:restore
+-- Dumped 2026-10-01T23:26:55.177Z. Safe to re-run. Restore: npm run schema:restore
 
 -- @section extensions
 create extension if not exists "pg_cron";
@@ -571,7 +571,8 @@ create table if not exists "pl_poe_snapshots" (
   "top3_click_share" numeric,
   "search_conversion" numeric,
   "avg_units_per_product" numeric,
-  "search_terms" jsonb default '[]'::jsonb not null
+  "search_terms" jsonb default '[]'::jsonb not null,
+  "search_conversion_source" text
 );
 alter table "pl_poe_snapshots" add column if not exists "id" uuid default gen_random_uuid();
 alter table "pl_poe_snapshots" add column if not exists "candidate_id" uuid;
@@ -586,6 +587,7 @@ alter table "pl_poe_snapshots" add column if not exists "top3_click_share" numer
 alter table "pl_poe_snapshots" add column if not exists "search_conversion" numeric;
 alter table "pl_poe_snapshots" add column if not exists "avg_units_per_product" numeric;
 alter table "pl_poe_snapshots" add column if not exists "search_terms" jsonb default '[]'::jsonb;
+alter table "pl_poe_snapshots" add column if not exists "search_conversion_source" text;
 alter table "pl_poe_snapshots" enable row level security;
 
 create table if not exists "pl_settings" (
@@ -1249,7 +1251,7 @@ do $$ begin
 end $$;
 do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'pl_candidate_fields_source_check' and conrelid = '"pl_candidate_fields"'::regclass) then
-    alter table "pl_candidate_fields" add constraint "pl_candidate_fields_source_check" CHECK ((source = ANY (ARRAY['keepa'::text, 'poe'::text, 'manual'::text, 'fees'::text])));
+    alter table "pl_candidate_fields" add constraint "pl_candidate_fields_source_check" CHECK ((source = ANY (ARRAY['keepa'::text, 'poe'::text, 'poe_derived'::text, 'manual'::text, 'fees'::text])));
   end if;
 end $$;
 do $$ begin
@@ -1265,6 +1267,11 @@ end $$;
 do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'pl_gate_waivers_reason_check' and conrelid = '"pl_gate_waivers"'::regclass) then
     alter table "pl_gate_waivers" add constraint "pl_gate_waivers_reason_check" CHECK ((length(TRIM(BOTH FROM reason)) > 0));
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'pl_poe_snapshots_search_conversion_source_check' and conrelid = '"pl_poe_snapshots"'::regclass) then
+    alter table "pl_poe_snapshots" add constraint "pl_poe_snapshots_search_conversion_source_check" CHECK ((search_conversion_source = ANY (ARRAY['niche'::text, 'trends'::text, 'terms'::text])));
   end if;
 end $$;
 do $$ begin
@@ -1699,3 +1706,4 @@ insert into schema_migrations (name) values ('20261001000200_seller_storefront_f
 insert into schema_migrations (name) values ('20261001000300_pl_settings_no_q4.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261001000400_pin_search_path.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261001000500_pl_gate_waivers.sql') on conflict do nothing;
+insert into schema_migrations (name) values ('20261002000000_poe_derived.sql') on conflict do nothing;

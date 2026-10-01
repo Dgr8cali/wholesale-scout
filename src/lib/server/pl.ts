@@ -22,7 +22,8 @@ const REUSE_MS = 7 * DAY;
 
 export const STATUSES = ["draft", "researching", "samples", "dropped", "launched"] as const;
 export type PlStatus = (typeof STATUSES)[number];
-export type FieldSource = "keepa" | "poe" | "manual" | "fees";
+/** poe_derived: worked out from a capture rather than read off it ("POE (derived)"). */
+export type FieldSource = "keepa" | "poe" | "poe_derived" | "manual" | "fees";
 
 export interface PlCandidate {
   id: string; name: string; niche_keyword: string | null; category: string; status: PlStatus; notes: string | null;
@@ -48,7 +49,7 @@ export function parseAsins(text: string): string[] {
 /* ===================== reads ===================== */
 
 const ASIN_COLS = "candidate_id, asin, position, is_reference, title, brand, image, price, rating, review_count, rank, avg_rank_90d, rank_drops_90d, bought_past_month, offer_count, buybox_price, amazon_ever_seller, amazon_brand, dimensions, weight, first_seen, history, snapshot_at";
-const POE_COLS = "id, candidate_id, niche_id, niche_title, captured_at, search_volume_360, search_volume_growth, products_in_niche, top3_click_share, search_conversion, avg_units_per_product, search_terms";
+const POE_COLS = "id, candidate_id, niche_id, niche_title, captured_at, search_volume_360, search_volume_growth, products_in_niche, top3_click_share, search_conversion, search_conversion_source, avg_units_per_product, search_terms";
 
 const numOrNull = (v: unknown) => (v == null ? null : Number(v));
 const asinRow = (r: Record<string, unknown>): PlAsin => ({
@@ -205,11 +206,11 @@ export async function setField(id: string, key: string, value: string | null) {
 }
 
 /** Write automatic values, skipping every field whose row is manual. Returns the keys written. */
-export async function applyAuto(id: string, fill: Fill, source: Exclude<FieldSource, "manual">): Promise<string[]> {
+export async function applyAuto(id: string, fill: Fill, source: Exclude<FieldSource, "manual" | "poe_derived">): Promise<string[]> {
   const d = db();
   const manual = new Set((must(await d.from("pl_candidate_fields").select("key").eq("candidate_id", id).eq("source", "manual"), "manual fields") as { key: string }[]).map((r) => r.key));
   const rows = Object.entries(fill).filter(([k]) => FIELD_KEYS.has(k) && !manual.has(k))
-    .map(([key, v]) => ({ candidate_id: id, key, value: v.value, source, updated_at: now() }));
+    .map(([key, v]) => ({ candidate_id: id, key, value: v.value, source: v.source ?? source, updated_at: now() }));
   if (rows.length) must(await d.from("pl_candidate_fields").upsert(rows, { onConflict: "candidate_id,key" }), "auto fill");
   return rows.map((r) => r.key);
 }
@@ -366,8 +367,8 @@ export async function attachPoe(snapshotId: string, candidateId: string): Promis
 const extractColumns = (x: PoeExtract) => ({
   niche_id: x.niche_id, niche_title: x.niche_title,
   search_volume_360: x.search_volume_360, search_volume_growth: x.search_volume_growth, products_in_niche: x.products_in_niche,
-  top3_click_share: x.top3_click_share, search_conversion: x.search_conversion, avg_units_per_product: x.avg_units_per_product,
-  search_terms: x.search_terms,
+  top3_click_share: x.top3_click_share, search_conversion: x.search_conversion, search_conversion_source: x.search_conversion_source,
+  avg_units_per_product: x.avg_units_per_product, search_terms: x.search_terms,
 });
 
 /**

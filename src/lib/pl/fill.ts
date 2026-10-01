@@ -46,7 +46,8 @@ export interface PlHistory {
   buyBoxFetched: boolean;
 }
 
-export interface Filled { value: string; why: string }
+/** An automatic value; `source` overrides the fill's own (e.g. "poe_derived" within a POE fill). */
+export interface Filled { value: string; why: string; source?: "poe_derived" }
 export type Fill = Record<string, Filled>;
 
 /** Gatekeeper's Gate 0 band (£18–35), widened 20% each way for "the price spread holds". */

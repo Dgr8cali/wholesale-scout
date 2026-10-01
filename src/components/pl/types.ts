@@ -3,7 +3,7 @@ import type { PlAsin } from "@/lib/pl/fill";
 import type { Fields, Settings, Status, Waiver } from "@/lib/pl/gatekeeper";
 import type { PoeTerm } from "@/lib/pl/poe";
 
-export type FieldSource = "keepa" | "poe" | "manual" | "fees";
+export type FieldSource = "keepa" | "poe" | "poe_derived" | "manual" | "fees";
 export interface PlField { value: string; source: FieldSource; updated_at?: string }
 export type FieldMap = Record<string, PlField>;
 
