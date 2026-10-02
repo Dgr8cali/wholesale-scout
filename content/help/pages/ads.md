@@ -13,8 +13,10 @@ order: 20
 |---|---|
 | **Dashboard** | Per product: spend, sales, ACoS beside break-even ACoS, profit after ads, cost per order, CPC, conversion, CTR. The same per campaign. Search terms with a status chip (Converting, Over target, Watch, Waste). |
 | **Imports** | Drop the bulk export (.xlsx): campaigns, placements, keywords with IDs, negatives, product ads and search terms with the keyword that matched, in one file. CSV reports (search term, campaign, Campaign Manager export) work too. Each file is previewed before you import. Re-importing doesn't double anything. |
-| **Rules** | Eight rules (harvest, negative, bid down, bid up, pause, placement, budget, revive): thresholds, on/off, mode, and a dry run showing what each would propose now. |
+| **Rules** | Thirteen rules (harvest, negatives, bids, pause, placements, budgets, revive, n-grams, stock guard, organic rank): thresholds, on/off, mode, and a dry run showing what each would propose now. |
 | **Proposals** | The changes your rules suggest, grouped by product and rule, with the reason in real numbers and a confidence. Approve, skip or snooze; export the approved ones as a bulk sheet to upload in Amazon Ads. Nothing changes in Amazon Ads without your upload. |
+| **N-grams** | Every search term's words and word pairs, with spend, orders, ACoS and waste per product; Rules 9 and 10 act on them. |
+| **Launch** | A new product's four launch campaigns as one bulk Create sheet, and its 60-day plan. See [Ads: launching a product](/help/howto/ads-launching-a-product). |
 
 ## Target ACoS and break-even
 

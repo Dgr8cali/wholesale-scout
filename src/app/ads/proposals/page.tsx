@@ -11,6 +11,7 @@ import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Skeleton } from "@/components/ui/skeleton";
 import { RULE_IDS, RULE_LABEL, type Confidence, type RuleId } from "@/lib/ads/rules";
 import { api } from "@/lib/ui/client";
+import type { NgramData } from "../ngrams/page";
 import { cn } from "@/lib/utils";
 
 interface Row {
@@ -33,8 +34,9 @@ export default function AdsProposalsPage() {
   const [campaign, setCampaign] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
 
+  const [grams, setGrams] = useState<NgramData | null>(null);
   const load = useCallback(() => api<Data>("/api/ads/proposals").then(setData).catch((e: Error) => setError(e.message)), []);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); api<NgramData>("/api/ads/ngrams").then(setGrams).catch(() => {}); }, [load]);
 
   const shown = useMemo(() => (data?.proposals ?? []).filter((p) => (!rule || p.rule === rule) && (!conf || p.confidence === conf) && (!campaign || p.campaign === campaign)), [data, rule, conf, campaign]);
   const groups = useMemo(() => {
@@ -121,6 +123,8 @@ export default function AdsProposalsPage() {
         </Button>
       </div>
 
+      {grams && grams.rows.length > 0 && <NgramCard d={grams} />}
+
       {notes.length > 0 && (
         <details className="panel px-3 py-2 text-sm">
           <summary className="cursor-pointer font-medium">What the rules couldn&apos;t check ({notes.reduce((a, [, n]) => a + n.length, 0)})</summary>
@@ -171,5 +175,25 @@ export default function AdsProposalsPage() {
         </section>
       ))}
     </div>
+  );
+}
+
+/** The n-grams wasting most, and what Rules 9 and 10 make of them. */
+function NgramCard({ d }: { d: NgramData }) {
+  const waste = [...d.rows].filter((r) => r.waste > 0).sort((a, b) => b.waste - a.waste).slice(0, 6);
+  const fired = d.rows.filter((r) => r.trigger);
+  return (
+    <section className="panel space-y-2 p-3 text-sm">
+      <div className="flex items-baseline gap-2">
+        <h2 className="font-semibold">N-grams</h2>
+        <span className="text-xs text-muted-foreground">{fired.length ? `${fired.length} gram${fired.length === 1 ? "" : "s"} fire Rule 9 or 10: ${fired.map((r) => `"${r.gram}" (${r.trigger})`).join(", ")}` : "No gram fires Rule 9 (negative) or Rule 10 (winner) on this data"}</span>
+        <Link href="/ads/ngrams" className="ml-auto text-xs font-medium text-brand hover:underline">All n-grams →</Link>
+      </div>
+      <div className="flex flex-wrap gap-2">{waste.map((r) => (
+        <span key={r.asin + r.gram} className="rounded-md bg-surface-2 px-2 py-1 text-xs" title={`${r.clicks} clicks, £${r.cost.toFixed(2)} spent, ${r.orders} orders, in ${r.terms} terms (${r.convertingTerms} with an order)`}>
+          <b>{r.gram}</b> · £{r.waste.toFixed(2)} wasted of £{r.cost.toFixed(2)} · {r.terms} terms{r.convertingTerms ? `, ${r.convertingTerms} converting` : ""}
+        </span>
+      ))}</div>
+    </section>
   );
 }

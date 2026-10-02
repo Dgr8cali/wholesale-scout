@@ -1,7 +1,10 @@
 import "server-only";
-import { bulkRows, writeBulkFile, type BulkChange } from "../ads/bulk";
+import { describeChange, writeBulkFile, type BulkChange } from "../ads/bulk";
+import { ngramTable } from "../ads/ngrams";
+import { restoresFor } from "../ads/snapshot";
 import { countByRule, DEFAULT_RULES, mergeRules, RULE_IDS, runRules, type Proposal, type RuleConfig, type RuleId, type RulesConfig, type RulesInput, type RuleTerm } from "../ads/rules";
 import { adsDashboard, loadAll } from "./ads";
+import { createBatch, entityState, guardsByAsin, launchPlans, rankHistory, stockByAsin } from "./adsOps";
 import { chunks, db, must } from "./db";
 
 /* ===================== rule settings ===================== */
@@ -56,10 +59,20 @@ async function rulesInput(): Promise<RulesInput> {
     history.set(k, [...(history.get(k) ?? []), { from: r.date_from as string, to: r.date_to as string, impressions: n(r.impressions), orders: Number(r.orders) }]);
   }
 
+  // Stock (days of cover), stock-guard values to restore, launch plans and rank checks.
+  const adsUnits = new Map(dash.asins.map((a) => {
+    const days = a.from && a.to ? (Date.parse(a.to) - Date.parse(a.from)) / 86_400_000 + 1 : null;
+    const units = a.totals.units ?? a.totals.orders;
+    return [a.asin, days ? units / days : null] as const;
+  }));
+  const [stock, guards, plans, ranks] = await Promise.all([stockByAsin(dash.asins.map((a) => a.asin), adsUnits), guardsByAsin(), launchPlans(), rankHistory()]);
   const products: RulesInput["products"] = {};
   for (const a of dash.asins) {
     const sku = ads.find((p) => p.asin === a.asin && !/archived/i.test(p.state ?? ""))?.sku ?? null;
-    products[a.asin] = { asin: a.asin, price: a.economics.priceSource ? a.economics.price : null, targetAcos: a.targetAcos, sku };
+    products[a.asin] = {
+      asin: a.asin, price: a.economics.priceSource ? a.economics.price : null, targetAcos: a.targetAcos, sku,
+      stock: stock[a.asin] ?? null, guard: guards[a.asin] ?? null, launchStart: plans.find((p) => p.asin === a.asin)?.start_date ?? null,
+    };
   }
 
   // Search terms per campaign and term, over the ranges counted (no overlaps), with the match types that found them.
@@ -96,7 +109,31 @@ async function rulesInput(): Promise<RulesInput> {
     placements: (must(placements, "placements") as Record<string, unknown>[]).map((p) => ({ campaign: p.campaign as string, placement: p.placement as string, percentage: n(p.percentage), ...perf(p) })),
     terms: [...terms.values()],
     negatives: (must(negatives, "negatives") as Record<string, unknown>[]).map((x) => ({ campaign: x.campaign as string, adGroupId: x.ad_group_id as string | null, text: x.keyword_text as string, matchType: x.match_type as string })),
+    ranks: Object.fromEntries(Object.entries(ranks).map(([asin, ks]) => [asin, Object.fromEntries(Object.entries(ks).map(([k, hs]) => [k, hs.map((h) => ({ position: h.position, checkedAt: h.checkedAt }))]))])),
     range, today: new Date().toISOString().slice(0, 10),
+  };
+}
+
+/** The n-gram table per product over the counted search terms, with what Rules 9 and 10 make of it. */
+export async function ngramReport() {
+  const input = await rulesInput();
+  const camp = new Map(input.campaigns.map((c) => [c.id, c]));
+  const rows = ngramTable(input.terms.flatMap((t) => {
+    const c = camp.get(t.campaign);
+    return c?.asin ? [{ asin: c.asin, campaign: c.id, adGroupIds: t.adGroupIds, term: t.term, impressions: t.impressions, clicks: t.clicks, cost: t.cost, orders: t.orders, sales: t.sales }] : [];
+  }));
+  const r = runRules(input, mergeRules({ ...Object.fromEntries(RULE_IDS.map((id) => [id, { enabled: id === "ngram_negative" || id === "ngram_winner" }])) }));
+  const cfg = await rulesConfig();
+  const triggers: Record<string, string> = {};
+  for (const p of r.proposals) {
+    if (p.rule === "ngram_negative") triggers[`${p.asin}|${p.entity.label}`] = "negative";
+    if (p.rule === "ngram_winner") { const g = p.reason.match(/^"([^"]+)" sells/)?.[1]; if (g) triggers[`${p.asin}|${g}`] = "winner"; }
+  }
+  return {
+    range: input.range,
+    products: Object.values(input.products).map((p) => ({ asin: p.asin, price: p.price, targetAcos: p.targetAcos })),
+    thresholds: { negative: cfg.ngram_negative.thresholds, winner: cfg.ngram_winner.thresholds },
+    rows: rows.map(({ servedIn, ...g }) => ({ ...g, acos: g.acos != null && Number.isFinite(g.acos) ? g.acos : null, campaigns: servedIn.length, trigger: triggers[`${g.asin}|${g.gram}`] ?? null })),
   };
 }
 
@@ -176,7 +213,11 @@ export async function decide(ids: string[], action: "approve" | "skip" | "snooze
 
 /* ===================== export batches ===================== */
 
-/** Approved proposals into one bulk sheet: a batch, its proposals marked exported. */
+/**
+ * Approved proposals into one bulk sheet: a batch, its proposals marked exported. Before it's
+ * written, the current value of everything it changes is saved (the batch's and each proposal's
+ * `before`), so the batch can be reverted and a stock guard restored.
+ */
 export async function exportApproved(): Promise<{ id: string; label: string; rows: number; proposals: number }> {
   const d = db();
   const approved = must(await d.from("ads_proposals").select(COLS).eq("status", "approved").order("asin").order("rule"), "approved") as ProposalRow[];
@@ -184,22 +225,24 @@ export async function exportApproved(): Promise<{ id: string; label: string; row
   const seen = new Set<string>();
   const changes: BulkChange[] = [];
   for (const p of approved) for (const c of p.changes) { const k = JSON.stringify(c); if (!seen.has(k)) { seen.add(k); changes.push(c); } }
-  const today = new Date().toISOString().slice(0, 10);
-  const sameDay = must(await d.from("ads_export_batches").select("id").gte("created_at", `${today}T00:00:00Z`), "batches") as { id: string }[];
-  const label = `${today} #${sameDay.length + 1}`;
-  const rows = changes.flatMap(bulkRows).length;
-  const batch = must(await d.from("ads_export_batches").insert({ label, proposals: approved.length, rows, changes }).select("id").single(), "batch") as { id: string };
-  for (const c of chunks(approved.map((p) => p.id))) must(await d.from("ads_proposals").update({ status: "exported", batch_id: batch.id, updated_at: new Date().toISOString() }).in("id", c), "mark exported");
-  return { id: batch.id, label, rows, proposals: approved.length };
+  const state = await entityState();
+  const batch = await createBatch("proposals", changes, { before: restoresFor(changes, state).restores, proposals: approved.length });
+  for (const p of approved) {
+    must(await d.from("ads_proposals").update({ status: "exported", batch_id: batch.id, before: restoresFor(p.changes, state).restores, updated_at: new Date().toISOString() }).eq("id", p.id), "mark exported");
+  }
+  return { ...batch, proposals: approved.length };
 }
 
 export async function listBatches() {
   const d = db();
-  const batches = must(await d.from("ads_export_batches").select("id, label, created_at, uploaded_at, proposals, rows").order("created_at", { ascending: false }).limit(100), "batches") as
-    { id: string; label: string; created_at: string; uploaded_at: string | null; proposals: number; rows: number }[];
+  const batches = must(await d.from("ads_export_batches").select("id, kind, label, created_at, uploaded_at, proposals, rows, reverts, notes, changes, before").order("created_at", { ascending: false }).limit(100), "batches") as
+    { id: string; kind: string; label: string; created_at: string; uploaded_at: string | null; proposals: number; rows: number; reverts: string | null; notes: string[]; changes: BulkChange[]; before: BulkChange[] }[];
   const ids = batches.map((b) => b.id);
   const items = ids.length ? must(await d.from("ads_proposals").select("batch_id, rule, asin, campaign_name, entity, current_value, proposed_value, confidence").in("batch_id", ids), "batch proposals") as Record<string, unknown>[] : [];
-  return batches.map((b) => ({ ...b, items: items.filter((i) => i.batch_id === b.id) }));
+  return batches.map(({ changes, before, ...b }) => ({
+    ...b, items: items.filter((i) => i.batch_id === b.id), changes: changes.map(describeChange), saved: before.length,
+    revertedBy: batches.find((x) => x.reverts === b.id)?.label ?? null, revertsLabel: batches.find((x) => x.id === b.reverts)?.label ?? null,
+  }));
 }
 
 export async function batchFile(id: string): Promise<{ label: string; data: Uint8Array }> {

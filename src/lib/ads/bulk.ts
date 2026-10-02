@@ -175,7 +175,14 @@ export type BulkChange =
    * rows created in the same upload.
    */
   | { kind: "create_campaign"; name: string; dailyBudget: number; biddingStrategy: string; startDate: string; adGroupName: string; defaultBid: number; sku: string;
-      keywords: { text: string; matchType: "Exact" | "Phrase" | "Broad"; bid: number }[] };
+      keywords: { text: string; matchType: "Exact" | "Phrase" | "Broad"; bid: number }[];
+      /** Auto: Amazon targets by itself, through the four targeting groups (close-match, loose-match, substitutes, complements). */
+      targetingType?: "Manual" | "Auto";
+      /** Product targeting rows: an auto campaign's targeting groups, or asin="B0…" in a manual one. */
+      targets?: { expression: string; bid: number; state: "enabled" | "paused" }[];
+      placements?: { placement: string; percentage: number }[] }
+  /** Negative keywords can't be paused: archived is how one is switched off. */
+  | { kind: "negative_state"; campaignId: string; adGroupId: string | null; keywordId: string; state: "enabled" | "archived" };
 
 const money = (n: number) => n.toFixed(2);
 
@@ -186,10 +193,12 @@ export function bulkRows(c: BulkChange): BulkRow[] {
   if (c.kind === "create_campaign") {
     const p = { Product: "Sponsored Products", Operation: "Create", "Campaign ID": c.name };
     return [
-      { ...p, Entity: "Campaign", "Campaign name": c.name, "Start date": c.startDate.replace(/-/g, ""), "Targeting type": "Manual", State: "enabled", "Daily budget": money(c.dailyBudget), "Bidding strategy": c.biddingStrategy },
+      { ...p, Entity: "Campaign", "Campaign name": c.name, "Start date": c.startDate.replace(/-/g, ""), "Targeting type": c.targetingType ?? "Manual", State: "enabled", "Daily budget": money(c.dailyBudget), "Bidding strategy": c.biddingStrategy },
+      ...(c.placements ?? []).map((x) => ({ ...p, Entity: "Bidding adjustment", "Bidding strategy": c.biddingStrategy, Placement: x.placement.startsWith("Placement") ? x.placement : `Placement ${x.placement}`, Percentage: String(Math.round(x.percentage)) })),
       { ...p, Entity: "Ad group", "Ad group ID": c.adGroupName, "Ad group name": c.adGroupName, State: "enabled", "Ad Group Default Bid": money(c.defaultBid) },
       { ...p, Entity: "Product ad", "Ad group ID": c.adGroupName, SKU: c.sku, State: "enabled" },
       ...c.keywords.map((k) => ({ ...p, Entity: "Keyword", "Ad group ID": c.adGroupName, "Keyword text": k.text, "Match type": k.matchType, Bid: money(k.bid), State: "enabled" })),
+      ...(c.targets ?? []).map((t) => ({ ...p, Entity: "Product targeting", "Ad group ID": c.adGroupName, "Product targeting expression": t.expression, Bid: money(t.bid), State: t.state })),
     ];
   }
   return [bulkRow(c)];
@@ -220,6 +229,10 @@ function bulkRow(c: Exclude<BulkChange, { kind: "create_campaign" }>): BulkRow {
       return { ...base, Entity: "Product targeting", Operation: "Update", "Ad group ID": c.adGroupId, "Product Targeting ID": c.targetId, Bid: money(c.bid) };
     case "target_state":
       return { ...base, Entity: "Product targeting", Operation: "Update", "Ad group ID": c.adGroupId, "Product Targeting ID": c.targetId, State: c.state };
+    case "negative_state":
+      return c.adGroupId
+        ? { ...base, Entity: "Negative keyword", Operation: "Update", "Ad group ID": c.adGroupId, "Keyword ID": c.keywordId, State: c.state }
+        : { ...base, Entity: "Campaign negative keyword", Operation: "Update", "Keyword ID": c.keywordId, State: c.state };
   }
 }
 
@@ -238,3 +251,21 @@ export function writeBulk(changes: BulkChange[]): XLSX.WorkBook {
 
 /** The upload as .xlsx bytes. */
 export const writeBulkFile = (changes: BulkChange[]): Uint8Array => XLSX.write(writeBulk(changes), { type: "array", bookType: "xlsx" }) as Uint8Array;
+
+/** A change in a few words, for a batch's change list (IDs, since the names live in the app). */
+export function describeChange(c: BulkChange): string {
+  switch (c.kind) {
+    case "keyword_bid": return `Keyword ${c.keywordId}: bid £${c.bid.toFixed(2)}`;
+    case "keyword_state": return `Keyword ${c.keywordId}: ${c.state}`;
+    case "target_bid": return `Target ${c.targetId}: bid £${c.bid.toFixed(2)}`;
+    case "target_state": return `Target ${c.targetId}: ${c.state}`;
+    case "ad_group_bid": return `Ad group ${c.adGroupId}: default bid £${c.defaultBid.toFixed(2)}`;
+    case "campaign_budget": return `Campaign ${c.campaignId}: budget £${c.dailyBudget.toFixed(2)}/day`;
+    case "campaign_state": return `Campaign ${c.campaignId}: ${c.state}`;
+    case "placement": return `Campaign ${c.campaignId}: ${c.placement.replace(/^Placement\s+/i, "")} +${Math.round(c.percentage)}%`;
+    case "create_keyword": return `New keyword "${c.text}" (${c.matchType.toLowerCase()}) at £${c.bid.toFixed(2)} in campaign ${c.campaignId}`;
+    case "create_negative": return `New ${c.matchType.toLowerCase()} "${c.text}" in campaign ${c.campaignId}${c.adGroupId ? "" : " (campaign level)"}`;
+    case "negative_state": return `Negative ${c.keywordId}: ${c.state}`;
+    case "create_campaign": return `New ${c.targetingType === "Auto" ? "auto" : "manual"} campaign "${c.name}" at £${c.dailyBudget.toFixed(2)}/day: ${c.keywords.length ? `${c.keywords.length} keywords` : `${c.targets?.length ?? 0} targets`}`;
+  }
+}

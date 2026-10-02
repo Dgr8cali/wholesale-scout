@@ -38,3 +38,34 @@ $("test").addEventListener("click", async () => {
     else msg(r?.error || "No answer.");
   });
 });
+
+// Check ranks: the products and their tracked keywords come from the app; the run happens in a tab (ranks.js).
+let rankTargets = [];
+let rankCap = 30;
+const rankMsg = (text, ok) => { $("rankMsg").textContent = text; $("rankMsg").className = ok ? "ok" : "err"; };
+function showRankInfo() {
+  const t = rankTargets.find((x) => x.asin === $("rankAsin").value);
+  $("rankGo").disabled = !t || !t.keywords.length;
+  $("rankInfo").textContent = !t ? "" : t.keywords.length
+    ? `${t.keywords.length} keyword${t.keywords.length === 1 ? "" : "s"}${t.keywords.length > rankCap ? ` (the first ${rankCap} are checked)` : ""}: ${t.keywords.slice(0, 6).join(", ")}${t.keywords.length > 6 ? "…" : ""}`
+    : "No exact keywords or added keywords for this product yet.";
+}
+chrome.runtime.sendMessage({ type: "rankState" }, (s) => { if (s?.running) rankMsg(`A check of ${s.asin} is running (${s.results.length} of ${s.keywords.length}).`, true); });
+chrome.runtime.sendMessage({ type: "api", method: "GET", path: "/api/ads/ranks" }, (r) => {
+  if (!r?.ok) { $("rankAsin").innerHTML = "<option value=''>Couldn't load products</option>"; rankMsg(r?.error || "No answer."); return; }
+  rankTargets = r.data.targets || [];
+  rankCap = r.data.cap || 30;
+  $("rankAsin").innerHTML = rankTargets.length
+    ? rankTargets.map((t) => `<option value="${t.asin}">${t.asin}${t.title ? ` · ${t.title.slice(0, 30)}` : ""} (${t.keywords.length})</option>`).join("")
+    : "<option value=''>No Ads products yet</option>";
+  showRankInfo();
+});
+$("rankAsin").addEventListener("change", showRankInfo);
+$("rankGo").addEventListener("click", () => {
+  const t = rankTargets.find((x) => x.asin === $("rankAsin").value);
+  if (!t) return;
+  chrome.runtime.sendMessage({ type: "rankStart", asin: t.asin, keywords: t.keywords }, (r) => {
+    if (r?.ok) rankMsg(`Checking ${r.count} keywords in a new tab. Results are saved to the app at the end (or when you Stop).`, true);
+    else rankMsg(r?.error || "No answer.");
+  });
+});

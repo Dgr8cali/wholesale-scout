@@ -76,7 +76,12 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
       await chrome.tabs.create({ url: s.dgUrl.replace("{asin}", encodeURIComponent(msg.asin)) });
       return reply({ ok: true });
     }
+    // Rank-check messages are answered by ranks.js.
+    if (String(msg.type).startsWith("rank")) return;
     reply({ ok: false, error: `Unknown message ${msg.type}` });
   })();
   return true; // reply asynchronously
 });
+
+// Rank checks (Ads): a manual run per click from the popup.
+importScripts("ranks.js");

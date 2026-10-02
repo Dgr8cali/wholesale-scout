@@ -135,6 +135,10 @@ On Seller Central's **Product Opportunity Explorer**, the extension can send a n
 - **Where it goes.** To your app (`/api/pl/poe`) with the extension's password, like every other call. The niche attaches to the candidate whose niche keyword equals its title. Otherwise the panel lists your candidates to pick from and **Attach** sends it there.
 - **Markets.** sellercentral.amazon.co.uk only, unless you tick **Opportunity Explorer on .com and .de too** in the popup. Chrome then asks for access to those two Seller Central sites.
 
+## Rank checks (0.3.0)
+
+**Check ranks** in the popup records where an Ads product sits in amazon.co.uk's organic results for its tracked keywords (its exact keywords, its launch head terms, and any you add): one keyword every 3–6 seconds in a tab you can see, at most 30 a run, with a progress panel and **Stop**. It runs only when you click. See [Ads: rank checks](/help/howto/ads-rank-checks).
+
 ## Updating the extension
 
 After you pull a new version of the app's code, open `chrome://extensions` and click the reload arrow on the Wholesale Scout card.

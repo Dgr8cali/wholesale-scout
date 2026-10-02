@@ -113,7 +113,7 @@ export async function advanceSync(opts: { force?: boolean } = {}): Promise<SyncS
 }
 
 /** FBA stock per SKU, replaced. */
-async function syncStock() {
+export async function syncStock() {
   const sp = getSpApi()!;
   const stock = await sp.fbaInventory();
   const d = db();

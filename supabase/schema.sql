@@ -1,5 +1,5 @@
 -- Wholesale Scout schema, dumped by scripts/schema-backup.mjs. No data.
--- Dumped 2026-10-02T13:24:22.930Z. Safe to re-run. Restore: npm run schema:restore
+-- Dumped 2026-10-02T13:51:26.818Z. Safe to re-run. Restore: npm run schema:restore
 
 -- @section extensions
 create extension if not exists "pg_cron";
@@ -135,7 +135,11 @@ create table if not exists "ads_export_batches" (
   "uploaded_at" timestamp with time zone,
   "proposals" integer default 0 not null,
   "rows" integer default 0 not null,
-  "changes" jsonb default '[]'::jsonb not null
+  "changes" jsonb default '[]'::jsonb not null,
+  "kind" text default 'proposals'::text not null,
+  "reverts" uuid,
+  "before" jsonb default '[]'::jsonb not null,
+  "notes" jsonb default '[]'::jsonb not null
 );
 alter table "ads_export_batches" add column if not exists "id" uuid default gen_random_uuid();
 alter table "ads_export_batches" add column if not exists "label" text;
@@ -144,6 +148,10 @@ alter table "ads_export_batches" add column if not exists "uploaded_at" timestam
 alter table "ads_export_batches" add column if not exists "proposals" integer default 0;
 alter table "ads_export_batches" add column if not exists "rows" integer default 0;
 alter table "ads_export_batches" add column if not exists "changes" jsonb default '[]'::jsonb;
+alter table "ads_export_batches" add column if not exists "kind" text default 'proposals'::text;
+alter table "ads_export_batches" add column if not exists "reverts" uuid;
+alter table "ads_export_batches" add column if not exists "before" jsonb default '[]'::jsonb;
+alter table "ads_export_batches" add column if not exists "notes" jsonb default '[]'::jsonb;
 alter table "ads_export_batches" enable row level security;
 
 create table if not exists "ads_imports" (
@@ -223,6 +231,24 @@ alter table "ads_keywords" add column if not exists "sales" numeric default 0;
 alter table "ads_keywords" add column if not exists "units" integer;
 alter table "ads_keywords" add column if not exists "import_id" uuid;
 alter table "ads_keywords" enable row level security;
+
+create table if not exists "ads_launch_plans" (
+  "asin" text not null,
+  "start_date" date not null,
+  "input" jsonb not null,
+  "campaigns" jsonb not null,
+  "plan" jsonb not null,
+  "batch_id" uuid,
+  "created_at" timestamp with time zone default now() not null
+);
+alter table "ads_launch_plans" add column if not exists "asin" text;
+alter table "ads_launch_plans" add column if not exists "start_date" date;
+alter table "ads_launch_plans" add column if not exists "input" jsonb;
+alter table "ads_launch_plans" add column if not exists "campaigns" jsonb;
+alter table "ads_launch_plans" add column if not exists "plan" jsonb;
+alter table "ads_launch_plans" add column if not exists "batch_id" uuid;
+alter table "ads_launch_plans" add column if not exists "created_at" timestamp with time zone default now();
+alter table "ads_launch_plans" enable row level security;
 
 create table if not exists "ads_negative_keywords" (
   "keyword_id" text not null,
@@ -391,7 +417,8 @@ create table if not exists "ads_proposals" (
   "batch_id" uuid,
   "decided_at" timestamp with time zone,
   "created_at" timestamp with time zone default now() not null,
-  "updated_at" timestamp with time zone default now() not null
+  "updated_at" timestamp with time zone default now() not null,
+  "before" jsonb
 );
 alter table "ads_proposals" add column if not exists "id" uuid default gen_random_uuid();
 alter table "ads_proposals" add column if not exists "rule" text;
@@ -416,7 +443,36 @@ alter table "ads_proposals" add column if not exists "batch_id" uuid;
 alter table "ads_proposals" add column if not exists "decided_at" timestamp with time zone;
 alter table "ads_proposals" add column if not exists "created_at" timestamp with time zone default now();
 alter table "ads_proposals" add column if not exists "updated_at" timestamp with time zone default now();
+alter table "ads_proposals" add column if not exists "before" jsonb;
 alter table "ads_proposals" enable row level security;
+
+create table if not exists "ads_rank_checks" (
+  "id" uuid default gen_random_uuid() not null,
+  "asin" text not null,
+  "keyword" text not null,
+  "position" integer,
+  "page" integer,
+  "run_id" uuid,
+  "checked_at" timestamp with time zone default now() not null
+);
+alter table "ads_rank_checks" add column if not exists "id" uuid default gen_random_uuid();
+alter table "ads_rank_checks" add column if not exists "asin" text;
+alter table "ads_rank_checks" add column if not exists "keyword" text;
+alter table "ads_rank_checks" add column if not exists "position" integer;
+alter table "ads_rank_checks" add column if not exists "page" integer;
+alter table "ads_rank_checks" add column if not exists "run_id" uuid;
+alter table "ads_rank_checks" add column if not exists "checked_at" timestamp with time zone default now();
+alter table "ads_rank_checks" enable row level security;
+
+create table if not exists "ads_rank_keywords" (
+  "asin" text not null,
+  "keyword" text not null,
+  "added_at" timestamp with time zone default now() not null
+);
+alter table "ads_rank_keywords" add column if not exists "asin" text;
+alter table "ads_rank_keywords" add column if not exists "keyword" text;
+alter table "ads_rank_keywords" add column if not exists "added_at" timestamp with time zone default now();
+alter table "ads_rank_keywords" enable row level security;
 
 create table if not exists "ads_rules" (
   "rule" text not null,
@@ -479,6 +535,20 @@ alter table "ads_settings" add column if not exists "key" text;
 alter table "ads_settings" add column if not exists "value" numeric;
 alter table "ads_settings" add column if not exists "updated_at" timestamp with time zone default now();
 alter table "ads_settings" enable row level security;
+
+create table if not exists "ads_snapshots" (
+  "id" uuid default gen_random_uuid() not null,
+  "label" text not null,
+  "state" jsonb not null,
+  "counts" jsonb default '{}'::jsonb not null,
+  "created_at" timestamp with time zone default now() not null
+);
+alter table "ads_snapshots" add column if not exists "id" uuid default gen_random_uuid();
+alter table "ads_snapshots" add column if not exists "label" text;
+alter table "ads_snapshots" add column if not exists "state" jsonb;
+alter table "ads_snapshots" add column if not exists "counts" jsonb default '{}'::jsonb;
+alter table "ads_snapshots" add column if not exists "created_at" timestamp with time zone default now();
+alter table "ads_snapshots" enable row level security;
 
 create table if not exists "ads_targets" (
   "asin" text not null,
@@ -1662,6 +1732,11 @@ do $$ begin
   end if;
 end $$;
 do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'ads_launch_plans_pkey' and conrelid = '"ads_launch_plans"'::regclass) then
+    alter table "ads_launch_plans" add constraint "ads_launch_plans_pkey" PRIMARY KEY (asin);
+  end if;
+end $$;
+do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'ads_negative_keywords_pkey' and conrelid = '"ads_negative_keywords"'::regclass) then
     alter table "ads_negative_keywords" add constraint "ads_negative_keywords_pkey" PRIMARY KEY (keyword_id);
   end if;
@@ -1692,6 +1767,16 @@ do $$ begin
   end if;
 end $$;
 do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'ads_rank_checks_pkey' and conrelid = '"ads_rank_checks"'::regclass) then
+    alter table "ads_rank_checks" add constraint "ads_rank_checks_pkey" PRIMARY KEY (id);
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'ads_rank_keywords_pkey' and conrelid = '"ads_rank_keywords"'::regclass) then
+    alter table "ads_rank_keywords" add constraint "ads_rank_keywords_pkey" PRIMARY KEY (asin, keyword);
+  end if;
+end $$;
+do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'ads_rules_pkey' and conrelid = '"ads_rules"'::regclass) then
     alter table "ads_rules" add constraint "ads_rules_pkey" PRIMARY KEY (rule);
   end if;
@@ -1704,6 +1789,11 @@ end $$;
 do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'ads_settings_pkey' and conrelid = '"ads_settings"'::regclass) then
     alter table "ads_settings" add constraint "ads_settings_pkey" PRIMARY KEY (key);
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'ads_snapshots_pkey' and conrelid = '"ads_snapshots"'::regclass) then
+    alter table "ads_snapshots" add constraint "ads_snapshots_pkey" PRIMARY KEY (id);
   end if;
 end $$;
 do $$ begin
@@ -2012,6 +2102,11 @@ do $$ begin
   end if;
 end $$;
 do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'ads_export_batches_kind_check' and conrelid = '"ads_export_batches"'::regclass) then
+    alter table "ads_export_batches" add constraint "ads_export_batches_kind_check" CHECK ((kind = ANY (ARRAY['proposals'::text, 'revert'::text, 'restore'::text, 'launch'::text])));
+  end if;
+end $$;
+do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'ads_negative_keywords_level_check' and conrelid = '"ads_negative_keywords"'::regclass) then
     alter table "ads_negative_keywords" add constraint "ads_negative_keywords_level_check" CHECK ((level = ANY (ARRAY['ad group'::text, 'campaign'::text])));
   end if;
@@ -2029,6 +2124,11 @@ end $$;
 do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'ads_proposals_status_check' and conrelid = '"ads_proposals"'::regclass) then
     alter table "ads_proposals" add constraint "ads_proposals_status_check" CHECK ((status = ANY (ARRAY['open'::text, 'approved'::text, 'skipped'::text, 'snoozed'::text, 'exported'::text, 'uploaded'::text])));
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'ads_rank_checks_position_check' and conrelid = '"ads_rank_checks"'::regclass) then
+    alter table "ads_rank_checks" add constraint "ads_rank_checks_position_check" CHECK ((("position" >= 1) AND ("position" <= 48)));
   end if;
 end $$;
 do $$ begin
@@ -2207,6 +2307,11 @@ do $$ begin
   end if;
 end $$;
 do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'ads_export_batches_reverts_fkey' and conrelid = '"ads_export_batches"'::regclass) then
+    alter table "ads_export_batches" add constraint "ads_export_batches_reverts_fkey" FOREIGN KEY (reverts) REFERENCES ads_export_batches(id) ON DELETE SET NULL;
+  end if;
+end $$;
+do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'ads_keyword_ranges_import_id_fkey' and conrelid = '"ads_keyword_ranges"'::regclass) then
     alter table "ads_keyword_ranges" add constraint "ads_keyword_ranges_import_id_fkey" FOREIGN KEY (import_id) REFERENCES ads_imports(id) ON DELETE CASCADE;
   end if;
@@ -2219,6 +2324,11 @@ end $$;
 do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'ads_keywords_import_id_fkey' and conrelid = '"ads_keywords"'::regclass) then
     alter table "ads_keywords" add constraint "ads_keywords_import_id_fkey" FOREIGN KEY (import_id) REFERENCES ads_imports(id) ON DELETE CASCADE;
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'ads_launch_plans_batch_id_fkey' and conrelid = '"ads_launch_plans"'::regclass) then
+    alter table "ads_launch_plans" add constraint "ads_launch_plans_batch_id_fkey" FOREIGN KEY (batch_id) REFERENCES ads_export_batches(id) ON DELETE SET NULL;
   end if;
 end $$;
 do $$ begin
@@ -2400,6 +2510,7 @@ CREATE INDEX IF NOT EXISTS ads_product_ads_asin ON ads_product_ads USING btree (
 CREATE INDEX IF NOT EXISTS ads_proposals_batch ON ads_proposals USING btree (batch_id);
 CREATE UNIQUE INDEX IF NOT EXISTS ads_proposals_one_open ON ads_proposals USING btree (rule, entity_key) WHERE (status = ANY (ARRAY['open'::text, 'approved'::text]));
 CREATE INDEX IF NOT EXISTS ads_proposals_status ON ads_proposals USING btree (status);
+CREATE INDEX IF NOT EXISTS ads_rank_checks_key ON ads_rank_checks USING btree (asin, keyword, checked_at DESC);
 CREATE INDEX IF NOT EXISTS amazon_inventory_asin ON amazon_inventory USING btree (asin);
 CREATE INDEX IF NOT EXISTS amazon_sales_day ON amazon_sales USING btree (day);
 CREATE INDEX IF NOT EXISTS auth_failures_blocked ON auth_failures USING btree (blocked_until) WHERE (blocked_until IS NOT NULL);
@@ -2661,3 +2772,4 @@ insert into schema_migrations (name) values ('20261002000600_ads_phase1.sql') on
 insert into schema_migrations (name) values ('20261002000700_ads_upsert_keys.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261002000800_ads_bulk.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261002000900_ads_rules_proposals.sql') on conflict do nothing;
+insert into schema_migrations (name) values ('20261002001000_ads_phase25.sql') on conflict do nothing;

@@ -30,7 +30,7 @@ describe("workspaces", () => {
       ["ads", "Ads", "Run and tune Sponsored Products"],
     ]);
     expect(workspace("pl").nav.map((n) => [n.href, n.soon ?? false])).toEqual([["/pl/candidates", false], ["/pl/niche-hunt", false], ["/pl/quotes", true], ["/pl/launch", true]]);
-    expect(workspace("ads").nav.map((n) => n.href)).toEqual(["/ads/dashboard", "/ads/imports", "/ads/rules", "/ads/proposals"]);
+    expect(workspace("ads").nav.map((n) => n.href)).toEqual(["/ads/dashboard", "/ads/imports", "/ads/rules", "/ads/proposals", "/ads/ngrams", "/ads/launch"]);
     expect(workspace("ads").nav.some((n) => n.soon)).toBe(false);
     expect(workspace("wholesale").nav.map((n) => n.label)).toEqual(expect.arrayContaining(["Runs", "Upload", "Check ASINs", "Qogita", "Sellers", "Brands", "Suppliers", "Favourites", "Watchlist", "Plan", "Hunt"]));
   });

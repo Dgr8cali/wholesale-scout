@@ -9,6 +9,7 @@ import { EmptyState, ErrorState } from "@/components/States";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { Sparkline } from "@/components/results/Sparkline";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TERM_STATUS_LABEL, type Ratios, type TermStatus, type Totals } from "@/lib/ads/metrics";
 import { api } from "@/lib/ui/client";
@@ -27,7 +28,10 @@ interface CampaignRow {
 }
 interface Matched { text: string; matchType: string | null; clicks: number; cost: number; orders: number }
 interface TermRow { campaign: string; campaignName: string; term: string; asin: string | null; totals: Totals; ratios: Ratios; status: TermStatus; why: string; from: string; to: string; breakEvenAcos: number | null; targetAcos: number; matched: Matched[] }
-interface Dash { settings: { targetAcos: number; cpc: number; cpcAuto: boolean }; asins: AsinRow[]; campaigns: CampaignRow[]; terms: TermRow[]; imports: number }
+interface Stock { fulfillable: number; inbound: number; unitsPerDay: number | null; daysOfCover: number | null; source: string; updatedAt: string | null }
+interface Plan { asin: string; start_date: string; input: { price: number; headTerms: string[] }; plan: { from: string; to: string | null; title: string; detail: string }[]; batch_id: string | null }
+interface KeywordRow { keywordId: string; campaign: string; campaignName: string; asin: string | null; text: string; matchType: string; bid: number | null; state: string | null; clicks: number; cost: number; orders: number; sales: number; ranks: { position: number | null; page: number | null; checkedAt: string }[] }
+interface Dash { settings: { targetAcos: number; cpc: number; cpcAuto: boolean }; asins: AsinRow[]; campaigns: CampaignRow[]; terms: TermRow[]; imports: number; stock: Record<string, Stock>; plans: Plan[]; keywords: KeywordRow[] }
 
 const gbp = (v: number | null | undefined) => (v == null ? "—" : `${v < 0 ? "−" : ""}£${Math.abs(v).toFixed(2)}`);
 const pct = (v: number | null | undefined, dp = 1) => (v == null ? "—" : `${(v * 100).toFixed(dp)}%`);
@@ -71,6 +75,7 @@ export default function AdsDashboardPage() {
     );
   }
   const unmapped = d.campaigns.filter((c) => !c.asin && c.totals);
+  const launchOnly = d.plans.filter((p) => !d.asins.some((a) => a.asin === p.asin));
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -81,7 +86,10 @@ export default function AdsDashboardPage() {
             ACoS is green at or under the target, amber up to break-even, red past it.
           </p>
         </div>
-        <Button asChild variant="outline"><Link href="/ads/imports"><FileUpIcon /> Import reports</Link></Button>
+        <div className="flex gap-2">
+          <FetchStock onDone={load} />
+          <Button asChild variant="outline"><Link href="/ads/imports"><FileUpIcon /> Import reports</Link></Button>
+        </div>
       </div>
 
       {unmapped.length > 0 && (
@@ -94,10 +102,21 @@ export default function AdsDashboardPage() {
 
       <section className="space-y-3">
         <h2 className="section-label">Products</h2>
-        {d.asins.length ? d.asins.map((a) => <AsinTile key={a.asin} a={a} onSaved={load} />) : <p className="text-sm text-muted-foreground">No campaign is linked to an ASIN yet.</p>}
+        {d.asins.length ? d.asins.map((a) => <AsinTile key={a.asin} a={a} stock={d.stock[a.asin]} plan={d.plans.find((p) => p.asin === a.asin)} onSaved={load} />) : <p className="text-sm text-muted-foreground">No campaign is linked to an ASIN yet.</p>}
+        {launchOnly.map((p) => (
+          <div key={p.asin} className="panel space-y-2 p-4">
+            <div className="flex flex-wrap items-baseline gap-2">
+              <span className="font-heading text-base font-bold">{p.asin}</span>
+              <span className="text-xs text-muted-foreground">launching at {gbp(p.input.price)} · no campaign data imported yet</span>
+              <StockChip s={d.stock[p.asin]} />
+            </div>
+            <PlanLine plan={p} />
+          </div>
+        ))}
       </section>
 
       <CampaignTable rows={d.campaigns} onSaved={load} />
+      <KeywordTable rows={d.keywords} />
       <TermTable rows={d.terms} campaigns={d.campaigns} />
     </div>
   );
@@ -113,7 +132,53 @@ function Metric({ label, value, sub, cls }: { label: string; value: string; sub?
   );
 }
 
-function AsinTile({ a, onSaved }: { a: AsinRow; onSaved: () => void }) {
+/** Days of cover: red under 3, amber under 10, plain to 21, green above. */
+function StockChip({ s }: { s: Stock | undefined }) {
+  if (!s) return <span className="text-xs text-muted-foreground" title="No FBA inventory for this ASIN in the last sync">stock unknown</span>;
+  const d = s.daysOfCover;
+  const cls = d == null ? "bg-empty-soft text-ink-2" : d < 3 ? "bg-fail-soft text-fail" : d < 10 ? "bg-warn-soft text-warn" : d <= 21 ? "bg-empty-soft text-ink-2" : "bg-pass-soft text-pass";
+  const days = d == null ? "—" : d >= 9999 ? "no sales" : `${d < 10 ? d.toFixed(1) : Math.round(d)} days`;
+  return (
+    <span className={cn("cursor-help rounded-full px-2 py-0.5 text-xs font-semibold", cls)}
+      title={`${s.fulfillable} fulfillable${s.inbound ? `, ${s.inbound} inbound` : ""}; ${s.unitsPerDay != null ? `${s.unitsPerDay.toFixed(2)} units a day` : "no sales rate"} (${s.source})${s.updatedAt ? `; stock as of ${new Date(s.updatedAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}` : ""}`}>
+      {s.fulfillable} in stock · {days} of cover
+    </span>
+  );
+}
+
+function FetchStock({ onDone }: { onDone: () => void }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <Button variant="outline" disabled={busy} onClick={async () => {
+      setBusy(true);
+      try {
+        const r = await api<{ ok: boolean; skus: number; error: string | null }>("/api/ads/inventory", { method: "POST" });
+        toast.success(`FBA stock fetched: ${r.skus} SKUs`);
+        onDone();
+      } catch (e) {
+        toast.error((e as Error).message);
+      } finally {
+        setBusy(false);
+      }
+    }}>{busy ? <LoaderIcon className="animate-spin" /> : null} Fetch stock</Button>
+  );
+}
+
+/** Where a launch is in its 60-day plan. */
+function PlanLine({ plan }: { plan: Plan }) {
+  const today = new Date().toISOString().slice(0, 10);
+  const cur = [...plan.plan].reverse().find((p) => p.from <= today);
+  const next = plan.plan.find((p) => p.from > today);
+  return (
+    <div className="rounded-lg bg-surface-2 px-3 py-2 text-sm">
+      <b>Launch plan</b> from {day(plan.start_date)}: {cur ? <><b>{cur.title}</b> <span className="text-muted-foreground">({cur.detail})</span></> : <>starts {day(plan.start_date)}</>}
+      {next && <span className="text-muted-foreground"> Next: {next.title} on {day(next.from)}.</span>}
+      <div className="mt-1 flex flex-wrap gap-x-4 text-xs text-muted-foreground">{plan.plan.map((p) => <span key={p.from}>{day(p.from)}: {p.title}</span>)}</div>
+    </div>
+  );
+}
+
+function AsinTile({ a, stock, plan, onSaved }: { a: AsinRow; stock: Stock | undefined; plan: Plan | undefined; onSaved: () => void }) {
   const [open, setOpen] = useState(false);
   const e = a.economics;
   const t = a.totals, r = a.ratios;
@@ -123,7 +188,9 @@ function AsinTile({ a, onSaved }: { a: AsinRow; onSaved: () => void }) {
         <span className="font-heading text-base font-bold">{a.title ?? a.asin}</span>
         <a className="num text-xs text-brand hover:underline" href={`https://www.amazon.co.uk/dp/${a.asin}`} target="_blank" rel="noreferrer">{a.asin}</a>
         <span className="text-xs text-muted-foreground">· {a.campaigns} campaign{a.campaigns === 1 ? "" : "s"} · {day(a.from)} – {day(a.to)} · {a.phase} · target ACoS {pct(a.targetAcos, 0)}</span>
+        <StockChip s={stock} />
       </div>
+      {plan && <PlanLine plan={plan} />}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
         <Metric label="Spend" value={gbp(t.cost)} />
         <Metric label="Sales" value={gbp(t.sales)} sub={`${n0(t.orders)} orders${t.units != null ? `, ${n0(t.units)} units` : ""}`} />
@@ -367,6 +434,61 @@ function TermTable({ rows, campaigns }: { rows: TermRow[]; campaigns: CampaignRo
         </table>
       </div>
       <p className="text-xs text-muted-foreground">Converting: orders at or under the target ACoS. Over target: orders above it. Watch: no order yet, under 15 clicks. Waste: no order after 15 clicks, or after spending half the product&apos;s price. The Negative rule on <Link className="underline" href="/ads/rules">Rules</Link> uses the same thresholds by default.</p>
+    </section>
+  );
+}
+
+/** Organic rank as a sparkline: not in the top 48 is drawn at 49; lower is better, so it's drawn higher. */
+function RankCell({ ranks }: { ranks: KeywordRow["ranks"] }) {
+  if (!ranks.length) return <span className="text-muted-foreground">—</span>;
+  const last = ranks[ranks.length - 1];
+  const label = ranks.map((r) => `${new Date(r.checkedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}: ${r.position == null ? "not in top 48" : `#${r.position} (page ${r.page ?? "?"})`}`).join("\n");
+  return (
+    <span className="inline-flex items-center gap-2" title={label}>
+      <span className="num font-medium">{last.position == null ? ">48" : `#${last.position}`}</span>
+      {ranks.length > 1 && <Sparkline values={ranks.map((r) => r.position ?? 49)} invert width={64} height={18} label={`Organic rank, last ${ranks.length} checks`} />}
+    </span>
+  );
+}
+
+function KeywordTable({ rows }: { rows: KeywordRow[] }) {
+  const [asin, setAsin] = useState("");
+  const [all, setAll] = useState(false);
+  const asins = [...new Set(rows.map((r) => r.asin).filter((a): a is string => !!a))];
+  const shown = rows.filter((r) => (!asin || r.asin === asin) && (all || r.clicks > 0 || r.ranks.length > 0));
+  if (!rows.length) return null;
+  return (
+    <section className="space-y-2">
+      <div className="flex flex-wrap items-end gap-3">
+        <h2 className="section-label mr-auto">Keywords</h2>
+        <label className="space-y-1"><span className="field-label">Product</span>
+          <NativeSelect value={asin} onChange={(e) => setAsin(e.target.value)}>
+            <NativeSelectOption value="">All products</NativeSelectOption>
+            {asins.map((a) => <NativeSelectOption key={a} value={a}>{a}</NativeSelectOption>)}
+          </NativeSelect></label>
+        <label className="flex items-center gap-2 pb-2 text-sm"><input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} /> Include keywords with no clicks</label>
+      </div>
+      <div className="overflow-x-auto rounded-lg border">
+        <table className="w-full text-sm">
+          <thead><tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase">
+            <th className="px-2 py-1.5">Keyword</th><th className="px-2 py-1.5">Campaign</th><th className="px-2 py-1.5 text-right">Bid</th><th className="px-2 py-1.5 text-right">Clicks</th>
+            <th className="px-2 py-1.5 text-right">Spend</th><th className="px-2 py-1.5 text-right">Orders</th><th className="px-2 py-1.5 text-right">ACoS</th><th className="px-2 py-1.5" title="Organic position on the extension's rank checks: the latest, and the last 8">Organic rank</th>
+          </tr></thead>
+          <tbody>{shown.slice(0, 200).map((k) => (
+            <tr key={k.keywordId} className={cn("border-b last:border-b-0", /paused|archived/i.test(k.state ?? "") && "text-muted-foreground")}>
+              <td className="px-2 py-1.5">{k.text} <span className="text-xs text-muted-foreground">{k.matchType.toLowerCase()}{k.state && k.state !== "enabled" ? ` · ${k.state}` : ""}</span></td>
+              <td className="px-2 py-1.5 text-xs text-muted-foreground">{k.campaignName}</td>
+              <td className="num px-2 py-1.5 text-right">{gbp(k.bid)}</td>
+              <td className="num px-2 py-1.5 text-right">{n0(k.clicks)}</td>
+              <td className="num px-2 py-1.5 text-right">{gbp(k.cost)}</td>
+              <td className="num px-2 py-1.5 text-right">{n0(k.orders)}</td>
+              <td className="num px-2 py-1.5 text-right">{k.sales ? pct(k.cost / k.sales) : k.cost ? "no sales" : "—"}</td>
+              <td className="px-2 py-1.5"><RankCell ranks={k.ranks} /></td>
+            </tr>
+          ))}</tbody>
+        </table>
+      </div>
+      <p className="text-xs text-muted-foreground">Organic rank comes from the extension&apos;s manual rank checks (Help: Ads: rank checks).</p>
     </section>
   );
 }

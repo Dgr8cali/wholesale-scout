@@ -7,6 +7,7 @@ Wholesale Scout's verdict on Amazon UK, where you browse:
 - **Competitors' stock** (on request, per click): see below.
 - **Dangerous goods**: "Look up" opens Seller Central for the ASIN; a bar there reads the classification and, when you confirm it, saves it to the product in the app. Hazmat counts in the compliance gate the next time the product is screened.
 - **Opportunity Explorer → Private label** (on request, per click): send a Product Opportunity Explorer niche to the app's Private label workspace for Gates 3 and 5. See below.
+- **Rank checks** (on request, per click, 0.3.0): where an Ads product sits in amazon.co.uk's organic results for its keywords. See below.
 
 ## Install (load unpacked)
 
@@ -53,6 +54,14 @@ Seller Central's pages can't be read reliably, so the bar suggests hazmat / not 
 - **Where it goes**: `POST /api/pl/poe` on your app with `{ nicheId, title, raw }` and your password, through `background.js` like every other call. The app stores the capture, reads Gate 3 (search volume, growth, products, top-3 click share, conversion, units per product) and Gate 5 (head-term volume, long-tail count) from it, and attaches it to the candidate whose niche keyword is the niche's title. Otherwise the panel lists your candidates and **Attach** sends it to the one you pick (`/api/pl/poe/attach`).
 - **Markets**: `.co.uk` only by default. `.com` and `.de` are optional permissions, registered only while the popup option is on.
 
+## Rank checks: manual, per click
+
+- **Where**: the popup's **Check ranks**. It lists the app's Ads products with their tracked keywords (`GET /api/ads/ranks`: each product's exact keywords, launch head terms and any added).
+- **What it does**: `ranks.js` (background) opens one amazon.co.uk tab and, for each keyword (at most 30 a run), waits a random 3–6 seconds, opens `/s?k=<keyword>`, and `rankread.js` reads the results: every `[data-component-type="s-search-result"]` with an ASIN, skipping sponsored ones (`AdHolder`, the "Sponsored" label, `/sspa/click` links). The product's position among the organic results is 1–48; not on page 1, it reads pages 2 and 3 (each after its own pause) until 48 organic results have been seen; otherwise "not in top 48".
+- **What you see**: a panel at the bottom right of that tab with each keyword's result and **Stop**. A captcha stops the run and says so.
+- **Where it goes**: at the end or on Stop, `POST /api/ads/ranks` with `{ asin, runId, results: [{ keyword, position, page, checkedAt }] }`, through `background.js` with your password.
+- **Limits**: one run at a time, started only by your click, never scheduled. Amazon's Conditions of Use prohibit automated data gathering: keep it to a few runs a week.
+
 ## Limits
 
 The app allows the extension 60 checks and 120 other requests a minute from one address; past that it answers 429 with the time to try again. Ten wrong passwords in 15 minutes block the address for 15 minutes.
@@ -68,6 +77,8 @@ The app allows the extension 60 checks and 120 other requests a minute from one 
 | `sellercentral.js` | The DG reading bar on Seller Central |
 | `poe-page.js` | Opportunity Explorer, page world: observes every GraphQL and insights response the page receives |
 | `poe.js` | Opportunity Explorer panel: merges the niche page's responses, Send to Private label, the candidate picker, what was and wasn't read |
-| `popup.html`, `popup.js` | Settings and the connection test |
+| `popup.html`, `popup.js` | Settings, the connection test, and Check ranks |
+| `ranks.js` | Rank checks (background): the run, one keyword at a time, and posting the results |
+| `rankread.js` | Rank checks (in the search tab): reads the organic results and draws the progress panel |
 
-The app's endpoints are under `/api/extension/`: `check`, `lookup`, `star`, `watch`, `stock`, `dg` and `ping`; Opportunity Explorer captures go to `/api/pl/poe` and `/api/pl/poe/attach`.
+The app's endpoints are under `/api/extension/`: `check`, `lookup`, `star`, `watch`, `stock`, `dg` and `ping`; Opportunity Explorer captures go to `/api/pl/poe` and `/api/pl/poe/attach`; rank checks to `/api/ads/ranks`.

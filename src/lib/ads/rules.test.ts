@@ -115,12 +115,67 @@ describe("rules on made-up data", () => {
     expect(runRules(input({ keywords: [kw({ clicks: 10, cost: 30, orders: 3, sales: 60 })] })).proposals).toEqual([]);
   });
 
-  it("word-level negative phrase from 3 wasting terms sharing a word, none converting", () => {
-    const t = (term: string, clicks: number, orders = 0): RuleTerm => ({ campaign: "c1", term, adGroupIds: ["g1"], matchTypes: ["Broad"], impressions: null, clicks, cost: clicks * 0.5, orders, sales: orders * 20 });
-    const r = runRules(input({ terms: [t("cheap box", 16), t("cheap tray", 16), t("cheap case", 16), t("pill box", 5, 1)] }));
-    const word = r.proposals.filter((p) => p.group === "word-level");
-    expect(word.map((p) => p.entity.label)).toEqual(["cheap"]); // "box" is in a converting term
-    expect(word[0].changes[0]).toEqual({ kind: "create_negative", campaignId: "111", adGroupId: null, text: "cheap", matchType: "Negative phrase" });
+  const term = (t: string, clicks: number, orders = 0, over: Partial<RuleTerm> = {}): RuleTerm => ({ campaign: "c1", term: t, adGroupIds: ["g1"], matchTypes: ["Broad"], impressions: null, clicks, cost: clicks * 0.5, orders, sales: orders * 20, ...over });
+
+  it("Rule 9: a gram in 3 wasting terms, none converting, becomes an ad-group negative phrase", () => {
+    const r = runRules(input({ terms: [term("cheap box", 16), term("cheap tray", 16), term("cheap case", 16, 0, { adGroupIds: ["g2"] }), term("pill box", 5, 1)] }));
+    const g = r.proposals.filter((p) => p.rule === "ngram_negative");
+    expect(g.map((p) => p.entity.label)).toEqual(["cheap"]); // "box" is in a converting term; "tray", "case" in one term each
+    expect(g[0].changes).toEqual([
+      { kind: "create_negative", campaignId: "111", adGroupId: "g1", text: "cheap", matchType: "Negative phrase" },
+      { kind: "create_negative", campaignId: "111", adGroupId: "g2", text: "cheap", matchType: "Negative phrase" },
+    ]);
+    expect(r.proposals.some((p) => p.group === "word-level")).toBe(false);
+  });
+
+  it("Rule 10: a gram selling across 3+ terms puts its best terms forward for harvest", () => {
+    // Each term has 1–2 orders: under Rule 1's 2-order bar for some, but "blue" has 6 orders at 25% ACoS.
+    const terms = [term("blue box", 4, 2), term("blue tray", 4, 2), term("blue case", 4, 1), term("blue lid", 4, 1), term("red box", 10, 0)];
+    const r = runRules(input({ terms }), mergeRules({ harvest: { enabled: false } }));
+    // No Exact campaign yet: one proposal creates it with the gram's terms.
+    const w = r.proposals.filter((p) => p.rule === "ngram_winner");
+    expect(w.map((p) => p.key)).toEqual(["exact-campaign:B000000001"]);
+    expect(w[0].changes[0]).toMatchObject({ kind: "create_campaign", keywords: [{ text: "blue box" }, { text: "blue tray" }, { text: "blue case" }, { text: "blue lid" }] });
+    // With an Exact campaign, each term is its own proposal.
+    const exact = camp({ id: "c2", campaignId: "222", name: "Exact" });
+    const r2 = runRules(input({ terms, campaigns: [camp(), exact], adGroups: [{ adGroupId: "g1", campaign: "c1", defaultBid: 0.5, state: "enabled" }, { adGroupId: "g9", campaign: "c2", defaultBid: 0.5, state: "enabled" }], keywords: [kw({ keywordId: "k9", campaign: "c2", adGroupId: "g9", text: "other", matchType: "Exact" })] }), mergeRules({ harvest: { enabled: false } }));
+    const w2 = r2.proposals.filter((p) => p.rule === "ngram_winner");
+    expect(w2).toHaveLength(4);
+    expect(w2[0].reason).toMatch(/^"blue" sells across 4 terms \(6 orders/);
+  });
+
+  it("Rule 11: stock guard slows, pauses and restores", () => {
+    const kw1 = kw({ clicks: 5, cost: 2 });
+    const stock = (days: number) => ({ fulfillable: 20, unitsPerDay: 2, daysOfCover: days, source: "Amazon sales, last 14 days" });
+    const prods = (st: ReturnType<typeof stock>, guard: RulesInput["products"][string]["guard"] = null) => ({ B000000001: { asin: "B000000001", price: 20, targetAcos: 0.3, sku: "SKU1", stock: st, guard } });
+    const slow = runRules(input({ products: prods(stock(8)), keywords: [kw1] })).proposals.find((p) => p.rule === "stock_guard")!;
+    expect(slow.changes).toEqual([{ kind: "campaign_budget", campaignId: "111", dailyBudget: 5 }, { kind: "keyword_bid", campaignId: "111", adGroupId: "g1", keywordId: "k1", bid: 0.35 }]);
+    expect(slow.reason).toMatch(/^20 in FBA stock, selling 2.0 a day .* = 8.0 days of cover: under 10 days/);
+    expect(runRules(input({ products: prods(stock(2)) })).proposals.find((p) => p.rule === "stock_guard")!.changes).toEqual([{ kind: "campaign_state", campaignId: "111", state: "paused" }]);
+    const restores = [{ kind: "campaign_budget" as const, campaignId: "111", dailyBudget: 10 }];
+    expect(runRules(input({ products: prods(stock(30), { label: "2026-10-02 #2", restores }) })).proposals.find((p) => p.rule === "stock_guard")).toMatchObject({ key: "stock-restore:B000000001", changes: restores });
+    // Under the guard, the campaign's other bid changes wait.
+    const both = runRules(input({ products: prods(stock(8)), keywords: [kw({ clicks: 12, cost: 6 })] }));
+    expect(both.proposals.map((p) => p.rule)).toEqual(["stock_guard"]);
+  });
+
+  it("Rules 12 and 13: ranked eases off, slipping raises; one bid change per keyword", () => {
+    const ranks = (ps: (number | null)[]) => ({ B000000001: { kw: ps.map((position, i) => ({ position, checkedAt: `2026-09-2${i}` })) } });
+    const ranked = runRules(input({ keywords: [kw({ clicks: 5, cost: 1, orders: 1, sales: 20 })], ranks: ranks([5, 3, 8]) })).proposals;
+    expect(ranked).toMatchObject([{ rule: "ranked", current: "£0.50", proposed: "£0.40" }]);
+    const slip = runRules(input({ keywords: [kw({ clicks: 5, cost: 1, orders: 1, sales: 20 })], ranks: ranks([4, 15]) })).proposals;
+    expect(slip).toMatchObject([{ rule: "slipping", proposed: "£0.55" }]);
+    expect(slip[0].reason).toMatch(/fell from #4 to #15 \(11 places\)/);
+    // Bid down outranks ranked on the same keyword.
+    const both = runRules(input({ keywords: [kw({ clicks: 12, cost: 6 })], ranks: ranks([2, 2, 2]) })).proposals;
+    expect(both.map((p) => p.rule)).toEqual(["bid_down"]);
+  });
+
+  it("launch weeks 1–2: harvest and negatives only", () => {
+    const products = { B000000001: { asin: "B000000001", price: 20, targetAcos: 0.3, sku: "SKU1", launchStart: "2026-09-25" } };
+    const r = runRules(input({ products, keywords: [kw({ clicks: 12, cost: 6 })], terms: [term("waste term", 20)] }));
+    expect(r.proposals.map((p) => p.rule)).toEqual(["negative"]);
+    expect(r.notes.bid_down?.[0]).toMatch(/launch weeks 1–2/);
   });
 
   it("harvest with no Exact campaign proposes creating one", () => {

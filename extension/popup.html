@@ -36,6 +36,13 @@
     <button id="test">Test connection</button>
   </div>
   <div id="msg"></div>
+  <hr style="border:0;border-top:1px solid #e4e4e7;margin:14px 0 4px" />
+  <h1 style="margin-top:10px">Check ranks</h1>
+  <div class="hint" style="margin:0 0 6px">Where a product sits in Amazon's organic results for its keywords (its exact keywords plus any you added). Opens a tab and searches one keyword every 3–6 seconds, up to 30. Manual: it runs only when you click, and Stop is in the tab.</div>
+  <select id="rankAsin" style="width:100%;padding:6px;border:1px solid #d4d4d8;border-radius:6px"><option value="">Loading products…</option></select>
+  <div id="rankInfo" class="hint"></div>
+  <div class="row"><button id="rankGo" class="p" disabled>Check ranks</button></div>
+  <div id="rankMsg" style="margin-top:8px;font-size:12px"></div>
   <script src="popup.js"></script>
 </body>
 </html>

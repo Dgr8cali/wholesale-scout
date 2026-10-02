@@ -24,7 +24,7 @@ export async function proxy(req: NextRequest) {
     }
   }
   // The extension's CORS preflight carries no credentials; the request that follows does.
-  if (req.method === "OPTIONS" && (req.nextUrl.pathname.startsWith("/api/extension/") || req.nextUrl.pathname.startsWith("/api/pl/poe"))) return NextResponse.next();
+  if (req.method === "OPTIONS" && (req.nextUrl.pathname.startsWith("/api/extension/") || req.nextUrl.pathname.startsWith("/api/pl/poe") || req.nextUrl.pathname === "/api/ads/ranks")) return NextResponse.next();
 
   // Too many wrong passwords from this address: refused for a while, even with the right one.
   const ip = clientIp(req.headers);
@@ -44,7 +44,7 @@ export async function proxy(req: NextRequest) {
   if (ok) {
     // The extension API, per address: a check can spend Keepa tokens.
     const path = req.nextUrl.pathname;
-    if (path.startsWith("/api/extension/") || path.startsWith("/api/pl/poe")) {
+    if (path.startsWith("/api/extension/") || path.startsWith("/api/pl/poe") || path === "/api/ads/ranks") {
       const isCheck = path === "/api/extension/check";
       const r = overLimit(`ext:${isCheck ? "check" : "other"}:${ip}`, isCheck ? EXTENSION_LIMITS.check : EXTENSION_LIMITS.other);
       if (r.over) return tooMany(Date.now() + r.retryAfterS * 1000, "Too many requests from the extension");

@@ -7,8 +7,10 @@
  */
 import type { BulkChange } from "./bulk";
 import { chooseRanges } from "./metrics";
+import { ngramTable, termHasGram, type GramTerm } from "./ngrams";
 
-export type RuleId = "harvest" | "negative" | "bid_down" | "bid_up" | "pause" | "placement" | "budget" | "revive";
+export type RuleId = "harvest" | "negative" | "bid_down" | "bid_up" | "pause" | "placement" | "budget" | "revive"
+  | "ngram_negative" | "ngram_winner" | "stock_guard" | "ranked" | "slipping";
 export type Confidence = "low" | "medium" | "high";
 export type RuleMode = "propose" | "auto";
 
@@ -26,12 +28,11 @@ export const RULES: RuleMeta[] = [
   },
   {
     id: "negative", label: "Negative",
-    summary: "A search term with no order after enough clicks, or after spending a share of the price, becomes a negative exact in its campaign. A word in several wasting terms and in none with an order becomes a campaign negative phrase (word-level).",
+    summary: "A search term with no order after enough clicks, or after spending a share of the price, becomes a negative exact in its campaign. (Words wasting across several terms: N-gram negative.)",
     thresholds: [
       { key: "minClicks", label: "Clicks with no order", unit: "count", default: 15 },
       { key: "spendOfPrice", label: "Or spend with no order, % of price", unit: "pct", default: 50 },
       { key: "windowDays", label: "Over the last", unit: "days", default: 60 },
-      { key: "wordMinTerms", label: "Word-level: wasting terms with the word", unit: "count", default: 3 },
     ],
   },
   {
@@ -94,6 +95,52 @@ export const RULES: RuleMeta[] = [
       { key: "step", label: "Raise by", unit: "pct", default: 10 },
     ],
   },
+  {
+    id: "ngram_negative", label: "N-gram negative",
+    summary: "A word or word pair with many clicks (or the price spent) and no order, across several search terms and in none with an order, becomes a negative phrase in every ad group where it has served for that product.",
+    thresholds: [
+      { key: "minClicks", label: "Clicks with no order", unit: "count", default: 20 },
+      { key: "spendOfPrice", label: "Or spend with no order, % of price", unit: "pct", default: 100 },
+      { key: "minTerms", label: "In distinct search terms at least", unit: "count", default: 3 },
+    ],
+  },
+  {
+    id: "ngram_winner", label: "N-gram winner",
+    summary: "A word or word pair selling at or under the target ACoS across several terms puts its best terms forward for harvest, even when each alone is under the harvest threshold.",
+    thresholds: [
+      { key: "minOrders", label: "Orders at least", unit: "count", default: 5 },
+      { key: "minTerms", label: "Across terms with an order, at least", unit: "count", default: 3 },
+      { key: "topTerms", label: "Terms to harvest", unit: "count", default: 5 },
+    ],
+  },
+  {
+    id: "stock_guard", label: "Stock guard",
+    summary: "Low FBA stock slows a product's ads before it runs out: budgets and bids cut, then campaigns paused; once stock is back, the values from before are restored.",
+    thresholds: [
+      { key: "slowDays", label: "Slow down under (days of cover)", unit: "days", default: 10 },
+      { key: "budgetCut", label: "Budget cut", unit: "pct", default: 50 },
+      { key: "bidCut", label: "Bid cut", unit: "pct", default: 30 },
+      { key: "pauseDays", label: "Pause under (days of cover)", unit: "days", default: 3 },
+      { key: "restoreDays", label: "Restore over (days of cover)", unit: "days", default: 21 },
+    ],
+  },
+  {
+    id: "ranked", label: "Ranked — ease off",
+    summary: "A keyword the product already ranks for organically, near the top, on the last few rank checks gets a lower bid: the ad pays for a slot it already holds.",
+    thresholds: [
+      { key: "maxPosition", label: "Organic position at most", unit: "count", default: 8 },
+      { key: "checks", label: "On the last checks", unit: "count", default: 3 },
+      { key: "step", label: "Lower by", unit: "pct", default: 20 },
+    ],
+  },
+  {
+    id: "slipping", label: "Slipping",
+    summary: "A keyword whose organic position fell sharply between two rank checks, while its ads sell under the target ACoS, gets a higher bid.",
+    thresholds: [
+      { key: "drop", label: "Places lost at least", unit: "count", default: 10 },
+      { key: "step", label: "Raise by", unit: "pct", default: 10 },
+    ],
+  },
 ];
 
 export const RULE_LABEL = Object.fromEntries(RULES.map((r) => [r.id, r.label])) as Record<RuleId, string>;
@@ -122,7 +169,15 @@ export function mergeRules(saved: Partial<Record<string, Partial<RuleConfig>>>):
 
 export interface Perf { impressions: number | null; clicks: number; cost: number; orders: number; sales: number }
 
-export interface RuleProduct { asin: string; price: number | null; /** Fraction (0.3). */ targetAcos: number; sku: string | null }
+export interface RuleProduct {
+  asin: string; price: number | null; /** Fraction (0.3). */ targetAcos: number; sku: string | null;
+  /** FBA stock and days of cover (Stock guard); null when unknown. */
+  stock?: { fulfillable: number; unitsPerDay: number | null; daysOfCover: number | null; source: string } | null;
+  /** The values a stock-guard batch changed, to put back once stock recovers. */
+  guard?: { label: string; restores: BulkChange[] } | null;
+  /** Launch plan start: weeks 1–2 are harvest only. */
+  launchStart?: string | null;
+}
 export interface RuleCampaign extends Perf {
   id: string; campaignId: string | null; name: string; asin: string | null; targeting: string | null; state: string | null;
   budget: number | null; biddingStrategy: string | null;
@@ -148,6 +203,8 @@ export interface RulesInput {
   products: Record<string, RuleProduct>;
   campaigns: RuleCampaign[]; adGroups: RuleAdGroup[]; keywords: RuleKeyword[]; targets: RuleTarget[];
   placements: RulePlacement[]; terms: RuleTerm[]; negatives: RuleNegative[];
+  /** Organic rank checks per product and keyword (lower case), oldest first; position null = not in the top 48. */
+  ranks?: Record<string, Record<string, { position: number | null; checkedAt: string }[]>>;
   /** The range the entity figures cover (the latest bulk export). */
   range: { from: string; to: string } | null;
   today: string;
@@ -161,7 +218,7 @@ export interface Proposal {
   key: string;
   asin: string | null;
   campaign: string; campaignName: string; campaignState: string | null;
-  entity: { type: "keyword" | "target" | "search term" | "word" | "placement" | "campaign"; label: string; campaignId: string | null; adGroupId: string | null; keywordId: string | null; targetId: string | null };
+  entity: { type: "keyword" | "target" | "search term" | "word" | "gram" | "placement" | "campaign" | "product"; label: string; campaignId: string | null; adGroupId: string | null; keywordId: string | null; targetId: string | null };
   current: string; proposed: string; reason: string; confidence: Confidence; effect: string | null;
   changes: BulkChange[];
   /** "word-level" negatives are listed apart from term-level ones. */
@@ -227,7 +284,6 @@ export function runRules(input: RulesInput, config: RulesConfig = DEFAULT_RULES)
   }
 
   /* ---- Negative (term-level and word-level) ---- */
-  const wasting = new Map<string, RuleTerm[]>();
   if (on("negative")) {
     const t = th("negative");
     for (const term of input.terms) {
@@ -237,7 +293,6 @@ export function runRules(input: RulesInput, config: RulesConfig = DEFAULT_RULES)
       const byClicks = term.clicks >= t.minClicks;
       const bySpend = price != null && price > 0 && term.cost >= (price * t.spendOfPrice) / 100;
       if (!byClicks && !bySpend) continue;
-      wasting.set(c.id, [...(wasting.get(c.id) ?? []), term]);
       if (negatedExact(c.id, term.term) || unexportable("negative", c)) continue;
       const adGroupId = term.adGroupIds.length === 1 ? term.adGroupIds[0] : null;
       const saved = perMonth(term.cost);
@@ -252,98 +307,134 @@ export function runRules(input: RulesInput, config: RulesConfig = DEFAULT_RULES)
         clicks: term.clicks, orders: 0,
       });
     }
-    // Word-level: a word in several wasting terms of a campaign and in none of its terms with an order.
-    for (const [cid, terms] of wasting) {
-      const c = campaign.get(cid)!;
-      if (!c.campaignId) continue;
-      const converting = input.terms.filter((x) => x.campaign === cid && x.orders > 0);
-      const words = new Map<string, RuleTerm[]>();
-      for (const term of terms) for (const w of new Set(term.term.split(/\s+/))) if (w.length >= 3 && !/^\d+$/.test(w)) words.set(w, [...(words.get(w) ?? []), term]);
-      for (const [w, ts] of words) {
-        if (ts.length < t.wordMinTerms || converting.some((x) => x.term.split(/\s+/).includes(w))) continue;
-        if (negativesIn(cid).some((n) => /phrase/i.test(n.matchType) && n.text.trim().toLowerCase() === w)) continue;
-        const sum = ts.reduce((a, x) => ({ clicks: a.clicks + x.clicks, cost: a.cost + x.cost }), { clicks: 0, cost: 0 });
-        out.push({
-          ...base("negative", c), key: `word:${cid}:${w}`, group: "word-level",
-          entity: { type: "word", label: w, campaignId: c.campaignId, adGroupId: null, keywordId: null, targetId: null },
-          current: "showing", proposed: "campaign negative phrase",
-          reason: `"${w}" is in ${ts.length} wasting terms (${ts.slice(0, 3).map((x) => `"${x.term}"`).join(", ")}${ts.length > 3 ? "…" : ""}: ${plural(sum.clicks, "click")}, ${gbp(sum.cost)} spent, 0 orders) and in no term with an order${rangeTxt}.`,
-          confidence: confidence(sum.clicks, 0), effect: perMonth(sum.cost) != null ? `Saves about ${gbp(perMonth(sum.cost)!)} a month at this rate` : null,
-          changes: [{ kind: "create_negative", campaignId: c.campaignId, adGroupId: null, text: w, matchType: "Negative phrase" }],
-          clicks: sum.clicks, orders: 0,
-        });
-      }
-    }
   }
 
-  /* ---- Harvest ---- */
+  /* ---- Harvest (Rule 1), and Rule 10's candidates through the same path ---- */
+  const kwIn = (cid: string) => input.keywords.filter((k) => k.campaign === cid && notArchived(k.state));
+  const exactCampaign = (asin: string, not: string) => input.campaigns
+    .filter((c) => c.asin === asin && c.id !== not && notArchived(c.state) && !/auto/i.test(c.targeting ?? "") && kwIn(c.id).length > 0 && kwIn(c.id).every((k) => isExact(k.matchType)))
+    .sort((a, b) => kwIn(b.id).length - kwIn(a.id).length)[0] ?? null;
+  const newCampaigns = new Map<string, { p: RuleProduct; c: RuleCampaign; items: { term: RuleTerm; c: RuleCampaign; bid: number; rule: RuleId }[] }>();
+  const harvested = new Set<string>();
+  const fromNonExact = (term: RuleTerm, c: RuleCampaign) => /auto/i.test(c.targeting ?? "") || term.matchTypes.some((m) => !isExact(m))
+    || (term.matchTypes.length === 0 && kwIn(c.id).some((k) => !isExact(k.matchType)));
+  /** A term into the product's Exact campaign, and a negative exact where it was found. */
+  const harvestTerm = (rule: "harvest" | "ngram_winner", term: RuleTerm, c: RuleCampaign, p: RuleProduct, lead: string) => {
+    const t = th("harvest");
+    const key = `term:${c.id}:${term.term}`;
+    if (harvested.has(key) || unexportable(rule, c)) return;
+    const a = acosOf(term);
+    const conv = term.orders / term.clicks;
+    const cpc = term.cost / term.clicks;
+    const cap = p.targetAcos * p.price! * conv;
+    const bid = Math.max(0.02, round2(Math.min(cpc * t.cpcMultiplier, cap)));
+    const found = term.matchTypes.length ? [...new Set(term.matchTypes.map((m) => (m ? m.toLowerCase() : "auto targeting")))].join("/") : (c.targeting ?? "").toLowerCase();
+    const why = `${lead}"${term.term}": ${perfTxt(term)} = ${acosTxt(a)}${rule === "harvest" ? `, at or under the ${pct(p.targetAcos, 0)} target` : ""}${rangeTxt}, found by ${found} in ${c.name}.`;
+    const target = exactCampaign(p.asin, c.id);
+    const negate = !negatedExact(c.id, term.term);
+    if (!target) {
+      if (!p.sku) { note(rule, `${p.asin} has no Exact campaign, and no SKU from a product ad to create one with`); return; }
+      const g = newCampaigns.get(p.asin) ?? { p, c, items: [] };
+      g.items.push({ term, c, bid, rule });
+      newCampaigns.set(p.asin, g);
+      harvested.add(key);
+      return;
+    }
+    const group = input.adGroups.find((g) => g.campaign === target.id && notArchived(g.state));
+    const exists = input.keywords.some((k) => k.campaign === target.id && isExact(k.matchType) && k.text.trim().toLowerCase() === term.term);
+    if ((exists || !group || !target.campaignId) && !negate) return;
+    const changes: BulkChange[] = [];
+    if (!exists && group && target.campaignId) changes.push({ kind: "create_keyword", campaignId: target.campaignId, adGroupId: group.adGroupId, text: term.term, matchType: "Exact", bid });
+    if (negate) changes.push({ kind: "create_negative", campaignId: c.campaignId!, adGroupId: term.adGroupIds.length === 1 ? term.adGroupIds[0] : null, text: term.term, matchType: "Negative exact" });
+    harvested.add(key);
+    out.push({
+      ...base(rule, c), key,
+      entity: { type: "search term", label: term.term, campaignId: c.campaignId, adGroupId: term.adGroupIds[0] ?? null, keywordId: null, targetId: null },
+      current: `${found} in ${c.name}`,
+      proposed: [changes.some((x) => x.kind === "create_keyword") ? `exact in ${target.name} at ${gbp(bid)}` : `already exact in ${target.name}`, negate ? `negative exact in ${c.name}` : null].filter(Boolean).join(" + "),
+      reason: changes.some((x) => x.kind === "create_keyword")
+        ? `${why} Bid: the term's ${gbp(cpc)} CPC × ${t.cpcMultiplier}, capped at ${pct(p.targetAcos, 0)} × ${gbp(p.price!)} × ${pct(conv)} conversion = ${gbp(cap)}.`
+        : `${why} ${target.name} already has it as an exact keyword, so only the negative is needed.`,
+      confidence: confidence(term.clicks, term.orders),
+      effect: "The term gets its own exact bid; the negative stops the broader target buying the same clicks",
+      changes, clicks: term.clicks, orders: term.orders,
+    });
+  };
   if (on("harvest")) {
     const t = th("harvest");
-    const kwIn = (cid: string) => input.keywords.filter((k) => k.campaign === cid && notArchived(k.state));
-    const exactCampaign = (asin: string, not: string) => input.campaigns
-      .filter((c) => c.asin === asin && c.id !== not && notArchived(c.state) && !/auto/i.test(c.targeting ?? "") && kwIn(c.id).length > 0 && kwIn(c.id).every((k) => isExact(k.matchType)))
-      .sort((a, b) => kwIn(b.id).length - kwIn(a.id).length)[0] ?? null;
-    const newCampaigns = new Map<string, { p: RuleProduct; c: RuleCampaign; items: { term: RuleTerm; c: RuleCampaign; bid: number }[] }>();
     for (const term of input.terms) {
       const c = campaign.get(term.campaign);
       if (!c || term.orders < t.minOrders) continue;
       const p = needsPrice("harvest", c);
       if (!p) continue;
       const a = acosOf(term);
-      if (a == null || a > p.targetAcos) continue;
-      const fromNonExact = /auto/i.test(c.targeting ?? "") || term.matchTypes.some((m) => !isExact(m))
-        || (term.matchTypes.length === 0 && kwIn(c.id).some((k) => !isExact(k.matchType)));
-      if (!fromNonExact || unexportable("harvest", c)) continue;
-      const conv = term.orders / term.clicks;
-      const cpc = term.cost / term.clicks;
-      const cap = p.targetAcos * p.price! * conv;
-      const bid = Math.max(0.02, round2(Math.min(cpc * t.cpcMultiplier, cap)));
-      const found = term.matchTypes.length ? [...new Set(term.matchTypes.map((m) => (m ? m.toLowerCase() : "auto targeting")))].join("/") : (c.targeting ?? "").toLowerCase();
-      const why = `"${term.term}": ${perfTxt(term)} = ${pct(a)} ACoS, at or under the ${pct(p.targetAcos, 0)} target${rangeTxt}, found by ${found} in ${c.name}.`;
-      const target = exactCampaign(p.asin, c.id);
-      const negate = !negatedExact(c.id, term.term);
-      if (!target) {
-        if (!p.sku) { note("harvest", `${p.asin} has no Exact campaign, and no SKU from a product ad to create one with`); continue; }
-        const g = newCampaigns.get(p.asin) ?? { p, c, items: [] };
-        g.items.push({ term, c, bid });
-        newCampaigns.set(p.asin, g);
-        continue;
-      }
-      const group = input.adGroups.find((g) => g.campaign === target.id && notArchived(g.state));
-      const exists = input.keywords.some((k) => k.campaign === target.id && isExact(k.matchType) && k.text.trim().toLowerCase() === term.term);
-      if ((exists || !group || !target.campaignId) && !negate) continue;
+      if (a == null || a > p.targetAcos || !fromNonExact(term, c)) continue;
+      harvestTerm("harvest", term, c, p, "");
+    }
+  }
+
+  /* ---- N-grams (Rules 9 and 10) ---- */
+  const gramTerms: GramTerm[] = input.terms.flatMap((t) => {
+    const c = campaign.get(t.campaign);
+    return c?.asin ? [{ asin: c.asin, campaign: c.id, adGroupIds: t.adGroupIds, term: t.term, impressions: t.impressions, clicks: t.clicks, cost: t.cost, orders: t.orders, sales: t.sales }] : [];
+  });
+  const gramRows = ngramTable(gramTerms);
+  if (on("ngram_negative")) {
+    const t = th("ngram_negative");
+    for (const g of gramRows) {
+      const p = input.products[g.asin];
+      const bySpend = p?.price != null && p.price > 0 && g.cost >= p.price * t.spendOfPrice / 100;
+      if (g.orders > 0 || g.convertingTerms > 0 || g.terms < t.minTerms || (g.clicks < t.minClicks && !bySpend)) continue;
       const changes: BulkChange[] = [];
-      if (!exists && group && target.campaignId) changes.push({ kind: "create_keyword", campaignId: target.campaignId, adGroupId: group.adGroupId, text: term.term, matchType: "Exact", bid });
-      if (negate) changes.push({ kind: "create_negative", campaignId: c.campaignId!, adGroupId: term.adGroupIds.length === 1 ? term.adGroupIds[0] : null, text: term.term, matchType: "Negative exact" });
+      const where: string[] = [];
+      for (const sv of g.servedIn) {
+        const c = campaign.get(sv.campaign);
+        if (!c?.campaignId) continue;
+        const has = (ag: string | null) => negativesIn(c.id).some((n) => /phrase/i.test(n.matchType) && n.text.trim().toLowerCase() === g.gram && (n.adGroupId == null || n.adGroupId === ag));
+        const groups = sv.adGroupIds.filter((ag) => ag && !has(ag));
+        for (const ag of groups) changes.push({ kind: "create_negative", campaignId: c.campaignId, adGroupId: ag, text: g.gram, matchType: "Negative phrase" });
+        if (groups.length) where.push(c.name);
+      }
+      if (!changes.length) continue;
+      const first = campaign.get(g.servedIn[0].campaign)!;
       out.push({
-        ...base("harvest", c), key: `term:${c.id}:${term.term}`,
-        entity: { type: "search term", label: term.term, campaignId: c.campaignId, adGroupId: term.adGroupIds[0] ?? null, keywordId: null, targetId: null },
-        current: `${found} in ${c.name}`,
-        proposed: [changes.some((x) => x.kind === "create_keyword") ? `exact in ${target.name} at ${gbp(bid)}` : `already exact in ${target.name}`, negate ? `negative exact in ${c.name}` : null].filter(Boolean).join(" + "),
-        reason: changes.some((x) => x.kind === "create_keyword")
-          ? `${why} Bid: the term's ${gbp(cpc)} CPC × ${t.cpcMultiplier}, capped at ${pct(p.targetAcos, 0)} × ${gbp(p.price!)} × ${pct(conv)} conversion = ${gbp(cap)}.`
-          : `${why} ${target.name} already has it as an exact keyword, so only the negative is needed.`,
-        confidence: confidence(term.clicks, term.orders),
-        effect: "The term gets its own exact bid; the negative stops the broader target buying the same clicks",
-        changes, clicks: term.clicks, orders: term.orders,
+        ...base("ngram_negative", first), key: `ngram:${g.asin}:${g.gram}`, group: null,
+        entity: { type: "gram", label: g.gram, campaignId: null, adGroupId: null, keywordId: null, targetId: null },
+        current: `in ${plural(g.terms, "search term")}`, proposed: `negative phrase in ${plural(changes.length, "ad group")} (${where.join(", ")})`,
+        reason: `"${g.gram}" is in ${g.terms} search terms (${g.examples.slice(0, 3).map((x) => `"${x}"`).join(", ")}${g.terms > 3 ? "…" : ""}): ${perfTxt(g)}${p?.price ? ` = ${Math.round((g.cost / p.price) * 100)}% of the ${gbp(p.price)} price` : ""}${rangeTxt}, and in no term with an order.`,
+        confidence: confidence(g.clicks, 0), effect: perMonth(g.cost) != null ? `Saves about ${gbp(perMonth(g.cost)!)} a month at this rate` : null,
+        changes, clicks: g.clicks, orders: 0,
       });
     }
-    for (const [asin, g] of newCampaigns) {
-      const name = `${asin} Exact`;
-      const clicks = g.items.reduce((a, x) => a + x.term.clicks, 0), orders = g.items.reduce((a, x) => a + x.term.orders, 0);
-      out.push({
-        ...base("harvest", g.c), key: `exact-campaign:${asin}`,
-        entity: { type: "campaign", label: name, campaignId: null, adGroupId: null, keywordId: null, targetId: null },
-        current: `no Exact campaign for ${asin}`, proposed: `create "${name}" with ${plural(g.items.length, "exact keyword")}`,
-        reason: `${g.items.map((x) => `"${x.term.term}" (${plural(x.term.orders, "order")}, ${pct(acosOf(x.term))} ACoS in ${x.c.name})`).join("; ")} qualify for harvest, and ${asin} has no campaign of exact keywords to put them in.`,
-        confidence: confidence(clicks, orders), effect: "Converting terms get their own exact bids",
-        changes: [
-          { kind: "create_campaign", name, dailyBudget: g.c.budget ?? 5, biddingStrategy: "Dynamic bids - down only", startDate: input.today, adGroupName: "Exact", defaultBid: Math.max(...g.items.map((x) => x.bid)), sku: g.p.sku!, keywords: g.items.map((x) => ({ text: x.term.term, matchType: "Exact" as const, bid: x.bid })) },
-          ...g.items.filter((x) => !negatedExact(x.c.id, x.term.term) && x.c.campaignId).map((x): BulkChange => ({ kind: "create_negative", campaignId: x.c.campaignId!, adGroupId: x.term.adGroupIds.length === 1 ? x.term.adGroupIds[0] : null, text: x.term.term, matchType: "Negative exact" })),
-        ],
-        clicks, orders,
-      });
+  }
+  if (on("ngram_winner")) {
+    const t = th("ngram_winner");
+    for (const g of gramRows) {
+      const p = input.products[g.asin];
+      if (!p?.price || g.orders < t.minOrders || g.convertingTerms < t.minTerms || g.acos == null || g.acos > p.targetAcos) continue;
+      const cands = input.terms
+        .filter((x) => x.orders > 0 && termHasGram(x.term, g.gram) && campaign.get(x.campaign)?.asin === g.asin && fromNonExact(x, campaign.get(x.campaign)!))
+        .sort((a, b) => b.orders - a.orders || (acosOf(a) ?? 0) - (acosOf(b) ?? 0))
+        .slice(0, t.topTerms);
+      for (const term of cands) harvestTerm("ngram_winner", term, campaign.get(term.campaign)!, p, `"${g.gram}" sells across ${g.convertingTerms} terms (${plural(g.orders, "order")}, ${acosTxt(g.acos)}, target ${pct(p.targetAcos, 0)}). `);
     }
+  }
+
+  for (const [asin, g] of newCampaigns) {
+    const name = `${asin} Exact`;
+    const clicks = g.items.reduce((a, x) => a + x.term.clicks, 0), orders = g.items.reduce((a, x) => a + x.term.orders, 0);
+    out.push({
+      ...base(g.items.some((x) => x.rule === "harvest") ? "harvest" : "ngram_winner", g.c), key: `exact-campaign:${asin}`,
+      entity: { type: "campaign", label: name, campaignId: null, adGroupId: null, keywordId: null, targetId: null },
+      current: `no Exact campaign for ${asin}`, proposed: `create "${name}" with ${plural(g.items.length, "exact keyword")}`,
+      reason: `${g.items.map((x) => `"${x.term.term}" (${plural(x.term.orders, "order")}, ${acosTxt(acosOf(x.term))} in ${x.c.name})`).join("; ")} qualify for harvest, and ${asin} has no campaign of exact keywords to put them in.`,
+      confidence: confidence(clicks, orders), effect: "Converting terms get their own exact bids",
+      changes: [
+        { kind: "create_campaign", name, dailyBudget: g.c.budget ?? 5, biddingStrategy: "Dynamic bids - down only", startDate: input.today, adGroupName: "Exact", defaultBid: Math.max(...g.items.map((x) => x.bid)), sku: g.p.sku!, keywords: g.items.map((x) => ({ text: x.term.term, matchType: "Exact" as const, bid: x.bid })) },
+        ...g.items.filter((x) => !negatedExact(x.c.id, x.term.term) && x.c.campaignId).map((x): BulkChange => ({ kind: "create_negative", campaignId: x.c.campaignId!, adGroupId: x.term.adGroupIds.length === 1 ? x.term.adGroupIds[0] : null, text: x.term.term, matchType: "Negative exact" })),
+      ],
+      clicks, orders,
+    });
   }
 
   /* ---- Pause ---- */
@@ -537,6 +628,122 @@ export function runRules(input: RulesInput, config: RulesConfig = DEFAULT_RULES)
     }
     if (candidates && !input.keywords.some((k) => recentOf(k))) note("revive", `Needs a bulk export of just the last ${t.quietDays} days (as well as a longer one) to see which keywords have gone quiet`);
   }
+
+  /* ---- Stock guard (Rule 11) ---- */
+  if (on("stock_guard")) {
+    const t = th("stock_guard");
+    for (const p of Object.values(input.products)) {
+      const st = p.stock;
+      if (!st || st.daysOfCover == null) continue;
+      const cover = st.daysOfCover;
+      const camps = input.campaigns.filter((c) => c.asin === p.asin && c.campaignId && notArchived(c.state));
+      const coverTxt = `${st.fulfillable} in FBA stock, selling ${st.unitsPerDay != null ? st.unitsPerDay.toFixed(1) : "0"} a day (${st.source}) = ${Number.isFinite(cover) ? `${cover.toFixed(1)} days` : "no end"} of cover`;
+      if (cover < t.pauseDays) {
+        for (const c of camps.filter((x) => live(x.state))) out.push({
+          ...base("stock_guard", c), key: `stock:${c.id}`,
+          entity: { type: "campaign", label: c.name, campaignId: c.campaignId, adGroupId: null, keywordId: null, targetId: null },
+          current: c.state ?? "enabled", proposed: "paused",
+          reason: `${coverTxt}: under ${t.pauseDays} days. Pause before the listing runs out and the ad spend turns into lost rank.`,
+          confidence: "high", effect: "No ad spend on stock that's about to run out; restored when stock is back",
+          changes: [{ kind: "campaign_state", campaignId: c.campaignId!, state: "paused" }], clicks: c.clicks, orders: c.orders,
+        });
+      } else if (cover < t.slowDays) {
+        for (const c of camps.filter((x) => live(x.state))) {
+          const changes: BulkChange[] = [];
+          if (c.budget) changes.push({ kind: "campaign_budget", campaignId: c.campaignId!, dailyBudget: Math.max(1, round2(c.budget * (1 - t.budgetCut / 100))) });
+          for (const k of input.keywords.filter((x) => x.campaign === c.id && live(x.state) && x.bid != null)) changes.push({ kind: "keyword_bid", campaignId: c.campaignId!, adGroupId: k.adGroupId, keywordId: k.keywordId, bid: Math.max(0.02, round2(k.bid! * (1 - t.bidCut / 100))) });
+          for (const k of input.targets.filter((x) => x.campaign === c.id && live(x.state) && x.bid != null)) changes.push({ kind: "target_bid", campaignId: c.campaignId!, adGroupId: k.adGroupId, targetId: k.targetId, bid: Math.max(0.02, round2(k.bid! * (1 - t.bidCut / 100))) });
+          if (!changes.length) continue;
+          out.push({
+            ...base("stock_guard", c), key: `stock:${c.id}`,
+            entity: { type: "campaign", label: c.name, campaignId: c.campaignId, adGroupId: null, keywordId: null, targetId: null },
+            current: c.budget ? `${gbp(c.budget)}/day` : "—", proposed: `budget −${t.budgetCut}%, ${plural(changes.length - (c.budget ? 1 : 0), "bid")} −${t.bidCut}%`,
+            reason: `${coverTxt}: under ${t.slowDays} days. Slow the ads so the stock lasts until it's replenished.`,
+            confidence: "high", effect: "Fewer ad sales while stock is short; the values are put back when it recovers",
+            changes, clicks: c.clicks, orders: c.orders,
+          });
+        }
+      } else if (cover > t.restoreDays && p.guard?.restores.length) {
+        const c = camps[0] ?? input.campaigns.find((x) => x.asin === p.asin);
+        if (!c) continue;
+        out.push({
+          ...base("stock_guard", c), key: `stock-restore:${p.asin}`,
+          entity: { type: "product", label: p.asin, campaignId: null, adGroupId: null, keywordId: null, targetId: null },
+          current: `slowed by ${p.guard.label}`, proposed: `restore ${plural(p.guard.restores.length, "value")} from before`,
+          reason: `${coverTxt}: over ${t.restoreDays} days again. Put back the budgets, bids and states the stock guard changed in ${p.guard.label}.`,
+          confidence: "high", effect: "The ads back where they were before stock ran low",
+          changes: p.guard.restores, clicks: 0, orders: 0,
+        });
+      }
+    }
+  }
+
+  /* ---- Organic rank (Rules 12 and 13) ---- */
+  const ranksFor = (asin: string | null, text: string) => (asin ? input.ranks?.[asin]?.[text.trim().toLowerCase()] ?? [] : []);
+  const posTxt = (x: number | null) => (x == null ? "not in the top 48" : `#${x}`);
+  for (const k of input.keywords) {
+    const c = campaign.get(k.campaign);
+    if (!c?.campaignId || !c.asin || !live(k.state) || k.bid == null) continue;
+    const hist = ranksFor(c.asin, k.text);
+    if (!hist.length) continue;
+    const label = `${k.text} (${k.matchType.toLowerCase()})`;
+    const entity = { type: "keyword" as const, label, campaignId: c.campaignId, adGroupId: k.adGroupId, keywordId: k.keywordId, targetId: null };
+    if (on("ranked")) {
+      const t = th("ranked");
+      const last = hist.slice(-t.checks);
+      if (last.length === t.checks && last.every((h) => h.position != null && h.position <= t.maxPosition)) {
+        const bid = Math.max(0.02, round2(k.bid * (1 - t.step / 100)));
+        out.push({
+          ...base("ranked", c), key: `kw:${k.keywordId}`, entity, current: gbp(k.bid), proposed: gbp(bid),
+          reason: `Organic ${last.map((h) => posTxt(h.position)).join(", ")} for "${k.text}" on the last ${t.checks} rank checks: the product already holds a page-one slot. Ads: ${perfTxt(k)}.`,
+          confidence: confidence(k.clicks, k.orders), effect: `Up to ${t.step}% less per click on a search the listing wins organically`,
+          changes: [{ kind: "keyword_bid", campaignId: c.campaignId, adGroupId: k.adGroupId, keywordId: k.keywordId, bid }], clicks: k.clicks, orders: k.orders,
+        });
+      }
+    }
+    if (on("slipping") && hist.length >= 2) {
+      const t = th("slipping");
+      const [prev, last] = hist.slice(-2);
+      const lost = (last.position ?? 49) - (prev.position ?? 49);
+      const p = input.products[c.asin];
+      const a = acosOf(k);
+      if (lost >= t.drop && p && a != null && Number.isFinite(a) && a < p.targetAcos) {
+        const bid = round2(k.bid * (1 + t.step / 100));
+        out.push({
+          ...base("slipping", c), key: `kw:${k.keywordId}`, entity, current: gbp(k.bid), proposed: gbp(bid),
+          reason: `Organic rank for "${k.text}" fell from ${posTxt(prev.position)} to ${posTxt(last.position)} (${lost} places), while its ads sell at ${pct(a)} ACoS, under the ${pct(p.targetAcos, 0)} target: ${perfTxt(k)}.`,
+          confidence: confidence(k.clicks, k.orders), effect: "More ad visibility while organic rank recovers",
+          changes: [{ kind: "keyword_bid", campaignId: c.campaignId, adGroupId: k.adGroupId, keywordId: k.keywordId, bid }], clicks: k.clicks, orders: k.orders,
+        });
+      }
+    }
+  }
+
+  /* ---- One change per entity; stock and launch weeks come first ---- */
+  const BID_PRIORITY: RuleId[] = ["pause", "bid_down", "ranked", "slipping", "bid_up", "revive"];
+  const guarded = new Set(out.filter((p) => p.rule === "stock_guard").map((p) => p.campaign));
+  const SAFE: RuleId[] = ["stock_guard", "harvest", "ngram_winner", "negative", "ngram_negative"];
+  const launchWeeks = (asin: string | null) => {
+    const start = asin ? input.products[asin]?.launchStart : null;
+    if (!start) return false;
+    const days = (Date.parse(input.today) - Date.parse(start)) / DAY;
+    return days >= 0 && days < 14;
+  };
+  const best = new Map<string, Proposal>();
+  const kept: Proposal[] = [];
+  for (const p of out) {
+    if (!SAFE.includes(p.rule) && guarded.has(p.campaign)) { note(p.rule, `"${p.campaignName}" is under the stock guard: its other changes wait`); continue; }
+    if (!SAFE.includes(p.rule) && launchWeeks(p.asin)) { note(p.rule, `${p.asin} is in launch weeks 1–2: harvest and negatives only`); continue; }
+    if (BID_PRIORITY.includes(p.rule) && p.key.startsWith("kw:")) {
+      const cur = best.get(p.key);
+      if (cur && BID_PRIORITY.indexOf(cur.rule) <= BID_PRIORITY.indexOf(p.rule)) continue;
+      best.set(p.key, p);
+      continue;
+    }
+    kept.push(p);
+  }
+  out.length = 0;
+  out.push(...kept, ...best.values());
 
   out.sort((a, b) => (a.asin ?? "~").localeCompare(b.asin ?? "~") || RULE_ORDER[a.rule] - RULE_ORDER[b.rule] || CONF_ORDER[a.confidence] - CONF_ORDER[b.confidence] || b.clicks - a.clicks);
   return { proposals: out, notes };
