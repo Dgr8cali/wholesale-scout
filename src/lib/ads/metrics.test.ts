@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { breakEvenAcos, campaignTotals, marginBeforeAds, profitAfterAds, ratios, termStatus, type Range } from "./metrics";
+import { breakEvenAcos, campaignTotals, chooseRanges, marginBeforeAds, profitAfterAds, ratios, termStatus, type Range } from "./metrics";
 
 const r = (from: string | null, to: string | null, clicks: number, cost: number, orders: number, sales: number, source: Range["source"] = "campaign"): Range =>
   ({ dateFrom: from, dateTo: to, impressions: clicks * 100, clicks, cost, orders, sales, units: null, source });
@@ -50,5 +50,17 @@ describe("sums keep unknowns unknown", () => {
     const noUnits = { impressions: null, clicks: 1, cost: 1, orders: 1, sales: 9, units: null };
     expect(add(ZERO, noUnits)).toMatchObject({ units: null, impressions: null, clicks: 1 });
     expect(add(add(ZERO, noUnits), { ...noUnits, units: 2, impressions: 50 })).toMatchObject({ units: 2, impressions: 50 });
+  });
+});
+
+describe("chooseRanges", () => {
+  it("takes the widest, skips overlaps, keeps disjoint ones, prefers the higher rank on equal dates", () => {
+    const r = chooseRanges([
+      { from: "2026-08-25", to: "2026-09-23", rank: 0 },
+      { from: "2026-08-10", to: "2026-10-02", rank: 0 },
+      { from: "2026-08-10", to: "2026-10-02", rank: 1 },
+      { from: "2026-07-01", to: "2026-07-31", rank: 0 },
+    ]);
+    expect(r).toEqual([{ from: "2026-08-10", to: "2026-10-02", rank: 1 }, { from: "2026-07-01", to: "2026-07-31", rank: 0 }]);
   });
 });

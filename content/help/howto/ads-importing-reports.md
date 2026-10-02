@@ -1,15 +1,34 @@
 ---
 title: "Ads: importing reports"
-summary: Import Sponsored Products reports exported from Amazon Ads (search term, campaign, Campaign Manager export), and read the Ads dashboard's figures, break-even ACoS and search-term chips.
-synonyms: [ads import, sponsored products, search term report, campaign report, campaign manager export, acos, break-even acos, csv, amazon ads]
+summary: Import the Amazon Ads bulk export (or Sponsored Products CSV reports), and read the Ads dashboard's figures, placements, break-even ACoS and search-term chips.
+synonyms: [ads import, bulk export, bulk file, bulk operations, xlsx, sponsored products, search term report, campaign report, campaign manager export, placements, keyword id, acos, break-even acos, csv, amazon ads]
 workspace: ads
 order: 1
 ---
-Until the Amazon Ads API is connected, Ads works from reports you export from Amazon Ads and import on **Ads → Imports**.
+Until the Amazon Ads API is connected, Ads works from files you export from Amazon Ads and import on **Ads → Imports**. The **bulk export** is the one to use: one file gives everything.
 
-## What to export
+## The bulk export (recommended)
 
-Three exports are read today. Each file's format is worked out from its columns, in any order:
+In Amazon Ads, go to **Campaign manager → Bulk operations**, pick a date range, tick **Sponsored Products** and **Include Sponsored Products search term data**, and download the .xlsx. One file gives:
+
+| From the file | What the app keeps |
+|---|---|
+| **Campaign** rows | Settings (state, targeting, daily budget, bidding strategy, start date) and totals over the range |
+| **Bidding adjustment** rows | Each placement (top of search, rest of search, product page, Amazon Business): its bid adjustment % and its own clicks, spend, orders and sales |
+| **Ad group** rows | Default bid and state |
+| **Product ad** rows | The SKU and ASIN each campaign advertises. A campaign whose product ads advertise one ASIN is linked to it automatically |
+| **Keyword** rows | Keyword ID, text, match type, bid, state and performance |
+| **Negative keyword** rows | Keyword ID, text and match type (negative exact or phrase) |
+| **Product targeting** rows | An auto campaign's targeting groups, with bid and performance |
+| **SP Search Term Report** sheet | Each customer search term with the keyword (or targeting) that matched it |
+
+**Give the date range.** The bulk file doesn't record the range it was exported for, so the preview asks for it (it's filled in when the file name holds two dates). Enter the range you picked in Amazon Ads; the figures are kept as that range.
+
+Keyword, ad group and campaign IDs are kept exactly, so Phase 2 can send changes back as a bulk upload Amazon accepts: bids, states, budgets and placement percentages updated, keywords and negatives created, in the export's own column order.
+
+## CSV reports
+
+The CSV reports still work, for a quick look or a range you haven't bulk-exported. Three are read. Each file's format is worked out from its columns, in any order:
 
 | Export | Where in Amazon Ads | What it gives |
 |---|---|---|
@@ -21,21 +40,22 @@ Placement, targeting (keyword) and daily campaign reports are recognised too. Da
 
 ## Importing
 
-1. Drop the CSV files on **Ads → Imports**, or click to choose. Several at once is fine.
-2. Each file shows what was read: the report type, rows, campaigns, the dates it covers, its totals, and its first rows. A file that isn't a report the app knows says why and isn't imported.
+1. Drop the bulk export (.xlsx) or CSV files on **Ads → Imports**, or click to choose. One drop zone takes either, several at once.
+2. Each file shows what was read. A bulk export lists how many campaigns, placements, ad groups, product ads, keywords, negatives and search terms it holds, and each campaign with the ASIN its product ads advertise. A CSV shows its report type, rows, the dates it covers, its totals and first rows. A file the app doesn't know says why and isn't imported.
 3. Click **Import**.
 
-**Importing the same data again doesn't double it.** Each row has a key (campaign, ad group, search term and date range; or campaign and date range), and a newer import replaces the older import's rows. An import whose rows have all been replaced leaves the list. **Undo** on an import removes the rows it brought in.
+**Importing the same data again doesn't double it.** Each row has a key (keywords, ad groups and product ads by Amazon's ID; search terms by campaign, ad group, matching keyword, term and date range; campaign totals by campaign and date range), and a newer import replaces the older import's rows. An import whose rows have all been replaced leaves the list. **Undo** on an import removes the rows it brought in.
 
 ### How the files fit together
 
-- **Campaign IDs.** Reports give a campaign a numeric ID. The Campaign Manager export gives it a console ID ("A0…"). The app links the two by the campaign's exact name, so keep names unchanged between exports.
+- **Overlapping ranges count once.** A campaign's dated ranges, and its search terms, are taken widest first; a range that overlaps one already taken is skipped. A bulk export for 10 Aug – 2 Oct and a search term report for 11 Aug – 13 Sep aren't added together. On the same dates, the bulk export's terms (which name the matching keyword) win.
+- **Campaign IDs.** Reports and the bulk export give a campaign a numeric ID. The Campaign Manager export gives it a console ID ("A0…"). The app links the two by the campaign's exact name, so keep names unchanged between exports.
 - **The Campaign Manager export has no date range.** Its totals cover whatever range was picked in the console. A campaign's figures come from, in order: daily rows; dated campaign-report ranges (an overlapping range is taken once, never added twice); the Campaign Manager export ("as exported"); its search terms summed.
 - **Values.** The ="…" wrapper Amazon puts on IDs is stripped. Money is read without the £, and percentages as percentages. "Aug 23, 2026 - Sep 13, 2026" is read as a start and an end date, and the Campaign Manager's dates as day/month/year. "Total cost", not "(converted)", is used.
 
 ## Which product a campaign advertises
 
-A campaign named with an ASIN ("AD_READY: B0H9ZKYYHZ") is linked to it automatically. For any other campaign, set the ASIN in the **ASIN** column of the dashboard's campaign table. A campaign without one is listed under **Campaigns without a product** and doesn't count towards any product.
+A bulk export links each campaign to the ASIN its product ads advertise. That wins over an ASIN in the campaign's name, but never over a different ASIN you set yourself. A campaign whose product ads advertise several ASINs isn't linked: the import says so, and you pick one. Without a bulk export, a campaign named with an ASIN ("AD_READY: B0H9ZKYYHZ") is linked to it. For any other campaign, set the ASIN in the **ASIN** column of the dashboard's campaign table. A campaign without one is listed under **Campaigns without a product** and doesn't count towards any product.
 
 ## The dashboard
 
@@ -50,9 +70,9 @@ A campaign named with an ASIN ("AD_READY: B0H9ZKYYHZ") is linked to it automatic
 
 **Profit after ads** = sales − fees × units − landed cost × units − spend.
 
-**Campaigns**: the same figures per campaign, with where they came from (campaign report, Campaign Manager export, search terms) and the dates covered.
+**Campaigns**: the same figures per campaign, with its state, budget, keyword and negative counts, where the figures came from (bulk export or campaign report, Campaign Manager export, search terms) and the dates covered. The arrow opens its **placements**: each placement's bid adjustment and its own clicks, spend, orders, ACoS and cost per order.
 
-**Search terms**: each term per campaign over everything imported, sorted by spend (or clicks, orders, ACoS), filtered by campaign or status. The chip reads:
+**Search terms**: each term per campaign over everything imported, with the keywords that matched it ("matched by …"; hover for each one's clicks, spend and orders), sorted by spend (or clicks, orders, ACoS), filtered by campaign or status. The chip reads:
 
 | Chip | When |
 |---|---|

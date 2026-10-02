@@ -22,8 +22,11 @@ interface AsinRow { asin: string; title: string | null; campaigns: number; total
 interface CampaignRow {
   id: string; name: string; state: string | null; targeting: string | null; asin: string | null; asin_source: string | null;
   totals: Totals | null; ratios: Ratios | null; source: string | null; from: string | null; to: string | null; breakEvenAcos: number | null; targetAcos: number; profitAfterAds: number | null;
+  bidding_strategy: string | null; budget: number | null; keywords: number; negatives: number; advertised: string[];
+  placements: { placement: string; percentage: number | null; totals: Totals; ratios: Ratios; from: string | null; to: string | null }[];
 }
-interface TermRow { campaign: string; campaignName: string; term: string; asin: string | null; totals: Totals; ratios: Ratios; status: TermStatus; why: string; from: string; to: string; breakEvenAcos: number | null; targetAcos: number }
+interface Matched { text: string; matchType: string | null; clicks: number; cost: number; orders: number }
+interface TermRow { campaign: string; campaignName: string; term: string; asin: string | null; totals: Totals; ratios: Ratios; status: TermStatus; why: string; from: string; to: string; breakEvenAcos: number | null; targetAcos: number; matched: Matched[] }
 interface Dash { settings: { targetAcos: number; cpc: number; cpcAuto: boolean }; asins: AsinRow[]; campaigns: CampaignRow[]; terms: TermRow[]; imports: number }
 
 const gbp = (v: number | null | undefined) => (v == null ? "—" : `${v < 0 ? "−" : ""}£${Math.abs(v).toFixed(2)}`);
@@ -44,7 +47,7 @@ const STATUS_CLS: Record<TermStatus, string> = {
 };
 
 const SOURCE_LABEL: Record<string, string> = {
-  campaign: "campaign report", campaign_daily: "daily report", grid: "Campaign Manager export (range unknown)", search_term: "search terms summed",
+  campaign: "bulk export or campaign report", campaign_daily: "daily report", grid: "Campaign Manager export (range unknown)", search_term: "search terms summed",
 };
 
 /** Ads → Dashboard: per ASIN, per campaign and per search term, with break-even ACoS beside the actual. */
@@ -230,7 +233,7 @@ function AsinCell({ c, onSaved }: { c: CampaignRow; onSaved: () => void }) {
   };
   if (!editing) {
     return (
-      <button type="button" className={cn("num text-xs hover:underline", c.asin ? "" : "font-medium text-brand")} onClick={() => setEditing(true)} title={c.asin_source === "name" ? "From the campaign's name" : c.asin ? "Set by you" : "Set the ASIN this campaign advertises"}>
+      <button type="button" className={cn("num text-xs hover:underline", c.asin ? "" : "font-medium text-brand")} onClick={() => setEditing(true)} title={c.asin_source === "product_ad" ? "From the campaign's product ads" : c.asin_source === "name" ? "From the campaign's name" : c.asin ? "Set by you" : c.advertised.length > 1 ? `Its product ads advertise ${c.advertised.join(", ")}: set which one it counts towards` : "Set the ASIN this campaign advertises"}>
         {c.asin ?? "Set ASIN"}
       </button>
     );
@@ -244,6 +247,8 @@ function AsinCell({ c, onSaved }: { c: CampaignRow; onSaved: () => void }) {
 }
 
 function CampaignTable({ rows, onSaved }: { rows: CampaignRow[]; onSaved: () => void }) {
+  const [open, setOpen] = useState<Set<string>>(new Set());
+  const toggle = (id: string) => setOpen((cur) => { const next = new Set(cur); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   return (
     <section className="space-y-2">
       <h2 className="section-label">Campaigns</h2>
@@ -256,10 +261,18 @@ function CampaignTable({ rows, onSaved }: { rows: CampaignRow[]; onSaved: () => 
             <th className="px-2 py-1.5 text-right">Per order</th><th className="px-2 py-1.5 text-right">Profit after ads</th>
           </tr></thead>
           <tbody>{rows.map((c) => (
-            <tr key={c.id} className="border-b last:border-b-0">
+            <Fragment key={c.id}>
+            <tr className="border-b last:border-b-0">
               <td className="px-2 py-1.5">
-                <div className="font-medium">{c.name}</div>
-                <div className="text-xs text-muted-foreground">{[c.state?.toLowerCase(), c.targeting?.toLowerCase(), c.source ? SOURCE_LABEL[c.source] : "no figures", c.from ? `${day(c.from)} – ${day(c.to)}` : c.source === "grid" ? `as exported ${day(c.to)}` : null].filter(Boolean).join(" · ")}</div>
+                <div className="flex items-center gap-1 font-medium">
+                  {c.placements.length > 0 && (
+                    <button type="button" onClick={() => toggle(c.id)} aria-label={open.has(c.id) ? "Hide placements" : "Show placements"} aria-expanded={open.has(c.id)}>
+                      <ChevronRightIcon className={cn("size-3.5 text-muted-foreground transition-transform", open.has(c.id) && "rotate-90")} />
+                    </button>
+                  )}
+                  {c.name}
+                </div>
+                <div className="text-xs text-muted-foreground">{[c.state?.toLowerCase(), c.targeting?.toLowerCase(), c.budget != null ? `${gbp(c.budget)}/day` : null, c.keywords ? `${c.keywords} keywords` : null, c.negatives ? `${c.negatives} negatives` : null, c.source ? SOURCE_LABEL[c.source] : "no figures", c.from ? `${day(c.from)} – ${day(c.to)}` : c.source === "grid" ? `as exported ${day(c.to)}` : null].filter(Boolean).join(" · ")}</div>
               </td>
               <td className="px-2 py-1.5"><AsinCell c={c} onSaved={onSaved} /></td>
               <td className="num px-2 py-1.5 text-right">{n0(c.totals?.impressions)}</td>
@@ -275,6 +288,23 @@ function CampaignTable({ rows, onSaved }: { rows: CampaignRow[]; onSaved: () => 
               <td className="num px-2 py-1.5 text-right">{gbp(c.ratios?.costPerOrder)}</td>
               <td className={cn("num px-2 py-1.5 text-right", c.profitAfterAds == null ? "" : c.profitAfterAds >= 0 ? "text-pass" : "text-fail")}>{gbp(c.profitAfterAds)}</td>
             </tr>
+            {open.has(c.id) && c.placements.map((p) => (
+              <tr key={p.placement} className="border-b bg-muted/40 text-xs last:border-b-0">
+                <td className="py-1 pr-2 pl-7">{p.placement[0].toUpperCase() + p.placement.slice(1)} <span className="text-muted-foreground">· bid +{p.percentage ?? 0}%{c.bidding_strategy ? ` · ${c.bidding_strategy}` : ""}</span></td>
+                <td />
+                <td className="num px-2 py-1 text-right">{n0(p.totals.impressions)}</td>
+                <td className="num px-2 py-1 text-right">{n0(p.totals.clicks)}</td>
+                <td className="num px-2 py-1 text-right">{pct(p.ratios.ctr, 2)}</td>
+                <td className="num px-2 py-1 text-right">{gbp(p.totals.cost)}</td>
+                <td className="num px-2 py-1 text-right">{gbp(p.ratios.cpc)}</td>
+                <td className="num px-2 py-1 text-right">{n0(p.totals.orders)}</td>
+                <td className="num px-2 py-1 text-right">{pct(p.ratios.conversion)}</td>
+                <td className="num px-2 py-1 text-right">{gbp(p.totals.sales)}</td>
+                <td className={cn("num px-2 py-1 text-right", acosTone(p.ratios.acos, c.targetAcos, c.breakEvenAcos))}>{pct(p.ratios.acos)}</td>
+                <td /><td className="num px-2 py-1 text-right">{gbp(p.ratios.costPerOrder)}</td><td />
+              </tr>
+            ))}
+            </Fragment>
           ))}</tbody>
         </table>
       </div>
@@ -320,7 +350,10 @@ function TermTable({ rows, campaigns }: { rows: TermRow[]; campaigns: CampaignRo
           <tbody>{shown.map((t) => (
             <Fragment key={`${t.campaign}|${t.term}`}>
               <tr className="border-b last:border-b-0">
-                <td className="px-2 py-1.5">{t.term}</td>
+                <td className="px-2 py-1.5">
+                  <div>{t.term}</div>
+                  {t.matched.length > 0 && <div className="text-xs text-muted-foreground" title={t.matched.map((m) => `${m.text} (${m.matchType ?? "targeting"}): ${m.clicks} clicks, £${m.cost.toFixed(2)}, ${m.orders} orders`).join("\n")}>matched by {t.matched.slice(0, 2).map((m) => `"${m.text}"${m.matchType ? ` ${m.matchType.toLowerCase()}` : ""}`).join(", ")}{t.matched.length > 2 ? ` +${t.matched.length - 2} more` : ""}</div>}
+                </td>
                 <td className="px-2 py-1.5 text-xs text-muted-foreground">{t.campaignName}</td>
                 <td className="num px-2 py-1.5 text-right">{n0(t.totals.clicks)}</td>
                 <td className="num px-2 py-1.5 text-right">{n0(t.totals.orders)}</td>

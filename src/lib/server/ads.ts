@@ -1,6 +1,7 @@
 import "server-only";
 import { asinFromName, dateFromFileName, parseReport, REPORT_LABEL, type AdsRow, type ParsedReport, type ReportType } from "../ads/parse";
-import { add, breakEvenAcos, campaignTotals, marginBeforeAds, profitAfterAds, ratios, termStatus, ZERO, type Range, type Totals, type UnitEconomics } from "../ads/metrics";
+import { parseBulk, type ParsedBulk, type Perf } from "../ads/bulk";
+import { add, breakEvenAcos, campaignTotals, chooseRanges, marginBeforeAds, profitAfterAds, ratios, termStatus, ZERO, type Range, type Totals, type UnitEconomics } from "../ads/metrics";
 import { computeFees, DEFAULT_FEE_ASSUMPTIONS, referralCategoryFor } from "../fees/engine";
 import { getKeepa } from "../keepa/client";
 import { activeRateCard, chunks, db, must } from "./db";
@@ -44,8 +45,9 @@ export async function saveAdsSettings(input: Partial<AdsSettings>): Promise<AdsS
 interface CampaignRow {
   id: string; campaign_id: string | null; console_id: string | null; name: string; type: string | null; targeting: string | null;
   state: string | null; budget: number | null; start_date: string | null; end_date: string | null; asin: string | null; asin_source: string | null;
+  bidding_strategy: string | null;
 }
-const CAMPAIGN_COLS = "id, campaign_id, console_id, name, type, targeting, state, budget, start_date, end_date, asin, asin_source";
+const CAMPAIGN_COLS = "id, campaign_id, console_id, name, type, targeting, state, budget, start_date, end_date, asin, asin_source, bidding_strategy";
 
 /** Reports give a numeric ID; the Campaign Manager export a console ID ("A0…"). */
 const isConsoleId = (id: string) => /[A-Za-z]/.test(id);
@@ -124,6 +126,91 @@ async function storeReport(p: ParsedReport, fileName: string): Promise<ImportSum
   return { file: fileName, type: p.type, label: REPORT_LABEL[p.type], rows: p.rows.length, dateFrom: p.dateFrom, dateTo: p.dateTo, warnings: p.warnings, importId: imp.id };
 }
 
+/* ===================== bulk export (the primary import) ===================== */
+
+export interface BulkImportSummary { file: string; label: string; rows: number; dateFrom: string; dateTo: string; warnings: string[]; importId: string; mapped: number }
+
+const perfRow = (p: Perf, from: string, to: string, importId: string) => ({
+  impressions: p.impressions == null ? null : Math.round(p.impressions), clicks: Math.round(p.clicks), cost: p.cost, orders: Math.round(p.orders), sales: p.sales,
+  units: p.units == null ? null : Math.round(p.units), date_from: from, date_to: to, import_id: importId,
+});
+
+/**
+ * Store a bulk export: each campaign's settings and totals over the export's range, its placements,
+ * ad groups, product ads, keywords, negatives and product targeting (latest settings by Amazon's
+ * ID), and search terms with the keyword that matched. A campaign whose product ads advertise one
+ * ASIN is mapped to it (over a name's ASIN, never over a different one you set).
+ */
+export async function importBulk(data: Uint8Array, fileName: string, dateFrom?: string | null, dateTo?: string | null): Promise<BulkImportSummary> {
+  const b: ParsedBulk = parseBulk(data, { fileName, dateFrom, dateTo });
+  if (!b.dateFrom || !b.dateTo) throw new Error("Give the date range the bulk export was made for");
+  const from = b.dateFrom, to = b.dateTo;
+  const d = db();
+  const rows = b.campaigns.length + b.placements.length + b.adGroups.length + b.productAds.length + b.keywords.length + b.negatives.length + b.targets.length + b.searchTerms.length;
+  const imp = must(await d.from("ads_imports").insert({ report_type: "bulk", file_name: fileName.slice(0, 200), rows, date_from: from, date_to: to }).select("id").single(), "import") as { id: string };
+  const now = new Date().toISOString();
+
+  // Campaigns: by Amazon's ID, else the exact name; created when new.
+  const all = must(await d.from("ads_campaigns").select(CAMPAIGN_COLS), "campaigns") as CampaignRow[];
+  const uuid = new Map<string, string>();
+  let mapped = 0;
+  for (const c of b.campaigns) {
+    const cur = all.find((x) => x.campaign_id === c.campaignId) ?? all.find((x) => x.name.trim().toLowerCase() === c.name.trim().toLowerCase());
+    const patch: Record<string, unknown> = {
+      campaign_id: c.campaignId, name: c.name, type: "Sponsored Products", targeting: c.targeting, state: c.state, budget: c.budget,
+      bidding_strategy: c.biddingStrategy, portfolio_id: c.portfolioId, start_date: c.startDate, end_date: c.endDate, last_seen: now,
+    };
+    const adAsin = b.campaignAsins.get(c.campaignId);
+    const nameAsin = asinFromName(c.name);
+    // A manual mapping stands unless the product ads say the same (then they're the source).
+    if (cur?.asin_source !== "manual" || (adAsin && cur.asin === adAsin)) {
+      if (adAsin) { Object.assign(patch, { asin: adAsin, asin_source: "product_ad" }); mapped++; }
+      else if (!cur?.asin && nameAsin) Object.assign(patch, { asin: nameAsin, asin_source: "name" });
+    }
+    const row = cur
+      ? must(await d.from("ads_campaigns").update(patch).eq("id", cur.id).select("id").single(), "update campaign") as { id: string }
+      : must(await d.from("ads_campaigns").insert(patch).select("id").single(), "add campaign") as { id: string };
+    uuid.set(c.campaignId, row.id);
+  }
+  const camp = (id: string) => {
+    const u = uuid.get(id);
+    if (!u) throw new Error(`Campaign ${id} has rows but no Campaign row in the file`);
+    return u;
+  };
+  const upsert = async (table: string, list: Record<string, unknown>[], onConflict: string) => {
+    for (const c of chunks(list, 200)) if (c.length) must(await d.from(table).upsert(c, { onConflict }), `save ${table}`);
+  };
+  await upsert("ads_campaign_ranges", b.campaigns.map((c) => ({ campaign: camp(c.campaignId), source: "bulk", ...perfRow(c, from, to, imp.id) })), "campaign,source,date_from,date_to");
+  await upsert("ads_placements", b.placements.map((p) => ({ campaign: camp(p.campaignId), placement: p.placement, percentage: p.percentage, bidding_strategy: p.biddingStrategy, ...perfRow(p, from, to, imp.id) })), "campaign,placement");
+  await upsert("ads_ad_groups", b.adGroups.map((g) => ({ ad_group_id: g.adGroupId, campaign: camp(g.campaignId), name: g.name, default_bid: g.defaultBid, state: g.state, ...perfRow(g, from, to, imp.id) })), "ad_group_id");
+  await upsert("ads_product_ads", b.productAds.map((a) => ({ ad_id: a.adId, campaign: camp(a.campaignId), ad_group_id: a.adGroupId, sku: a.sku, asin: a.asin, state: a.state, eligibility: a.eligibility, ...perfRow(a, from, to, imp.id) })), "ad_id");
+  await upsert("ads_keywords", b.keywords.filter((k) => k.keywordId).map((k) => ({ keyword_id: k.keywordId, campaign: camp(k.campaignId), ad_group_id: k.adGroupId, keyword_text: k.text, match_type: k.matchType, bid: k.bid, state: k.state, ...perfRow(k, from, to, imp.id) })), "keyword_id");
+  await upsert("ads_negative_keywords", b.negatives.filter((k) => k.keywordId).map((k) => ({ keyword_id: k.keywordId, campaign: camp(k.campaignId), ad_group_id: k.adGroupId, keyword_text: k.text, match_type: k.matchType, state: k.state, level: k.level, import_id: imp.id })), "keyword_id");
+  await upsert("ads_product_targets", b.targets.filter((t) => t.targetId).map((t) => ({ target_id: t.targetId, campaign: camp(t.campaignId), ad_group_id: t.adGroupId, expression: t.expression, bid: t.bid, state: t.state, ...perfRow(t, from, to, imp.id) })), "target_id");
+  const terms = new Map<string, Record<string, unknown>>();
+  for (const t of b.searchTerms) {
+    const row = { campaign: camp(t.campaignId), ad_group_id: t.adGroupId, ad_group_name: t.adGroupName, keyword_id: t.keywordId ?? t.targetId ?? "", keyword_text: t.keywordText, match_type: t.matchType, term: t.term, ...perfRow(t, from, to, imp.id) };
+    terms.set(`${row.campaign}|${row.ad_group_id}|${row.keyword_id}|${row.term}`, row);
+  }
+  await upsert("ads_search_terms", [...terms.values()], "campaign,ad_group_id,keyword_id,term,date_from,date_to");
+  return { file: fileName, label: b.label, rows, dateFrom: from, dateTo: to, warnings: b.warnings, importId: imp.id, mapped };
+}
+
+/** After any import: drop superseded import records and follow the account's CPC (when auto). */
+async function afterImport(importIds: string[]): Promise<number | null> {
+  if (!importIds.length) return null;
+  await dropSupersededImports(importIds);
+  const s = await adsSettings();
+  const trailing = await trailingCpc();
+  if (s.cpcAuto && trailing != null) { await saveAdsSettings({ cpc: Math.round(trailing * 100) / 100 }); return trailing; }
+  return null;
+}
+
+export async function importBulkFile(data: Uint8Array, fileName: string, dateFrom?: string | null, dateTo?: string | null) {
+  const summary = await importBulk(data, fileName, dateFrom, dateTo);
+  return { imported: summary, cpc: await afterImport([summary.importId]) };
+}
+
 /** Import several exported files; afterwards the CPC estimate follows the account's (when auto). */
 export async function importReports(files: { name: string; text: string }[]): Promise<{ imported: ImportSummary[]; errors: { file: string; error: string }[]; cpc: number | null }> {
   const imported: ImportSummary[] = [];
@@ -135,14 +222,7 @@ export async function importReports(files: { name: string; text: string }[]): Pr
       errors.push({ file: f.name, error: (e as Error).message });
     }
   }
-  if (imported.length) await dropSupersededImports(imported.map((i) => i.importId));
-  let cpc: number | null = null;
-  if (imported.length) {
-    const s = await adsSettings();
-    const trailing = await trailingCpc();
-    if (s.cpcAuto && trailing != null) { await saveAdsSettings({ cpc: Math.round(trailing * 100) / 100 }); cpc = trailing; }
-  }
-  return { imported, errors, cpc };
+  return { imported, errors, cpc: await afterImport(imported.map((i) => i.importId)) };
 }
 
 /**
@@ -153,7 +233,7 @@ export async function importReports(files: { name: string; text: string }[]): Pr
 async function dropSupersededImports(keep: string[]) {
   const d = db();
   const owned = new Set<string>();
-  for (const t of ["ads_campaign_ranges", "ads_campaign_daily", "ads_search_terms"]) {
+  for (const t of ["ads_campaign_ranges", "ads_campaign_daily", "ads_search_terms", "ads_placements", "ads_ad_groups", "ads_product_ads", "ads_keywords", "ads_negative_keywords", "ads_product_targets"]) {
     const rows = must(await d.from(t).select("import_id"), t) as { import_id: string | null }[];
     for (const r of rows) if (r.import_id) owned.add(r.import_id);
   }
@@ -164,7 +244,7 @@ async function dropSupersededImports(keep: string[]) {
 
 export async function listImports() {
   return must(await db().from("ads_imports").select("id, report_type, file_name, rows, date_from, date_to, imported_at").order("imported_at", { ascending: false }).limit(100), "imports") as
-    { id: string; report_type: ReportType; file_name: string; rows: number; date_from: string | null; date_to: string | null; imported_at: string }[];
+    { id: string; report_type: ReportType | "bulk"; file_name: string; rows: number; date_from: string | null; date_to: string | null; imported_at: string }[];
 }
 
 /** Undo an import: the rows it last wrote go with it. */
@@ -183,21 +263,43 @@ async function loadAll() {
     d.from("ads_campaigns").select(CAMPAIGN_COLS),
     d.from("ads_campaign_ranges").select("campaign, source, date_from, date_to, impressions, clicks, cost, orders, sales, units"),
     d.from("ads_campaign_daily").select("campaign, date, impressions, clicks, cost, orders, sales, units"),
-    d.from("ads_search_terms").select("campaign, ad_group_id, ad_group_name, term, date_from, date_to, impressions, clicks, cost, orders, sales, units"),
+    d.from("ads_search_terms").select("campaign, ad_group_id, ad_group_name, keyword_id, keyword_text, match_type, term, date_from, date_to, impressions, clicks, cost, orders, sales, units"),
   ]);
   return {
     campaigns: must(camps, "campaigns") as CampaignRow[],
     ranges: must(ranges, "ranges") as Record<string, unknown>[],
     daily: must(daily, "daily") as Record<string, unknown>[],
-    terms: must(terms, "search terms") as Record<string, unknown>[],
+    terms: countedTerms(must(terms, "search terms") as Record<string, unknown>[]),
   };
+}
+
+/**
+ * The search-term rows to count: per campaign, the ranges chosen widest first without overlaps
+ * (a bulk export and a search term report over overlapping weeks aren't added), with every row in a
+ * chosen range. On equal dates, the rows that name the matching keyword win.
+ */
+function countedTerms(rows: Record<string, unknown>[]) {
+  const byCampaign = new Map<string, Record<string, unknown>[]>();
+  for (const r of rows) byCampaign.set(r.campaign as string, [...(byCampaign.get(r.campaign as string) ?? []), r]);
+  const out: Record<string, unknown>[] = [];
+  for (const list of byCampaign.values()) {
+    const ranges = new Map<string, { from: string; to: string; rank: number; key: string }>();
+    for (const r of list) {
+      const rank = r.keyword_id ? 1 : 0;
+      const key = `${r.date_from}|${r.date_to}|${rank}`;
+      ranges.set(key, { from: r.date_from as string, to: r.date_to as string, rank, key });
+    }
+    const keep = new Set(chooseRanges([...ranges.values()]).map((r) => r.key));
+    out.push(...list.filter((r) => keep.has(`${r.date_from}|${r.date_to}|${r.keyword_id ? 1 : 0}`)));
+  }
+  return out;
 }
 
 /** Each campaign's totals from its best source (see campaignTotals). */
 function campaignFigures(all: Awaited<ReturnType<typeof loadAll>>) {
   return all.campaigns.map((c) => {
     const mine = (rows: Record<string, unknown>[]) => rows.filter((r) => r.campaign === c.id);
-    const ranges: Range[] = mine(all.ranges).filter((r) => r.source === "campaign").map((r) => ({ ...toTotals(r), dateFrom: r.date_from as string, dateTo: r.date_to as string, source: "campaign" }));
+    const ranges: Range[] = mine(all.ranges).filter((r) => r.source === "campaign" || r.source === "bulk").map((r) => ({ ...toTotals(r), dateFrom: r.date_from as string, dateTo: r.date_to as string, source: r.source as Range["source"] }));
     const gridRow = mine(all.ranges).find((r) => r.source === "grid");
     const grid: Range | null = gridRow ? { ...toTotals(gridRow), dateFrom: null, dateTo: gridRow.date_to as string, source: "grid" } : null;
     const daily: Range[] = mine(all.daily).map((r) => ({ ...toTotals(r), dateFrom: r.date as string, dateTo: r.date as string, source: "campaign_daily" }));
@@ -276,10 +378,19 @@ export async function adsDashboard() {
   const all = await loadAll();
   const settings = await adsSettings();
   const figs = campaignFigures(all);
-  const [products, targets] = await Promise.all([
+  const [products, targets, placementsRes, adsRes, kwRes, negRes] = await Promise.all([
     db().from("ads_products").select("asin, title, price, landed_cost, referral_category, weight_g, dims, fba_fee, phase"),
     db().from("ads_targets").select("asin, target_acos_launch, target_acos_steady"),
+    db().from("ads_placements").select("campaign, placement, percentage, date_from, date_to, impressions, clicks, cost, orders, sales, units"),
+    db().from("ads_product_ads").select("campaign, sku, asin, state"),
+    db().from("ads_keywords").select("campaign, state"),
+    db().from("ads_negative_keywords").select("campaign"),
   ]);
+  const placementRows = must(placementsRes, "placements") as Record<string, unknown>[];
+  const productAds = must(adsRes, "product ads") as { campaign: string; sku: string | null; asin: string | null; state: string | null }[];
+  const keywordRows = must(kwRes, "keywords") as { campaign: string; state: string | null }[];
+  const negativeRows = must(negRes, "negative keywords") as { campaign: string }[];
+  const PLACEMENT_ORDER = ["top", "rest of search", "product page", "amazon business"];
   const prod = new Map((must(products, "ads products") as AdsProduct[]).map((p) => [p.asin, { ...p, price: n(p.price), landed_cost: n(p.landed_cost), fba_fee: n(p.fba_fee) }]));
   const tgt = new Map((must(targets, "ads targets") as { asin: string; target_acos_launch: number | null; target_acos_steady: number | null }[]).map((t) => [t.asin, t]));
   const targetFor = (asin: string | null) => {
@@ -311,22 +422,32 @@ export async function adsDashboard() {
   // Per campaign.
   const campaigns = figs.map((f) => {
     const e = f.campaign.asin ? econByAsin.get(f.campaign.asin) : undefined;
+    const placements = placementRows.filter((p) => p.campaign === f.campaign.id).map((p) => {
+      const t = toTotals(p);
+      return { placement: p.placement as string, percentage: n(p.percentage), totals: t, ratios: ratios(t), from: p.date_from as string | null, to: p.date_to as string | null };
+    }).sort((a, b) => PLACEMENT_ORDER.indexOf(a.placement.toLowerCase()) - PLACEMENT_ORDER.indexOf(b.placement.toLowerCase()));
+    const advertised = [...new Set(productAds.filter((a) => a.campaign === f.campaign.id && a.asin).map((a) => a.asin!))];
     return {
-      ...f.campaign, totals: f.totals, ratios: f.totals ? ratios(f.totals) : null, source: f.source, from: f.from, to: f.to,
+      ...f.campaign, totals: f.totals, ratios: f.totals ? ratios(f.totals) : null, source: f.source, from: f.from, to: f.to, placements, advertised,
+      keywords: keywordRows.filter((k) => k.campaign === f.campaign.id).length, negatives: negativeRows.filter((k) => k.campaign === f.campaign.id).length,
       breakEvenAcos: e?.breakEvenAcos ?? null, targetAcos: targetFor(f.campaign.asin).target,
       profitAfterAds: f.totals && e ? profitAfterAds(f.totals, e) : null,
     };
   }).sort((a, b) => (b.totals?.cost ?? 0) - (a.totals?.cost ?? 0));
 
   // Search terms: per campaign and term, over every range imported.
-  const byTerm = new Map<string, { campaign: string; term: string; totals: Totals; from: string; to: string }>();
+  // Each term lists the keywords that matched it (from bulk exports), with their clicks and spend.
+  type Matched = { text: string; matchType: string | null; clicks: number; cost: number; orders: number };
+  const byTerm = new Map<string, { campaign: string; term: string; totals: Totals; from: string; to: string; matched: Matched[] }>();
   for (const r of all.terms) {
     const k = `${r.campaign}|${r.term}`;
     const cur = byTerm.get(k);
     const t = toTotals(r);
-    if (cur) Object.assign(cur, { totals: add(cur.totals, t), from: [cur.from, r.date_from as string].sort()[0], to: [cur.to, r.date_to as string].sort()[1] });
-    else byTerm.set(k, { campaign: r.campaign as string, term: r.term as string, totals: t, from: r.date_from as string, to: r.date_to as string });
+    const m: Matched[] = r.keyword_text ? [{ text: r.keyword_text as string, matchType: (r.match_type as string | null) ?? null, clicks: t.clicks, cost: t.cost, orders: t.orders }] : [];
+    if (cur) Object.assign(cur, { totals: add(cur.totals, t), from: [cur.from, r.date_from as string].sort()[0], to: [cur.to, r.date_to as string].sort()[1], matched: [...cur.matched, ...m] });
+    else byTerm.set(k, { campaign: r.campaign as string, term: r.term as string, totals: t, from: r.date_from as string, to: r.date_to as string, matched: m });
   }
+  for (const x of byTerm.values()) x.matched.sort((a, b) => b.cost - a.cost);
   const campById = new Map(all.campaigns.map((c) => [c.id, c]));
   const terms = [...byTerm.values()].map((x) => {
     const c = campById.get(x.campaign)!;

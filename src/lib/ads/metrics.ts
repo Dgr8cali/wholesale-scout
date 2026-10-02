@@ -40,12 +40,12 @@ export function ratios(t: Totals): Ratios {
 
 /* ===================== a campaign's figures ===================== */
 
-export interface Range extends Totals { dateFrom: string | null; dateTo: string | null; source: "campaign" | "campaign_daily" | "grid" | "search_term" }
+export interface Range extends Totals { dateFrom: string | null; dateTo: string | null; source: "campaign" | "campaign_daily" | "grid" | "search_term" | "bulk" }
 
 /**
  * A campaign's totals from the best source, never adding the same days twice:
  * 1. daily rows, when there are any (each day once);
- * 2. else its dated campaign-report ranges, widest first, skipping any that overlaps one taken
+ * 2. else its dated ranges (campaign reports, bulk exports), widest first, skipping any that overlaps one taken
  *    (re-imports and overlapping exports don't double count);
  * 3. else the Campaign Manager export's totals ("as exported": their range is unknown);
  * 4. else its search terms summed.
@@ -63,6 +63,19 @@ export function campaignTotals(x: { daily: Range[]; ranges: Range[]; grid: Range
   if (x.grid) return { totals: x.grid, source: "grid", from: null, to: x.grid.dateTo };
   if (x.terms) return { totals: x.terms, source: "search_term", from: null, to: null };
   return null;
+}
+
+/**
+ * The date ranges to count, never overlapping: widest first, then (for equal dates) the higher
+ * rank, skipping any that overlaps one taken. Search terms use it per campaign so a bulk export and
+ * a search term report over overlapping weeks aren't added together.
+ */
+export function chooseRanges<T extends { from: string; to: string; rank?: number }>(rs: T[]): T[] {
+  const width = (r: T) => Date.parse(r.to) - Date.parse(r.from);
+  const sorted = [...rs].sort((a, b) => width(b) - width(a) || (b.rank ?? 0) - (a.rank ?? 0));
+  const taken: T[] = [];
+  for (const r of sorted) if (!taken.some((t) => r.from <= t.to && t.from <= r.to)) taken.push(r);
+  return taken;
 }
 
 const days = (r: Range) => (Date.parse(r.dateTo!) - Date.parse(r.dateFrom!)) / 86_400_000;

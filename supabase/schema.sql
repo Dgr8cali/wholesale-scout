@@ -1,5 +1,5 @@
 -- Wholesale Scout schema, dumped by scripts/schema-backup.mjs. No data.
--- Dumped 2026-10-02T11:16:55.702Z. Safe to re-run. Restore: npm run schema:restore
+-- Dumped 2026-10-02T13:05:20.897Z. Safe to re-run. Restore: npm run schema:restore
 
 -- @section extensions
 create extension if not exists "pg_cron";
@@ -10,6 +10,38 @@ create extension if not exists "supabase_vault";
 create extension if not exists "uuid-ossp";
 
 -- @section tables
+create table if not exists "ads_ad_groups" (
+  "ad_group_id" text not null,
+  "campaign" uuid not null,
+  "name" text,
+  "default_bid" numeric,
+  "state" text,
+  "date_from" date,
+  "date_to" date,
+  "impressions" integer,
+  "clicks" integer default 0 not null,
+  "cost" numeric default 0 not null,
+  "orders" integer default 0 not null,
+  "sales" numeric default 0 not null,
+  "units" integer,
+  "import_id" uuid
+);
+alter table "ads_ad_groups" add column if not exists "ad_group_id" text;
+alter table "ads_ad_groups" add column if not exists "campaign" uuid;
+alter table "ads_ad_groups" add column if not exists "name" text;
+alter table "ads_ad_groups" add column if not exists "default_bid" numeric;
+alter table "ads_ad_groups" add column if not exists "state" text;
+alter table "ads_ad_groups" add column if not exists "date_from" date;
+alter table "ads_ad_groups" add column if not exists "date_to" date;
+alter table "ads_ad_groups" add column if not exists "impressions" integer;
+alter table "ads_ad_groups" add column if not exists "clicks" integer default 0;
+alter table "ads_ad_groups" add column if not exists "cost" numeric default 0;
+alter table "ads_ad_groups" add column if not exists "orders" integer default 0;
+alter table "ads_ad_groups" add column if not exists "sales" numeric default 0;
+alter table "ads_ad_groups" add column if not exists "units" integer;
+alter table "ads_ad_groups" add column if not exists "import_id" uuid;
+alter table "ads_ad_groups" enable row level security;
+
 create table if not exists "ads_campaign_daily" (
   "campaign" uuid not null,
   "date" date not null,
@@ -74,7 +106,9 @@ create table if not exists "ads_campaigns" (
   "asin" text,
   "asin_source" text,
   "first_seen" timestamp with time zone default now() not null,
-  "last_seen" timestamp with time zone default now() not null
+  "last_seen" timestamp with time zone default now() not null,
+  "bidding_strategy" text,
+  "portfolio_id" text
 );
 alter table "ads_campaigns" add column if not exists "id" uuid default gen_random_uuid();
 alter table "ads_campaigns" add column if not exists "campaign_id" text;
@@ -90,6 +124,8 @@ alter table "ads_campaigns" add column if not exists "asin" text;
 alter table "ads_campaigns" add column if not exists "asin_source" text;
 alter table "ads_campaigns" add column if not exists "first_seen" timestamp with time zone default now();
 alter table "ads_campaigns" add column if not exists "last_seen" timestamp with time zone default now();
+alter table "ads_campaigns" add column if not exists "bidding_strategy" text;
+alter table "ads_campaigns" add column if not exists "portfolio_id" text;
 alter table "ads_campaigns" enable row level security;
 
 create table if not exists "ads_imports" (
@@ -109,6 +145,162 @@ alter table "ads_imports" add column if not exists "date_from" date;
 alter table "ads_imports" add column if not exists "date_to" date;
 alter table "ads_imports" add column if not exists "imported_at" timestamp with time zone default now();
 alter table "ads_imports" enable row level security;
+
+create table if not exists "ads_keywords" (
+  "keyword_id" text not null,
+  "campaign" uuid not null,
+  "ad_group_id" text not null,
+  "keyword_text" text not null,
+  "match_type" text not null,
+  "bid" numeric,
+  "state" text,
+  "date_from" date,
+  "date_to" date,
+  "impressions" integer,
+  "clicks" integer default 0 not null,
+  "cost" numeric default 0 not null,
+  "orders" integer default 0 not null,
+  "sales" numeric default 0 not null,
+  "units" integer,
+  "import_id" uuid
+);
+alter table "ads_keywords" add column if not exists "keyword_id" text;
+alter table "ads_keywords" add column if not exists "campaign" uuid;
+alter table "ads_keywords" add column if not exists "ad_group_id" text;
+alter table "ads_keywords" add column if not exists "keyword_text" text;
+alter table "ads_keywords" add column if not exists "match_type" text;
+alter table "ads_keywords" add column if not exists "bid" numeric;
+alter table "ads_keywords" add column if not exists "state" text;
+alter table "ads_keywords" add column if not exists "date_from" date;
+alter table "ads_keywords" add column if not exists "date_to" date;
+alter table "ads_keywords" add column if not exists "impressions" integer;
+alter table "ads_keywords" add column if not exists "clicks" integer default 0;
+alter table "ads_keywords" add column if not exists "cost" numeric default 0;
+alter table "ads_keywords" add column if not exists "orders" integer default 0;
+alter table "ads_keywords" add column if not exists "sales" numeric default 0;
+alter table "ads_keywords" add column if not exists "units" integer;
+alter table "ads_keywords" add column if not exists "import_id" uuid;
+alter table "ads_keywords" enable row level security;
+
+create table if not exists "ads_negative_keywords" (
+  "keyword_id" text not null,
+  "campaign" uuid not null,
+  "ad_group_id" text,
+  "keyword_text" text not null,
+  "match_type" text not null,
+  "state" text,
+  "level" text default 'ad group'::text not null,
+  "import_id" uuid
+);
+alter table "ads_negative_keywords" add column if not exists "keyword_id" text;
+alter table "ads_negative_keywords" add column if not exists "campaign" uuid;
+alter table "ads_negative_keywords" add column if not exists "ad_group_id" text;
+alter table "ads_negative_keywords" add column if not exists "keyword_text" text;
+alter table "ads_negative_keywords" add column if not exists "match_type" text;
+alter table "ads_negative_keywords" add column if not exists "state" text;
+alter table "ads_negative_keywords" add column if not exists "level" text default 'ad group'::text;
+alter table "ads_negative_keywords" add column if not exists "import_id" uuid;
+alter table "ads_negative_keywords" enable row level security;
+
+create table if not exists "ads_placements" (
+  "campaign" uuid not null,
+  "placement" text not null,
+  "percentage" numeric,
+  "bidding_strategy" text,
+  "date_from" date,
+  "date_to" date,
+  "impressions" integer,
+  "clicks" integer default 0 not null,
+  "cost" numeric default 0 not null,
+  "orders" integer default 0 not null,
+  "sales" numeric default 0 not null,
+  "units" integer,
+  "import_id" uuid
+);
+alter table "ads_placements" add column if not exists "campaign" uuid;
+alter table "ads_placements" add column if not exists "placement" text;
+alter table "ads_placements" add column if not exists "percentage" numeric;
+alter table "ads_placements" add column if not exists "bidding_strategy" text;
+alter table "ads_placements" add column if not exists "date_from" date;
+alter table "ads_placements" add column if not exists "date_to" date;
+alter table "ads_placements" add column if not exists "impressions" integer;
+alter table "ads_placements" add column if not exists "clicks" integer default 0;
+alter table "ads_placements" add column if not exists "cost" numeric default 0;
+alter table "ads_placements" add column if not exists "orders" integer default 0;
+alter table "ads_placements" add column if not exists "sales" numeric default 0;
+alter table "ads_placements" add column if not exists "units" integer;
+alter table "ads_placements" add column if not exists "import_id" uuid;
+alter table "ads_placements" enable row level security;
+
+create table if not exists "ads_product_ads" (
+  "ad_id" text not null,
+  "campaign" uuid not null,
+  "ad_group_id" text not null,
+  "sku" text,
+  "asin" text,
+  "state" text,
+  "eligibility" text,
+  "date_from" date,
+  "date_to" date,
+  "impressions" integer,
+  "clicks" integer default 0 not null,
+  "cost" numeric default 0 not null,
+  "orders" integer default 0 not null,
+  "sales" numeric default 0 not null,
+  "units" integer,
+  "import_id" uuid
+);
+alter table "ads_product_ads" add column if not exists "ad_id" text;
+alter table "ads_product_ads" add column if not exists "campaign" uuid;
+alter table "ads_product_ads" add column if not exists "ad_group_id" text;
+alter table "ads_product_ads" add column if not exists "sku" text;
+alter table "ads_product_ads" add column if not exists "asin" text;
+alter table "ads_product_ads" add column if not exists "state" text;
+alter table "ads_product_ads" add column if not exists "eligibility" text;
+alter table "ads_product_ads" add column if not exists "date_from" date;
+alter table "ads_product_ads" add column if not exists "date_to" date;
+alter table "ads_product_ads" add column if not exists "impressions" integer;
+alter table "ads_product_ads" add column if not exists "clicks" integer default 0;
+alter table "ads_product_ads" add column if not exists "cost" numeric default 0;
+alter table "ads_product_ads" add column if not exists "orders" integer default 0;
+alter table "ads_product_ads" add column if not exists "sales" numeric default 0;
+alter table "ads_product_ads" add column if not exists "units" integer;
+alter table "ads_product_ads" add column if not exists "import_id" uuid;
+alter table "ads_product_ads" enable row level security;
+
+create table if not exists "ads_product_targets" (
+  "target_id" text not null,
+  "campaign" uuid not null,
+  "ad_group_id" text not null,
+  "expression" text,
+  "bid" numeric,
+  "state" text,
+  "date_from" date,
+  "date_to" date,
+  "impressions" integer,
+  "clicks" integer default 0 not null,
+  "cost" numeric default 0 not null,
+  "orders" integer default 0 not null,
+  "sales" numeric default 0 not null,
+  "units" integer,
+  "import_id" uuid
+);
+alter table "ads_product_targets" add column if not exists "target_id" text;
+alter table "ads_product_targets" add column if not exists "campaign" uuid;
+alter table "ads_product_targets" add column if not exists "ad_group_id" text;
+alter table "ads_product_targets" add column if not exists "expression" text;
+alter table "ads_product_targets" add column if not exists "bid" numeric;
+alter table "ads_product_targets" add column if not exists "state" text;
+alter table "ads_product_targets" add column if not exists "date_from" date;
+alter table "ads_product_targets" add column if not exists "date_to" date;
+alter table "ads_product_targets" add column if not exists "impressions" integer;
+alter table "ads_product_targets" add column if not exists "clicks" integer default 0;
+alter table "ads_product_targets" add column if not exists "cost" numeric default 0;
+alter table "ads_product_targets" add column if not exists "orders" integer default 0;
+alter table "ads_product_targets" add column if not exists "sales" numeric default 0;
+alter table "ads_product_targets" add column if not exists "units" integer;
+alter table "ads_product_targets" add column if not exists "import_id" uuid;
+alter table "ads_product_targets" enable row level security;
 
 create table if not exists "ads_products" (
   "asin" text not null,
@@ -148,7 +340,10 @@ create table if not exists "ads_search_terms" (
   "orders" integer default 0 not null,
   "sales" numeric default 0 not null,
   "units" integer,
-  "import_id" uuid
+  "import_id" uuid,
+  "keyword_id" text default ''::text not null,
+  "keyword_text" text,
+  "match_type" text
 );
 alter table "ads_search_terms" add column if not exists "id" uuid default gen_random_uuid();
 alter table "ads_search_terms" add column if not exists "campaign" uuid;
@@ -164,6 +359,9 @@ alter table "ads_search_terms" add column if not exists "orders" integer default
 alter table "ads_search_terms" add column if not exists "sales" numeric default 0;
 alter table "ads_search_terms" add column if not exists "units" integer;
 alter table "ads_search_terms" add column if not exists "import_id" uuid;
+alter table "ads_search_terms" add column if not exists "keyword_id" text default ''::text;
+alter table "ads_search_terms" add column if not exists "keyword_text" text;
+alter table "ads_search_terms" add column if not exists "match_type" text;
 alter table "ads_search_terms" enable row level security;
 
 create table if not exists "ads_settings" (
@@ -1318,6 +1516,11 @@ alter table "watchlist" enable row level security;
 
 -- @section constraints
 do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'ads_ad_groups_pkey' and conrelid = '"ads_ad_groups"'::regclass) then
+    alter table "ads_ad_groups" add constraint "ads_ad_groups_pkey" PRIMARY KEY (ad_group_id);
+  end if;
+end $$;
+do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'ads_campaign_daily_pkey' and conrelid = '"ads_campaign_daily"'::regclass) then
     alter table "ads_campaign_daily" add constraint "ads_campaign_daily_pkey" PRIMARY KEY (campaign, date);
   end if;
@@ -1335,6 +1538,31 @@ end $$;
 do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'ads_imports_pkey' and conrelid = '"ads_imports"'::regclass) then
     alter table "ads_imports" add constraint "ads_imports_pkey" PRIMARY KEY (id);
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'ads_keywords_pkey' and conrelid = '"ads_keywords"'::regclass) then
+    alter table "ads_keywords" add constraint "ads_keywords_pkey" PRIMARY KEY (keyword_id);
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'ads_negative_keywords_pkey' and conrelid = '"ads_negative_keywords"'::regclass) then
+    alter table "ads_negative_keywords" add constraint "ads_negative_keywords_pkey" PRIMARY KEY (keyword_id);
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'ads_placements_pkey' and conrelid = '"ads_placements"'::regclass) then
+    alter table "ads_placements" add constraint "ads_placements_pkey" PRIMARY KEY (campaign, placement);
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'ads_product_ads_pkey' and conrelid = '"ads_product_ads"'::regclass) then
+    alter table "ads_product_ads" add constraint "ads_product_ads_pkey" PRIMARY KEY (ad_id);
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'ads_product_targets_pkey' and conrelid = '"ads_product_targets"'::regclass) then
+    alter table "ads_product_targets" add constraint "ads_product_targets_pkey" PRIMARY KEY (target_id);
   end if;
 end $$;
 do $$ begin
@@ -1589,7 +1817,7 @@ do $$ begin
 end $$;
 do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'ads_search_terms_key' and conrelid = '"ads_search_terms"'::regclass) then
-    alter table "ads_search_terms" add constraint "ads_search_terms_key" UNIQUE (campaign, ad_group_id, term, date_from, date_to);
+    alter table "ads_search_terms" add constraint "ads_search_terms_key" UNIQUE (campaign, ad_group_id, keyword_id, term, date_from, date_to);
   end if;
 end $$;
 do $$ begin
@@ -1649,12 +1877,17 @@ do $$ begin
 end $$;
 do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'ads_campaign_ranges_source_check' and conrelid = '"ads_campaign_ranges"'::regclass) then
-    alter table "ads_campaign_ranges" add constraint "ads_campaign_ranges_source_check" CHECK ((source = ANY (ARRAY['campaign'::text, 'grid'::text])));
+    alter table "ads_campaign_ranges" add constraint "ads_campaign_ranges_source_check" CHECK ((source = ANY (ARRAY['campaign'::text, 'grid'::text, 'bulk'::text])));
   end if;
 end $$;
 do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'ads_campaigns_asin_source_check' and conrelid = '"ads_campaigns"'::regclass) then
-    alter table "ads_campaigns" add constraint "ads_campaigns_asin_source_check" CHECK ((asin_source = ANY (ARRAY['name'::text, 'manual'::text])));
+    alter table "ads_campaigns" add constraint "ads_campaigns_asin_source_check" CHECK ((asin_source = ANY (ARRAY['name'::text, 'manual'::text, 'product_ad'::text])));
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'ads_negative_keywords_level_check' and conrelid = '"ads_negative_keywords"'::regclass) then
+    alter table "ads_negative_keywords" add constraint "ads_negative_keywords_level_check" CHECK ((level = ANY (ARRAY['ad group'::text, 'campaign'::text])));
   end if;
 end $$;
 do $$ begin
@@ -1803,6 +2036,16 @@ do $$ begin
   end if;
 end $$;
 do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'ads_ad_groups_campaign_fkey' and conrelid = '"ads_ad_groups"'::regclass) then
+    alter table "ads_ad_groups" add constraint "ads_ad_groups_campaign_fkey" FOREIGN KEY (campaign) REFERENCES ads_campaigns(id) ON DELETE CASCADE;
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'ads_ad_groups_import_id_fkey' and conrelid = '"ads_ad_groups"'::regclass) then
+    alter table "ads_ad_groups" add constraint "ads_ad_groups_import_id_fkey" FOREIGN KEY (import_id) REFERENCES ads_imports(id) ON DELETE CASCADE;
+  end if;
+end $$;
+do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'ads_campaign_daily_campaign_fkey' and conrelid = '"ads_campaign_daily"'::regclass) then
     alter table "ads_campaign_daily" add constraint "ads_campaign_daily_campaign_fkey" FOREIGN KEY (campaign) REFERENCES ads_campaigns(id) ON DELETE CASCADE;
   end if;
@@ -1820,6 +2063,56 @@ end $$;
 do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'ads_campaign_ranges_import_id_fkey' and conrelid = '"ads_campaign_ranges"'::regclass) then
     alter table "ads_campaign_ranges" add constraint "ads_campaign_ranges_import_id_fkey" FOREIGN KEY (import_id) REFERENCES ads_imports(id) ON DELETE CASCADE;
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'ads_keywords_campaign_fkey' and conrelid = '"ads_keywords"'::regclass) then
+    alter table "ads_keywords" add constraint "ads_keywords_campaign_fkey" FOREIGN KEY (campaign) REFERENCES ads_campaigns(id) ON DELETE CASCADE;
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'ads_keywords_import_id_fkey' and conrelid = '"ads_keywords"'::regclass) then
+    alter table "ads_keywords" add constraint "ads_keywords_import_id_fkey" FOREIGN KEY (import_id) REFERENCES ads_imports(id) ON DELETE CASCADE;
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'ads_negative_keywords_campaign_fkey' and conrelid = '"ads_negative_keywords"'::regclass) then
+    alter table "ads_negative_keywords" add constraint "ads_negative_keywords_campaign_fkey" FOREIGN KEY (campaign) REFERENCES ads_campaigns(id) ON DELETE CASCADE;
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'ads_negative_keywords_import_id_fkey' and conrelid = '"ads_negative_keywords"'::regclass) then
+    alter table "ads_negative_keywords" add constraint "ads_negative_keywords_import_id_fkey" FOREIGN KEY (import_id) REFERENCES ads_imports(id) ON DELETE CASCADE;
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'ads_placements_campaign_fkey' and conrelid = '"ads_placements"'::regclass) then
+    alter table "ads_placements" add constraint "ads_placements_campaign_fkey" FOREIGN KEY (campaign) REFERENCES ads_campaigns(id) ON DELETE CASCADE;
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'ads_placements_import_id_fkey' and conrelid = '"ads_placements"'::regclass) then
+    alter table "ads_placements" add constraint "ads_placements_import_id_fkey" FOREIGN KEY (import_id) REFERENCES ads_imports(id) ON DELETE CASCADE;
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'ads_product_ads_campaign_fkey' and conrelid = '"ads_product_ads"'::regclass) then
+    alter table "ads_product_ads" add constraint "ads_product_ads_campaign_fkey" FOREIGN KEY (campaign) REFERENCES ads_campaigns(id) ON DELETE CASCADE;
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'ads_product_ads_import_id_fkey' and conrelid = '"ads_product_ads"'::regclass) then
+    alter table "ads_product_ads" add constraint "ads_product_ads_import_id_fkey" FOREIGN KEY (import_id) REFERENCES ads_imports(id) ON DELETE CASCADE;
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'ads_product_targets_campaign_fkey' and conrelid = '"ads_product_targets"'::regclass) then
+    alter table "ads_product_targets" add constraint "ads_product_targets_campaign_fkey" FOREIGN KEY (campaign) REFERENCES ads_campaigns(id) ON DELETE CASCADE;
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'ads_product_targets_import_id_fkey' and conrelid = '"ads_product_targets"'::regclass) then
+    alter table "ads_product_targets" add constraint "ads_product_targets_import_id_fkey" FOREIGN KEY (import_id) REFERENCES ads_imports(id) ON DELETE CASCADE;
   end if;
 end $$;
 do $$ begin
@@ -1946,6 +2239,8 @@ end $$;
 -- @section indexes
 CREATE INDEX IF NOT EXISTS ads_campaigns_asin ON ads_campaigns USING btree (asin);
 CREATE INDEX IF NOT EXISTS ads_campaigns_name ON ads_campaigns USING btree (lower(name));
+CREATE INDEX IF NOT EXISTS ads_keywords_campaign ON ads_keywords USING btree (campaign);
+CREATE INDEX IF NOT EXISTS ads_product_ads_asin ON ads_product_ads USING btree (asin);
 CREATE INDEX IF NOT EXISTS amazon_inventory_asin ON amazon_inventory USING btree (asin);
 CREATE INDEX IF NOT EXISTS amazon_sales_day ON amazon_sales USING btree (day);
 CREATE INDEX IF NOT EXISTS auth_failures_blocked ON auth_failures USING btree (blocked_until) WHERE (blocked_until IS NOT NULL);
@@ -2205,3 +2500,4 @@ insert into schema_migrations (name) values ('20261002000400_niche_hunt_leaves.s
 insert into schema_migrations (name) values ('20261002000500_ads_settings.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261002000600_ads_phase1.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261002000700_ads_upsert_keys.sql') on conflict do nothing;
+insert into schema_migrations (name) values ('20261002000800_ads_bulk.sql') on conflict do nothing;
