@@ -47,9 +47,36 @@ describe("Opportunity Explorer captures", () => {
       search_conversion: 10.1,
       search_conversion_source: "trends",
     });
+    // Growth fields are fractions: exactly what Opportunity Explorer displays.
+    expect(x).toMatchObject({
+      search_volume_growth: 5.92, // "Growth past 180 days +5.92%" (searchVolumeGrowthT180 0.0592…)
+      search_volume_growth_source: "t180",
+      search_volume_growth_90: 6.33, // "Growth past 90 days +6.33%" (searchVolumeGrowthT90 "0.0633…")
+      search_volume_growth_360: 154.3, // searchVolumeGrowthT360 "1.5429…" (not displayed)
+    });
     expect(x.search_terms).toHaveLength(20);
     expect(x.search_terms[0]).toMatchObject({ term: "bottle brush", volume: 60624, click_share: 48.6, conversion: 7.7 });
     expect(unreadFields(x)).toEqual([]);
+  });
+
+  it("fills Gate 3's growth from the 180-day figure, plain POE, with the 90-day one in the note", () => {
+    const f = poeFill(extractPoe(REAL));
+    expect(f.svGrowth).toMatchObject({ value: "growing", why: "+5.92% past 180 days (Opportunity Explorer; ±5% is flat) · past 90 days +6.33%" });
+    expect(f.svGrowth.source).toBeUndefined();
+  });
+
+  it("uses the 90-day figure without a 180-day one, and the weekly trend without either (POE (derived))", () => {
+    const raw = clone(REAL);
+    const s = nicheIn(raw).nicheSummary as Record<string, unknown>;
+    delete s.searchVolumeGrowthT180;
+    expect(extractPoe({ niche: raw.niche })).toMatchObject({ search_volume_growth: 6.33, search_volume_growth_source: "t90" });
+    delete s.searchVolumeGrowthT90;
+    const x = extractPoe({ niche: raw.niche });
+    // The 360-day field alone isn't used: it's not what Opportunity Explorer shows.
+    expect(x).toMatchObject({ search_volume_growth: 14.98, search_volume_growth_source: "trends", search_volume_growth_360: 154.3 });
+    const f = poeFill(x).svGrowth;
+    expect(f).toMatchObject({ value: "growing", source: "poe_derived" });
+    expect(f.why).toMatch(/^\+14\.98% derived: the last 52 weeks' search volume against the 52 before/);
   });
 
   it("marks a derived conversion as POE (derived), with how it was worked out", () => {

@@ -49,7 +49,7 @@ export function parseAsins(text: string): string[] {
 /* ===================== reads ===================== */
 
 const ASIN_COLS = "candidate_id, asin, position, is_reference, title, brand, image, price, rating, review_count, rank, avg_rank_90d, rank_drops_90d, bought_past_month, offer_count, buybox_price, amazon_ever_seller, amazon_brand, dimensions, weight, first_seen, history, snapshot_at";
-const POE_COLS = "id, candidate_id, niche_id, niche_title, captured_at, search_volume_360, search_volume_growth, products_in_niche, top3_click_share, search_conversion, search_conversion_source, avg_units_per_product, search_terms";
+const POE_COLS = "id, candidate_id, niche_id, niche_title, captured_at, search_volume_360, search_volume_growth, search_volume_growth_source, search_volume_growth_90, search_volume_growth_360, products_in_niche, top3_click_share, search_conversion, search_conversion_source, avg_units_per_product, search_terms";
 
 const numOrNull = (v: unknown) => (v == null ? null : Number(v));
 const asinRow = (r: Record<string, unknown>): PlAsin => ({
@@ -366,7 +366,8 @@ export async function attachPoe(snapshotId: string, candidateId: string): Promis
 
 const extractColumns = (x: PoeExtract) => ({
   niche_id: x.niche_id, niche_title: x.niche_title,
-  search_volume_360: x.search_volume_360, search_volume_growth: x.search_volume_growth, products_in_niche: x.products_in_niche,
+  search_volume_360: x.search_volume_360, search_volume_growth: x.search_volume_growth, search_volume_growth_source: x.search_volume_growth_source,
+  search_volume_growth_90: x.search_volume_growth_90, search_volume_growth_360: x.search_volume_growth_360, products_in_niche: x.products_in_niche,
   top3_click_share: x.top3_click_share, search_conversion: x.search_conversion, search_conversion_source: x.search_conversion_source,
   avg_units_per_product: x.avg_units_per_product, search_terms: x.search_terms,
 });

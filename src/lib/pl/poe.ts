@@ -16,8 +16,17 @@ export interface PoeExtract {
   niche_title: string | null;
   niche_id: string | null;
   search_volume_360: number | null;
-  /** Growth of the 360-day search volume, %. */
+  /**
+   * Search volume growth, %: Gate 3's input. Opportunity Explorer's "Growth past 180 days"
+   * (searchVolumeGrowthT180); else its 90-day figure; else derived from the weekly trend (the last
+   * 52 weeks' search volume against the 52 before). See search_volume_growth_source.
+   */
   search_volume_growth: number | null;
+  search_volume_growth_source: "t180" | "t90" | "trends" | null;
+  /** "Growth past 90 days" (searchVolumeGrowthT90), %. */
+  search_volume_growth_90: number | null;
+  /** searchVolumeGrowthT360, % (Opportunity Explorer doesn't display it). */
+  search_volume_growth_360: number | null;
   products_in_niche: number | null;
   /** Click share of the top 3 products, %. */
   top3_click_share: number | null;
@@ -175,6 +184,25 @@ function derivedConversion(arrays: Record<string, unknown>[][], terms: PoeTerm[]
   return null;
 }
 
+const r2 = (n: number) => Math.round(n * 100) / 100;
+
+/** Weekly trend rows (trendsMetrics): searchVolumeT7 by datasetDate, oldest first. */
+function weeklyRows(arrays: Record<string, unknown>[][]): Record<string, unknown>[] | null {
+  const weekly = arrays.find((a) => a.length >= 4 && a.every((r) => field(r, [/^searchVolumeT7$/i])));
+  if (!weekly) return null;
+  const date = (r: Record<string, unknown>) => String(r.datasetDate ?? r.startDate ?? r.weekStartDate ?? "");
+  return [...weekly].sort((a, b) => date(a).localeCompare(date(b)));
+}
+
+/** Growth from the weekly trend: the last 52 weeks' search volume against the 52 before, %. Needs 104 weeks. */
+function weeklyGrowth(arrays: Record<string, unknown>[][]): number | null {
+  const rows = weeklyRows(arrays);
+  if (!rows || rows.length < 104) return null;
+  const sum = (xs: Record<string, unknown>[]) => xs.reduce((a, r) => a + field(r, [/^searchVolumeT7$/i])!.n, 0);
+  const prev = sum(rows.slice(-104, -52));
+  return prev > 0 ? r2((sum(rows.slice(-52)) / prev - 1) * 100) : null;
+}
+
 /** What the extension sends: getNiche's response, every ox-api response on the page by operation, the insights widget's. */
 export interface PoeRaw { niche?: unknown; operations?: Record<string, unknown>; growth?: unknown; seen?: string[] }
 
@@ -203,7 +231,11 @@ export function extractPoe(raw: PoeRaw | unknown, hint: { nicheId?: string | nul
   const arrays = [...rowArrays(niche), ...others.flatMap((o) => rowArrays(o))];
 
   const sv = pick(ls, [/searchVolume.*(T360|360)/i, /searchVolume.*(T365|annual|year)/i]);
-  const growth = pick(ls, [/searchVolumeGrowth.*(T360|360)/i, /searchVolumeGrowth/i]) ?? pick(gls, [/searchVolumeGrowth.*(T360|360)/i, /searchVolumeGrowth/i]);
+  // Growth fields are fractions (0.0592 is the +5.92% Opportunity Explorer shows), whatever their size.
+  const g = (w: string) => pick(ls, [new RegExp(`^searchVolumeGrowthT${w}$`, "i")]) ?? pick(gls, [new RegExp(`^searchVolumeGrowthT${w}$`, "i")]);
+  const g180 = g("180"), g90 = g("90"), g360 = g("360");
+  const trendGrowth = g180 || g90 ? null : weeklyGrowth(arrays);
+  const growth = g180 ? { pct: r2(g180.n * 100), source: "t180" as const } : g90 ? { pct: r2(g90.n * 100), source: "t90" as const } : trendGrowth != null ? { pct: trendGrowth, source: "trends" as const } : null;
   const products = pick(ls, [/^productCount$/i, /(numberOf|num|total)Products/i, /productsInNiche/i, /productCount/i]);
   const top3 = pick(ls, [/top_?3.*clickShare/i, /clickShare.*top_?3/i, /topThree.*clickShare/i]);
   // Only search conversion: nicheSummary's purchaseConversionRatePostLaunch90d is a different
@@ -220,7 +252,10 @@ export function extractPoe(raw: PoeRaw | unknown, hint: { nicheId?: string | nul
     niche_title: hint.title?.trim() || pickString(ls, [/^nicheTitle$/i, /^(niche)?(title|displayName|name)$/i]),
     niche_id: hint.nicheId || pickString(ls, [/^nicheId$/i, /^id$/i]),
     search_volume_360: sv ? Math.round(sv.n) : null,
-    search_volume_growth: r1(asPct(growth?.n ?? null)),
+    search_volume_growth: growth?.pct ?? null,
+    search_volume_growth_source: growth?.source ?? null,
+    search_volume_growth_90: g90 ? r2(g90.n * 100) : null,
+    search_volume_growth_360: g360 ? r2(g360.n * 100) : null,
     products_in_niche: products ? Math.round(products.n) : null,
     top3_click_share: top3 ? r1(asPct(top3.n)) : top3FromProducts(arrays),
     search_conversion: conv?.pct ?? null,
@@ -244,7 +279,7 @@ export const POE_FIELDS: { label: string; read: (x: PoeExtract) => boolean }[] =
 
 export const unreadFields = (x: PoeExtract) => POE_FIELDS.filter((f) => !f.read(x)).map((f) => f.label);
 
-/** Gatekeeper's growth select from the 360-day growth %: under −5% declining, over +5% growing. */
+/** Gatekeeper's growth select from the growth %: under −5% declining, over +5% growing. */
 export const growthBand = (g: number | null): "declining" | "flat" | "growing" | null =>
   g == null ? null : g < -5 ? "declining" : g > 5 ? "growing" : "flat";
 
@@ -263,7 +298,14 @@ export function poeFill(x: PoeExtract): Record<string, PoeFilled> {
   const src = `Opportunity Explorer${x.niche_title ? `: ${x.niche_title}` : ""}`;
   if (x.search_volume_360 != null) out.sv360 = { value: String(x.search_volume_360), why: src };
   const g = growthBand(x.search_volume_growth);
-  if (g) out.svGrowth = { value: g, why: `${x.search_volume_growth}% over 360 days (±5% is flat)` };
+  if (g) {
+    const pct = (n: number) => `${n > 0 ? "+" : ""}${n.toFixed(2)}%`;
+    const g90 = x.search_volume_growth_90 != null ? ` · past 90 days ${pct(x.search_volume_growth_90)}` : "";
+    const why = x.search_volume_growth_source === "trends"
+      ? `${pct(x.search_volume_growth!)} derived: the last 52 weeks' search volume against the 52 before (Opportunity Explorer gave no growth figure; ±5% is flat)`
+      : `${pct(x.search_volume_growth!)} past ${x.search_volume_growth_source === "t90" ? "90" : "180"} days (Opportunity Explorer; ±5% is flat)${x.search_volume_growth_source === "t180" ? g90 : ""}`;
+    out.svGrowth = { value: g, why, ...(x.search_volume_growth_source === "trends" ? { source: "poe_derived" as const } : {}) };
+  }
   if (x.products_in_niche != null) out.products = { value: String(x.products_in_niche), why: src };
   if (x.top3_click_share != null) out.clickShare = { value: String(x.top3_click_share), why: src };
   if (x.search_conversion != null) {

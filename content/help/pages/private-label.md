@@ -61,7 +61,7 @@ An automatic field is read-only, with the figures it came from underneath it. Cl
 
 ### Gate 3: Amazon's own data (the extension)
 
-Search volume (360 days), growth, products in the niche, top-3 click share, search conversion and average units per product. These come from an Opportunity Explorer niche you send with the extension (see [Capturing Opportunity Explorer](#capturing-opportunity-explorer)). Growth over +5% is growing, under −5% declining, otherwise flat. Where Opportunity Explorer gives several windows, the 360-day figure is used. Average units sold per product comes as a yearly range (for example 3,000–4,000); Gatekeeper uses its midpoint, a month.
+Search volume (360 days), growth, products in the niche, top-3 click share, search conversion and average units per product. These come from an Opportunity Explorer niche you send with the extension (see [Capturing Opportunity Explorer](#capturing-opportunity-explorer)). **Search volume growth** is Opportunity Explorer's "Growth past 180 days" (for example +5.92%), with "Growth past 90 days" shown under the field. Over +5% is growing, under −5% declining, otherwise flat. Without a 180-day figure the 90-day one is used. Without either, growth is worked out from the niche's weekly search volume, the last 52 weeks against the 52 before (**POE (derived)**). Search volume itself is the 360-day figure. Average units sold per product comes as a yearly range (for example 3,000–4,000); Gatekeeper uses its midpoint, a month.
 
 **Search conversion** isn't given as a single niche figure. When Amazon's niche summary has one, it's used (**POE**). Otherwise it's worked out (**POE (derived)**):
 

@@ -1,5 +1,5 @@
 -- Wholesale Scout schema, dumped by scripts/schema-backup.mjs. No data.
--- Dumped 2026-10-01T23:26:55.177Z. Safe to re-run. Restore: npm run schema:restore
+-- Dumped 2026-10-02T08:23:04.408Z. Safe to re-run. Restore: npm run schema:restore
 
 -- @section extensions
 create extension if not exists "pg_cron";
@@ -572,7 +572,10 @@ create table if not exists "pl_poe_snapshots" (
   "search_conversion" numeric,
   "avg_units_per_product" numeric,
   "search_terms" jsonb default '[]'::jsonb not null,
-  "search_conversion_source" text
+  "search_conversion_source" text,
+  "search_volume_growth_90" numeric,
+  "search_volume_growth_360" numeric,
+  "search_volume_growth_source" text
 );
 alter table "pl_poe_snapshots" add column if not exists "id" uuid default gen_random_uuid();
 alter table "pl_poe_snapshots" add column if not exists "candidate_id" uuid;
@@ -588,6 +591,9 @@ alter table "pl_poe_snapshots" add column if not exists "search_conversion" nume
 alter table "pl_poe_snapshots" add column if not exists "avg_units_per_product" numeric;
 alter table "pl_poe_snapshots" add column if not exists "search_terms" jsonb default '[]'::jsonb;
 alter table "pl_poe_snapshots" add column if not exists "search_conversion_source" text;
+alter table "pl_poe_snapshots" add column if not exists "search_volume_growth_90" numeric;
+alter table "pl_poe_snapshots" add column if not exists "search_volume_growth_360" numeric;
+alter table "pl_poe_snapshots" add column if not exists "search_volume_growth_source" text;
 alter table "pl_poe_snapshots" enable row level security;
 
 create table if not exists "pl_settings" (
@@ -1275,6 +1281,11 @@ do $$ begin
   end if;
 end $$;
 do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'pl_poe_snapshots_search_volume_growth_source_check' and conrelid = '"pl_poe_snapshots"'::regclass) then
+    alter table "pl_poe_snapshots" add constraint "pl_poe_snapshots_search_volume_growth_source_check" CHECK ((search_volume_growth_source = ANY (ARRAY['t180'::text, 't90'::text, 'trends'::text])));
+  end if;
+end $$;
+do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'purchases_landed_gbp_check' and conrelid = '"purchases"'::regclass) then
     alter table "purchases" add constraint "purchases_landed_gbp_check" CHECK ((landed_gbp >= (0)::numeric));
   end if;
@@ -1707,3 +1718,4 @@ insert into schema_migrations (name) values ('20261001000300_pl_settings_no_q4.s
 insert into schema_migrations (name) values ('20261001000400_pin_search_path.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261001000500_pl_gate_waivers.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261002000000_poe_derived.sql') on conflict do nothing;
+insert into schema_migrations (name) values ('20261002000100_poe_growth_windows.sql') on conflict do nothing;

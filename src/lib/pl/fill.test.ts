@@ -95,7 +95,7 @@ describe("Opportunity Explorer", () => {
           nicheId: "abc123",
           nicheTitle: "bamboo cutlery tray",
           nicheSummary: {
-            searchVolumeT90: 12000, searchVolumeT360: 52000, searchVolumeGrowthT360: 0.08,
+            searchVolumeT90: 12000, searchVolumeT360: 52000, searchVolumeGrowthT180: 0.08,
             productCount: 140, searchConversionRateT360: 0.112, avgUnitsSoldT360: 2400,
           },
           searchTermMetrics: [
