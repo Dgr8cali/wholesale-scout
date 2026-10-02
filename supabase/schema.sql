@@ -1,5 +1,5 @@
 -- Wholesale Scout schema, dumped by scripts/schema-backup.mjs. No data.
--- Dumped 2026-10-02T17:06:48.834Z. Safe to re-run. Restore: npm run schema:restore
+-- Dumped 2026-10-02T22:07:56.926Z. Safe to re-run. Restore: npm run schema:restore
 
 -- @section extensions
 create extension if not exists "pg_cron";
@@ -1438,6 +1438,42 @@ alter table "pl_quotes" add column if not exists "created_at" timestamp with tim
 alter table "pl_quotes" add column if not exists "updated_at" timestamp with time zone default now();
 alter table "pl_quotes" enable row level security;
 
+create table if not exists "pl_review_dumps" (
+  "id" uuid default gen_random_uuid() not null,
+  "candidate_id" uuid not null,
+  "asin" text not null,
+  "text" text not null,
+  "pasted_at" timestamp with time zone default now() not null
+);
+alter table "pl_review_dumps" add column if not exists "id" uuid default gen_random_uuid();
+alter table "pl_review_dumps" add column if not exists "candidate_id" uuid;
+alter table "pl_review_dumps" add column if not exists "asin" text;
+alter table "pl_review_dumps" add column if not exists "text" text;
+alter table "pl_review_dumps" add column if not exists "pasted_at" timestamp with time zone default now();
+alter table "pl_review_dumps" enable row level security;
+
+create table if not exists "pl_review_marks" (
+  "candidate_id" uuid not null,
+  "theme" text not null,
+  "mark" text not null,
+  "updated_at" timestamp with time zone default now() not null
+);
+alter table "pl_review_marks" add column if not exists "candidate_id" uuid;
+alter table "pl_review_marks" add column if not exists "theme" text;
+alter table "pl_review_marks" add column if not exists "mark" text;
+alter table "pl_review_marks" add column if not exists "updated_at" timestamp with time zone default now();
+alter table "pl_review_marks" enable row level security;
+
+create table if not exists "pl_review_settings" (
+  "key" text not null,
+  "value" jsonb not null,
+  "updated_at" timestamp with time zone default now() not null
+);
+alter table "pl_review_settings" add column if not exists "key" text;
+alter table "pl_review_settings" add column if not exists "value" jsonb;
+alter table "pl_review_settings" add column if not exists "updated_at" timestamp with time zone default now();
+alter table "pl_review_settings" enable row level security;
+
 create table if not exists "pl_settings" (
   "key" text not null,
   "value" numeric not null,
@@ -2250,6 +2286,21 @@ do $$ begin
   end if;
 end $$;
 do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'pl_review_dumps_pkey' and conrelid = '"pl_review_dumps"'::regclass) then
+    alter table "pl_review_dumps" add constraint "pl_review_dumps_pkey" PRIMARY KEY (id);
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'pl_review_marks_pkey' and conrelid = '"pl_review_marks"'::regclass) then
+    alter table "pl_review_marks" add constraint "pl_review_marks_pkey" PRIMARY KEY (candidate_id, theme);
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'pl_review_settings_pkey' and conrelid = '"pl_review_settings"'::regclass) then
+    alter table "pl_review_settings" add constraint "pl_review_settings_pkey" PRIMARY KEY (key);
+  end if;
+end $$;
+do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'pl_settings_pkey' and conrelid = '"pl_settings"'::regclass) then
     alter table "pl_settings" add constraint "pl_settings_pkey" PRIMARY KEY (key);
   end if;
@@ -2395,6 +2446,11 @@ do $$ begin
   end if;
 end $$;
 do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'pl_review_dumps_candidate_id_asin_key' and conrelid = '"pl_review_dumps"'::regclass) then
+    alter table "pl_review_dumps" add constraint "pl_review_dumps_candidate_id_asin_key" UNIQUE (candidate_id, asin);
+  end if;
+end $$;
+do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'profiles_name_key' and conrelid = '"profiles"'::regclass) then
     alter table "profiles" add constraint "profiles_name_key" UNIQUE (name);
   end if;
@@ -2446,7 +2502,7 @@ do $$ begin
 end $$;
 do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'ads_ai_calls_feature_check' and conrelid = '"ads_ai_calls"'::regclass) then
-    alter table "ads_ai_calls" add constraint "ads_ai_calls_feature_check" CHECK ((feature = ANY (ARRAY['explain'::text, 'review'::text, 'targets'::text])));
+    alter table "ads_ai_calls" add constraint "ads_ai_calls_feature_check" CHECK ((feature = ANY (ARRAY['explain'::text, 'review'::text, 'targets'::text, 'pl_reviews'::text])));
   end if;
 end $$;
 do $$ begin
@@ -2582,6 +2638,11 @@ end $$;
 do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'pl_quotes_status_check' and conrelid = '"pl_quotes"'::regclass) then
     alter table "pl_quotes" add constraint "pl_quotes_status_check" CHECK ((status = ANY (ARRAY['requested'::text, 'received'::text, 'samples ordered'::text, 'samples received'::text, 'chosen'::text, 'rejected'::text])));
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'pl_review_marks_mark_check' and conrelid = '"pl_review_marks"'::regclass) then
+    alter table "pl_review_marks" add constraint "pl_review_marks_mark_check" CHECK ((mark = ANY (ARRAY['chosen'::text, 'not fixable'::text, 'ignore'::text])));
   end if;
 end $$;
 do $$ begin
@@ -2882,6 +2943,16 @@ end $$;
 do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'pl_quotes_candidate_id_fkey' and conrelid = '"pl_quotes"'::regclass) then
     alter table "pl_quotes" add constraint "pl_quotes_candidate_id_fkey" FOREIGN KEY (candidate_id) REFERENCES pl_candidates(id) ON DELETE CASCADE;
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'pl_review_dumps_candidate_id_fkey' and conrelid = '"pl_review_dumps"'::regclass) then
+    alter table "pl_review_dumps" add constraint "pl_review_dumps_candidate_id_fkey" FOREIGN KEY (candidate_id) REFERENCES pl_candidates(id) ON DELETE CASCADE;
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'pl_review_marks_candidate_id_fkey' and conrelid = '"pl_review_marks"'::regclass) then
+    alter table "pl_review_marks" add constraint "pl_review_marks_candidate_id_fkey" FOREIGN KEY (candidate_id) REFERENCES pl_candidates(id) ON DELETE CASCADE;
   end if;
 end $$;
 do $$ begin
@@ -3270,3 +3341,4 @@ insert into schema_migrations (name) values ('20261002001200_ads_daily_products.
 insert into schema_migrations (name) values ('20261002001300_pl_quotes_launch.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261002001400_stock.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261002001500_ads_ai.sql') on conflict do nothing;
+insert into schema_migrations (name) values ('20261002001600_pl_review_dumps.sql') on conflict do nothing;

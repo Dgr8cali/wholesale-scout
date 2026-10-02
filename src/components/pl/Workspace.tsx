@@ -23,6 +23,7 @@ import { Readout, SourceChip, StatusPill } from "./bits";
 import { STATUSES, TONE, valuesOf, type CandidateDetail, type FieldMap } from "./types";
 import { CandidateExtras } from "./Extras";
 import type { PlStatus } from "@/lib/pl/launch";
+import { ReviewMiner } from "./ReviewMiner";
 import { WaivePopover } from "./WaivePopover";
 
 const CHECK_BG: Record<Status, string> = { pass: "bg-pass", warn: "bg-warn", fail: "bg-fail", empty: "bg-empty" };
@@ -168,7 +169,7 @@ export function Workspace({ id, settings, card, adsCpc, onChanged, onDeleted }: 
                     manualOnly={g.id === "g5" && ["headBid", "ltBid", "sponsored"].includes(fd.k)} />
                 ))}
               </div>
-              <GateExtras g={g} data={data} fields={fields} settings={settings} card={card} />
+              <GateExtras g={g} data={data} fields={fields} settings={settings} card={card} onSave={saveField} />
               <div className="overflow-hidden rounded-lg border">
                 {rows.map((r, i) => (
                   <CheckRow key={i} row={r} gate={g} gateWaived={!!gateWaiver} onWaive={(reason) => waive(g.id, r.label, reason)} onUnwaive={unwaive} />
@@ -376,7 +377,7 @@ function FieldRow({ def, field, why, onSave, manualOnly, derived }: {
   );
 }
 
-function GateExtras({ g, data, fields, settings, card }: { g: GateDef; data: CandidateDetail; fields: FieldMap; settings: Settings; card: RateCard }) {
+function GateExtras({ g, data, fields, settings, card, onSave }: { g: GateDef; data: CandidateDetail; fields: FieldMap; settings: Settings; card: RateCard; onSave: (k: string, v: string, delay?: number) => void }) {
   const f = valuesOf(fields);
   if (g.id === "g3" || g.id === "g5") {
     const p = data.poe;
@@ -387,8 +388,12 @@ function GateExtras({ g, data, fields, settings, card }: { g: GateDef; data: Can
   }
   if (g.id === "g4") {
     const top = data.asins.slice(0, 5);
-    if (!top.length) return null;
-    return <CriticalReviewsTable asins={top} />;
+    return (
+      <div className="flex flex-col gap-3">
+        {top.length > 0 && <CriticalReviewsTable asins={top} />}
+        <ReviewMiner candidateId={data.candidate.id} asins={top} product={data.candidate.niche_keyword || data.candidate.name} fields={fields} onSave={onSave} />
+      </div>
+    );
   }
   if (g.id === "g6") {
     const e = econ(f, settings, data.candidate.category, card);

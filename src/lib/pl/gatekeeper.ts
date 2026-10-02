@@ -69,7 +69,7 @@ export const GATES: GateDef[] = [
       { k: "conv", label: "Search conversion rate", type: "num", unit: "%" },
       { k: "unitsPer", label: "Avg units sold per product", type: "num", unit: "/mo" },
     ] },
-  { id: "g4", n: "4", title: "Mine the reviews", tool: "By hand · 50 per listing",
+  { id: "g4", n: "4", title: "Mine the reviews", tool: "Paste the reviews · mined here",
     blurb: "One-, two- and three-star reviews on the top 5. You are looking for one complaint that repeats, that a factory can fix cheaply, that you can say in six words.",
     fields: [
       { k: "fixable", label: "A complaint a factory can fix?", type: "yn" },

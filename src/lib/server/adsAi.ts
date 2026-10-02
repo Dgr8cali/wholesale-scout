@@ -57,6 +57,9 @@ function client(): MessagesClient {
   return new Anthropic({ apiKey });
 }
 
+/** What a call was for: the Ads features, and Private label's review summary. */
+export type AiFeature = "explain" | "review" | "targets" | "pl_reviews";
+
 export interface AiRun<T> {
   result: T; cached: boolean; model: string; at: string; costGbp: number; costUsd: number;
   tokens: { input: number; output: number }; contextTokens: number;
@@ -89,7 +92,9 @@ const hashOf = (x: unknown) => createHash("sha256").update(JSON.stringify(x)).di
  * `force`. Every call, failed ones too, is logged with its tokens and cost.
  */
 export async function askModel<T>(x: {
-  feature: "explain" | "review" | "targets"; subject: string; context: unknown; instruction: string;
+  feature: AiFeature; subject: string; context: unknown; instruction: string;
+  /** The system prompt: the Ads analyst's unless given. */
+  system?: string;
   tool: { name: string; description: string; input_schema: Anthropic.Tool.InputSchema };
   force?: boolean; trigger?: "user" | "schedule"; maxTokens?: number;
 }): Promise<AiRun<T>> {
@@ -105,7 +110,7 @@ export async function askModel<T>(x: {
   try {
     msg = await client().messages.create({
       model: s.model, max_tokens: x.maxTokens ?? 2000,
-      system: SYSTEM_PROMPT,
+      system: x.system ?? SYSTEM_PROMPT,
       output_config: { format: { type: "json_schema", schema: strictSchema(x.tool.input_schema) } },
       messages: [{ role: "user", content: `${x.instruction}\n\nData (JSON):\n${JSON.stringify(x.context)}` }],
     });
@@ -294,7 +299,7 @@ export async function recommendTargets(asin: string, opts: { force?: boolean } =
 /* ===================== reading back ===================== */
 
 /** The latest answer per feature and subject (without calling the API), and what the AI has cost. */
-export async function latestAi(feature: "explain" | "review" | "targets", subject: string) {
+export async function latestAi(feature: AiFeature, subject: string) {
   const r = (must(await db().from("ads_ai_calls").select("*").eq("feature", feature).eq("subject", subject).is("error", null).order("created_at", { ascending: false }).limit(1), "latest") as Record<string, unknown>[])[0];
   return r ? { result: r.result, model: r.model, at: r.created_at, costGbp: Number(r.cost_gbp), tokens: { input: Number(r.input_tokens), output: Number(r.output_tokens) } } : null;
 }

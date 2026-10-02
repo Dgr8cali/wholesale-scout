@@ -1,8 +1,8 @@
 # Wholesale Scout: status
 
 Read this first in a new session. Keep it current: every commit that changes a feature updates
-it (what's built, the backlog, the rough edges). Last updated: 2 Oct 2026 (Ads Phase 4: the AI research
-layer).
+it (what's built, the backlog, the rough edges). Last updated: 2 Oct 2026 (Private label: Gate 4 reviews
+helper).
 
 Wholesale Scout is a single-user Amazon UK seller's workbench: Next.js 16 (App Router, `proxy.ts`
 password gate), Supabase (Postgres, RLS on, service-role access from the server only), Vercel
@@ -33,7 +33,10 @@ mode (one filtered Product Finder query per category, then detail grouped by lea
 check per niche with 3+ qualifying, off-niche incumbents by Keepa category) and Leaf mode (size
 each leaf, then detail), with a hard token cap (estimate + 10%). Quotes turns supplier quotes into
 a landed cost per unit and total cash (FX, freight, duty, import VAT, inspection), writes it into
-Gates 0 and 7, chooses a supplier and generates the RFQ. Launch is a 12-step checklist (samples to
+Gates 0 and 7, chooses a supplier and generates the RFQ. Gate 4's review miner takes pasted 1–3★ reviews per top-5 ASIN (`pl_review_dumps`), splits
+them, counts complaint phrases locally (stop words, bigrams/trigrams, an editable synonym list) into a
+sortable Themes table, and the theme you pick fills the gate's share and a draft six words; an
+optional Claude summary runs only on a click. Launch is a 12-step checklist (samples to
 first review) moving the status, a budget tracker against Gate 7, and a listing ASIN that links
 the candidate to its Ads product and stock item.
 
@@ -69,7 +72,7 @@ imported (3 items). Ads days of cover and the stock guard count every bucket.
 | **Keepa** | Live. About 21 tokens a minute refill; spend is logged per feature (Home's Keepa tile). Token-conscious: estimate before spending, report what was spent. |
 | **SP-API** | Live: orders report, FBA inventory (getInventorySummaries), catalog, fee estimates, listing restrictions, offers. Nightly sync plus on demand. The **Brand Analytics** and **Finance** roles are approved but the token still gets 403: no Buy Box %, no exact fees charged (the fee estimate stands in). Retry later. |
 | **Amazon Ads API** | **Pending approval.** LWA client credentials are in the env (`ADS_LWA_CLIENT_ID`, `ADS_LWA_CLIENT_SECRET`); no connector yet (backlog). Until then: bulk export in, bulk sheet out. |
-| **Anthropic API** | Live (`@anthropic-ai/sdk`): Ads Explain, Recommend targets and the monthly review, only on a click or the monthly schedule (off by default). Model and prices in Settings → Ads (Sonnet 5.5 default); cost per call logged in `ads_ai_calls`. |
+| **Anthropic API** | Live (`@anthropic-ai/sdk`): Ads Explain, Recommend targets and the monthly review, Private label's review summary, only on a click or the monthly schedule (off by default). Model and prices in Settings → Ads (Sonnet 5.5 default); cost per call logged in `ads_ai_calls`. |
 | **Supabase** | Postgres with RLS on every table; pg_cron + pg_net run the watchdog (restarts stalled runs and hunts). |
 | **Vercel** | Hosting; crons: Qogita nightly 03:00, Watchlist Sunday 06:00, Ads review 1st of the month 06:00 (does nothing unless turned on). Env vars set there (Sensitive), including Qogita and `SPAPI_SELLER_ID`. |
 | **Qogita** | Live: nightly catalogue and offer pull. |
@@ -79,11 +82,10 @@ imported (3 items). Ads days of cover and the stock guard count every bucket.
 
 1. **Ads: Phase 3, the Ads API connector**, once approved: pull reports and entities, apply approved proposals (rules in Auto mode), hourly data for budget timing, impression share, keyword-level days.
 2. **Ads: keyword and competitor research** (the old Phase 4 idea: feeding the rules and the launcher; the AI layer now covers narrative, targets and the monthly review).
-3. **Private label: Gate 4 reviews helper** (mine the 1–3★ reviews of the top listings for the fixable complaint).
-4. **Stock: TikTok/eBay sales recording in use** (record real sales so demand, cover and reorder points mean something; a faster entry path or imports from TikTok Shop/eBay order exports).
-5. **General: move pg_net out of the public schema** (Supabase advisor: extension in public).
-6. **General: Resend email alerts** configured in Vercel and extended beyond the Watchlist (stock low/out, reorder due, stock guard, hunt finished).
-7. **General: data backup workflow** (only the schema is backed up today, to `supabase/schema.sql`; data relies on Supabase's own backups).
+3. **Stock: TikTok/eBay sales recording in use** (record real sales so demand, cover and reorder points mean something; a faster entry path or imports from TikTok Shop/eBay order exports).
+4. **General: move pg_net out of the public schema** (Supabase advisor: extension in public).
+5. **General: Resend email alerts** configured in Vercel and extended beyond the Watchlist (stock low/out, reorder due, stock guard, hunt finished).
+6. **General: data backup workflow** (only the schema is backed up today, to `supabase/schema.sql`; data relies on Supabase's own backups).
 
 ## Known rough edges
 
@@ -98,6 +100,7 @@ imported (3 items). Ads days of cover and the stock guard count every bucket.
 - **The StockPilot app** still runs against its own Supabase project; a Dyad chat log on disk (`~/dyad-apps/StockPilot/.dyad/chats/44/…`, gitignored) holds its old project's anon key in plain text.
 - **AI prices are assumed defaults** ($3/$15 per M tokens for Sonnet 5.5, $1/$5 Haiku 4.5, $5/$25 Opus 5.5, £0.79 per $): check them against Anthropic's pricing and edit in Settings → Ads.
 - **The monthly review** needs the daily Campaign report for per-month figures and batch before/after verdicts; with range data only it says so. No batch has been uploaded yet, so no verdict has been tested on real data.
+- **The review miner** has no part-of-speech tagger: phrases are content-word pairs and triples after stop words, so a few odd ones ("too easily") show; Ignore hides them. Tested on a fixture of 40 fake reviews; the first real Amazon paste confirms the splitting.
 - **SP-API roles** (Brand Analytics, Finance): see above.
 
 ## Conventions for every session

@@ -72,9 +72,9 @@ Search volume (360 days), growth, products in the niche, top-3 click share, sear
 
 The niche summary's "purchase conversion post-launch" is a different measure (products launched in the last 90 days) and isn't used.
 
-### Gate 4: Mine the reviews (you)
+### Gate 4: Mine the reviews (you, then the miner)
 
-This gate is still by hand. To make the read faster, the gate lists the top five ASINs with their rating, review count and a link to Amazon's **critical reviews** (the 1–3★ ones). Keepa has the rating and review count but not the count per star, so the link is how you get to them.
+The gate lists the top five ASINs with their rating, review count and a link to Amazon's **critical reviews** (the 1–3★ ones). Paste each listing's critical reviews into its box. The app splits them into reviews, counts the complaint phrases in your browser, and shows a **Themes** table. **Use for Gate 4** on a theme fills the share of negative reviews and drafts the six words; you answer whether a factory can fix it. See [Private label: mining reviews](/help/howto/pl-mining-reviews).
 
 ### Gate 5: Keywords (the extension, then you)
 
