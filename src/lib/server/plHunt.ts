@@ -3,7 +3,7 @@ import { referralCategoryFor } from "../fees/engine";
 import { addDailyTokens, PL_KEEP_DAYS, type TokensByDay } from "../keepaLedger";
 import { getKeepa, hasFinder, type KeepaCategory, type KeepaClient, type KeepaFinder, type KeepaProduct, type OnKeepaResponse } from "../keepa/client";
 import {
-  defaultFilters, DETAIL_TOKENS_PER_ASIN, DIRECT_PAGE, DIRECT_PAGE_TOKENS, directEstimate, directSelection, filtersKey, INCUMBENT_TAKE, INCUMBENT_TOKENS, incumbentSelection, finderSelection, fittingDetailLeaves, funnel, groupNiches, huntEstimate,
+  defaultFilters, DETAIL_TOKENS_PER_ASIN, LIMITS, DIRECT_PAGE, DIRECT_PAGE_TOKENS, directEstimate, directSelection, filtersKey, INCUMBENT_TAKE, INCUMBENT_TOKENS, incumbentSelection, finderSelection, fittingDetailLeaves, funnel, groupNiches, huntEstimate,
   SIZING_TOKENS, spendCap, TOKEN_RESERVE, TREE_MAX_CATEGORIES,
   type HuntAsin, type HuntEstimate, type Niche, type NicheHuntFilters,
 } from "../pl/hunt";
@@ -603,7 +603,7 @@ async function incumbentStage(
  * Run (or re-run) the incumbent check on a finished direct hunt: its spend cap is raised by the
  * check's estimate + 10% (niches × ~31), and the job carries on from the detailing stage.
  */
-export async function recheckIncumbents(huntId: string, limit = 10): Promise<{ niches: number; estimate: number }> {
+export async function recheckIncumbents(huntId: string, limit = LIMITS.incumbentNiches): Promise<{ niches: number; estimate: number }> {
   const d = db();
   const h = must(await d.from("pl_hunts").select(HUNT_COLS).eq("id", huntId).single(), "hunt") as HuntRow;
   if (h.leaves) throw new Error("The incumbent check is for direct-mode hunts (a leaf hunt sees its incumbents already)");
@@ -673,13 +673,15 @@ export async function loadHunt(id: string, exhausted = false, override?: Partial
       const s = incSnaps.get(a) ?? bySnap.get(a);
       if (!s || (s.review_count ?? 0) <= filters.maxReviews) continue;
       incumbentIds.add(a);
-      if (!snaps.some((x) => x.asin === a)) extra.push({ ...s, leaf_category_id: Number(leaf), leaf_category: name ?? s.leaf_category });
+      if (!snaps.some((x) => x.asin === a)) extra.push({ ...s, leaf_category_id: Number(leaf), leaf_category: name ?? s.leaf_category, home_leaf_id: s.leaf_category_id ?? null });
     }
   }
   const grouped = [...snaps, ...extra];
-  const niches = groupNiches(grouped, filters, dismissed, { ...opts, incumbents: incumbentIds });
+  // A direct hunt's niches have a shape only once their leaf has had the incumbent check.
+  const checkedLeaves = hunt.leaves ? undefined : new Set(checked.map(([leaf]) => `cat:${leaf}`));
+  const niches = groupNiches(grouped, filters, dismissed, { ...opts, incumbents: incumbentIds, checkedLeaves });
   // Every niche with anything in it, for the totals; the funnel over the hunt's own detailed products.
-  const all = groupNiches(grouped, { ...filters, minAsins: 0 }, dismissed, { incumbents: incumbentIds });
+  const all = groupNiches(grouped, { ...filters, minAsins: 0 }, dismissed, { incumbents: incumbentIds, checkedLeaves });
   return {
     hunt: { ...hunt, filters },
     niches,

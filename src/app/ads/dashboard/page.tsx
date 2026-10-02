@@ -35,7 +35,7 @@ interface Stock { fulfillable: number; inbound: number; unitsPerDay: number | nu
 interface Plan { asin: string; start_date: string; input: { price: number; headTerms: string[] }; plan: { from: string; to: string | null; title: string; detail: string }[]; batch_id: string | null }
 interface KeywordRow { keywordId: string; campaign: string; campaignName: string; asin: string | null; text: string; matchType: string; bid: number | null; state: string | null; clicks: number; cost: number; orders: number; sales: number; ranks: { position: number | null; page: number | null; checkedAt: string }[] }
 interface Dash { settings: { targetAcos: number; cpc: number; cpcAuto: boolean }; asins: AsinRow[]; campaigns: CampaignRow[]; terms: TermRow[]; imports: number; stock: Record<string, Stock>; plans: Plan[]; keywords: KeywordRow[];
-  looks: Record<string, { title: string | null; image: string | null }>; archived: { id: string; name: string; campaign_id: string | null; state: string | null }[] }
+  looks: Record<string, { title: string | null; image: string | null; candidate?: string | null }>; archived: { id: string; name: string; campaign_id: string | null; state: string | null }[] }
 
 const gbp = (v: number | null | undefined) => (v == null ? "—" : `${v < 0 ? "−" : ""}£${Math.abs(v).toFixed(2)}`);
 const pct = (v: number | null | undefined, dp = 1) => (v == null ? "—" : `${(v * 100).toFixed(dp)}%`);
@@ -135,7 +135,7 @@ function Dashboard({ d, load }: { d: Dash; load: () => void }) {
 }
 
 /** A product: title, ASIN and image, stock, launch plan; open, its figures, campaigns, keywords and search terms. */
-function ProductSection({ asin, look, sub, stock, plan, onSaved, children }: { asin: string; look?: { title: string | null; image: string | null }; sub: string; stock: Stock | undefined; plan: Plan | undefined; onSaved: () => void; children?: React.ReactNode }) {
+function ProductSection({ asin, look, sub, stock, plan, onSaved, children }: { asin: string; look?: { title: string | null; image: string | null; candidate?: string | null }; sub: string; stock: Stock | undefined; plan: Plan | undefined; onSaved: () => void; children?: React.ReactNode }) {
   const [open, setOpen] = useState(true);
   const [busy, setBusy] = useState(false);
   const fetchLook = async () => {
@@ -163,7 +163,7 @@ function ProductSection({ asin, look, sub, stock, plan, onSaved, children }: { a
             <a className="num text-xs text-brand hover:underline" href={`https://www.amazon.co.uk/dp/${asin}`} target="_blank" rel="noreferrer">{asin}</a>
             <StockChip s={stock} />
           </div>
-          <div className="text-xs text-muted-foreground">{sub}</div>
+          <div className="text-xs text-muted-foreground">{sub}{look?.candidate && <> · <Link href={`/pl/candidates?c=${look.candidate}`} className="text-brand hover:underline">Private label candidate →</Link></>}</div>
         </div>
         {(!look?.image || !look?.title) && <Button size="xs" variant="outline" disabled={busy} onClick={fetchLook} title="Keepa: title, image, size and weight">{busy ? <LoaderIcon className="animate-spin" /> : null} Title and image (1 token)</Button>}
       </div>

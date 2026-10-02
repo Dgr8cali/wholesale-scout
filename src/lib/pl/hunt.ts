@@ -92,7 +92,8 @@ export const SIZING_PAGE = 50;
 
 export function defaultFilters(categories: { id: number; name: string }[]): NicheHuntFilters {
   return {
-    mode: "direct", pagesPerRoot: 4, incumbentNiches: 10,
+    // Every niche with 3+ qualifying gets an incumbent check (up to 30).
+    mode: "direct", pagesPerRoot: 4, incumbentNiches: LIMITS.incumbentNiches,
     finderPriceMin: 14, finderPriceMax: 45, finderRatingMin: 3.5, finderRatingMax: 4.7, maxRank90: 100_000,
     // Qualifying on Gatekeeper's warn band (£15–40, 3.6–4.5): a hunt finds; the scorecard judges on the pass band.
     priceMin: NEAR_MISS.priceMin, priceMax: NEAR_MISS.priceMax, maxReviews: 500, ratingMin: NEAR_MISS.ratingMin, ratingMax: NEAR_MISS.ratingMax, minRankDrops90: 300, noAmazon: true,
@@ -106,7 +107,7 @@ export function defaultFilters(categories: { id: number; name: string }[]): Nich
 export function validFilters(x: Partial<NicheHuntFilters>): NicheHuntFilters | string {
   const n = (v: unknown, d: number) => (typeof v === "number" && Number.isFinite(v) ? v : d);
   const f: NicheHuntFilters = {
-    mode: x.mode === "leaf" ? "leaf" : "direct", pagesPerRoot: Math.round(n(x.pagesPerRoot, 4)), incumbentNiches: Math.round(n(x.incumbentNiches, 10)),
+    mode: x.mode === "leaf" ? "leaf" : "direct", pagesPerRoot: Math.round(n(x.pagesPerRoot, 4)), incumbentNiches: Math.round(n(x.incumbentNiches, LIMITS.incumbentNiches)),
     finderPriceMin: n(x.finderPriceMin, 14), finderPriceMax: n(x.finderPriceMax, 45), finderRatingMin: n(x.finderRatingMin, 3.5), finderRatingMax: n(x.finderRatingMax, 4.7),
     priceMin: n(x.priceMin, NEAR_MISS.priceMin), priceMax: n(x.priceMax, NEAR_MISS.priceMax), maxReviews: Math.round(n(x.maxReviews, 500)),
     ratingMin: n(x.ratingMin, NEAR_MISS.ratingMin), ratingMax: n(x.ratingMax, NEAR_MISS.ratingMax), minRankDrops90: Math.round(n(x.minRankDrops90, 300)), maxRank90: Math.round(n(x.maxRank90, 100_000)),
@@ -346,6 +347,8 @@ export interface HuntAsin extends PlAsin {
   /** The leaf browse category (e.g. Cutlery Trays): the niche, when Keepa has it. */
   leaf_category_id?: number | null;
   leaf_category?: string | null;
+  /** An incumbent-check product's own leaf, when it's grouped into a niche's leaf for the check. */
+  home_leaf_id?: number | null;
   /** Days since Amazon last held an offer (0 = now); null = never seen. */
   amazon_last_seen_days: number | null;
 }
@@ -445,10 +448,12 @@ export function funnel(snaps: HuntAsin[], f: NicheHuntFilters): { start: number;
   return { start: snaps.length, steps, incumbents: incumbents.length, near, qualifying: rest.length - near };
 }
 
-export type Shape = "open" | "contested" | "dominated";
+/** "unchecked": a direct-mode niche whose leaf hasn't had the incumbent check, so its shape isn't known. */
+export type Shape = "open" | "contested" | "dominated" | "unchecked";
+export const SHAPE_RANK: Record<Shape, number> = { open: 0, contested: 1, dominated: 2, unchecked: 3 };
 
 /** Open: nobody over 1,000 reviews. Contested: one. Dominated: two or more, or one over 5,000. */
-export function shapeOf(reviews: (number | null)[]): Shape {
+export function shapeOf(reviews: (number | null)[]): Exclude<Shape, "unchecked"> {
   const r = reviews.filter((x): x is number => x != null);
   const over1k = r.filter((x) => x > 1000).length;
   if (over1k >= 2 || r.some((x) => x > 5000)) return "dominated";
@@ -464,7 +469,51 @@ export interface NicheAsin {
   sales: number | null;
   /** A fast seller (90-day rank under 5,000) without bought-past-month: its sales figure is a floor. */
   salesFloor: boolean;
+  /** An incumbent from the incumbent check that shares no word with the niche's products: left out of shape and max reviews. */
+  offNiche: boolean;
   snap: HuntAsin;
+}
+
+/** Words that say nothing about what a product is (who it's for, size, colour, pack). */
+const GENERIC_WORDS = new Set([
+  "men", "mens", "women", "womens", "kid", "kids", "child", "children", "unisex", "adult", "adults", "boy", "boys", "girl", "girls", "baby",
+  "best", "new", "pack", "set", "large", "small", "medium", "mini", "big", "premium", "quality", "pcs", "pc", "piece", "pieces", "size", "sizes",
+  "black", "white", "grey", "gray", "blue", "red", "green", "pink", "colour", "color", "multi", "uk", "free", "gift", "ideal", "perfect", "great",
+  "upgraded", "upgrade", "version", "durable", "portable", "professional", "home", "use", "made", "brand", "original", "genuine",
+  "and", "the", "for", "with", "from", "this", "that", "your", "our", "all", "per", "inch", "inches", "cm", "mm", "ml", "litre", "liter",
+]);
+/** A word's plural folded: "glasses" → "glass", "boxes" → "box", "socks" → "sock". */
+const fold = (w: string) => (/(ses|xes|ches|shes|zes)$/.test(w) ? w.slice(0, -2) : /ies$/.test(w) ? `${w.slice(0, -3)}y` : /[^s]s$/.test(w) ? w.slice(0, -1) : w);
+/** A title's significant words: 3+ letters, not a number, not its brand, not generic; plurals folded. */
+export function significantWords(title: string | null | undefined, brand?: string | null): Set<string> {
+  const brandWords = new Set((brand ?? "").toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean));
+  return new Set((title ?? "").toLowerCase().split(/[^\p{L}\p{N}]+/u)
+    .filter((w) => w.length >= 3 && !/^\d/.test(w) && !GENERIC_WORDS.has(w) && !brandWords.has(w))
+    .map(fold));
+}
+/** Does any of the product's words name the niche ("itchy" ~ "itch remedies")? 4+ letters may match by prefix. */
+function namesNiche(product: { title: string | null; brand?: string | null }, nicheName: string): boolean {
+  const name = [...significantWords(nicheName)];
+  const like = (a: string, b: string) => a === b || (Math.min(a.length, b.length) >= 4 && (a.startsWith(b) || b.startsWith(a)));
+  return [...significantWords(product.title, product.brand)].some((w) => name.some((n) => like(w, n)));
+}
+
+/**
+ * An incumbent-check product that isn't the niche's: Amazon files it in another leaf (compression
+ * socks in Socks, among hydration packs) and its title doesn't name the niche. A product in the
+ * niche's own leaf always counts: Amazon puts it on that page. With no leaf known, the title decides:
+ * no significant word shared with the niche's products.
+ */
+export function isOffNiche(
+  product: { title: string | null; brand?: string | null; leafId?: number | null },
+  niche: { titles: { title: string | null; brand?: string | null }[]; leafId?: number | null; name?: string | null },
+): boolean {
+  if (product.leafId != null && niche.leafId != null) return product.leafId !== niche.leafId && !(niche.name && namesNiche(product, niche.name));
+  const vocab = new Set<string>();
+  for (const t of niche.titles) for (const w of significantWords(t.title, t.brand)) vocab.add(w);
+  if (!vocab.size) return false;
+  for (const w of significantWords(product.title, product.brand)) if (vocab.has(w)) return false;
+  return true;
 }
 
 const isSalesFloor = (a: HuntAsin) => fastVelocity({ avgRank90d: a.avg_rank_90d }) && a.bought_past_month == null;
@@ -498,7 +547,12 @@ export interface Niche {
  * too unless `strict`. Medians and summed sales cover qualifying and near-miss ASINs (the niche's
  * page-one material); incumbents count for its shape and max reviews only.
  */
-export function groupNiches(snaps: HuntAsin[], f: NicheHuntFilters, dismissed: Set<string> = new Set(), opts: { strict?: boolean; incumbents?: Set<string> } = {}): Niche[] {
+/**
+ * `incumbents`: ASINs from the incumbent check (they count as incumbents whatever they fail, unless
+ * off-niche). `checkedLeaves`: in a direct-mode hunt, the niche keys whose leaf had the check; any
+ * other niche's shape is "unchecked", never "open" on the hunt's capped data.
+ */
+export function groupNiches(snaps: HuntAsin[], f: NicheHuntFilters, dismissed: Set<string> = new Set(), opts: { strict?: boolean; incumbents?: Set<string>; checkedLeaves?: Set<string> } = {}): Niche[] {
   const groups = new Map<string, { names: Map<string, number>; rows: NicheAsin[] }>();
   for (const s of snaps) {
     const n = nicheOfAsin(s);
@@ -508,7 +562,7 @@ export function groupNiches(snaps: HuntAsin[], f: NicheHuntFilters, dismissed: S
     if (opts.incumbents?.has(s.asin) && (s.review_count ?? 0) > f.maxReviews) q.status = "incumbent";
     const row: NicheAsin = {
       asin: s.asin, status: q.status, qualifies: q.status === "qualifies", near: q.status === "near", incumbent: q.status === "incumbent",
-      reasons: [...q.fails, ...q.near], unknown: q.unknown, sales: monthlySales(s).value, salesFloor: isSalesFloor(s), snap: s,
+      reasons: [...q.fails, ...q.near], unknown: q.unknown, sales: monthlySales(s).value, salesFloor: isSalesFloor(s), offNiche: false, snap: s,
     };
     const g = groups.get(n.key) ?? { names: new Map<string, number>(), rows: [] as NicheAsin[] };
     g.names.set(n.name, (g.names.get(n.name) ?? 0) + 1);
@@ -522,6 +576,17 @@ export function groupNiches(snaps: HuntAsin[], f: NicheHuntFilters, dismissed: S
     if (strictQ.length + (opts.strict ? 0 : nearQ.length) < f.minAsins) continue;
     // Page-one material: qualifying and near misses.
     const q = [...strictQ, ...nearQ];
+    // An incumbent from the check that Amazon files elsewhere, and whose title doesn't name the niche, isn't its competition.
+    const nicheName = [...g.names].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+    const leafId = key.startsWith("cat:") ? Number(key.slice(4)) : null;
+    for (const r of g.rows) {
+      if (!r.incumbent || !opts.incumbents?.has(r.asin)) continue;
+      const home = r.snap.home_leaf_id ?? r.snap.leaf_category_id ?? null;
+      if (isOffNiche({ title: r.snap.title, brand: r.snap.brand, leafId: home }, { titles: q.map((x) => x.snap), leafId, name: nicheName })) {
+        const why = home != null && leafId != null && home !== leafId ? "Amazon files it in another category, and its title doesn't name the niche" : "shares no word with the niche's products";
+        Object.assign(r, { offNiche: true, incumbent: false, reasons: [why, ...r.reasons] });
+      }
+    }
     // Shape and max reviews: the page-one material (qualifying, near misses) and the incumbents.
     const counted = g.rows.filter((r) => r.qualifies || r.near || r.incumbent);
     const cats = new Map<string, number>();
@@ -540,11 +605,11 @@ export function groupNiches(snaps: HuntAsin[], f: NicheHuntFilters, dismissed: S
       salesSum: Math.round(q.reduce((a, r) => a + (r.sales ?? 0), 0)),
       salesFloorCount: q.filter((r) => r.salesFloor).length,
       maxReviews: known.length ? Math.max(...known) : null,
-      shape: shapeOf(reviews),
+      shape: opts.checkedLeaves && !opts.checkedLeaves.has(key) ? "unchecked" : shapeOf(reviews),
       rootCategory: [...cats].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null,
       // Qualifying, then near misses, by sales; then the incumbents; then the fails.
       asins: [...strictQ, ...nearQ].sort((a, b) => Number(b.qualifies) - Number(a.qualifies) || (b.sales ?? 0) - (a.sales ?? 0))
-        .concat(g.rows.filter((r) => r.incumbent), g.rows.filter((r) => r.status === "fails")),
+        .concat(g.rows.filter((r) => r.incumbent), g.rows.filter((r) => r.offNiche), g.rows.filter((r) => r.status === "fails" && !r.offNiche)),
     });
   }
   return out.sort((a, b) => b.salesSum - a.salesSum);

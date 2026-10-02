@@ -21,6 +21,8 @@ import { ago } from "@/lib/ui/when";
 import { cn } from "@/lib/utils";
 import { Readout, SourceChip, StatusPill } from "./bits";
 import { STATUSES, TONE, valuesOf, type CandidateDetail, type FieldMap } from "./types";
+import { CandidateExtras } from "./Extras";
+import type { PlStatus } from "@/lib/pl/launch";
 import { WaivePopover } from "./WaivePopover";
 
 const CHECK_BG: Record<Status, string> = { pass: "bg-pass", warn: "bg-warn", fail: "bg-fail", empty: "bg-empty" };
@@ -178,6 +180,11 @@ export function Workspace({ id, settings, card, adsCpc, onChanged, onDeleted }: 
       ))}
       <ScorecardPanel ev={ev} />
       <WaiversPanel waivers={data.waivers ?? []} ev={ev} onUnwaive={unwaive} />
+      <CandidateExtras
+        c={{ id, name: c.name, niche_keyword: c.niche_keyword, category: c.category, sell: fields.sell?.value ? Number(fields.sell.value) : null, fields }}
+        status={c.status as PlStatus} verdictTitle={ev.v.title} budget={settings.budget}
+        onFieldsChanged={async () => { const d = await load(); if (d) onChanged(id, { fields: d.fields }); }}
+        onStatus={(s) => { setData((d) => d && { ...d, candidate: { ...d.candidate, status: s } }); onChanged(id, { status: s }); }} />
       <div className="flex flex-wrap items-center gap-2">
         <Button variant="outline" size="sm" className="text-fail hover:text-fail" onClick={remove}><Trash2Icon /> Delete candidate</Button>
         <span className="ml-auto text-xs text-muted-foreground">24–30 order samples · 18–23 only if weak lines are movable · under 18 drop</span>
@@ -337,6 +344,8 @@ function FieldRow({ def, field, why, onSave, manualOnly, derived }: {
         {def.unit && def.unit !== "£" && <span className="num self-stretch border-l bg-surface-2 px-2 py-1.5 text-xs text-muted-foreground">{def.unit}</span>}
       </div>
     );
+  } else if (def.type === "text") {
+    control = <input id={id} type="text" maxLength={200} className="min-h-9 rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring/40" value={value} onChange={(e) => onSave(def.k, e.target.value)} />;
   } else if (def.type === "sel") {
     control = (
       <NativeSelect id={id} className="w-full" value={value} onChange={(e) => onSave(def.k, e.target.value, 0)}>

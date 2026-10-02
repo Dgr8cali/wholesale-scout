@@ -13,7 +13,7 @@ import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { money } from "@/lib/pl/gatekeeper";
-import { AVOID_CATEGORY_NAMES, LIMITS, TOKEN_RESERVE, WEIGHT_FILTER_UNKNOWN, type HuntEstimate, type Niche, type NicheHuntFilters, type Shape } from "@/lib/pl/hunt";
+import { AVOID_CATEGORY_NAMES, LIMITS, SHAPE_RANK, TOKEN_RESERVE, WEIGHT_FILTER_UNKNOWN, type HuntEstimate, type Niche, type NicheHuntFilters, type Shape } from "@/lib/pl/hunt";
 import { priceOf } from "@/lib/pl/fill";
 import { api } from "@/lib/ui/client";
 import { ago } from "@/lib/ui/when";
@@ -81,6 +81,7 @@ const SHAPE: Record<Shape, { label: string; cls: string; title: string }> = {
   open: { label: "Open", cls: "bg-pass-soft text-pass", title: "No ASIN over 1,000 reviews" },
   contested: { label: "Contested", cls: "bg-warn-soft text-warn", title: "One ASIN over 1,000 reviews" },
   dominated: { label: "Dominated", cls: "bg-fail-soft text-fail", title: "Two or more ASINs over 1,000 reviews, or one over 5,000" },
+  unchecked: { label: "Unchecked", cls: "bg-empty-soft text-ink-2", title: "Not checked for incumbents: fewer than 3 qualifying, or the check hasn't run" },
 };
 
 /** Niche Hunt: Product Finder hunts for products that pass Gates 0 and 1, grouped into niches. */
@@ -205,13 +206,13 @@ export function NicheHunt({ onCandidate }: { onCandidate: (id: string) => void }
             <div className="grid gap-3 sm:grid-cols-3">
               <Num label={`Pages a category (1–${LIMITS.pagesPerRoot})`} value={f.pagesPerRoot} onChange={(v) => set({ pagesPerRoot: v })} hint="50 ASINs a page, most rank drops first, 11 tokens" />
               <Num label="Listed at least (months)" value={f.minListedMonths} onChange={(v) => set({ minListedMonths: v })} />
-              <Num label={`Niches to check for incumbents (0–${LIMITS.incumbentNiches})`} value={f.incumbentNiches} onChange={(v) => set({ incumbentNiches: v })} hint="Those with 3+ qualifying, ~31 tokens each" />
+              <Num label={`Niches to check for incumbents (0–${LIMITS.incumbentNiches})`} value={f.incumbentNiches} onChange={(v) => set({ incumbentNiches: v })} hint="Every niche with 3+ qualifying (up to 30), ~31 tokens each" />
             </div>
             <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
               <Toggle label="No Amazon offer (now; 90 days when qualifying)" checked={f.noAmazon} onChange={(v) => set({ noAmazon: v })} />
               <Toggle label="Leave out Amazon's own brands" checked={f.excludeAmazonBrands} onChange={(v) => set({ excludeAmazonBrands: v })} />
             </div>
-            <p className="text-xs text-muted-foreground">Keepa checks price, rating, reviews (at most the cap), sales a month (Amazon&apos;s &quot;bought in past month&quot;, at least rank drops ÷ 3), package weight up to 700 g, no Amazon offer, listing age and brands. Its weight filter leaves out products whose weight it doesn&apos;t know (about 0.4%). Because reviews are capped in the query, each niche with 3+ qualifying products then gets an <b>incumbent check</b>: its leaf&apos;s 10 best sellers over the review cap, any price, so its shape and max reviews are real.</p>
+            <p className="text-xs text-muted-foreground">Keepa checks price, rating, reviews (at most the cap), sales a month (Amazon&apos;s &quot;bought in past month&quot;, at least rank drops ÷ 3), package weight up to 700 g, no Amazon offer, listing age and brands. Its weight filter leaves out products whose weight it doesn&apos;t know (about 0.4%). Because reviews are capped in the query, every niche with 3+ qualifying products (up to 30) then gets an <b>incumbent check</b>: its leaf&apos;s 10 best sellers over the review cap, any price, so its shape and max reviews are real. A niche not checked shows &quot;Unchecked&quot;, never &quot;Open&quot;; an incumbent that shares no word with the niche&apos;s products is marked off-niche and left out.</p>
           </fieldset>
           ) : (
           <fieldset className="space-y-3 rounded-lg border p-3">
@@ -280,7 +281,7 @@ export function NicheHunt({ onCandidate }: { onCandidate: (id: string) => void }
             <div className="space-y-0.5 text-sm text-muted-foreground">
               <div>Finder: <span className="num">{f.categories.length}</span> categor{f.categories.length === 1 ? "y" : "ies"} × {f.pagesPerRoot} page{f.pagesPerRoot === 1 ? "" : "s"} × 11 = <span className="num">{plan.estimate.finder}</span> tokens</div>
               <div>Detail: up to <span className="num">{(plan.estimate.finderPages ?? 0) * 50}</span> ASINs × ~2 = <span className="num">{plan.estimate.detail}</span> tokens (less any fetched in the last 7 days)</div>
-              {(plan.estimate.incumbentNiches ?? 0) > 0 && <div>+ incumbents: up to <span className="num">{plan.estimate.incumbentNiches}</span> niches × 31 (a finder page of 11 + 10 details × 2) = <span className="num">{plan.estimate.incumbents}</span> tokens</div>}
+              {(plan.estimate.incumbentNiches ?? 0) > 0 && <div>+ incumbents: every niche with 3+ qualifying, up to <span className="num">{plan.estimate.incumbentNiches}</span> × 31 (a finder page of 11 + 10 details × 2) = <span className="num">{plan.estimate.incumbents}</span> tokens</div>}
               <div className="text-foreground">Total up to <b className="num">{plan.estimate.total}</b>; it stops at <b className="num">{plan.cap}</b> (+10%) · balance <span className="num">{plan.balance?.toLocaleString("en-GB") ?? "—"}</span>, {TOKEN_RESERVE} kept in reserve</div>
               {plan.waitsForRefill && plan.fits && <div className="text-warn">More than the balance: it waits for Keepa&apos;s refill part-way (about 21 tokens a minute).</div>}
               {!plan.fits && <div className="text-fail">The finder pages alone are over the balance less the reserve: fewer pages, or wait for the refill.</div>}
@@ -430,7 +431,7 @@ function Results({ result, start, onReload, onPick, onCandidate, onStart, onRequ
       <div className="flex flex-wrap items-end gap-3">
         <label className="space-y-1"><span className="field-label">Shape</span>
           <NativeSelect value={shape} onChange={(e) => setShape(e.target.value as "" | Shape)}>
-            <NativeSelectOption value="">Any</NativeSelectOption><NativeSelectOption value="open">Open</NativeSelectOption><NativeSelectOption value="contested">Contested</NativeSelectOption><NativeSelectOption value="dominated">Dominated</NativeSelectOption>
+            <NativeSelectOption value="">Any</NativeSelectOption><NativeSelectOption value="open">Open</NativeSelectOption><NativeSelectOption value="contested">Contested</NativeSelectOption><NativeSelectOption value="dominated">Dominated</NativeSelectOption><NativeSelectOption value="unchecked">Unchecked</NativeSelectOption>
           </NativeSelect></label>
         <label className="space-y-1"><span className="field-label">At least … {strict ? "qualifying" : "qualifying + near-miss"} ASINs</span>
           <Input className="num w-28" type="number" min={1} value={minCount} onChange={(e) => setMinCount(Math.max(1, Number(e.target.value) || 1))} /></label>
@@ -453,7 +454,7 @@ function Results({ result, start, onReload, onPick, onCandidate, onStart, onRequ
               <SortTh {...s.th("count")} numeric className="px-2 py-1.5 text-right" title="Qualifying · near misses · incumbents (sorts by qualifying)">Q · near · inc</SortTh>
               <SortTh {...s.th("price")} numeric className="px-2 py-1.5 text-right">Median price</SortTh><SortTh {...s.th("reviews")} numeric className="px-2 py-1.5 text-right">Median reviews</SortTh>
               <SortTh {...s.th("rating")} numeric className="px-2 py-1.5 text-right">Median rating</SortTh><SortTh {...s.th("sales")} numeric className="px-2 py-1.5 text-right">Sales / mo</SortTh>
-              <SortTh {...s.th("maxReviews")} numeric className="px-2 py-1.5 text-right">Max reviews</SortTh><SortTh {...s.th("shape")} className="px-2 py-1.5" title="Open → contested → dominated">Shape</SortTh><th />
+              <SortTh {...s.th("maxReviews")} numeric className="px-2 py-1.5 text-right">Max reviews</SortTh><SortTh {...s.th("shape")} className="px-2 py-1.5" title="Open → contested → dominated → unchecked">Shape</SortTh><th />
             </tr></thead>
             <tbody>
               {rows.map((n) => (
@@ -533,9 +534,7 @@ function Results({ result, start, onReload, onPick, onCandidate, onStart, onRequ
   );
 }
 
-const SHAPE_RANK: Record<Shape, number> = { open: 0, contested: 1, dominated: 2 };
-
-const ASIN_STATUS_RANK = { qualifies: 0, near: 1, incumbent: 2, fails: 3 } as const;
+const ASIN_STATUS_RANK = { qualifies: 0, near: 1, incumbent: 2, offNiche: 3, fails: 4 } as const;
 
 /** A niche's ASINs: every column sorts (status in the order qualifies → near miss → incumbent → fails). */
 function NicheAsins({ asins }: { asins: Niche["asins"] }) {
@@ -546,7 +545,7 @@ function NicheAsins({ asins }: { asins: Niche["asins"] }) {
     rating: { value: (a) => a.snap.rating, kind: "number" },
     rank: { value: (a) => a.snap.avg_rank_90d, kind: "number" },
     sales: { value: (a) => a.sales, kind: "number" },
-    status: { value: (a) => ASIN_STATUS_RANK[a.status], kind: "number" },
+    status: { value: (a) => (a.offNiche ? ASIN_STATUS_RANK.offNiche : ASIN_STATUS_RANK[a.status]), kind: "number" },
   });
   return (
     <table className="w-full text-xs">
@@ -554,10 +553,10 @@ function NicheAsins({ asins }: { asins: Niche["asins"] }) {
         <SortTh {...s.th("title")} className="px-2 py-1">Listing</SortTh><SortTh {...s.th("price")} numeric className="px-2 py-1 text-right">Price</SortTh>
         <SortTh {...s.th("reviews")} numeric className="px-2 py-1 text-right">Reviews</SortTh><SortTh {...s.th("rating")} numeric className="px-2 py-1 text-right">Rating</SortTh>
         <SortTh {...s.th("rank")} numeric className="px-2 py-1 text-right">Rank</SortTh><SortTh {...s.th("sales")} numeric className="px-2 py-1 text-right">Sales / mo</SortTh>
-        <SortTh {...s.th("status")} className="px-2 py-1" title="Qualifies → near miss → incumbent → fails">Status</SortTh>
+        <SortTh {...s.th("status")} className="px-2 py-1" title="Qualifies → near miss → incumbent → off-niche → fails">Status</SortTh>
       </tr></thead>
       <tbody>{s.rows.map((a) => (
-        <tr key={a.asin} className="border-t">
+        <tr key={a.asin} className={cn("border-t", a.offNiche && "text-muted-foreground opacity-60")}>
           <td className="px-2 py-1.5">
             <div className="flex w-[min(30rem,50vw)] items-center gap-2">
               <ProductThumb url={a.snap.image} asin={a.asin} title={a.snap.title} brand={a.snap.brand} size={32} />
@@ -572,6 +571,7 @@ function NicheAsins({ asins }: { asins: Niche["asins"] }) {
           <td className="num px-2 py-1.5 text-right">{a.salesFloor ? "≥ " : ""}{n0(a.sales)}</td>
           <td className="px-2 py-1.5">{a.qualifies ? <span><span className="font-medium text-pass">Qualifies</span>{a.unknown?.length ? <span className="text-muted-foreground"> ({a.unknown.join(", ")})</span> : null}</span>
             : a.near ? <span><span className="font-medium text-warn">Near miss</span> <span className="text-muted-foreground">({a.reasons.join(", ")})</span></span>
+            : a.offNiche ? <span title="Left out of the niche's shape and max reviews"><span className="font-medium">Off-niche incumbent</span> <span>({a.reasons.join(", ")})</span></span>
             : a.incumbent ? <span><span className="font-medium text-ink-2">Incumbent</span> <span className="text-muted-foreground">(over the review cap{a.reasons.length ? `; ${a.reasons.join(", ")}` : ""})</span></span>
             : <span><span className="font-medium text-fail">Fails</span> <span className="text-muted-foreground">({a.reasons.join(", ")})</span></span>}</td>
         </tr>

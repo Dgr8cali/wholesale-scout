@@ -1,5 +1,5 @@
 -- Wholesale Scout schema, dumped by scripts/schema-backup.mjs. No data.
--- Dumped 2026-10-02T14:48:07.440Z. Safe to re-run. Restore: npm run schema:restore
+-- Dumped 2026-10-02T15:31:26.827Z. Safe to re-run. Restore: npm run schema:restore
 
 -- @section extensions
 create extension if not exists "pg_cron";
@@ -409,7 +409,8 @@ create table if not exists "ads_products" (
   "fba_fee" numeric,
   "phase" text default 'launch'::text not null,
   "updated_at" timestamp with time zone default now() not null,
-  "image" text
+  "image" text,
+  "pl_candidate_id" uuid
 );
 alter table "ads_products" add column if not exists "asin" text;
 alter table "ads_products" add column if not exists "title" text;
@@ -422,6 +423,7 @@ alter table "ads_products" add column if not exists "fba_fee" numeric;
 alter table "ads_products" add column if not exists "phase" text default 'launch'::text;
 alter table "ads_products" add column if not exists "updated_at" timestamp with time zone default now();
 alter table "ads_products" add column if not exists "image" text;
+alter table "ads_products" add column if not exists "pl_candidate_id" uuid;
 alter table "ads_products" enable row level security;
 
 create table if not exists "ads_proposals" (
@@ -1109,7 +1111,10 @@ create table if not exists "pl_candidates" (
   "keepa_by_day" jsonb default '{}'::jsonb not null,
   "refreshed_at" timestamp with time zone,
   "created_at" timestamp with time zone default now() not null,
-  "updated_at" timestamp with time zone default now() not null
+  "updated_at" timestamp with time zone default now() not null,
+  "listing_asin" text,
+  "chosen_quote" uuid,
+  "chosen_landed" numeric
 );
 alter table "pl_candidates" add column if not exists "id" uuid default gen_random_uuid();
 alter table "pl_candidates" add column if not exists "name" text;
@@ -1122,6 +1127,9 @@ alter table "pl_candidates" add column if not exists "keepa_by_day" jsonb defaul
 alter table "pl_candidates" add column if not exists "refreshed_at" timestamp with time zone;
 alter table "pl_candidates" add column if not exists "created_at" timestamp with time zone default now();
 alter table "pl_candidates" add column if not exists "updated_at" timestamp with time zone default now();
+alter table "pl_candidates" add column if not exists "listing_asin" text;
+alter table "pl_candidates" add column if not exists "chosen_quote" uuid;
+alter table "pl_candidates" add column if not exists "chosen_landed" numeric;
 alter table "pl_candidates" enable row level security;
 
 create table if not exists "pl_category_tree" (
@@ -1266,6 +1274,24 @@ alter table "pl_hunts" add column if not exists "last_progress_at" timestamp wit
 alter table "pl_hunts" add column if not exists "finished_at" timestamp with time zone;
 alter table "pl_hunts" enable row level security;
 
+create table if not exists "pl_launch_steps" (
+  "candidate_id" uuid not null,
+  "step" text not null,
+  "done" boolean default false not null,
+  "done_on" date,
+  "note" text,
+  "spend" numeric,
+  "updated_at" timestamp with time zone default now() not null
+);
+alter table "pl_launch_steps" add column if not exists "candidate_id" uuid;
+alter table "pl_launch_steps" add column if not exists "step" text;
+alter table "pl_launch_steps" add column if not exists "done" boolean default false;
+alter table "pl_launch_steps" add column if not exists "done_on" date;
+alter table "pl_launch_steps" add column if not exists "note" text;
+alter table "pl_launch_steps" add column if not exists "spend" numeric;
+alter table "pl_launch_steps" add column if not exists "updated_at" timestamp with time zone default now();
+alter table "pl_launch_steps" enable row level security;
+
 create table if not exists "pl_leaf_counts" (
   "leaf_id" bigint not null,
   "filters_key" text not null,
@@ -1331,6 +1357,42 @@ alter table "pl_poe_snapshots" add column if not exists "search_volume_growth_90
 alter table "pl_poe_snapshots" add column if not exists "search_volume_growth_360" numeric;
 alter table "pl_poe_snapshots" add column if not exists "search_volume_growth_source" text;
 alter table "pl_poe_snapshots" enable row level security;
+
+create table if not exists "pl_quotes" (
+  "id" uuid default gen_random_uuid() not null,
+  "candidate_id" uuid not null,
+  "supplier_name" text not null,
+  "source" text default 'Alibaba'::text not null,
+  "contact" text,
+  "unit_price" numeric,
+  "currency" text default 'USD'::text not null,
+  "moq" integer,
+  "lead_time_days" integer,
+  "sample_cost" numeric,
+  "sample_lead_days" integer,
+  "notes" text,
+  "status" text default 'requested'::text not null,
+  "calc" jsonb default '{}'::jsonb not null,
+  "created_at" timestamp with time zone default now() not null,
+  "updated_at" timestamp with time zone default now() not null
+);
+alter table "pl_quotes" add column if not exists "id" uuid default gen_random_uuid();
+alter table "pl_quotes" add column if not exists "candidate_id" uuid;
+alter table "pl_quotes" add column if not exists "supplier_name" text;
+alter table "pl_quotes" add column if not exists "source" text default 'Alibaba'::text;
+alter table "pl_quotes" add column if not exists "contact" text;
+alter table "pl_quotes" add column if not exists "unit_price" numeric;
+alter table "pl_quotes" add column if not exists "currency" text default 'USD'::text;
+alter table "pl_quotes" add column if not exists "moq" integer;
+alter table "pl_quotes" add column if not exists "lead_time_days" integer;
+alter table "pl_quotes" add column if not exists "sample_cost" numeric;
+alter table "pl_quotes" add column if not exists "sample_lead_days" integer;
+alter table "pl_quotes" add column if not exists "notes" text;
+alter table "pl_quotes" add column if not exists "status" text default 'requested'::text;
+alter table "pl_quotes" add column if not exists "calc" jsonb default '{}'::jsonb;
+alter table "pl_quotes" add column if not exists "created_at" timestamp with time zone default now();
+alter table "pl_quotes" add column if not exists "updated_at" timestamp with time zone default now();
+alter table "pl_quotes" enable row level security;
 
 create table if not exists "pl_settings" (
   "key" text not null,
@@ -1967,6 +2029,11 @@ do $$ begin
   end if;
 end $$;
 do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'pl_launch_steps_pkey' and conrelid = '"pl_launch_steps"'::regclass) then
+    alter table "pl_launch_steps" add constraint "pl_launch_steps_pkey" PRIMARY KEY (candidate_id, step);
+  end if;
+end $$;
+do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'pl_leaf_counts_pkey' and conrelid = '"pl_leaf_counts"'::regclass) then
     alter table "pl_leaf_counts" add constraint "pl_leaf_counts_pkey" PRIMARY KEY (leaf_id, filters_key);
   end if;
@@ -1979,6 +2046,11 @@ end $$;
 do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'pl_poe_snapshots_pkey' and conrelid = '"pl_poe_snapshots"'::regclass) then
     alter table "pl_poe_snapshots" add constraint "pl_poe_snapshots_pkey" PRIMARY KEY (id);
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'pl_quotes_pkey' and conrelid = '"pl_quotes"'::regclass) then
+    alter table "pl_quotes" add constraint "pl_quotes_pkey" PRIMARY KEY (id);
   end if;
 end $$;
 do $$ begin
@@ -2208,7 +2280,7 @@ do $$ begin
 end $$;
 do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'pl_candidate_fields_source_check' and conrelid = '"pl_candidate_fields"'::regclass) then
-    alter table "pl_candidate_fields" add constraint "pl_candidate_fields_source_check" CHECK ((source = ANY (ARRAY['keepa'::text, 'poe'::text, 'poe_derived'::text, 'manual'::text, 'fees'::text])));
+    alter table "pl_candidate_fields" add constraint "pl_candidate_fields_source_check" CHECK ((source = ANY (ARRAY['keepa'::text, 'poe'::text, 'poe_derived'::text, 'manual'::text, 'fees'::text, 'quote'::text])));
   end if;
 end $$;
 do $$ begin
@@ -2239,6 +2311,21 @@ end $$;
 do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'pl_poe_snapshots_search_volume_growth_source_check' and conrelid = '"pl_poe_snapshots"'::regclass) then
     alter table "pl_poe_snapshots" add constraint "pl_poe_snapshots_search_volume_growth_source_check" CHECK ((search_volume_growth_source = ANY (ARRAY['t180'::text, 't90'::text, 'trends'::text])));
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'pl_quotes_currency_check' and conrelid = '"pl_quotes"'::regclass) then
+    alter table "pl_quotes" add constraint "pl_quotes_currency_check" CHECK ((currency = ANY (ARRAY['USD'::text, 'GBP'::text, 'CNY'::text, 'EUR'::text])));
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'pl_quotes_source_check' and conrelid = '"pl_quotes"'::regclass) then
+    alter table "pl_quotes" add constraint "pl_quotes_source_check" CHECK ((source = ANY (ARRAY['Alibaba'::text, '1688'::text, 'UK wholesaler'::text, 'Other'::text])));
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'pl_quotes_status_check' and conrelid = '"pl_quotes"'::regclass) then
+    alter table "pl_quotes" add constraint "pl_quotes_status_check" CHECK ((status = ANY (ARRAY['requested'::text, 'received'::text, 'samples ordered'::text, 'samples received'::text, 'chosen'::text, 'rejected'::text])));
   end if;
 end $$;
 do $$ begin
@@ -2417,6 +2504,11 @@ do $$ begin
   end if;
 end $$;
 do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'ads_products_pl_candidate_id_fkey' and conrelid = '"ads_products"'::regclass) then
+    alter table "ads_products" add constraint "ads_products_pl_candidate_id_fkey" FOREIGN KEY (pl_candidate_id) REFERENCES pl_candidates(id) ON DELETE SET NULL;
+  end if;
+end $$;
+do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'ads_proposals_batch_id_fkey' and conrelid = '"ads_proposals"'::regclass) then
     alter table "ads_proposals" add constraint "ads_proposals_batch_id_fkey" FOREIGN KEY (batch_id) REFERENCES ads_export_batches(id) ON DELETE SET NULL;
   end if;
@@ -2472,13 +2564,28 @@ do $$ begin
   end if;
 end $$;
 do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'pl_candidates_chosen_quote_fkey' and conrelid = '"pl_candidates"'::regclass) then
+    alter table "pl_candidates" add constraint "pl_candidates_chosen_quote_fkey" FOREIGN KEY (chosen_quote) REFERENCES pl_quotes(id) ON DELETE SET NULL;
+  end if;
+end $$;
+do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'pl_gate_waivers_candidate_id_fkey' and conrelid = '"pl_gate_waivers"'::regclass) then
     alter table "pl_gate_waivers" add constraint "pl_gate_waivers_candidate_id_fkey" FOREIGN KEY (candidate_id) REFERENCES pl_candidates(id) ON DELETE CASCADE;
   end if;
 end $$;
 do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'pl_launch_steps_candidate_id_fkey' and conrelid = '"pl_launch_steps"'::regclass) then
+    alter table "pl_launch_steps" add constraint "pl_launch_steps_candidate_id_fkey" FOREIGN KEY (candidate_id) REFERENCES pl_candidates(id) ON DELETE CASCADE;
+  end if;
+end $$;
+do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'pl_poe_snapshots_candidate_id_fkey' and conrelid = '"pl_poe_snapshots"'::regclass) then
     alter table "pl_poe_snapshots" add constraint "pl_poe_snapshots_candidate_id_fkey" FOREIGN KEY (candidate_id) REFERENCES pl_candidates(id) ON DELETE SET NULL;
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'pl_quotes_candidate_id_fkey' and conrelid = '"pl_quotes"'::regclass) then
+    alter table "pl_quotes" add constraint "pl_quotes_candidate_id_fkey" FOREIGN KEY (candidate_id) REFERENCES pl_candidates(id) ON DELETE CASCADE;
   end if;
 end $$;
 do $$ begin
@@ -2576,6 +2683,7 @@ CREATE INDEX IF NOT EXISTS pl_candidate_asins_asin ON pl_candidate_asins USING b
 CREATE INDEX IF NOT EXISTS pl_category_tree_root ON pl_category_tree USING btree (root_id);
 CREATE UNIQUE INDEX IF NOT EXISTS pl_gate_waivers_key ON pl_gate_waivers USING btree (candidate_id, gate_id, COALESCE(check_label, ''::text));
 CREATE INDEX IF NOT EXISTS pl_poe_snapshots_candidate ON pl_poe_snapshots USING btree (candidate_id, captured_at DESC);
+CREATE INDEX IF NOT EXISTS pl_quotes_candidate ON pl_quotes USING btree (candidate_id);
 CREATE INDEX IF NOT EXISTS products_asin_idx ON products USING btree (asin);
 CREATE INDEX IF NOT EXISTS products_ean ON products USING btree (ean);
 CREATE UNIQUE INDEX IF NOT EXISTS products_ean_asin_key ON products USING btree (ean, COALESCE(asin, ''::text));
@@ -2820,3 +2928,4 @@ insert into schema_migrations (name) values ('20261002000900_ads_rules_proposals
 insert into schema_migrations (name) values ('20261002001000_ads_phase25.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261002001100_niche_hunt_direct.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261002001200_ads_daily_products.sql') on conflict do nothing;
+insert into schema_migrations (name) values ('20261002001300_pl_quotes_launch.sql') on conflict do nothing;

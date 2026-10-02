@@ -1,16 +1,18 @@
 "use client";
 
 import { usePageCrumbs } from "@/components/Crumbs";
-import { ComingSoon } from "@/components/ComingSoon";
+import { PlOverview } from "@/components/pl/Overview";
 
+/** Private label → Quotes. */
 export default function QuotesPage() {
   usePageCrumbs([{ label: "Private label", href: "/pl/candidates" }, { label: "Quotes" }]);
   return (
-    <ComingSoon title="Quotes" what="Supplier quotes for a candidate side by side: unit price at each quantity break, MOQ, sample cost, lead time and freight to the UK, each turned into a landed cost that feeds Gate 0 and Gate 6.">
-      <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
-        <li>Three quotes per candidate, the cheapest landed cost taken for the gates.</li>
-        <li>Samples ordered and received, with notes against the complaint you mean to fix (Gate 4).</li>
-      </ul>
-    </ComingSoon>
+    <div className="space-y-4">
+      <div className="max-w-3xl">
+        <h1 className="page-title">Quotes</h1>
+        <p className="text-sm text-muted-foreground">Supplier quotes side by side, each turned into a landed cost per unit and the cash a first order needs, with Gatekeeper&apos;s price multiple. Write the one you trust into Gate 0 and Gate 7, choose it, and send the RFQ to more suppliers.</p>
+      </div>
+      <PlOverview mode="quotes" />
+    </div>
   );
 }

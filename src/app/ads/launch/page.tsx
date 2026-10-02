@@ -43,7 +43,12 @@ export default function AdsLaunchPage() {
   const [made, setMade] = useState<{ id: string; label: string } | null>(null);
 
   const loadDefaults = useCallback((q: string) => api<Picker>(`/api/ads/launch${q}`).then((r) => { setPick(r); setForm(toForm(r.defaults)); setPreview(null); setMade(null); }).catch((e: Error) => setError(e.message)), []);
-  useEffect(() => { loadDefaults(""); }, [loadDefaults]);
+  useEffect(() => {
+    // From a private-label candidate's launch checklist: ?candidateId=…&asin=… prefill the head terms, competitors and listing.
+    const q = new URLSearchParams(window.location.search);
+    const params = [q.get("candidateId") ? `candidateId=${encodeURIComponent(q.get("candidateId")!)}` : null, q.get("asin") ? `asin=${encodeURIComponent(q.get("asin")!)}` : null].filter(Boolean);
+    loadDefaults(params.length ? `?${params.join("&")}` : "");
+  }, [loadDefaults]);
   useEffect(() => {
     if (!form) return;
     const t = setTimeout(() => {

@@ -22,6 +22,7 @@ const SOURCE: Record<FieldSource, { label: string; cls: string; title: string }>
   poe_derived: { label: "POE (derived)", cls: "bg-warn-soft text-warn", title: "Worked out from an Opportunity Explorer capture, which doesn't state it: how, under the field" },
   fees: { label: "Fees", cls: "bg-pass-soft text-pass", title: "Worked out from the rate card" },
   manual: { label: "Manual", cls: "bg-empty-soft text-ink-2", title: "Typed by you: no refresh overwrites it" },
+  quote: { label: "Quote", cls: "bg-pass-soft text-pass", title: "From a supplier quote's landed-cost calculator (Quotes); your own value wins over it" },
 };
 
 export function SourceChip({ source }: { source: FieldSource }) {

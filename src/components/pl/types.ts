@@ -3,13 +3,15 @@ import type { PlAsin } from "@/lib/pl/fill";
 import type { Fields, Settings, Status, Waiver } from "@/lib/pl/gatekeeper";
 import type { PoeTerm } from "@/lib/pl/poe";
 
-export type FieldSource = "keepa" | "poe" | "poe_derived" | "manual" | "fees";
+export type FieldSource = "keepa" | "poe" | "poe_derived" | "manual" | "fees" | "quote";
 export interface PlField { value: string; source: FieldSource; updated_at?: string }
 export type FieldMap = Record<string, PlField>;
 
 export interface CandidateRow {
   id: string; name: string; niche_keyword: string | null; category: string; status: string; notes: string | null;
   token_cost: number; refreshed_at: string | null; created_at: string; updated_at: string; fields: FieldMap; waivers: Waiver[];
+  /** The chosen quote's landed cost per unit, the listing once live, and the next launch step. */
+  chosen_landed?: number | null; listing_asin?: string | null; launch?: { next: string | null; done: number };
 }
 
 export interface CandidateDetail {

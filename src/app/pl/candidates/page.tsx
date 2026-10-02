@@ -18,6 +18,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { evaluate, referralOptions } from "@/lib/pl/gatekeeper";
 import { withAdsDefaults } from "@/lib/pl/adsDefaults";
+import { priceMultiple } from "@/lib/pl/quotes";
 import { api } from "@/lib/ui/client";
 import { ago } from "@/lib/ui/when";
 import { cn } from "@/lib/utils";
@@ -78,6 +79,7 @@ function Candidates() {
                       <span className="rounded border px-1 tracking-wide uppercase">{c.status}</span>
                       <span className="truncate">{c.refreshed_at ? `Keepa ${ago(c.refreshed_at)}` : "not fetched"}</span>
                     </span>
+                    <CandidateLine c={c} />
                   </button>
                 ))}
               </div>
@@ -154,5 +156,21 @@ function NewCandidate({ open, onOpenChange, list, onCreated }: { open: boolean; 
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** Under a candidate in the list: the chosen landed cost, the price multiple, the next launch step. */
+function CandidateLine({ c }: { c: CandidateRow }) {
+  const sell = c.fields.sell?.value ? Number(c.fields.sell.value) : null;
+  const landed = c.chosen_landed ?? (c.fields.landed?.value ? Number(c.fields.landed.value) : null);
+  const m = priceMultiple(sell, landed);
+  const step = c.launch?.done ? c.launch.next : null;
+  if (landed == null && !step) return null;
+  return (
+    <span className="flex flex-wrap items-center gap-x-2 pl-4 text-[11px] text-muted-foreground">
+      {landed != null && <span title={c.chosen_landed != null ? "The chosen quote's landed cost per unit" : "Gate 0's landed cost per unit"}>landed £{landed.toFixed(2)}{c.chosen_landed != null ? " (quote)" : ""}</span>}
+      {m && <span className={cn("num font-semibold", m.status === "pass" ? "text-pass" : m.status === "warn" ? "text-warn" : "text-fail")} title="Sell ÷ landed: 3.5× passes, 3× warns">{m.multiple.toFixed(1)}×</span>}
+      {step && <span className="truncate" title="Next launch step">next: {step}</span>}
+    </span>
   );
 }

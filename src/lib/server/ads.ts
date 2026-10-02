@@ -395,7 +395,7 @@ export async function adsDashboard(lookAsins: string[] = []) {
   const settings = await adsSettings();
   const figs = campaignFigures(all);
   const [products, targets, placementsRes, adsRes, kwRes, negRes] = await Promise.all([
-    db().from("ads_products").select("asin, title, image, price, landed_cost, referral_category, weight_g, dims, fba_fee, phase"),
+    db().from("ads_products").select("asin, title, image, price, landed_cost, referral_category, weight_g, dims, fba_fee, phase, pl_candidate_id"),
     db().from("ads_targets").select("asin, target_acos_launch, target_acos_steady"),
     db().from("ads_placements").select("campaign, placement, percentage, date_from, date_to, impressions, clicks, cost, orders, sales, units"),
     db().from("ads_product_ads").select("campaign, sku, asin, state"),
@@ -476,17 +476,17 @@ export async function adsDashboard(lookAsins: string[] = []) {
   // Each product's title and image: the Ads product, else the app's other records (free).
   const lookFor = [...new Set([...asins, ...lookAsins])];
   const [extraProds, wholesale, hunted, archived] = await Promise.all([
-    db().from("ads_products").select("asin, title, image").in("asin", lookFor.length ? lookFor : [""]),
+    db().from("ads_products").select("asin, title, image, pl_candidate_id").in("asin", lookFor.length ? lookFor : [""]),
     db().from("products").select("asin, title, image_url").in("asin", lookFor.length ? lookFor : [""]),
     db().from("pl_hunt_asins").select("asin, title, image").in("asin", lookFor.length ? lookFor : [""]),
     db().from("ads_campaigns").select("id, name, campaign_id, state").eq("archived", true).order("name"),
   ]);
-  const looks: Record<string, { title: string | null; image: string | null }> = {};
+  const looks: Record<string, { title: string | null; image: string | null; candidate?: string | null }> = {};
   for (const asin of lookFor) {
-    const p = (prod.get(asin) ?? (extraProds.data as { asin: string; title: string | null; image: string | null }[] | null)?.find((x) => x.asin === asin)) as { title: string | null; image?: string | null } | undefined;
+    const p = (prod.get(asin) ?? (extraProds.data as { asin: string; title: string | null; image: string | null }[] | null)?.find((x) => x.asin === asin)) as { title: string | null; image?: string | null; pl_candidate_id?: string | null } | undefined;
     const w = (wholesale.data as { asin: string; title: string | null; image_url: string | null }[] | null)?.find((x) => x.asin === asin);
     const h = (hunted.data as { asin: string; title: string | null; image: string | null }[] | null)?.find((x) => x.asin === asin);
-    looks[asin] = { title: p?.title ?? w?.title ?? h?.title ?? null, image: p?.image ?? w?.image_url ?? h?.image ?? null };
+    looks[asin] = { title: p?.title ?? w?.title ?? h?.title ?? null, image: p?.image ?? w?.image_url ?? h?.image ?? null, candidate: p?.pl_candidate_id ?? null };
   }
   return { settings, asins: asinRows, campaigns, terms, imports: (await listImports()).length, looks, archived: (archived.data ?? []) as { id: string; name: string; campaign_id: string | null; state: string | null }[] };
 }

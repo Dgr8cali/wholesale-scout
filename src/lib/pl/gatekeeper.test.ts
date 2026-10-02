@@ -95,7 +95,9 @@ function randomCandidate(r: () => number): { f: Fields; S: Settings; cat: string
 
 describe("Gatekeeper port", () => {
   it("has the same gates, fields and settings", () => {
-    expect(GATES.map((g) => [g.id, g.fields.map((f) => [f.k, f.type, f.opts ?? null])]))
+    // The app's own additions (not in the reference): Gate 4's six words as text, for the RFQ.
+    const APP_ONLY = new Set(["sixWordsText"]);
+    expect(GATES.map((g) => [g.id, g.fields.filter((f) => !APP_ONLY.has(f.k)).map((f) => [f.k, f.type, f.opts ?? null])]))
       .toEqual(ref.GATES.map((g) => [g.id, g.fields.map((f) => [f.k, f.type, f.opts ?? null])]));
     // Every setting but the Q4 switch (peak rates now follow the date).
     expect(SETTINGS_DEF.map((s) => [s.k, s.d])).toEqual(ref.SETTINGS_DEF.filter((s) => s.k !== "q4").map((s) => [s.k, s.d]));

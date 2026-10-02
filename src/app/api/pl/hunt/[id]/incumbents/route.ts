@@ -5,12 +5,12 @@ import { recheckIncumbents } from "@/lib/server/plHunt";
 
 type Ctx = { params: Promise<{ id: string }> };
 
-/** { limit? }: check a finished direct hunt's niches (3+ qualifying) for incumbents, ~31 tokens a niche. */
+/** { limit? }: check a finished direct hunt's niches (every one with 3+ qualifying, up to 30) for incumbents, ~31 tokens a niche. */
 export const POST = handle(async (req: NextRequest, ctx: Ctx) => {
   const id = (await ctx.params).id;
   const b = (await req.json().catch(() => ({}))) as { limit?: number };
   try {
-    const r = await recheckIncumbents(id, Math.min(30, Math.max(1, Math.round(Number(b.limit) || 10))));
+    const r = await recheckIncumbents(id, Math.min(30, Math.max(1, Math.round(Number(b.limit) || 30))));
     scheduleCall(req.nextUrl.origin, `/api/pl/hunt/${id}/process`);
     return Response.json(r);
   } catch (e) {

@@ -11,9 +11,9 @@ You used to type about 45 numbers per candidate from Jungle Scout, Keepa and Sel
 
 ## The page
 
-Private label is one of the app's three workspaces (switch at the top of the sidebar). Its pages are **Candidates** (below), **Niche Hunt**, which proposes niches that already pass Gates 0 and 1 and turns one into a candidate (see [Niche Hunt](/help/concepts/niche-hunt)), and **Quotes** and **Launch**, which are coming soon. The old /private-label address still works: it opens Candidates.
+Private label is one of the app's three workspaces (switch at the top of the sidebar). Its pages are **Candidates** (below), **Niche Hunt**, which proposes niches that already pass Gates 0 and 1 and turns one into a candidate (see [Niche Hunt](/help/concepts/niche-hunt)), **Quotes**, where supplier quotes become a landed cost that feeds Gates 0 and 7 (see [Private label: quotes and landed cost](/help/howto/pl-quotes-and-landed-cost)), and **Launch**, the checklist from samples to the first review (see [Private label: launch checklist](/help/howto/pl-launch-checklist)). Each candidate also has its Quotes and Launch sections under its scorecard. The old /private-label address still works: it opens Candidates.
 
-- **Candidates** (left): each candidate with a dot in its verdict colour, its score (or how many of the 10 lines are scored, e.g. `6/10`), its status (draft, researching, samples, dropped, launched) and when Keepa last refreshed it.
+- **Candidates** (left): each candidate with a dot in its verdict colour, its score (or how many of the 10 lines are scored, e.g. `6/10`), its status (draft, researching, samples, dropped, launched) and when Keepa last refreshed it; once there's a landed cost, the cost per unit (from the chosen quote when there is one), the price multiple in its band colour, and the next launch step.
 - **The workspace** (right): the selected candidate's header, the eight gates in order, the scorecard and the verdict.
 - **New candidate** asks for a name, a niche keyword, a referral category and up to ten ASINs from page one of the niche. Paste them one per line or comma-separated. The first is the **reference listing**. Keepa is fetched when you save.
 
@@ -88,7 +88,7 @@ Gatekeeper's economics, using the app's rate card (Amazon UK FBA, July 2026: the
 
 Without packed dimensions and weight there's no FBA fee: the tier says **Enter dimensions and weight in Gate 0** instead of assuming a size. Profit and margins stay blank until they're in.
 
-You type **landed cost** (Gate 0). **Ads per unit** has a derived default until you type one (chip **Derived**, with the formula under the field): at launch, CPC ÷ conversion, where the CPC is Settings → Ads's (£0.60 to start, then the account's trailing CPC once [ads reports are imported](/help/howto/ads-importing-reports)) and the conversion is the candidate's Gate 3 search conversion, else 7%; at steady state, 40% of launch. Click **edit** to type your own. **FBA fee override** replaces the rate-card fee with Amazon's own figure.
+You type **landed cost** (Gate 0), or write it from a supplier quote (Quotes, chip **Quote**; a value you type yourself still wins). **Ads per unit** has a derived default until you type one (chip **Derived**, with the formula under the field): at launch, CPC ÷ conversion, where the CPC is Settings → Ads's (£0.60 to start, then the account's trailing CPC once [ads reports are imported](/help/howto/ads-importing-reports)) and the conversion is the candidate's Gate 3 search conversion, else 7%; at steady state, 40% of launch. Click **edit** to type your own. **FBA fee override** replaces the rate-card fee with Amazon's own figure.
 
 ### Gate 7: Launch budget (you)
 

@@ -1,4 +1,5 @@
 import "server-only";
+import { LAUNCH_STEPS } from "../pl/launch";
 import { addDailyTokens, PL_KEEP_DAYS, ukDay, type TokensByDay } from "../keepaLedger";
 import { getKeepa, type KeepaProduct, type OnKeepaResponse, type Point } from "../keepa/client";
 import { rankDrops } from "../keepa/summarize";
@@ -25,11 +26,12 @@ const REUSE_MS = 7 * DAY;
 export const STATUSES = ["draft", "researching", "samples", "dropped", "launched"] as const;
 export type PlStatus = (typeof STATUSES)[number];
 /** poe_derived: worked out from a capture rather than read off it ("POE (derived)"). */
-export type FieldSource = "keepa" | "poe" | "poe_derived" | "manual" | "fees";
+export type FieldSource = "keepa" | "poe" | "poe_derived" | "manual" | "fees" | "quote";
 
 export interface PlCandidate {
   id: string; name: string; niche_keyword: string | null; category: string; status: PlStatus; notes: string | null;
   token_cost: number; keepa_by_day: TokensByDay; refreshed_at: string | null; created_at: string; updated_at: string;
+  listing_asin?: string | null; chosen_quote?: string | null; chosen_landed?: number | null;
 }
 export interface PlField { value: string; source: FieldSource; updated_at: string }
 export interface PoeSnapshot extends Omit<PoeExtract, "niche_id" | "niche_title"> { id: string; candidate_id: string | null; niche_id: string | null; niche_title: string | null; captured_at: string }
@@ -125,9 +127,14 @@ export async function listCandidates() {
   ]);
   const candidates = must(rows, "candidates") as PlCandidate[];
   const ids = candidates.map((c) => c.id);
-  const [fields, waivers] = await Promise.all([fieldsOf(ids), waiversOf(ids)]);
+  const [fields, waivers, steps] = await Promise.all([
+    fieldsOf(ids), waiversOf(ids),
+    ids.length ? db().from("pl_launch_steps").select("candidate_id, step, done").in("candidate_id", ids).then((r) => (r.data ?? []) as { candidate_id: string; step: string; done: boolean }[]) : Promise.resolve([]),
+  ]);
+  // The next launch step, for the list.
+  const next = (id: string) => { const done = new Set(steps.filter((x) => x.candidate_id === id && x.done).map((x) => x.step)); return { next: LAUNCH_STEPS.find((x) => !done.has(x.key))?.label ?? null, done: done.size }; };
   // adsCpc: the CPC the ads-per-unit defaults use (Settings → Ads; the account's once imported).
-  return { candidates: candidates.map((c) => ({ ...c, fields: fields.get(c.id) ?? {}, waivers: waivers.get(c.id) ?? [] })), settings, card, adsCpc: ads.cpc };
+  return { candidates: candidates.map((c) => ({ ...c, chosen_landed: c.chosen_landed == null ? null : Number(c.chosen_landed), fields: fields.get(c.id) ?? {}, waivers: waivers.get(c.id) ?? [], launch: next(c.id) })), settings, card, adsCpc: ads.cpc };
 }
 
 export async function getCandidate(id: string) {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defaultFilters, directEstimate, directSelection, incumbentSelection, disqualify, filtersKey, finderSelection, fittingDetailLeaves, funnel, groupNiches, huntEstimate, nicheOfAsin, nicheOfTitle, qualify, shapeOf, spendCap, validFilters, type HuntAsin } from "./hunt";
+import { defaultFilters, directEstimate, directSelection, incumbentSelection, isOffNiche, significantWords, disqualify, filtersKey, finderSelection, fittingDetailLeaves, funnel, groupNiches, huntEstimate, nicheOfAsin, nicheOfTitle, qualify, shapeOf, spendCap, validFilters, type HuntAsin } from "./hunt";
 
 const CATS = [{ id: 11052681, name: "Home & Kitchen" }, { id: 117332031, name: "Beauty" }, { id: 79903031, name: "DIY & Tools" }];
 const F = defaultFilters(CATS);
@@ -18,6 +18,7 @@ describe("Niche Hunt", () => {
     // Wide finder, strict qualifying.
     expect(F).toMatchObject({ finderPriceMin: 14, finderPriceMax: 45, finderRatingMin: 3.5, finderRatingMax: 4.7, maxRank90: 100000, noAmazon: true, minListedMonths: 6, excludeAmazonBrands: true });
     // Qualifying on the warn band by default; direct mode, 4 pages a root.
+    expect(F.incumbentNiches).toBe(30);
     expect(F).toMatchObject({ mode: "direct", pagesPerRoot: 4, priceMin: 15, priceMax: 40, maxReviews: 500, ratingMin: 3.6, ratingMax: 4.5, minRankDrops90: 300, maxWeightG: 500, smallParcel: true, minAsins: 3 });
     expect(validFilters({ ...F, pagesPerRoot: 11 })).toMatch(/1–10/);
     expect(validFilters({ ...F, mode: "leaf" })).toMatchObject({ mode: "leaf" });
@@ -64,6 +65,40 @@ describe("Niche Hunt", () => {
     const rows = [snap("Q1", "x", leaf), snap("Q2", "x", leaf), snap("Q3", "x", leaf), snap("I1", "x", { ...leaf, review_count: 6200, price: 55 })];
     expect(groupNiches(rows, F)[0]).toMatchObject({ incumbentCount: 0, shape: "open" }); // £55 fails: not counted
     expect(groupNiches(rows, F, new Set(), { incumbents: new Set(["I1"]) })[0]).toMatchObject({ incumbentCount: 1, maxReviews: 6200, shape: "dominated" });
+  });
+
+  it("off-niche incumbents: filed in another leaf and not naming the niche; same leaf always counts", () => {
+    const vests = [{ title: "Running Vest Women Men, Light Reflective Hydration Vest", brand: "X" }, { title: "ONETOALL Running Vest Women with Water Bottle 500ml", brand: "ONETOALL" }];
+    const hydration = { titles: vests, leafId: 3842334031, name: "hydration packs" };
+    // Socks share "running" and "cycling", but Amazon files them in Socks and they don't name the niche.
+    expect(isOffNiche({ title: "DRESHOW Compression Socks For Men & Women Best Support for Athletic Running Flight Travel Cycling", brand: "DRESHOW", leafId: 26161856031 }, hydration)).toBe(true);
+    expect(isOffNiche({ title: "TRIWONDER Soft Flask TPU Foldable Running Water Bottle", brand: "TRIWONDER", leafId: 3842334031 }, hydration)).toBe(false);
+    expect(isOffNiche({ title: "Azarxis Sport Squeeze Water Bottle Fast Flow", brand: "Azarxis", leafId: 3842334031 }, hydration)).toBe(false);
+    // Filed elsewhere but naming the niche ("itchy" ~ "itch"): counts.
+    expect(isOffNiche({ title: "Leucillin Natural Antiseptic Spray for Itchy Skin", brand: "Leucillin", leafId: 2826560031 }, { titles: [{ title: "Itch Relief Spray for Dogs" }], leafId: 471434031, name: "itch remedies" })).toBe(false);
+    const magnifiers = { titles: [{ title: "Exgoon Magnifying Glass with Light, 1.5X-5X Headband", brand: "Exgoon" }, { title: "6X Rechargeable Magnifying Glass for Reading", brand: null }], leafId: 200859031, name: "magnifying glasses" };
+    expect(isOffNiche({ title: "Jetec 2 Pcs Jewelers Loupe 30X 60X 90X Magnifying Glass", brand: "Jetec", leafId: 200859031 }, magnifiers)).toBe(false);
+    // No leaf known: the title decides (no significant word shared).
+    expect(isOffNiche({ title: "DRESHOW Compression Socks for Running", brand: "DRESHOW" }, { titles: vests })).toBe(false);
+    expect(isOffNiche({ title: "Vetericyn Wound and Skincare Liquid Spray", brand: "Vetericyn" }, { titles: vests })).toBe(true);
+    expect([...significantWords("Large Magnifying Glasses Boxes for Women, 2 Pack", "Acme")]).toEqual(["magnifying", "glass", "box"]);
+  });
+
+  it("direct hunt: a niche without the incumbent check is Unchecked, never Open; off-niche incumbents don't count", () => {
+    const leaf = { leaf_category: "Hydration Packs", leaf_category_id: 9 };
+    const rows = [
+      snap("Q1", "Running Vest Hydration Pack", leaf), snap("Q2", "Hydration Running Vest Women", leaf), snap("Q3", "Running Vest with Water Bottle", leaf),
+      snap("I1", "Salomon Hydration Vest 2 Soft Flasks", { ...leaf, review_count: 1974, price: 70 }),
+      snap("I2", "DRESHOW Compression Socks For Men & Women", { ...leaf, brand: "DRESHOW", review_count: 9000, price: 9, home_leaf_id: 77 }),
+    ];
+    const inc = new Set(["I1", "I2"]);
+    expect(groupNiches(rows, F, new Set(), { incumbents: inc, checkedLeaves: new Set() })[0].shape).toBe("unchecked");
+    const [n] = groupNiches(rows, F, new Set(), { incumbents: inc, checkedLeaves: new Set(["cat:9"]) });
+    expect(n).toMatchObject({ incumbentCount: 1, maxReviews: 1974, shape: "contested" }); // the socks' 9,000 reviews don't count
+    expect(n.asins.find((a) => a.asin === "I2")).toMatchObject({ offNiche: true, incumbent: false });
+    expect(n.asins.at(-1)!.asin).toBe("I2");
+    // Leaf hunts pass no checkedLeaves: their shape is real.
+    expect(groupNiches(rows.slice(0, 3), F)[0].shape).toBe("open");
   });
 
   it("estimates both stages, and how many leaves to detail fit the balance less the 100 reserve", () => {

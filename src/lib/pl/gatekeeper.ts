@@ -18,7 +18,7 @@ import { inPeakMonths, sizeTier as cardSizeTier, referralPct as cardReferralPct 
 import type { RateCard } from "../fees/rateCard";
 
 export type Fields = Record<string, string | undefined>;
-export type FieldType = "num" | "sel" | "yn";
+export type FieldType = "num" | "sel" | "yn" | "text";
 export interface FieldDef { k: string; label: string; type: FieldType; unit?: string; step?: string; hint?: string; opts?: [string, string][] }
 export interface GateDef { id: GateId; n: string; title: string; tool: string; blurb: string; fields: FieldDef[] }
 export type GateId = "g0" | "g1" | "g2" | "g3" | "g4" | "g5" | "g6" | "g7";
@@ -76,6 +76,7 @@ export const GATES: GateDef[] = [
       { k: "complaintPct", label: "Share of negative reviews with it", type: "num", unit: "%", hint: "10%+ across most listings" },
       { k: "fixCostPct", label: "Cost of the fix", type: "num", unit: "% of unit", hint: "Under 15%" },
       { k: "sixWords", label: "Sayable in six words?", type: "yn", hint: "\"the only X with Y\"" },
+      { k: "sixWordsText", label: "The six words", type: "text", hint: "The differentiator, e.g. \"the only pill box with braille lids\": the RFQ asks suppliers for it" },
     ] },
   { id: "g5", n: "5", title: "Keywords", tool: "Opportunity Explorer search terms",
     blurb: "The niche's search terms from Opportunity Explorer. Demand you can't reach is not demand. Bids aren't in Opportunity Explorer: type them from Seller Central's campaign manager.",
