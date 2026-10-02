@@ -1,7 +1,8 @@
 /**
  * Niche Hunt: Keepa's Product Finder asked for products that already pass Gatekeeper's Gate 0 and
- * Gate 1, then grouped by what they are (a niche) rather than listed one by one. Pure: the page and
- * the server share it.
+ * Gate 1, hunted per leaf browse category (each leaf is a niche). Two stages: size each leaf with
+ * one finder call and no detail; then fetch detail for the most promising leaves. Pure: the page
+ * and the server share it.
  *
  * What the finder can filter is filtered there (price, rating, no Amazon now, package size, listing
  * age, category, Amazon brands). The rest needs each product's detail, so it's checked after the
@@ -41,10 +42,18 @@ export interface NicheHuntFilters {
   categories: number[];
   minListedMonths: number;
   excludeAmazonBrands: boolean;
-  /** ASINs to fetch in detail (the real cost): 200 by default, up to 500. */
-  cap: number;
   /** Qualifying ASINs a niche needs to be shown. */
   minAsins: number;
+  /** Stage 1: leaves to size (the largest under the roots by product count). */
+  leavesCap: number;
+  /** Stage 2: leaves to fetch detail for, most matches first ("N"). */
+  detailLeaves: number;
+  /** Stage 2: ASINs per leaf, best-selling first. */
+  perLeaf: number;
+  /** A leaf with fewer finder matches than this isn't detailed. */
+  minLeafMatches: number;
+  /** Hunt exactly these leaf ids instead of the largest under the roots (a smoke test, a re-check). */
+  leafIds?: number[];
 }
 
 /** Keepa UK root categories Gatekeeper's Gate 0 allows by default. */
@@ -53,12 +62,15 @@ export const DEFAULT_CATEGORY_NAMES = ["Home & Kitchen", "Garden", "Sports & Out
 export const AVOID_CATEGORY_NAMES = ["Beauty", "Premium Beauty", "Health & Personal Care", "Grocery", "Electronics & Photo", "Computers & Accessories", "Toys & Games", "Fashion"];
 
 export const SMALL_PARCEL_CM: [number, number, number] = [35, 25, 12];
-export const CAP_MAX = 500;
+export const LIMITS = { leavesCap: 200, detailLeaves: 50, perLeaf: 50 };
+/** Keepa's smallest finder page: sizing a leaf returns up to this many ASINs, best-selling first. */
+export const SIZING_PAGE = 50;
 
 export function defaultFilters(categories: { id: number; name: string }[]): NicheHuntFilters {
   return {
     priceMin: 18, priceMax: 35, maxReviews: 500, ratingMin: 3.8, ratingMax: 4.3, minRankDrops90: 300, maxRank90: 75_000, noAmazon: true,
-    maxWeightG: 500, smallParcel: true, minListedMonths: 6, excludeAmazonBrands: true, cap: 200, minAsins: 3,
+    maxWeightG: 500, smallParcel: true, minListedMonths: 6, excludeAmazonBrands: true, minAsins: 3,
+    leavesCap: 60, detailLeaves: 15, perLeaf: 12, minLeafMatches: 5,
     categories: categories.filter((c) => DEFAULT_CATEGORY_NAMES.includes(c.name)).map((c) => c.id),
   };
 }
@@ -72,26 +84,32 @@ export function validFilters(x: Partial<NicheHuntFilters>): NicheHuntFilters | s
     noAmazon: x.noAmazon !== false, maxWeightG: Math.round(n(x.maxWeightG, 500)), smallParcel: x.smallParcel !== false,
     categories: Array.isArray(x.categories) ? x.categories.map(Number).filter(Number.isFinite).slice(0, 50) : [],
     minListedMonths: n(x.minListedMonths, 6), excludeAmazonBrands: x.excludeAmazonBrands !== false,
-    cap: Math.round(n(x.cap, 200)), minAsins: Math.max(1, Math.round(n(x.minAsins, 3))),
+    minAsins: Math.max(1, Math.round(n(x.minAsins, 3))),
+    leavesCap: Math.round(n(x.leavesCap, 60)), detailLeaves: Math.round(n(x.detailLeaves, 15)), perLeaf: Math.round(n(x.perLeaf, 12)),
+    minLeafMatches: Math.max(1, Math.round(n(x.minLeafMatches, 5))),
+    ...(Array.isArray(x.leafIds) && x.leafIds.length ? { leafIds: x.leafIds.map(Number).filter(Number.isFinite).slice(0, LIMITS.leavesCap) } : {}),
   };
   if (!(f.priceMin >= 0) || !(f.priceMax > f.priceMin)) return "The price band needs a min under the max";
   if (!(f.ratingMin >= 0 && f.ratingMax <= 5 && f.ratingMax >= f.ratingMin)) return "Ratings run 0–5, min at or under max";
   if (!f.categories.length) return "Pick at least one category";
   if (!(f.maxRank90 >= 1)) return "The rank ceiling must be at least 1";
-  if (!(f.cap >= 50 && f.cap <= CAP_MAX)) return `The ASIN cap must be 50–${CAP_MAX} (Keepa's smallest page is 50)`;
+  if (!(f.leavesCap >= 1 && f.leavesCap <= LIMITS.leavesCap)) return `Leaves to size must be 1–${LIMITS.leavesCap}`;
+  if (!(f.detailLeaves >= 1 && f.detailLeaves <= LIMITS.detailLeaves)) return `Leaves to detail must be 1–${LIMITS.detailLeaves}`;
+  if (!(f.perLeaf >= 1 && f.perLeaf <= LIMITS.perLeaf)) return `ASINs per leaf must be 1–${LIMITS.perLeaf}`;
   return f;
 }
 
 const keepaMinutes = (ms: number) => Math.floor(ms / 60_000) - 21_564_000;
 
 /**
- * The Product Finder query: only what the finder can check itself. Best-selling first (90-day rank),
- * one product per variation family, the cap as the page size.
+ * The Product Finder query for one leaf: only what the finder can check itself, products listed
+ * directly in the leaf, best-selling first (90-day rank), one per variation family, Keepa's smallest
+ * page (the match count is what stage 1 is after; the page is kept for stage 2).
  */
-export function finderSelection(f: NicheHuntFilters, now = Date.now()): Record<string, unknown> {
+export function finderSelection(f: NicheHuntFilters, leafId: number, now = Date.now()): Record<string, unknown> {
   const mm = SMALL_PARCEL_CM[0] * 10; // the longest side; the exact fit is checked after the fetch
   return {
-    salesRankReference: f.categories,
+    categories_include: [leafId],
     current_BUY_BOX_SHIPPING_gte: Math.round(f.priceMin * 100),
     current_BUY_BOX_SHIPPING_lte: Math.round(f.priceMax * 100),
     current_RATING_gte: Math.round(f.ratingMin * 10),
@@ -106,21 +124,51 @@ export function finderSelection(f: NicheHuntFilters, now = Date.now()): Record<s
     productType: [0],
     singleVariation: true,
     sort: [["avg90_SALES", "asc"]],
-    perPage: f.cap,
+    perPage: SIZING_PAGE,
     page: 0,
   };
 }
 
-/** Keepa's price for a Product Finder page: 10 tokens, plus 1 per 100 ASINs (as the wholesale Hunt). */
+/** Keepa's price for a Product Finder page: 10 tokens, plus 1 per 100 ASINs returned (as the wholesale Hunt). */
 export const finderTokens = (asins: number) => 10 + Math.ceil(asins / 100);
+/** Sizing a leaf: one finder page of up to 50 ASINs. */
+export const SIZING_TOKENS = finderTokens(SIZING_PAGE);
 /** A detail fetch: 1 token an ASIN, plus up to 1 for its rating and review count. */
 export const DETAIL_TOKENS_PER_ASIN = 2;
+/** Listing a root's category tree: 1 token per 10 categories, at most this many categories a root. */
+export const TREE_MAX_CATEGORIES = 400;
 
-/** The cost before running: the finder page, and the detail of every ASIN not fetched in the last 7 days. */
-export function huntEstimate(cap: number, cachedShare = 0): { finder: number; detail: number; total: number } {
-  const finder = finderTokens(cap);
-  const detail = Math.ceil(cap * (1 - Math.min(1, Math.max(0, cachedShare))) * DETAIL_TOKENS_PER_ASIN);
-  return { finder, detail, total: finder + detail };
+/** Spare tokens a hunt leaves in the balance: it won't start if its estimate eats into these. */
+export const TOKEN_RESERVE = 100;
+
+export interface HuntEstimate {
+  /** Listing the category tree (0 when cached). */
+  tree: number;
+  /** Stage 1: leaves to size (not sized in the last 7 days under these filters), × 11. */
+  sizing: number;
+  leavesToSize: number;
+  /** Stage 2: N leaves × ASINs per leaf, × ~2, less any detail fetched in the last 7 days. */
+  detail: number;
+  total: number;
+}
+
+export function huntEstimate(x: { rootsWithoutTree: number; leavesToSize: number; detailLeaves: number; perLeaf: number; cachedAsins?: number }): HuntEstimate {
+  const tree = x.rootsWithoutTree * Math.ceil(TREE_MAX_CATEGORIES / 10);
+  const sizing = x.leavesToSize * SIZING_TOKENS;
+  const detail = Math.max(0, x.detailLeaves * x.perLeaf - (x.cachedAsins ?? 0)) * DETAIL_TOKENS_PER_ASIN;
+  return { tree, sizing, leavesToSize: x.leavesToSize, detail, total: tree + sizing + detail };
+}
+
+/** The most leaves to detail that fits the balance (less the reserve); 0 when even sizing doesn't fit. */
+export function fittingDetailLeaves(e: HuntEstimate, perLeaf: number, balance: number): number {
+  const room = balance - TOKEN_RESERVE - e.tree - e.sizing;
+  return room <= 0 ? 0 : Math.floor(room / (perLeaf * DETAIL_TOKENS_PER_ASIN));
+}
+
+/** The filters a leaf's finder count depends on, as a key: a count is reused only under the same ones. */
+export function filtersKey(f: NicheHuntFilters): string {
+  const k = [f.priceMin, f.priceMax, f.ratingMin, f.ratingMax, f.maxRank90, f.noAmazon ? 1 : 0, f.maxWeightG, f.smallParcel ? 1 : 0, f.minListedMonths, f.excludeAmazonBrands ? 1 : 0];
+  return k.join("|");
 }
 
 /* ===================== niche names ===================== */

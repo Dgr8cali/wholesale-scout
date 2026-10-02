@@ -350,6 +350,27 @@ export class HttpKeepaClient implements KeepaClient {
     return { categories, tokensUsed: body.tokensConsumed ?? 0 };
   }
 
+  /** Categories by id (up to 10 a request, 1 token each request): name, parent, children, product count. */
+  async categories(ids: number[]): Promise<{ categories: KeepaCategory[]; tokensUsed: number; tokensLeft: number | null }> {
+    const out: KeepaCategory[] = [];
+    let tokensUsed = 0, tokensLeft: number | null = null;
+    for (let i = 0; i < ids.length; i += 10) {
+      const chunk = ids.slice(i, i + 10);
+      const url = new URL("https://api.keepa.com/category");
+      url.search = new URLSearchParams({ key: this.key, domain: "2", category: chunk.join(","), parents: "0" }).toString();
+      const res = await this.fetchImpl(url);
+      const body = (await res.json().catch(() => ({}))) as KeepaBody & { categories?: Record<string, { catId: number; name: string; parent?: number; children?: number[] | null; childCategoryIds?: number[] | null; productCount?: number }> };
+      this.log(`[keepa] category n=${chunk.length} http=${res.status} tokensConsumed=${body.tokensConsumed ?? 0} tokensLeft=${body.tokensLeft}`);
+      if (!res.ok || body.error) throw new Error(`Keepa categories ${res.status}: ${body.error?.message ?? body.error?.type ?? "request failed"}`);
+      tokensUsed += body.tokensConsumed ?? 0;
+      tokensLeft = body.tokensLeft ?? tokensLeft;
+      for (const c of Object.values(body.categories ?? {})) {
+        out.push({ id: c.catId, name: c.name, parent: c.parent && c.parent > 0 ? c.parent : null, children: c.children ?? c.childCategoryIds ?? [], products: c.productCount ?? null });
+      }
+    }
+    return { categories: out, tokensUsed, tokensLeft };
+  }
+
   async lookupByAsins(asins: string[], onResponse?: OnKeepaResponse, opts: { buyBox?: boolean; rating?: boolean } = {}): Promise<KeepaLookup> {
     return this.run("asin", asins, onResponse, (p, _chunk, out) => {
       out.byAsin.set(p.asin, p);
@@ -370,10 +391,14 @@ export class HttpKeepaClient implements KeepaClient {
 
 export interface FinderResult { asins: string[]; total: number; tokensUsed: number; tokensLeft: number | null }
 
+/** A browse category from Keepa's /category: its children are empty for a leaf. */
+export interface KeepaCategory { id: number; name: string; parent: number | null; children: number[]; products: number | null }
+
 /** Keepa's Product Finder (/query) and category list, on the HTTP client only. */
 export interface KeepaFinder {
   productFinder(selection: Record<string, unknown>): Promise<FinderResult>;
   rootCategories(): Promise<{ categories: { id: number; name: string; products: number | null }[]; tokensUsed: number }>;
+  categories(ids: number[]): Promise<{ categories: KeepaCategory[]; tokensUsed: number; tokensLeft: number | null }>;
 }
 
 export const hasFinder = (k: KeepaClient): k is KeepaClient & KeepaFinder => typeof (k as Partial<KeepaFinder>).productFinder === "function";

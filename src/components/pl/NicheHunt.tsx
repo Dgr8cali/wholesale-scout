@@ -12,7 +12,7 @@ import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { money } from "@/lib/pl/gatekeeper";
-import { AVOID_CATEGORY_NAMES, CAP_MAX, huntEstimate, opportunityExplorerUrl, type Niche, type NicheHuntFilters, type Shape } from "@/lib/pl/hunt";
+import { AVOID_CATEGORY_NAMES, LIMITS, TOKEN_RESERVE, type HuntEstimate, type Niche, type NicheHuntFilters, type Shape } from "@/lib/pl/hunt";
 import { priceOf } from "@/lib/pl/fill";
 import { api } from "@/lib/ui/client";
 import { ago } from "@/lib/ui/when";
@@ -28,14 +28,43 @@ interface Start {
   keepa: boolean;
   hunts: { id: string; name: string; finder_total: number | null; fetched: number; reused: number; token_cost: number; created_at: string }[];
 }
+interface HuntLeaf { id: number; name: string; products: number | null; matches?: number; finderTokens?: number; cached?: boolean; detail?: boolean; detailed?: boolean; fetched?: number; reused?: number }
+type HuntStatus = "listing" | "sizing" | "detailing" | "done" | "error" | "cancelled";
+interface Plan { estimate: HuntEstimate; balance: number | null; fits: boolean; fittingDetailLeaves: number | null; leavesKnown: boolean }
 interface HuntResult {
-  hunt: { id: string; name: string; filters: NicheHuntFilters; asins: string[]; finder_total: number | null; fetched: number; reused: number; finder_tokens: number; detail_tokens: number; token_cost: number; created_at: string };
+  hunt: {
+    id: string; name: string; filters: NicheHuntFilters; asins: string[]; finder_total: number | null; fetched: number; reused: number; finder_tokens: number; detail_tokens: number;
+    token_cost: number; created_at: string; status: HuntStatus; leaves: HuntLeaf[] | null; note: string | null; finished_at: string | null;
+  };
   niches: Niche[];
   qualifying: number;
   incumbents: number;
 }
 
 const n0 = (v: number | null | undefined) => (v == null ? "—" : Math.round(v).toLocaleString("en-GB"));
+const running = (s: HuntStatus) => s === "listing" || s === "sizing" || s === "detailing";
+const OE_URL = "https://sellercentral.amazon.co.uk/opportunity-explorer";
+
+/** "Sizing leaves 23/60 → Detailing 4/15": where a hunt has got to. */
+function progressLine(h: HuntResult["hunt"]): string {
+  if (h.status === "listing") return "Listing the leaf categories…";
+  const leaves = h.leaves ?? [];
+  const sized = leaves.filter((l) => l.matches != null).length, picked = leaves.filter((l) => l.detail).length, detailed = leaves.filter((l) => l.detailed).length;
+  const size = `Sizing leaves ${sized}/${leaves.length}`;
+  if (h.status === "sizing") return `${size} → Detailing`;
+  return `${size} → Detailing ${detailed}/${picked}`;
+}
+
+/** Amazon doesn't take a search in the address: copy the niche name, open Opportunity Explorer. */
+async function openInPoe(name: string) {
+  try {
+    await navigator.clipboard.writeText(name);
+    toast.success(`Niche name copied — paste into the POE search box ("${name}")`);
+  } catch {
+    toast.message(`Couldn't copy: search for "${name}" in POE`);
+  }
+  window.open(OE_URL, "_blank", "noopener");
+}
 const SHAPE: Record<Shape, { label: string; cls: string; title: string }> = {
   open: { label: "Open", cls: "bg-pass-soft text-pass", title: "No ASIN over 1,000 reviews" },
   contested: { label: "Contested", cls: "bg-warn-soft text-warn", title: "One ASIN over 1,000 reviews" },
@@ -50,6 +79,7 @@ export function NicheHunt({ onCandidate }: { onCandidate: (id: string) => void }
   const [result, setResult] = useState<HuntResult | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [preset, setPreset] = useState<string>("");
+  const [plan, setPlan] = useState<Plan | null>(null);
   const { prompt, confirm } = useDialogs();
 
   const loadHunt = async (id: string) => {
@@ -59,6 +89,27 @@ export function NicheHunt({ onCandidate }: { onCandidate: (id: string) => void }
       toast.error((e as Error).message);
     }
   };
+  // The estimate follows the filters (free to ask): both stages against the balance less the reserve.
+  useEffect(() => {
+    if (!f) return;
+    const t = setTimeout(() => {
+      api<Plan>("/api/pl/hunt/estimate", { method: "POST", json: { filters: f } }).then(setPlan).catch(() => setPlan(null));
+    }, 400);
+    return () => clearTimeout(t);
+  }, [f]);
+  // A running hunt: poll its progress until it's done.
+  const huntId = result?.hunt.id, huntRunning = result ? running(result.hunt.status) : false;
+  useEffect(() => {
+    if (!huntId || !huntRunning) return;
+    const t = setInterval(() => {
+      api<HuntResult>(`/api/pl/hunt/${huntId}?minAsins=1`).then((r) => {
+        setResult(r);
+        if (!running(r.hunt.status)) api<Start>("/api/pl/hunt").then(setStart).catch(() => {});
+      }).catch(() => {});
+    }, 3000);
+    return () => clearInterval(t);
+  }, [huntId, huntRunning]);
+
   useEffect(() => {
     api<Start>("/api/pl/hunt").then((s) => {
       setStart(s);
@@ -70,17 +121,18 @@ export function NicheHunt({ onCandidate }: { onCandidate: (id: string) => void }
   if (error) return <ErrorState title="Couldn't load Niche Hunt" message={error} />;
   if (!start || !f) return <Skeleton className="h-96 rounded-xl" />;
   const set = (p: Partial<NicheHuntFilters>) => setF({ ...f, ...p });
-  const est = huntEstimate(f.cap);
-  const short = start.tokensLeft != null && start.tokensLeft < est.total;
+  const busyHunt = result ? running(result.hunt.status) : false;
 
   const run = async () => {
     setBusy("run");
     try {
-      const r = await api<HuntResult & { exhausted: boolean }>("/api/pl/hunt", { method: "POST", json: { filters: f } });
-      await loadHunt(r.hunt.id);
-      const s = await api<Start>("/api/pl/hunt");
-      setStart(s);
-      toast.success(`Hunt done: ${r.hunt.finder_total?.toLocaleString("en-GB") ?? "?"} found, ${r.hunt.asins.length} taken, ${r.hunt.fetched} fetched, ${r.hunt.reused} reused, ${r.hunt.token_cost} tokens.${r.exhausted ? " Keepa ran out of tokens: some weren't fetched." : ""}`);
+      const res = await fetch("/api/pl/hunt", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ filters: f }) });
+      const body = await res.json().catch(() => ({}));
+      if (res.status === 409 && body.plan) { setPlan(body.plan); toast.error(body.error); return; }
+      if (!res.ok) throw new Error(body.error ?? `${res.status}`);
+      await loadHunt(body.id);
+      setStart(await api<Start>("/api/pl/hunt"));
+      toast.success("Hunt started: it runs in the background, you can leave the page.");
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -134,8 +186,11 @@ export function NicheHunt({ onCandidate }: { onCandidate: (id: string) => void }
           <Num label="Max 90-day rank" value={f.maxRank90} onChange={(v) => set({ maxRank90: v })} step={5000} hint="The finder's pre-filter" />
           <Num label="Max package weight (g)" value={f.maxWeightG} onChange={(v) => set({ maxWeightG: v })} step={50} />
           <Num label="Listed at least (months)" value={f.minListedMonths} onChange={(v) => set({ minListedMonths: v })} />
-          <Num label={`ASINs to fetch (50–${CAP_MAX})`} value={f.cap} onChange={(v) => set({ cap: v })} step={50} hint="The real cost" />
           <Num label="Min qualifying ASINs a niche" value={f.minAsins} onChange={(v) => set({ minAsins: v })} />
+          <Num label={`Leaves to size (1–${LIMITS.leavesCap})`} value={f.leavesCap} onChange={(v) => set({ leavesCap: v })} step={5} hint="Stage 1: the largest leaves, ~11 tokens each" />
+          <Num label="Skip leaves under … matches" value={f.minLeafMatches} onChange={(v) => set({ minLeafMatches: v })} />
+          <Num label={`Leaves to detail, N (1–${LIMITS.detailLeaves})`} value={f.detailLeaves} onChange={(v) => set({ detailLeaves: v })} hint="Stage 2: most matches first" />
+          <Num label={`ASINs per leaf (1–${LIMITS.perLeaf})`} value={f.perLeaf} onChange={(v) => set({ perLeaf: v })} hint="Best-selling first, ~2 tokens each" />
         </div>
         <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
           <Toggle label="No Amazon offer, now or in the last 90 days" checked={f.noAmazon} onChange={(v) => set({ noAmazon: v })} />
@@ -159,15 +214,25 @@ export function NicheHunt({ onCandidate }: { onCandidate: (id: string) => void }
             {!start.categories.length && <span className="text-xs text-muted-foreground">No categories yet: the wholesale Hunt page&apos;s “Load categories” fetches them (1 token).</span>}
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-3 border-t pt-3">
-          <Button onClick={run} disabled={!!busy || !start.keepa || !f.categories.length || short}>
+        <div className="flex flex-wrap items-start gap-4 border-t pt-3">
+          <Button onClick={run} disabled={!!busy || busyHunt || !start.keepa || !f.categories.length || !plan?.fits}>
             {busy === "run" ? <LoaderIcon className="animate-spin" /> : <CrosshairIcon />} Hunt niches
           </Button>
-          <span className="text-sm text-muted-foreground">
-            Up to <b className="num text-foreground">{est.total}</b> tokens: finder {est.finder}, detail up to {est.detail} ({f.cap} ASINs × ~2; any fetched in the last 7 days are reused free).
-            {start.tokensLeft != null && <> Balance <span className="num">{start.tokensLeft.toLocaleString("en-GB")}</span>.</>}
-            {short && <span className="text-fail"> Not enough tokens: lower the cap or wait for the refill.</span>}
-          </span>
+          {plan ? (
+            <div className="space-y-0.5 text-sm text-muted-foreground">
+              {plan.estimate.tree > 0 && <div>Category tree: up to <span className="num">{plan.estimate.tree}</span> tokens (listed once, kept a week)</div>}
+              <div>Stage 1, size leaves: <span className="num">{plan.estimate.leavesToSize}</span>{plan.leavesKnown ? "" : " (up to)"} × 11 = <span className="num">{plan.estimate.sizing}</span> tokens{plan.leavesKnown && plan.estimate.leavesToSize < (f.leafIds?.length ?? f.leavesCap) ? " (the rest counted in the last 7 days)" : ""}</div>
+              <div>Stage 2, detail: <span className="num">{Math.min(f.detailLeaves, f.leafIds?.length ?? f.detailLeaves)}</span> leaves × {f.perLeaf} ASINs × ~2 = <span className="num">{plan.estimate.detail}</span> tokens (less any fetched in the last 7 days)</div>
+              <div className="text-foreground">Total up to <b className="num">{plan.estimate.total}</b> · balance <span className="num">{plan.balance?.toLocaleString("en-GB") ?? "—"}</span>, {TOKEN_RESERVE} kept in reserve</div>
+              {!plan.fits && (
+                <div className="flex flex-wrap items-center gap-2 text-fail">
+                  Over the balance less the reserve.
+                  {plan.fittingDetailLeaves ? <Button size="xs" variant="outline" onClick={() => set({ detailLeaves: plan.fittingDetailLeaves! })}>Detail {plan.fittingDetailLeaves} leaves instead</Button>
+                    : <span>Size fewer leaves, or wait for the refill.</span>}
+                </div>
+              )}
+            </div>
+          ) : <span className="text-sm text-muted-foreground">Working out the cost…</span>}
         </div>
       </section>
 
@@ -204,6 +269,7 @@ function Results({ result, start, onReload, onPick, onCandidate, onStart }: {
   const [showDismissed, setShowDismissed] = useState(false);
   const { prompt } = useDialogs();
   const h = result.hunt;
+  const [showLeaves, setShowLeaves] = useState(false);
 
   const rows = useMemo(() => result.niches
     .filter((n) => n.count >= minCount && (!shape || n.shape === shape))
@@ -246,8 +312,16 @@ function Results({ result, start, onReload, onPick, onCandidate, onStart }: {
         <div className="space-y-1">
           <h2 className="section-label">Niches</h2>
           <p className="text-sm text-muted-foreground">
-            {h.name} · {ago(h.created_at)} · {h.finder_total?.toLocaleString("en-GB") ?? "?"} found, {h.asins.length} taken ({h.fetched} fetched, {h.reused} reused) · <b className="text-foreground">{h.token_cost} tokens</b> · {result.qualifying} qualifying ASINs, {result.incumbents} incumbents
+            {h.name} · {ago(h.created_at)} · {h.leaves ? `${h.leaves.length} leaves` : `${h.finder_total?.toLocaleString("en-GB") ?? "?"} found`}, {h.asins.length} ASINs detailed ({h.fetched} fetched, {h.reused} reused) · <b className="text-foreground">{h.token_cost} tokens</b> · {result.qualifying} qualifying ASINs, {result.incumbents} incumbents
           </p>
+          {h.leaves && (
+            <p className={cn("flex items-center gap-2 text-sm font-medium", running(h.status) ? "text-brand" : h.status === "error" ? "text-fail" : "text-muted-foreground")}>
+              {running(h.status) && <LoaderIcon className="size-4 animate-spin" />}
+              {progressLine(h)}{h.status === "done" ? " · done" : h.status === "cancelled" ? " · cancelled" : h.status === "error" ? " · stopped" : ""}
+              {h.note && <span className="font-normal text-muted-foreground">({h.note})</span>}
+              {running(h.status) && <Button size="xs" variant="ghost" onClick={async () => { await api(`/api/pl/hunt/${h.id}/cancel`, { method: "POST" }); onReload(); }}>Cancel</Button>}
+            </p>
+          )}
         </div>
         {start.hunts.length > 1 && (
           <NativeSelect className="w-72" value={h.id} onChange={(e) => onPick(e.target.value)}>
@@ -301,7 +375,7 @@ function Results({ result, start, onReload, onPick, onCandidate, onStart }: {
                     <td className="px-2 py-2">
                       <div className="flex items-center justify-end gap-2 whitespace-nowrap">
                         <Button size="xs" onClick={() => create(n)} disabled={!!busy}>{busy === n.key ? <LoaderIcon className="animate-spin" /> : <PlusIcon />} Create candidate</Button>
-                        <a className="inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline" href={opportunityExplorerUrl(n.name)} target="_blank" rel="noreferrer">Opportunity Explorer <ExternalLinkIcon className="size-3" /></a>
+                        <button type="button" className="inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline" onClick={() => openInPoe(n.name)} title="Copies the niche name and opens Opportunity Explorer">Opportunity Explorer <ExternalLinkIcon className="size-3" /></button>
                         <button type="button" className="text-xs text-muted-foreground hover:text-fail" onClick={() => dismiss(n)} title="Dismiss niche"><Trash2Icon className="size-3.5" /></button>
                       </div>
                     </td>
@@ -334,6 +408,27 @@ function Results({ result, start, onReload, onPick, onCandidate, onStart }: {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {h.leaves && h.leaves.length > 0 && (
+        <div className="text-sm">
+          <button type="button" className="text-xs font-medium text-brand hover:underline" onClick={() => setShowLeaves((v) => !v)}>{showLeaves ? "Hide" : "Show"} leaves sized ({h.leaves.filter((l) => l.matches != null).length}/{h.leaves.length})</button>
+          {showLeaves && (
+            <div className="mt-2 overflow-x-auto rounded-lg border">
+              <table className="w-full text-xs">
+                <thead><tr className="border-b text-left text-[10.5px] tracking-wide text-muted-foreground uppercase"><th className="px-2 py-1.5">Leaf</th><th className="px-2 py-1.5 text-right">Matches</th><th className="px-2 py-1.5 text-right">Finder cost</th><th className="px-2 py-1.5">Stage 2</th></tr></thead>
+                <tbody>{[...h.leaves].sort((a, b) => (b.matches ?? -1) - (a.matches ?? -1)).map((l) => (
+                  <tr key={l.id} className="border-b last:border-b-0">
+                    <td className="px-2 py-1.5">{l.name} <span className="num text-muted-foreground">{l.id}</span></td>
+                    <td className="num px-2 py-1.5 text-right">{l.matches == null ? "…" : l.matches.toLocaleString("en-GB")}</td>
+                    <td className="num px-2 py-1.5 text-right">{l.matches == null ? "" : l.cached ? "0 (counted in the last 7 days)" : l.finderTokens}</td>
+                    <td className="px-2 py-1.5 text-muted-foreground">{l.detailed ? `detailed: ${l.fetched ?? 0} fetched, ${l.reused ?? 0} reused` : l.detail ? "to detail" : l.matches != null && l.matches < h.filters.minLeafMatches ? `skipped (under ${h.filters.minLeafMatches})` : l.matches != null ? "not in the top N" : ""}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 

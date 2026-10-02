@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defaultFilters, disqualify, finderSelection, groupNiches, huntEstimate, nicheOfAsin, nicheOfTitle, shapeOf, validFilters, type HuntAsin } from "./hunt";
+import { defaultFilters, disqualify, filtersKey, finderSelection, fittingDetailLeaves, groupNiches, huntEstimate, nicheOfAsin, nicheOfTitle, shapeOf, validFilters, type HuntAsin } from "./hunt";
 
 const CATS = [{ id: 11052681, name: "Home & Kitchen" }, { id: 117332031, name: "Beauty" }, { id: 79903031, name: "DIY & Tools" }];
 const F = defaultFilters(CATS);
@@ -13,23 +13,38 @@ const snap = (asin: string, title: string, over: Partial<HuntAsin> = {}): HuntAs
 
 describe("Niche Hunt", () => {
   it("defaults to Gate 0's categories and Gatekeeper's thresholds", () => {
-    expect(F).toMatchObject({ priceMin: 18, priceMax: 35, maxReviews: 500, ratingMin: 3.8, ratingMax: 4.3, minRankDrops90: 300, maxWeightG: 500, cap: 200, minAsins: 3 });
+    expect(F).toMatchObject({ priceMin: 18, priceMax: 35, maxReviews: 500, ratingMin: 3.8, ratingMax: 4.3, minRankDrops90: 300, maxWeightG: 500, minAsins: 3, leavesCap: 60, detailLeaves: 15, perLeaf: 12, minLeafMatches: 5 });
     expect(F.categories).toEqual([11052681, 79903031]); // Beauty is an avoid category
-    expect(validFilters({ ...F, cap: 600 })).toMatch(/50–500/);
+    expect(validFilters({ ...F, leavesCap: 300 })).toMatch(/1–200/);
+    expect(validFilters({ ...F, leafIds: [3313566031] })).toMatchObject({ leafIds: [3313566031] });
     expect(validFilters({ ...F, categories: [] })).toMatch(/category/);
   });
 
-  it("asks the finder only what it can check", () => {
-    const s = finderSelection(F, Date.UTC(2026, 9, 2));
+  it("sizes one leaf with the finder: only what it can check, Keepa's smallest page", () => {
+    const s = finderSelection(F, 3313566031, Date.UTC(2026, 9, 2));
     expect(s).toMatchObject({
-      salesRankReference: [11052681, 79903031], current_BUY_BOX_SHIPPING_gte: 1800, current_BUY_BOX_SHIPPING_lte: 3500,
+      categories_include: [3313566031], current_BUY_BOX_SHIPPING_gte: 1800, current_BUY_BOX_SHIPPING_lte: 3500,
       current_RATING_gte: 38, current_RATING_lte: 43, avg90_SALES_gte: 1, avg90_SALES_lte: 75000, availabilityAmazon: [-1], buyBoxStatsAmazon90_lte: 0,
-      packageWeight_lte: 500, packageLength_lte: 350, productType: [0], singleVariation: true, perPage: 200, sort: [["avg90_SALES", "asc"]],
+      packageWeight_lte: 500, packageLength_lte: 350, productType: [0], singleVariation: true, perPage: 50, sort: [["avg90_SALES", "asc"]],
     });
     expect((s.brand as string[])[0]).toBe("✜Amazon Basics");
     expect(s).not.toHaveProperty("current_COUNT_REVIEWS_lte"); // reviews qualify after the fetch (incumbents stay)
-    expect(huntEstimate(100)).toEqual({ finder: 11, detail: 200, total: 211 });
-    expect(huntEstimate(100, 0.5).detail).toBe(100);
+  });
+
+  it("estimates both stages, and how many leaves to detail fit the balance less the 100 reserve", () => {
+    // 60 leaves × 11, 15 leaves × 12 ASINs × 2, trees stored.
+    const e = huntEstimate({ rootsWithoutTree: 0, leavesToSize: 60, detailLeaves: 15, perLeaf: 12 });
+    expect(e).toEqual({ tree: 0, sizing: 660, leavesToSize: 60, detail: 360, total: 1020 });
+    expect(huntEstimate({ rootsWithoutTree: 1, leavesToSize: 60, detailLeaves: 15, perLeaf: 12, cachedAsins: 30 })).toMatchObject({ tree: 40, detail: 300, total: 1000 });
+    expect(fittingDetailLeaves(e, 12, 824)).toBe(2); // 824 − 100 − 660 = 64 → 2 leaves of 24
+    expect(fittingDetailLeaves(e, 12, 700)).toBe(0);
+    // One leaf, sized and detailed with 9 ASINs: 11 + 18.
+    expect(huntEstimate({ rootsWithoutTree: 0, leavesToSize: 1, detailLeaves: 1, perLeaf: 9 }).total).toBe(29);
+  });
+
+  it("reuses a leaf's count only under the same finder filters", () => {
+    expect(filtersKey(F)).toBe(filtersKey({ ...F, detailLeaves: 3, perLeaf: 5, minAsins: 2, maxReviews: 900 }));
+    expect(filtersKey(F)).not.toBe(filtersKey({ ...F, priceMax: 40 }));
   });
 
   it("names niches from titles: brand, sizes, colours and marketing words out", () => {

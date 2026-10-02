@@ -1,5 +1,5 @@
 -- Wholesale Scout schema, dumped by scripts/schema-backup.mjs. No data.
--- Dumped 2026-10-02T08:47:57.304Z. Safe to re-run. Restore: npm run schema:restore
+-- Dumped 2026-10-02T09:00:39.215Z. Safe to re-run. Restore: npm run schema:restore
 
 -- @section extensions
 create extension if not exists "pg_cron";
@@ -542,6 +542,24 @@ alter table "pl_candidates" add column if not exists "created_at" timestamp with
 alter table "pl_candidates" add column if not exists "updated_at" timestamp with time zone default now();
 alter table "pl_candidates" enable row level security;
 
+create table if not exists "pl_category_tree" (
+  "id" bigint not null,
+  "name" text not null,
+  "parent" bigint,
+  "root_id" bigint not null,
+  "child_ids" bigint[] default '{}'::bigint[] not null,
+  "product_count" bigint,
+  "fetched_at" timestamp with time zone default now() not null
+);
+alter table "pl_category_tree" add column if not exists "id" bigint;
+alter table "pl_category_tree" add column if not exists "name" text;
+alter table "pl_category_tree" add column if not exists "parent" bigint;
+alter table "pl_category_tree" add column if not exists "root_id" bigint;
+alter table "pl_category_tree" add column if not exists "child_ids" bigint[] default '{}'::bigint[];
+alter table "pl_category_tree" add column if not exists "product_count" bigint;
+alter table "pl_category_tree" add column if not exists "fetched_at" timestamp with time zone default now();
+alter table "pl_category_tree" enable row level security;
+
 create table if not exists "pl_gate_waivers" (
   "id" uuid default gen_random_uuid() not null,
   "candidate_id" uuid not null,
@@ -636,7 +654,14 @@ create table if not exists "pl_hunts" (
   "detail_tokens" integer default 0 not null,
   "token_cost" integer default 0 not null,
   "keepa_by_day" jsonb default '{}'::jsonb not null,
-  "created_at" timestamp with time zone default now() not null
+  "created_at" timestamp with time zone default now() not null,
+  "status" text default 'done'::text not null,
+  "leaves" jsonb,
+  "progress" jsonb default '{}'::jsonb not null,
+  "note" text,
+  "lease_until" timestamp with time zone,
+  "last_progress_at" timestamp with time zone,
+  "finished_at" timestamp with time zone
 );
 alter table "pl_hunts" add column if not exists "id" uuid default gen_random_uuid();
 alter table "pl_hunts" add column if not exists "name" text;
@@ -650,7 +675,30 @@ alter table "pl_hunts" add column if not exists "detail_tokens" integer default 
 alter table "pl_hunts" add column if not exists "token_cost" integer default 0;
 alter table "pl_hunts" add column if not exists "keepa_by_day" jsonb default '{}'::jsonb;
 alter table "pl_hunts" add column if not exists "created_at" timestamp with time zone default now();
+alter table "pl_hunts" add column if not exists "status" text default 'done'::text;
+alter table "pl_hunts" add column if not exists "leaves" jsonb;
+alter table "pl_hunts" add column if not exists "progress" jsonb default '{}'::jsonb;
+alter table "pl_hunts" add column if not exists "note" text;
+alter table "pl_hunts" add column if not exists "lease_until" timestamp with time zone;
+alter table "pl_hunts" add column if not exists "last_progress_at" timestamp with time zone;
+alter table "pl_hunts" add column if not exists "finished_at" timestamp with time zone;
 alter table "pl_hunts" enable row level security;
+
+create table if not exists "pl_leaf_counts" (
+  "leaf_id" bigint not null,
+  "filters_key" text not null,
+  "matches" integer not null,
+  "asins" text[] default '{}'::text[] not null,
+  "finder_tokens" integer default 0 not null,
+  "counted_at" timestamp with time zone default now() not null
+);
+alter table "pl_leaf_counts" add column if not exists "leaf_id" bigint;
+alter table "pl_leaf_counts" add column if not exists "filters_key" text;
+alter table "pl_leaf_counts" add column if not exists "matches" integer;
+alter table "pl_leaf_counts" add column if not exists "asins" text[] default '{}'::text[];
+alter table "pl_leaf_counts" add column if not exists "finder_tokens" integer default 0;
+alter table "pl_leaf_counts" add column if not exists "counted_at" timestamp with time zone default now();
+alter table "pl_leaf_counts" enable row level security;
 
 create table if not exists "pl_niche_dismissals" (
   "key" text not null,
@@ -1197,6 +1245,11 @@ do $$ begin
   end if;
 end $$;
 do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'pl_category_tree_pkey' and conrelid = '"pl_category_tree"'::regclass) then
+    alter table "pl_category_tree" add constraint "pl_category_tree_pkey" PRIMARY KEY (id);
+  end if;
+end $$;
+do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'pl_gate_waivers_pkey' and conrelid = '"pl_gate_waivers"'::regclass) then
     alter table "pl_gate_waivers" add constraint "pl_gate_waivers_pkey" PRIMARY KEY (id);
   end if;
@@ -1214,6 +1267,11 @@ end $$;
 do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'pl_hunts_pkey' and conrelid = '"pl_hunts"'::regclass) then
     alter table "pl_hunts" add constraint "pl_hunts_pkey" PRIMARY KEY (id);
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'pl_leaf_counts_pkey' and conrelid = '"pl_leaf_counts"'::regclass) then
+    alter table "pl_leaf_counts" add constraint "pl_leaf_counts_pkey" PRIMARY KEY (leaf_id, filters_key);
   end if;
 end $$;
 do $$ begin
@@ -1404,6 +1462,11 @@ end $$;
 do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'pl_gate_waivers_reason_check' and conrelid = '"pl_gate_waivers"'::regclass) then
     alter table "pl_gate_waivers" add constraint "pl_gate_waivers_reason_check" CHECK ((length(TRIM(BOTH FROM reason)) > 0));
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'pl_hunts_status_check' and conrelid = '"pl_hunts"'::regclass) then
+    alter table "pl_hunts" add constraint "pl_hunts_status_check" CHECK ((status = ANY (ARRAY['listing'::text, 'sizing'::text, 'detailing'::text, 'done'::text, 'error'::text, 'cancelled'::text])));
   end if;
 end $$;
 do $$ begin
@@ -1615,6 +1678,7 @@ CREATE INDEX IF NOT EXISTS offers_product_idx ON offers USING btree (product_id)
 CREATE INDEX IF NOT EXISTS offers_seen ON offers USING btree (supplier_id, seen_at DESC);
 CREATE INDEX IF NOT EXISTS offers_supplier_idx ON offers USING btree (supplier_id);
 CREATE INDEX IF NOT EXISTS pl_candidate_asins_asin ON pl_candidate_asins USING btree (asin, snapshot_at DESC);
+CREATE INDEX IF NOT EXISTS pl_category_tree_root ON pl_category_tree USING btree (root_id);
 CREATE UNIQUE INDEX IF NOT EXISTS pl_gate_waivers_key ON pl_gate_waivers USING btree (candidate_id, gate_id, COALESCE(check_label, ''::text));
 CREATE INDEX IF NOT EXISTS pl_poe_snapshots_candidate ON pl_poe_snapshots USING btree (candidate_id, captured_at DESC);
 CREATE INDEX IF NOT EXISTS products_asin_idx ON products USING btree (asin);
@@ -1852,3 +1916,4 @@ insert into schema_migrations (name) values ('20261002000000_poe_derived.sql') o
 insert into schema_migrations (name) values ('20261002000100_poe_growth_windows.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261002000200_niche_hunt.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261002000300_hunt_leaf_category.sql') on conflict do nothing;
+insert into schema_migrations (name) values ('20261002000400_niche_hunt_leaves.sql') on conflict do nothing;
