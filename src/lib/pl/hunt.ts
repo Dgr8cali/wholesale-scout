@@ -26,6 +26,8 @@ export interface NicheHuntFilters {
   mode: HuntMode;
   /** Direct: finder pages of 50 per root, best rank drops first. */
   pagesPerRoot: number;
+  /** Direct: niches (3+ qualifying) to check for incumbents afterwards, ~31 tokens each. */
+  incumbentNiches: number;
   /* Finder filters (wide): what Keepa searches. */
   finderPriceMin: number;
   finderPriceMax: number;
@@ -84,13 +86,13 @@ export const SMALL_PARCEL_CM: [number, number, number] = [35, 25, 12];
  * failing only these, or missing its weight or size, is a near miss rather than a fail.
  */
 export const NEAR_MISS = { priceMin: 15, priceMax: 40, ratingMin: 3.6, ratingMax: 4.5, weightG: 700 };
-export const LIMITS = { leavesCap: 200, detailLeaves: 50, perLeaf: 50, pagesPerRoot: 10 };
+export const LIMITS = { leavesCap: 200, detailLeaves: 50, perLeaf: 50, pagesPerRoot: 10, incumbentNiches: 30 };
 /** Keepa's smallest finder page: sizing a leaf returns up to this many ASINs, best-selling first. */
 export const SIZING_PAGE = 50;
 
 export function defaultFilters(categories: { id: number; name: string }[]): NicheHuntFilters {
   return {
-    mode: "direct", pagesPerRoot: 4,
+    mode: "direct", pagesPerRoot: 4, incumbentNiches: 10,
     finderPriceMin: 14, finderPriceMax: 45, finderRatingMin: 3.5, finderRatingMax: 4.7, maxRank90: 100_000,
     // Qualifying on Gatekeeper's warn band (£15–40, 3.6–4.5): a hunt finds; the scorecard judges on the pass band.
     priceMin: NEAR_MISS.priceMin, priceMax: NEAR_MISS.priceMax, maxReviews: 500, ratingMin: NEAR_MISS.ratingMin, ratingMax: NEAR_MISS.ratingMax, minRankDrops90: 300, noAmazon: true,
@@ -104,7 +106,7 @@ export function defaultFilters(categories: { id: number; name: string }[]): Nich
 export function validFilters(x: Partial<NicheHuntFilters>): NicheHuntFilters | string {
   const n = (v: unknown, d: number) => (typeof v === "number" && Number.isFinite(v) ? v : d);
   const f: NicheHuntFilters = {
-    mode: x.mode === "leaf" ? "leaf" : "direct", pagesPerRoot: Math.round(n(x.pagesPerRoot, 4)),
+    mode: x.mode === "leaf" ? "leaf" : "direct", pagesPerRoot: Math.round(n(x.pagesPerRoot, 4)), incumbentNiches: Math.round(n(x.incumbentNiches, 10)),
     finderPriceMin: n(x.finderPriceMin, 14), finderPriceMax: n(x.finderPriceMax, 45), finderRatingMin: n(x.finderRatingMin, 3.5), finderRatingMax: n(x.finderRatingMax, 4.7),
     priceMin: n(x.priceMin, NEAR_MISS.priceMin), priceMax: n(x.priceMax, NEAR_MISS.priceMax), maxReviews: Math.round(n(x.maxReviews, 500)),
     ratingMin: n(x.ratingMin, NEAR_MISS.ratingMin), ratingMax: n(x.ratingMax, NEAR_MISS.ratingMax), minRankDrops90: Math.round(n(x.minRankDrops90, 300)), maxRank90: Math.round(n(x.maxRank90, 100_000)),
@@ -123,6 +125,7 @@ export function validFilters(x: Partial<NicheHuntFilters>): NicheHuntFilters | s
   if (!f.categories.length) return "Pick at least one category";
   if (!(f.maxRank90 >= 1)) return "The rank ceiling must be at least 1";
   if (!(f.pagesPerRoot >= 1 && f.pagesPerRoot <= LIMITS.pagesPerRoot)) return `Pages per root must be 1–${LIMITS.pagesPerRoot}`;
+  if (!(f.incumbentNiches >= 0 && f.incumbentNiches <= LIMITS.incumbentNiches)) return `Niches to check for incumbents must be 0–${LIMITS.incumbentNiches}`;
   if (!(f.leavesCap >= 1 && f.leavesCap <= LIMITS.leavesCap)) return `Leaves to size must be 1–${LIMITS.leavesCap}`;
   if (!(f.detailLeaves >= 1 && f.detailLeaves <= LIMITS.detailLeaves)) return `Leaves to detail must be 1–${LIMITS.detailLeaves}`;
   if (!(f.perLeaf >= 1 && f.perLeaf <= LIMITS.perLeaf)) return `ASINs per leaf must be 1–${LIMITS.perLeaf}`;
@@ -167,8 +170,8 @@ export function finderSelection(f: NicheHuntFilters, leafId: number, now = Date.
  *    sales the qualifying check asks for. salesRankDrops90_gte exists but undercounts: no product in
  *    Pet Supplies under these filters had 300+ (81 had 100+), so it isn't used as a floor;
  *  - sorted by 90-day rank drops, most first.
- * No weight filter: packageWeight_lte drops products whose weight Keepa doesn't know (125 of
- * 28,582 in Pet Supplies), so weight is left to the detail stage.
+ *  - package weight at most 700 g (the warn band; 500 g is checked on the detail). Keepa's weight
+ *    filter leaves out products whose weight it doesn't know: WEIGHT_FILTER_UNKNOWN measured it.
  */
 export function directSelection(f: NicheHuntFilters, rootId: number, now = Date.now()): Record<string, unknown> {
   return {
@@ -178,6 +181,7 @@ export function directSelection(f: NicheHuntFilters, rootId: number, now = Date.
     current_RATING_gte: Math.round(f.ratingMin * 10),
     current_RATING_lte: Math.round(f.ratingMax * 10),
     current_COUNT_REVIEWS_lte: f.maxReviews,
+    packageWeight_lte: NEAR_MISS.weightG,
     monthlySold_gte: Math.max(1, Math.ceil(f.minRankDrops90 / 3)),
     ...(f.noAmazon ? { availabilityAmazon: [-1] } : {}),
     ...(f.minListedMonths > 0 ? { trackingSince_lte: keepaMinutes(now - f.minListedMonths * 30.44 * 86_400_000) } : {}),
@@ -185,6 +189,31 @@ export function directSelection(f: NicheHuntFilters, rootId: number, now = Date.
     productType: [0],
     singleVariation: true,
     sort: [["salesRankDrops90", "desc"]],
+  };
+}
+
+/**
+ * What Keepa's weight filter leaves out: products with no package weight. Measured on Pet Supplies
+ * under the direct-mode filters (Oct 2026): 28,582 matched without it, 21,973 at ≤ 700 g and 6,484
+ * over, so 125 had no weight.
+ */
+export const WEIGHT_FILTER_UNKNOWN = { unknown: 125, of: 28_582 };
+
+/** Incumbents taken per niche: the leaf's best sellers over the review cap. */
+export const INCUMBENT_TAKE = 10;
+/**
+ * The incumbent check for a niche (direct mode caps reviews, so it finds none): the leaf's best
+ * sellers by rank with more reviews than the cap, any price. The finder returns ASINs only, so the
+ * 10 taken are detailed for their review counts.
+ */
+export function incumbentSelection(leafId: number, maxReviews: number): Record<string, unknown> {
+  return {
+    categories_include: [leafId],
+    current_COUNT_REVIEWS_gte: maxReviews + 1,
+    current_SALES_gte: 1,
+    productType: [0],
+    singleVariation: true,
+    sort: [["current_SALES", "asc"]],
   };
 }
 
@@ -200,6 +229,8 @@ export const SPEND_CAP_OVER = 0.1;
 export const spendCap = (estimate: number) => Math.ceil(estimate * (1 + SPEND_CAP_OVER));
 /** A detail fetch: 1 token an ASIN, plus up to 1 for its rating and review count. */
 export const DETAIL_TOKENS_PER_ASIN = 2;
+/** A niche's incumbent check: one finder page (Keepa's smallest is 50) and up to 10 details. */
+export const INCUMBENT_TOKENS = SIZING_TOKENS + INCUMBENT_TAKE * DETAIL_TOKENS_PER_ASIN;
 /** Listing a root's category tree: 1 token per 10 categories, at most this many categories a root. */
 export const TREE_MAX_CATEGORIES = 400;
 
@@ -208,8 +239,8 @@ export const TOKEN_RESERVE = 100;
 
 export interface HuntEstimate {
   mode?: HuntMode;
-  /** Direct: finder pages (roots × pages) and their tokens. */
-  finderPages?: number; finder?: number;
+  /** Direct: finder pages (roots × pages) and their tokens; incumbent checks (niches × ~31). */
+  finderPages?: number; finder?: number; incumbentNiches?: number; incumbents?: number;
   /** Listing the category tree (0 when cached). */
   tree: number;
   /** Stage 1: leaves to size (not sized in the last 7 days under these filters), × 11. */
@@ -231,11 +262,13 @@ export function huntEstimate(x: { rootsWithoutTree: number; leavesToSize: number
  * Direct mode: roots × pages finder pages at 11 tokens, and detail for up to 50 ASINs a page at ~2
  * tokens (less the ASINs with a snapshot under 7 days old, when known). No category tree.
  */
-export function directEstimate(x: { roots: number; pages: number; cachedAsins?: number }): HuntEstimate {
+export function directEstimate(x: { roots: number; pages: number; cachedAsins?: number; incumbentNiches?: number }): HuntEstimate {
   const finderPages = x.roots * x.pages;
   const finder = finderPages * DIRECT_PAGE_TOKENS;
   const detail = Math.max(0, finderPages * DIRECT_PAGE - (x.cachedAsins ?? 0)) * DETAIL_TOKENS_PER_ASIN;
-  return { mode: "direct", finderPages, finder, tree: 0, sizing: 0, leavesToSize: 0, detail, total: finder + detail };
+  const incumbentNiches = x.incumbentNiches ?? 0;
+  const incumbents = incumbentNiches * INCUMBENT_TOKENS;
+  return { mode: "direct", finderPages, finder, incumbentNiches, incumbents, tree: 0, sizing: 0, leavesToSize: 0, detail, total: finder + detail + incumbents };
 }
 
 /** The most leaves to detail that fits the balance (less the reserve); 0 when even sizing doesn't fit. */
@@ -465,12 +498,14 @@ export interface Niche {
  * too unless `strict`. Medians and summed sales cover qualifying and near-miss ASINs (the niche's
  * page-one material); incumbents count for its shape and max reviews only.
  */
-export function groupNiches(snaps: HuntAsin[], f: NicheHuntFilters, dismissed: Set<string> = new Set(), opts: { strict?: boolean } = {}): Niche[] {
+export function groupNiches(snaps: HuntAsin[], f: NicheHuntFilters, dismissed: Set<string> = new Set(), opts: { strict?: boolean; incumbents?: Set<string> } = {}): Niche[] {
   const groups = new Map<string, { names: Map<string, number>; rows: NicheAsin[] }>();
   for (const s of snaps) {
     const n = nicheOfAsin(s);
     if (!n || dismissed.has(n.key)) continue;
     const q = qualify(s, f);
+    // From an incumbent check: the competition on page one whatever else it fails (price, Amazon…).
+    if (opts.incumbents?.has(s.asin) && (s.review_count ?? 0) > f.maxReviews) q.status = "incumbent";
     const row: NicheAsin = {
       asin: s.asin, status: q.status, qualifies: q.status === "qualifies", near: q.status === "near", incumbent: q.status === "incumbent",
       reasons: [...q.fails, ...q.near], unknown: q.unknown, sales: monthlySales(s).value, salesFloor: isSalesFloor(s), snap: s,

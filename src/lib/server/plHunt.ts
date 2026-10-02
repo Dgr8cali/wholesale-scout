@@ -3,7 +3,7 @@ import { referralCategoryFor } from "../fees/engine";
 import { addDailyTokens, PL_KEEP_DAYS, type TokensByDay } from "../keepaLedger";
 import { getKeepa, hasFinder, type KeepaCategory, type KeepaClient, type KeepaFinder, type KeepaProduct, type OnKeepaResponse } from "../keepa/client";
 import {
-  defaultFilters, DETAIL_TOKENS_PER_ASIN, DIRECT_PAGE, DIRECT_PAGE_TOKENS, directEstimate, directSelection, filtersKey, finderSelection, fittingDetailLeaves, funnel, groupNiches, huntEstimate,
+  defaultFilters, DETAIL_TOKENS_PER_ASIN, DIRECT_PAGE, DIRECT_PAGE_TOKENS, directEstimate, directSelection, filtersKey, INCUMBENT_TAKE, INCUMBENT_TOKENS, incumbentSelection, finderSelection, fittingDetailLeaves, funnel, groupNiches, huntEstimate,
   SIZING_TOKENS, spendCap, TOKEN_RESERVE, TREE_MAX_CATEGORIES,
   type HuntAsin, type HuntEstimate, type Niche, type NicheHuntFilters,
 } from "../pl/hunt";
@@ -46,6 +46,8 @@ const RUNNING: HuntStatus[] = ["listing", "sizing", "finding", "detailing"];
 export interface HuntProgressState {
   estimate?: HuntEstimate; cap?: number; sizingBudget?: number; leavesWanted?: number;
   pages?: Record<string, number>; detailIndex?: number; capped?: boolean;
+  /** The incumbent check: each niche's leaf → the incumbents found (their ASINs), and whether it's finished. */
+  incumbents?: Record<string, string[]>; incumbentsDone?: boolean;
   [k: string]: unknown;
 }
 
@@ -219,7 +221,7 @@ export async function planHunt(f: NicheHuntFilters): Promise<HuntPlan> {
   const keepa = getKeepa();
   if (f.mode === "direct") {
     // Direct: no tree; the finder pages must fit now, detail may wait for the refill.
-    const estimate = directEstimate({ roots: f.categories.length, pages: f.pagesPerRoot });
+    const estimate = directEstimate({ roots: f.categories.length, pages: f.pagesPerRoot, incumbentNiches: f.incumbentNiches });
     const status = keepa.available ? await keepa.tokenStatus().catch(() => null) : null;
     const balance = status?.tokensLeft ?? null;
     return {
@@ -520,7 +522,15 @@ export async function processHunt(id: string, budgetMs = 40_000): Promise<HuntPr
         idx += batch.length;
         await save({ ...counts, progress: { ...(h.progress ?? {}), detailIndex: idx } });
       }
-      if (h.status === "detailing" && (h.progress?.detailIndex ?? 0) >= h.asins.length) await save({ status: "done", finished_at: new Date().toISOString(), note: h.progress?.capped ? h.note : null });
+      // Stage 3: the incumbent check (direct mode caps reviews in its query, so it finds none).
+      if (h.status === "detailing" && (h.progress?.detailIndex ?? 0) >= h.asins.length && !h.progress?.incumbentsDone && f.incumbentNiches > 0 && !h.progress?.capped) {
+        const r = await incumbentStage(h, f, keepa, { id, left, waitForTokens, time, save: async (patch) => { await save(patch); return h; } });
+        if (r === "capped") await save({ note: capNote(), progress: { ...(h.progress ?? {}), capped: true, incumbentsDone: true } });
+        else if (r === "done") await save({ progress: { ...(h.progress ?? {}), incumbentsDone: true } });
+      }
+      if (h.status === "detailing" && (h.progress?.detailIndex ?? 0) >= h.asins.length && (h.progress?.incumbentsDone || f.incumbentNiches === 0 || h.progress?.capped)) {
+        await save({ status: "done", finished_at: new Date().toISOString(), note: h.progress?.capped ? h.note : null });
+      }
     }
   } catch (e) {
     if (e instanceof CapReached) {
@@ -540,13 +550,81 @@ export async function processHunt(id: string, budgetMs = 40_000): Promise<HuntPr
   return report(false);
 }
 
+/** The niches an incumbent check covers: 3+ qualifying ASINs (strict), grouped by leaf, most first. */
+async function incumbentLeaves(huntId: string, limit: number): Promise<number[]> {
+  const r = await loadHunt(huntId, false, { minAsins: 3 }, { strict: true });
+  return r.niches.filter((n) => n.count >= 3 && n.key.startsWith("cat:")).sort((a, b) => b.count - a.count).slice(0, limit).map((n) => Number(n.key.slice(4)));
+}
+
+/**
+ * For each niche, one finder page of the leaf's best sellers over the review cap (any price), the
+ * top 10 detailed (reusing snapshots under 7 days old) for their review counts: those are the
+ * incumbents its shape and max reviews read. Stops at the cap; carries on where it left off.
+ */
+async function incumbentStage(
+  h: HuntRow, f: NicheHuntFilters, keepa: Finder,
+  x: { id: string; left: () => number; waitForTokens: (cost: number) => Promise<void>; time: () => boolean; save: (patch: Record<string, unknown>) => Promise<HuntRow> },
+): Promise<"done" | "capped" | "later"> {
+  const names = await categoryNames();
+  const leaves = await incumbentLeaves(x.id, f.incumbentNiches);
+  const found: Record<string, string[]> = { ...(h.progress?.incumbents ?? {}) };
+  for (const leaf of leaves) {
+    if (found[leaf]) continue;
+    if (!x.time()) return "later";
+    if (x.left() < DIRECT_PAGE_TOKENS) return "capped";
+    await x.waitForTokens(DIRECT_PAGE_TOKENS);
+    const r = await keepa.productFinder({ ...incumbentSelection(leaf, f.maxReviews), perPage: DIRECT_PAGE, page: 0 });
+    await addTokens(x.id, r.tokensUsed, "finder");
+    const top = r.asins.slice(0, INCUMBENT_TAKE).map((a) => a.toUpperCase());
+    const cached = await freshHuntAsins(top);
+    let need = top.filter((a) => !cached.has(a));
+    const room = Math.max(0, Math.floor((x.left() - r.tokensUsed) / DETAIL_TOKENS_PER_ASIN));
+    if (need.length > room) need = need.slice(0, room);
+    const fetched: KeepaProduct[] = [];
+    if (need.length) {
+      await x.waitForTokens(need.length * DETAIL_TOKENS_PER_ASIN);
+      let spent = 0;
+      try {
+        const res = await keepa.lookupByAsins(need, (m) => { spent += m.tokensConsumed; }, { buyBox: false, rating: true });
+        fetched.push(...res.byAsin.values());
+      } finally {
+        await addTokens(x.id, spent, "detail");
+      }
+      const snaps = fetched.map((k) => huntSnapshot(k, names));
+      if (snaps.length) must(await db().from("pl_hunt_asins").upsert(snaps, { onConflict: "asin" }), "save hunt snapshots");
+    }
+    found[leaf] = [...cached.keys(), ...fetched.map((k) => k.asin)];
+    h = await x.save({ progress: { ...(h.progress ?? {}), incumbents: found } });
+  }
+  return "done";
+}
+
+/**
+ * Run (or re-run) the incumbent check on a finished direct hunt: its spend cap is raised by the
+ * check's estimate + 10% (niches × ~31), and the job carries on from the detailing stage.
+ */
+export async function recheckIncumbents(huntId: string, limit = 10): Promise<{ niches: number; estimate: number }> {
+  const d = db();
+  const h = must(await d.from("pl_hunts").select(HUNT_COLS).eq("id", huntId).single(), "hunt") as HuntRow;
+  if (h.leaves) throw new Error("The incumbent check is for direct-mode hunts (a leaf hunt sees its incumbents already)");
+  if (RUNNING.includes(h.status)) throw new Error("The hunt is still running");
+  const leaves = await incumbentLeaves(huntId, limit);
+  const estimate = leaves.length * INCUMBENT_TOKENS;
+  must(await d.from("pl_hunts").update({
+    status: "detailing", finished_at: null, note: null, last_progress_at: new Date().toISOString(),
+    filters: { ...validFiltersOrStored(h.filters), incumbentNiches: limit },
+    progress: { ...(h.progress ?? {}), detailIndex: h.asins.length, capped: false, incumbents: {}, incumbentsDone: false, cap: (h.token_cost ?? 0) + spendCap(estimate) },
+  }).eq("id", huntId), "recheck incumbents");
+  return { niches: leaves.length, estimate };
+}
+
 /** The hunt reached its cap (the estimate + 10%) before a call it needed. */
 class CapReached extends Error {}
 
 /** Filters stored on a hunt, with defaults for anything added since. */
 function validFiltersOrStored(f: NicheHuntFilters): NicheHuntFilters {
-  // Hunts from before direct mode were leaf hunts.
-  return { ...defaultFilters([]), ...f, mode: f.mode ?? "leaf", categories: f.categories ?? [] };
+  // Hunts from before direct mode were leaf hunts; before the incumbent check, it was off.
+  return { ...defaultFilters([]), ...f, mode: f.mode ?? "leaf", incumbentNiches: f.incumbentNiches ?? 0, categories: f.categories ?? [] };
 }
 
 /** Hunts whose chain has died: work left, no lease, nothing moved for 3 minutes (the watchdog restarts them). */
@@ -582,9 +660,26 @@ export async function loadHunt(id: string, exhausted = false, override?: Partial
     snaps = hunt.leaves.filter((l) => l.detailed).flatMap((l) => (l.asins ?? []).slice(0, filters.perLeaf)
       .map((a) => bySnap.get(a)).filter((x): x is HuntAsin => !!x).map((s) => ({ ...s, leaf_category: l.name, leaf_category_id: l.id })));
   } else snaps = [...bySnap.values()];
-  const niches = groupNiches(snaps, filters, dismissed, opts);
-  // Every niche with anything in it, for the totals; the funnel over every detailed product.
-  const all = groupNiches(snaps, { ...filters, minAsins: 0 }, dismissed);
+  // Incumbents from the incumbent check: in their niche's leaf, counted as incumbents.
+  const incumbentIds = new Set<string>();
+  const extra: HuntAsin[] = [];
+  const checked = Object.entries(hunt.progress?.incumbents ?? {});
+  const want = checked.flatMap(([, a]) => a).filter((a) => !bySnap.has(a));
+  const incSnaps = new Map<string, HuntAsin>();
+  for (const c of chunks(want)) for (const r of must(await d.from("pl_hunt_asins").select(ASIN_COLS).in("asin", c), "incumbent snapshots") as Record<string, unknown>[]) incSnaps.set(r.asin as string, toHuntAsin(r));
+  for (const [leaf, asins] of checked) {
+    const name = snaps.find((x) => x.leaf_category_id === Number(leaf))?.leaf_category ?? null;
+    for (const a of asins) {
+      const s = incSnaps.get(a) ?? bySnap.get(a);
+      if (!s || (s.review_count ?? 0) <= filters.maxReviews) continue;
+      incumbentIds.add(a);
+      if (!snaps.some((x) => x.asin === a)) extra.push({ ...s, leaf_category_id: Number(leaf), leaf_category: name ?? s.leaf_category });
+    }
+  }
+  const grouped = [...snaps, ...extra];
+  const niches = groupNiches(grouped, filters, dismissed, { ...opts, incumbents: incumbentIds });
+  // Every niche with anything in it, for the totals; the funnel over the hunt's own detailed products.
+  const all = groupNiches(grouped, { ...filters, minAsins: 0 }, dismissed, { incumbents: incumbentIds });
   return {
     hunt: { ...hunt, filters },
     niches,
@@ -646,7 +741,8 @@ function referralFor(root: string | null, card: Awaited<ReturnType<typeof active
 
 /**
  * A candidate from a niche: its name as product and niche keyword, the referral category from its
- * root category, up to 10 of its ASINs (highest sales first; the first is the reference) with their
+ * root category, up to 10 of its page-one ASINs (qualifying, then incumbents by rank; the best seller
+ * is the reference) with their
  * hunt snapshots copied across, then the usual Keepa fill. Only the reference's Buy Box history is
  * new (about 3 tokens); the rest reuse the hunt's snapshots.
  */
@@ -655,10 +751,14 @@ export async function candidateFromNiche(huntId: string, key: string) {
   const niche = niches.find((n) => n.key === key);
   if (!niche) throw new Error("That niche isn't in this hunt (dismissed, or the hunt changed)");
   const card = await activeRateCard();
-  // Highest sales first; the reference is the best-selling qualifying (or near-miss) one.
+  // Page one: qualifying first (by sales), then the incumbents by rank, then near misses; up to 10.
+  // The reference (first) is the best seller among them: the best 90-day sales rank (Amazon's own
+  // measure; bought-past-month can disagree with it).
   const bySales = (a: { sales: number | null }, b: { sales: number | null }) => (b.sales ?? 0) - (a.sales ?? 0);
-  const page = niche.asins.filter((a) => a.qualifies || a.near).sort(bySales);
-  const picked = [...page.slice(0, 1), ...niche.asins.filter((a) => a !== page[0]).sort(bySales)].slice(0, 10);
+  const byRank = (a: { snap: HuntAsin }, b: { snap: HuntAsin }) => (a.snap.avg_rank_90d ?? a.snap.rank ?? Infinity) - (b.snap.avg_rank_90d ?? b.snap.rank ?? Infinity);
+  const ordered = [...niche.asins.filter((a) => a.qualifies).sort(bySales), ...niche.asins.filter((a) => a.incumbent).sort(byRank), ...niche.asins.filter((a) => a.near).sort(bySales)].slice(0, 10);
+  const best = [...ordered].sort((a, b) => byRank(a, b) || bySales(a, b))[0];
+  const picked = best ? [best, ...ordered.filter((a) => a !== best)] : ordered;
   const candidate = await createCandidate({ name: niche.name, niche_keyword: niche.name, category: referralFor(niche.rootCategory, card), asins: picked.map((a) => a.asin) });
   const d = db();
   for (const a of picked) {

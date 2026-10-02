@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defaultFilters, directEstimate, directSelection, disqualify, filtersKey, finderSelection, fittingDetailLeaves, funnel, groupNiches, huntEstimate, nicheOfAsin, nicheOfTitle, qualify, shapeOf, spendCap, validFilters, type HuntAsin } from "./hunt";
+import { defaultFilters, directEstimate, directSelection, incumbentSelection, disqualify, filtersKey, finderSelection, fittingDetailLeaves, funnel, groupNiches, huntEstimate, nicheOfAsin, nicheOfTitle, qualify, shapeOf, spendCap, validFilters, type HuntAsin } from "./hunt";
 
 const CATS = [{ id: 11052681, name: "Home & Kitchen" }, { id: 117332031, name: "Beauty" }, { id: 79903031, name: "DIY & Tools" }];
 const F = defaultFilters(CATS);
@@ -39,14 +39,14 @@ describe("Niche Hunt", () => {
     for (const k of ["packageWeight_lte", "packageLength_lte", "current_COUNT_REVIEWS_lte", "buyBoxStatsAmazon90_lte"]) expect(s).not.toHaveProperty(k);
   });
 
-  it("direct mode: every qualifying threshold Keepa can apply, per root, by rank drops; no weight filter", () => {
+  it("direct mode: every qualifying threshold Keepa can apply, per root, by rank drops; weight at most 700 g", () => {
     const s = directSelection(F, 340840031, Date.UTC(2026, 9, 2));
     expect(s).toMatchObject({
       salesRankReference: [340840031], current_BUY_BOX_SHIPPING_gte: 1500, current_BUY_BOX_SHIPPING_lte: 4000, current_RATING_gte: 36, current_RATING_lte: 45,
-      current_COUNT_REVIEWS_lte: 500, monthlySold_gte: 100, availabilityAmazon: [-1], productType: [0], singleVariation: true, sort: [["salesRankDrops90", "desc"]],
+      current_COUNT_REVIEWS_lte: 500, packageWeight_lte: 700, monthlySold_gte: 100, availabilityAmazon: [-1], productType: [0], singleVariation: true, sort: [["salesRankDrops90", "desc"]],
     });
     expect(s.trackingSince_lte).toBe(Math.floor((Date.UTC(2026, 9, 2) - 6 * 30.44 * 86_400_000) / 60_000) - 21_564_000);
-    for (const k of ["packageWeight_lte", "salesRankDrops90_gte", "perPage", "page"]) expect(s).not.toHaveProperty(k);
+    for (const k of ["salesRankDrops90_gte", "perPage", "page"]) expect(s).not.toHaveProperty(k);
   });
 
   it("direct estimate: pages × 11, then ~2 a detailed ASIN; the cap is the estimate + 10%", () => {
@@ -54,6 +54,16 @@ describe("Niche Hunt", () => {
     expect(directEstimate({ roots: 5, pages: 2 })).toMatchObject({ finderPages: 10, finder: 110, detail: 1000, total: 1110, tree: 0 });
     expect(directEstimate({ roots: 5, pages: 2, cachedAsins: 120 }).detail).toBe(760);
     expect(spendCap(1154)).toBe(1270);
+    // Incumbent checks: 11 for the finder page + 10 details × 2.
+    expect(directEstimate({ roots: 5, pages: 2, incumbentNiches: 5 })).toMatchObject({ incumbents: 155, total: 1265 });
+  });
+
+  it("incumbent check: the leaf's best sellers over the review cap, any price; they count as incumbents whatever they fail", () => {
+    expect(incumbentSelection(123, 500)).toEqual({ categories_include: [123], current_COUNT_REVIEWS_gte: 501, current_SALES_gte: 1, productType: [0], singleVariation: true, sort: [["current_SALES", "asc"]] });
+    const leaf = { leaf_category: "Hydration Packs", leaf_category_id: 9 };
+    const rows = [snap("Q1", "x", leaf), snap("Q2", "x", leaf), snap("Q3", "x", leaf), snap("I1", "x", { ...leaf, review_count: 6200, price: 55 })];
+    expect(groupNiches(rows, F)[0]).toMatchObject({ incumbentCount: 0, shape: "open" }); // £55 fails: not counted
+    expect(groupNiches(rows, F, new Set(), { incumbents: new Set(["I1"]) })[0]).toMatchObject({ incumbentCount: 1, maxReviews: 6200, shape: "dominated" });
   });
 
   it("estimates both stages, and how many leaves to detail fit the balance less the 100 reserve", () => {

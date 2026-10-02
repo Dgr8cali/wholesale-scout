@@ -12,7 +12,7 @@ import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { money } from "@/lib/pl/gatekeeper";
-import { AVOID_CATEGORY_NAMES, LIMITS, TOKEN_RESERVE, type HuntEstimate, type Niche, type NicheHuntFilters, type Shape } from "@/lib/pl/hunt";
+import { AVOID_CATEGORY_NAMES, LIMITS, TOKEN_RESERVE, WEIGHT_FILTER_UNKNOWN, type HuntEstimate, type Niche, type NicheHuntFilters, type Shape } from "@/lib/pl/hunt";
 import { priceOf } from "@/lib/pl/fill";
 import { api } from "@/lib/ui/client";
 import { ago } from "@/lib/ui/when";
@@ -35,7 +35,7 @@ interface HuntResult {
   hunt: {
     id: string; name: string; filters: NicheHuntFilters; asins: string[]; finder_total: number | null; fetched: number; reused: number; finder_tokens: number; detail_tokens: number;
     token_cost: number; created_at: string; status: HuntStatus; leaves: HuntLeaf[] | null; note: string | null; finished_at: string | null;
-    progress?: { pages?: Record<string, number>; detailIndex?: number; cap?: number; estimate?: HuntEstimate } | null;
+    progress?: { pages?: Record<string, number>; detailIndex?: number; cap?: number; estimate?: HuntEstimate; incumbents?: Record<string, string[]> } | null;
   };
   niches: Niche[];
   qualifying: number;
@@ -204,12 +204,13 @@ export function NicheHunt({ onCandidate }: { onCandidate: (id: string) => void }
             <div className="grid gap-3 sm:grid-cols-3">
               <Num label={`Pages a category (1–${LIMITS.pagesPerRoot})`} value={f.pagesPerRoot} onChange={(v) => set({ pagesPerRoot: v })} hint="50 ASINs a page, most rank drops first, 11 tokens" />
               <Num label="Listed at least (months)" value={f.minListedMonths} onChange={(v) => set({ minListedMonths: v })} />
+              <Num label={`Niches to check for incumbents (0–${LIMITS.incumbentNiches})`} value={f.incumbentNiches} onChange={(v) => set({ incumbentNiches: v })} hint="Those with 3+ qualifying, ~31 tokens each" />
             </div>
             <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
               <Toggle label="No Amazon offer (now; 90 days when qualifying)" checked={f.noAmazon} onChange={(v) => set({ noAmazon: v })} />
               <Toggle label="Leave out Amazon's own brands" checked={f.excludeAmazonBrands} onChange={(v) => set({ excludeAmazonBrands: v })} />
             </div>
-            <p className="text-xs text-muted-foreground">Keepa checks price, rating, reviews (at most the cap), sales a month (Amazon&apos;s &quot;bought in past month&quot;, at least rank drops ÷ 3), no Amazon offer, listing age and brands. Not weight: Keepa&apos;s weight filter drops products whose weight it doesn&apos;t know, so weight is checked on the detail (unknown weight isn&apos;t a miss). With reviews capped in the query, few incumbents come back: the leaf mode shows the incumbents.</p>
+            <p className="text-xs text-muted-foreground">Keepa checks price, rating, reviews (at most the cap), sales a month (Amazon&apos;s &quot;bought in past month&quot;, at least rank drops ÷ 3), package weight up to 700 g, no Amazon offer, listing age and brands. Its weight filter leaves out products whose weight it doesn&apos;t know (about 0.4%). Because reviews are capped in the query, each niche with 3+ qualifying products then gets an <b>incumbent check</b>: its leaf&apos;s 10 best sellers over the review cap, any price, so its shape and max reviews are real.</p>
           </fieldset>
           ) : (
           <fieldset className="space-y-3 rounded-lg border p-3">
@@ -278,6 +279,7 @@ export function NicheHunt({ onCandidate }: { onCandidate: (id: string) => void }
             <div className="space-y-0.5 text-sm text-muted-foreground">
               <div>Finder: <span className="num">{f.categories.length}</span> categor{f.categories.length === 1 ? "y" : "ies"} × {f.pagesPerRoot} page{f.pagesPerRoot === 1 ? "" : "s"} × 11 = <span className="num">{plan.estimate.finder}</span> tokens</div>
               <div>Detail: up to <span className="num">{(plan.estimate.finderPages ?? 0) * 50}</span> ASINs × ~2 = <span className="num">{plan.estimate.detail}</span> tokens (less any fetched in the last 7 days)</div>
+              {(plan.estimate.incumbentNiches ?? 0) > 0 && <div>+ incumbents: up to <span className="num">{plan.estimate.incumbentNiches}</span> niches × 31 (a finder page of 11 + 10 details × 2) = <span className="num">{plan.estimate.incumbents}</span> tokens</div>}
               <div className="text-foreground">Total up to <b className="num">{plan.estimate.total}</b>; it stops at <b className="num">{plan.cap}</b> (+10%) · balance <span className="num">{plan.balance?.toLocaleString("en-GB") ?? "—"}</span>, {TOKEN_RESERVE} kept in reserve</div>
               {plan.waitsForRefill && plan.fits && <div className="text-warn">More than the balance: it waits for Keepa&apos;s refill part-way (about 21 tokens a minute).</div>}
               {!plan.fits && <div className="text-fail">The finder pages alone are over the balance less the reserve: fewer pages, or wait for the refill.</div>}
@@ -396,6 +398,15 @@ function Results({ result, start, onReload, onPick, onCandidate, onStart, onRequ
               {progressLine(h)}{h.status === "done" ? " · done" : h.status === "cancelled" ? " · cancelled" : h.status === "error" ? " · stopped" : ""}
               {h.note && <span className="font-normal text-muted-foreground">({h.note})</span>}
               {running(h.status) && <Button size="xs" variant="ghost" onClick={async () => { await api(`/api/pl/hunt/${h.id}/cancel`, { method: "POST" }); onReload(); }}>Cancel</Button>}
+              {!running(h.status) && !h.leaves && h.filters.mode === "direct" && (
+                <Button size="xs" variant="outline" title="Each niche with 3+ qualifying: its leaf's 10 best sellers over the review cap, ~31 tokens a niche" onClick={async () => {
+                  try {
+                    const r = await api<{ niches: number; estimate: number }>(`/api/pl/hunt/${h.id}/incumbents`, { method: "POST", json: {} });
+                    toast.success(`Checking ${r.niches} niche${r.niches === 1 ? "" : "s"} for incumbents: about ${r.estimate} tokens`);
+                    onReload();
+                  } catch (e) { toast.error((e as Error).message); }
+                }}>{Object.keys(h.progress?.incumbents ?? {}).length ? "Re-check incumbents" : "Check incumbents"}</Button>
+              )}
             </p>
           )}
         </div>
@@ -501,6 +512,7 @@ function Results({ result, start, onReload, onPick, onCandidate, onStart, onRequ
           {result.funnel.steps.filter((x) => x.removed || x.near).map((x) => ` → ${x.label}: −${x.removed}${x.near ? ` (${x.near} near miss${x.near === 1 ? "" : "es"} let through)` : ""}`).join("")}
           {` → over ${h.filters.maxReviews} reviews: ${result.funnel.incumbents} incumbent${result.funnel.incumbents === 1 ? "" : "s"}`}
           {` = ${result.funnel.qualifying} qualifying + ${result.funnel.near} near miss${result.funnel.near === 1 ? "" : "es"}.`}
+          {h.filters.mode === "direct" && !h.leaves && <> Before all that, Keepa&apos;s weight filter (700 g) left out products it has no weight for: about {(WEIGHT_FILTER_UNKNOWN.unknown / WEIGHT_FILTER_UNKNOWN.of * 100).toFixed(1)}% of matches ({WEIGHT_FILTER_UNKNOWN.unknown.toLocaleString("en-GB")} of {WEIGHT_FILTER_UNKNOWN.of.toLocaleString("en-GB")} when measured on Pet Supplies; Keepa doesn&apos;t report the count per query).</>}
           {" "}Leaves: {h.leaves ? `${h.leaves.filter((l) => l.matches != null).length} sized, ${h.leaves.reduce((a, l) => a + (l.matches ?? 0), 0).toLocaleString("en-GB")} finder matches, ${h.leaves.filter((l) => l.matches === 0).length} with none` : "—"}.
         </p>
       )}

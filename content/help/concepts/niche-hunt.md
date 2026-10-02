@@ -21,6 +21,7 @@ One Product Finder query per category you pick, with every qualifying threshold 
 | Rating | 3.6–4.5 |
 | Reviews | at most 500 |
 | Sales a month (Amazon's "bought in past month") | at least 100 (rank drops ÷ 3) |
+| Package weight | at most 700 g (500 g is checked on the detail; 500–700 g is a near miss) |
 | No Amazon offer now | on |
 | Tracked by Keepa for at least | 6 months |
 | Not an Amazon brand | on |
@@ -30,10 +31,10 @@ One Product Finder query per category you pick, with every qualifying threshold 
 What Keepa's query can't do, found by testing it:
 
 - **Rank drops** can be filtered (salesRankDrops90), but Keepa's count tops out low: no Pet Supplies product under these filters had 300 drops in 90 days (81 had 100). So direct mode asks for sales a month instead, and sorts by rank drops.
-- **Weight** can be filtered, but the filter drops products whose weight Keepa doesn't know. So weight is checked on the detail, where unknown weight isn't a miss.
-- With reviews capped in the query, direct mode finds few **incumbents** (products over the review cap). Use leaf mode to see a niche's incumbents.
+- **Weight**: Keepa's filter also leaves out products whose weight it doesn't know, about 0.4% of matches (125 of 28,582 when measured on Pet Supplies). Keepa doesn't report that count per query, so "Why so few?" gives the measured share. Without the filter, over half the products detailed were too heavy.
+- **Incumbents**: with reviews capped in the query, the hunt itself finds none. So after grouping, each niche with 3+ qualifying products gets an **incumbent check**: one finder page of its leaf's best sellers by rank with more reviews than the cap, any price, and the top 10 detailed for their review counts. They count as the niche's incumbents (whatever else they fail, such as a price over £40), so its **shape** and **max reviews** are real. **Niches to check for incumbents** (10) limits how many; about 31 tokens each (a finder page is at least 50 results, 11 tokens, and the finder returns ASINs only, so the 10 are detailed at about 2 each). A finished direct hunt has **Check incumbents** to run it afterwards. Expect some odd ones: a leaf can hold products that aren't the niche's (compression socks among hydration packs).
 
-The page shows "Finder pages 6/10 (300 ASINs) → Detailing 150/500" as it goes. For example, Garden, Pet Supplies, Sports & Outdoors, Baby Products and Stationery & Office Supplies at 2 pages each found 500 products (of 2,125 matches) for 1,104 tokens: 135 qualifying and 48 near misses.
+The page shows "Finder pages 6/10 (300 ASINs) → Detailing 150/500" as it goes. For example, Garden, Pet Supplies, Sports & Outdoors, Baby Products and Stationery & Office Supplies at 2 pages each found 500 products (of 2,125 matches) for 1,104 tokens: 135 qualifying and 48 near misses. The incumbent check on its five niches with 3+ qualifying cost 150 more and turned all five from "Open" to "Dominated" (max reviews 3,354 to 21,295).
 
 ## Leaf mode
 
@@ -102,7 +103,7 @@ Each detailed leaf is a niche, named after the leaf in lower case. Correct the n
 
 ## Actions
 
-- **Create candidate** makes a Private label candidate. The niche name is both the product and the niche keyword. The referral category comes from the root category (Home & Kitchen is Home Products). Up to 10 of the niche's products are added, highest sales first, and the first is the reference. Their hunt snapshots are copied across, so only the reference's Buy Box history is fetched, about 3–4 tokens. The usual Keepa fill then runs for Gates 0, 1 and 2, and Gate 6 works out from them. The candidate opens with its token cost.
+- **Create candidate** makes a Private label candidate. The niche name is both the product and the niche keyword. The referral category comes from the root category (Home & Kitchen is Home Products, Sports & Outdoors is Sports and Outdoors, Stationery & Office Supplies is Office Products). Up to 10 of the niche's page-one products are added: qualifying ones first (by sales), then incumbents by rank, then near misses. The **reference** is the best seller among them by 90-day sales rank; check it suits (a much cheaper or newer listing makes Gate 2 thin) and change it on the candidate if not. Their hunt snapshots are copied across, so only the reference's Buy Box history is fetched, about 3–4 tokens. The usual Keepa fill then runs for Gates 0, 1 and 2, and Gate 6 works out from them. The candidate opens with its token cost.
 - **Opportunity Explorer** copies the niche name to your clipboard and opens Seller Central's Product Opportunity Explorer in a new tab ("Niche name copied — paste into the POE search box"). Amazon doesn't take a search in the address. Capture Gate 3 there with the extension.
 - **Dismiss** (bin icon) hides the niche from this and every later hunt. Give a reason. **Show dismissed niches** lists them, with **Show again**.
 
@@ -110,7 +111,7 @@ Each detailed leaf is a niche, named after the leaf in lower case. Correct the n
 
 The estimate is shown before you run, line by line, against your balance. **A hunt never spends more than its estimate + 10%**: it starts no Keepa call that would take it past that (the page shows "it stops at …"), and finishes with what it has, saying "Stopped at the token cap". Before each call it checks the balance: if the call doesn't fit, it waits for Keepa's refill and carries on.
 
-Direct mode: **finder pages** (categories × pages a category) × 11 tokens, plus **detail** of up to 50 products a page × about 2 tokens, less products fetched in the last 7 days. No category tree. The finder pages must fit the balance less the reserve to start; detail may wait for the refill.
+Direct mode: **finder pages** (categories × pages a category) × 11 tokens, plus **detail** of up to 50 products a page × about 2 tokens, less products fetched in the last 7 days, plus **incumbents**: niches to check × about 31. No category tree. The finder pages must fit the balance less the reserve to start; detail may wait for the refill.
 
 Leaf mode:
 
