@@ -96,8 +96,10 @@ interface RawKeepaProduct {
   upcList?: string[] | null;
   title?: string | null;
   brand?: string | null;
-  categoryTree?: { name: string }[] | null;
+  categoryTree?: { name: string; catId?: number }[] | null;
   rootCategory?: number;
+  /** The category the sales rank is in (e.g. Home & Kitchen, under the Home & Garden root). */
+  salesRankReference?: number;
   packageLength?: number; // mm
   packageWidth?: number;
   packageHeight?: number;
@@ -170,6 +172,9 @@ export function parseKeepaProduct(p: RawKeepaProduct, now = Date.now(), buyBoxFe
     ratingNow: ratingNow == null ? null : ratingNow / 10,
     reviewsNow,
     rankDrops90: p.stats?.salesRankDrops90 != null && p.stats.salesRankDrops90 >= 0 ? p.stats.salesRankDrops90 : null,
+    leafCategory: p.categoryTree?.length && p.categoryTree.length > 1 ? { id: p.categoryTree.at(-1)!.catId ?? null, name: p.categoryTree.at(-1)!.name } : null,
+    rootCategoryId: p.rootCategory && p.rootCategory > 0 ? p.rootCategory : null,
+    rankCategoryId: p.salesRankReference && p.salesRankReference > 0 ? p.salesRankReference : null,
     firstSeen: firstMin.length ? new Date((Math.min(...firstMin) + 21_564_000) * 60_000).toISOString() : null,
     summary: {
       ...base,

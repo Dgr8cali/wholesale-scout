@@ -1,5 +1,5 @@
 -- Wholesale Scout schema, dumped by scripts/schema-backup.mjs. No data.
--- Dumped 2026-10-02T08:23:04.408Z. Safe to re-run. Restore: npm run schema:restore
+-- Dumped 2026-10-02T08:47:57.304Z. Safe to re-run. Restore: npm run schema:restore
 
 -- @section extensions
 create extension if not exists "pg_cron";
@@ -558,6 +558,112 @@ alter table "pl_gate_waivers" add column if not exists "reason" text;
 alter table "pl_gate_waivers" add column if not exists "created_at" timestamp with time zone default now();
 alter table "pl_gate_waivers" enable row level security;
 
+create table if not exists "pl_hunt_asins" (
+  "asin" text not null,
+  "title" text,
+  "brand" text,
+  "image" text,
+  "root_category" text,
+  "price" numeric,
+  "rating" numeric,
+  "review_count" integer,
+  "rank" integer,
+  "avg_rank_90d" integer,
+  "rank_drops_90d" integer,
+  "bought_past_month" integer,
+  "offer_count" integer,
+  "buybox_price" numeric,
+  "amazon_ever_seller" boolean,
+  "amazon_last_seen_days" integer,
+  "amazon_brand" boolean,
+  "dimensions" jsonb,
+  "weight" integer,
+  "first_seen" timestamp with time zone,
+  "history" jsonb,
+  "snapshot_at" timestamp with time zone not null,
+  "leaf_category_id" bigint,
+  "leaf_category" text
+);
+alter table "pl_hunt_asins" add column if not exists "asin" text;
+alter table "pl_hunt_asins" add column if not exists "title" text;
+alter table "pl_hunt_asins" add column if not exists "brand" text;
+alter table "pl_hunt_asins" add column if not exists "image" text;
+alter table "pl_hunt_asins" add column if not exists "root_category" text;
+alter table "pl_hunt_asins" add column if not exists "price" numeric;
+alter table "pl_hunt_asins" add column if not exists "rating" numeric;
+alter table "pl_hunt_asins" add column if not exists "review_count" integer;
+alter table "pl_hunt_asins" add column if not exists "rank" integer;
+alter table "pl_hunt_asins" add column if not exists "avg_rank_90d" integer;
+alter table "pl_hunt_asins" add column if not exists "rank_drops_90d" integer;
+alter table "pl_hunt_asins" add column if not exists "bought_past_month" integer;
+alter table "pl_hunt_asins" add column if not exists "offer_count" integer;
+alter table "pl_hunt_asins" add column if not exists "buybox_price" numeric;
+alter table "pl_hunt_asins" add column if not exists "amazon_ever_seller" boolean;
+alter table "pl_hunt_asins" add column if not exists "amazon_last_seen_days" integer;
+alter table "pl_hunt_asins" add column if not exists "amazon_brand" boolean;
+alter table "pl_hunt_asins" add column if not exists "dimensions" jsonb;
+alter table "pl_hunt_asins" add column if not exists "weight" integer;
+alter table "pl_hunt_asins" add column if not exists "first_seen" timestamp with time zone;
+alter table "pl_hunt_asins" add column if not exists "history" jsonb;
+alter table "pl_hunt_asins" add column if not exists "snapshot_at" timestamp with time zone;
+alter table "pl_hunt_asins" add column if not exists "leaf_category_id" bigint;
+alter table "pl_hunt_asins" add column if not exists "leaf_category" text;
+alter table "pl_hunt_asins" enable row level security;
+
+create table if not exists "pl_hunt_presets" (
+  "id" uuid default gen_random_uuid() not null,
+  "name" text not null,
+  "filters" jsonb not null,
+  "created_at" timestamp with time zone default now() not null,
+  "updated_at" timestamp with time zone default now() not null
+);
+alter table "pl_hunt_presets" add column if not exists "id" uuid default gen_random_uuid();
+alter table "pl_hunt_presets" add column if not exists "name" text;
+alter table "pl_hunt_presets" add column if not exists "filters" jsonb;
+alter table "pl_hunt_presets" add column if not exists "created_at" timestamp with time zone default now();
+alter table "pl_hunt_presets" add column if not exists "updated_at" timestamp with time zone default now();
+alter table "pl_hunt_presets" enable row level security;
+
+create table if not exists "pl_hunts" (
+  "id" uuid default gen_random_uuid() not null,
+  "name" text not null,
+  "filters" jsonb not null,
+  "asins" text[] default '{}'::text[] not null,
+  "finder_total" integer,
+  "fetched" integer default 0 not null,
+  "reused" integer default 0 not null,
+  "finder_tokens" integer default 0 not null,
+  "detail_tokens" integer default 0 not null,
+  "token_cost" integer default 0 not null,
+  "keepa_by_day" jsonb default '{}'::jsonb not null,
+  "created_at" timestamp with time zone default now() not null
+);
+alter table "pl_hunts" add column if not exists "id" uuid default gen_random_uuid();
+alter table "pl_hunts" add column if not exists "name" text;
+alter table "pl_hunts" add column if not exists "filters" jsonb;
+alter table "pl_hunts" add column if not exists "asins" text[] default '{}'::text[];
+alter table "pl_hunts" add column if not exists "finder_total" integer;
+alter table "pl_hunts" add column if not exists "fetched" integer default 0;
+alter table "pl_hunts" add column if not exists "reused" integer default 0;
+alter table "pl_hunts" add column if not exists "finder_tokens" integer default 0;
+alter table "pl_hunts" add column if not exists "detail_tokens" integer default 0;
+alter table "pl_hunts" add column if not exists "token_cost" integer default 0;
+alter table "pl_hunts" add column if not exists "keepa_by_day" jsonb default '{}'::jsonb;
+alter table "pl_hunts" add column if not exists "created_at" timestamp with time zone default now();
+alter table "pl_hunts" enable row level security;
+
+create table if not exists "pl_niche_dismissals" (
+  "key" text not null,
+  "name" text,
+  "reason" text,
+  "created_at" timestamp with time zone default now() not null
+);
+alter table "pl_niche_dismissals" add column if not exists "key" text;
+alter table "pl_niche_dismissals" add column if not exists "name" text;
+alter table "pl_niche_dismissals" add column if not exists "reason" text;
+alter table "pl_niche_dismissals" add column if not exists "created_at" timestamp with time zone default now();
+alter table "pl_niche_dismissals" enable row level security;
+
 create table if not exists "pl_poe_snapshots" (
   "id" uuid default gen_random_uuid() not null,
   "candidate_id" uuid,
@@ -1096,6 +1202,26 @@ do $$ begin
   end if;
 end $$;
 do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'pl_hunt_asins_pkey' and conrelid = '"pl_hunt_asins"'::regclass) then
+    alter table "pl_hunt_asins" add constraint "pl_hunt_asins_pkey" PRIMARY KEY (asin);
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'pl_hunt_presets_pkey' and conrelid = '"pl_hunt_presets"'::regclass) then
+    alter table "pl_hunt_presets" add constraint "pl_hunt_presets_pkey" PRIMARY KEY (id);
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'pl_hunts_pkey' and conrelid = '"pl_hunts"'::regclass) then
+    alter table "pl_hunts" add constraint "pl_hunts_pkey" PRIMARY KEY (id);
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'pl_niche_dismissals_pkey' and conrelid = '"pl_niche_dismissals"'::regclass) then
+    alter table "pl_niche_dismissals" add constraint "pl_niche_dismissals_pkey" PRIMARY KEY (key);
+  end if;
+end $$;
+do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'pl_poe_snapshots_pkey' and conrelid = '"pl_poe_snapshots"'::regclass) then
     alter table "pl_poe_snapshots" add constraint "pl_poe_snapshots_pkey" PRIMARY KEY (id);
   end if;
@@ -1193,6 +1319,11 @@ end $$;
 do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'ip_risk_brands_brand_key_key' and conrelid = '"ip_risk_brands"'::regclass) then
     alter table "ip_risk_brands" add constraint "ip_risk_brands_brand_key_key" UNIQUE (brand_key);
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'pl_hunt_presets_name_key' and conrelid = '"pl_hunt_presets"'::regclass) then
+    alter table "pl_hunt_presets" add constraint "pl_hunt_presets_name_key" UNIQUE (name);
   end if;
 end $$;
 do $$ begin
@@ -1719,3 +1850,5 @@ insert into schema_migrations (name) values ('20261001000400_pin_search_path.sql
 insert into schema_migrations (name) values ('20261001000500_pl_gate_waivers.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261002000000_poe_derived.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261002000100_poe_growth_windows.sql') on conflict do nothing;
+insert into schema_migrations (name) values ('20261002000200_niche_hunt.sql') on conflict do nothing;
+insert into schema_migrations (name) values ('20261002000300_hunt_leaf_category.sql') on conflict do nothing;

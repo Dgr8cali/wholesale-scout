@@ -83,6 +83,11 @@ export interface KeepaProduct {
   rankDrops90?: number | null;
   /** The earlier of Amazon's listing date and Keepa's first tracking. */
   firstSeen?: string | null;
+  /** The most specific browse category (the last of the category tree), when it's below the root. */
+  leafCategory?: { id: number | null; name: string } | null;
+  /** Keepa's root category id, and the category its sales rank is in (salesRankReference). */
+  rootCategoryId?: number | null;
+  rankCategoryId?: number | null;
   series: {
     rank: Point[];
     buyBox: Point[];

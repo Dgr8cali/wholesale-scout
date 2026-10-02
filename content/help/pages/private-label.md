@@ -11,6 +11,8 @@ You used to type about 45 numbers per candidate from Jungle Scout, Keepa and Sel
 
 ## The page
 
+The page has two tabs: **Candidates** (below) and **Niche Hunt**, which proposes niches that already pass Gates 0 and 1 and turns one into a candidate. See [Niche Hunt](/help/concepts/niche-hunt).
+
 - **Candidates** (left): each candidate with a dot in its verdict colour, its score (or how many of the 10 lines are scored, e.g. `6/10`), its status (draft, researching, samples, dropped, launched) and when Keepa last refreshed it.
 - **The workspace** (right): the selected candidate's header, the eight gates in order, the scorecard and the verdict.
 - **New candidate** asks for a name, a niche keyword, a referral category and up to ten ASINs from page one of the niche. Paste them one per line or comma-separated. The first is the **reference listing**. Keepa is fetched when you save.

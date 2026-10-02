@@ -1,6 +1,6 @@
 "use client";
 
-import { LoaderIcon, PlusIcon, TagIcon } from "lucide-react";
+import { CrosshairIcon, LoaderIcon, PlusIcon, TagIcon } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
@@ -9,6 +9,8 @@ import { usePageCrumbs } from "@/components/Crumbs";
 import { Dot } from "@/components/pl/bits";
 import { valuesOf, type CandidateRow, type ListResponse } from "@/components/pl/types";
 import { Workspace } from "@/components/pl/Workspace";
+import { NicheHunt } from "@/components/pl/NicheHunt";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EmptyState, ErrorState } from "@/components/States";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -34,14 +36,16 @@ function PrivateLabel() {
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const selected = params.get("c");
+  const tab = params.get("tab") === "hunt" ? "hunt" : "candidates";
 
   const load = useCallback(() => api<ListResponse>("/api/pl/candidates").then(setList).catch((e: Error) => setError(e.message)), []);
   useEffect(() => { load(); }, [load]);
   const select = useCallback((id: string | null) => router.replace(id ? `/private-label?c=${id}` : "/private-label", { scroll: false }), [router]);
+  const showTab = (t: string) => router.replace(t === "hunt" ? "/private-label?tab=hunt" : selected ? `/private-label?c=${selected}` : "/private-label", { scroll: false });
 
   useEffect(() => {
-    if (list && !selected && list.candidates.length) select(list.candidates[0].id);
-  }, [list, selected, select]);
+    if (tab === "candidates" && list && !selected && list.candidates.length) select(list.candidates[0].id);
+  }, [list, selected, select, tab]);
 
   const scored = useMemo(() => (list ? list.candidates.map((c) => ({ c, ev: evaluate(valuesOf(c.fields), c.category, list.settings, list.card, new Date(), c.waivers ?? []) })) : []), [list]);
 
@@ -56,6 +60,15 @@ function PrivateLabel() {
         <h1 className="page-title">Private label</h1>
         <p className="text-sm text-muted-foreground">Should ~£1,000 launch your own product into this niche? A candidate must clear every gate <em>and</em> score well; a good score never overrides a failed gate.</p>
       </div>
+      <Tabs value={tab} onValueChange={showTab} className="gap-4">
+        <TabsList variant="line" className="w-full justify-start border-b">
+          <TabsTrigger value="candidates" className="flex-none"><TagIcon /> Candidates</TabsTrigger>
+          <TabsTrigger value="hunt" className="flex-none"><CrosshairIcon /> Niche Hunt</TabsTrigger>
+        </TabsList>
+        <TabsContent value="hunt">
+          {tab === "hunt" && <NicheHunt onCandidate={async (id) => { await load(); select(id); }} />}
+        </TabsContent>
+        <TabsContent value="candidates">
       <div className="grid items-start gap-5 lg:grid-cols-[260px_1fr]">
         <aside className="flex flex-col gap-3.5 lg:sticky lg:top-[calc(var(--app-header,56px)+12px)]">
           <div className="panel p-3">
@@ -103,6 +116,8 @@ function PrivateLabel() {
           )}
         </main>
       </div>
+        </TabsContent>
+      </Tabs>
       <NewCandidate open={adding} onOpenChange={setAdding} list={list} onCreated={async (id) => { await load(); select(id); }} />
     </div>
   );
