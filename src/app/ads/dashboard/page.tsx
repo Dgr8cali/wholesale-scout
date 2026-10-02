@@ -13,6 +13,7 @@ import { Sparkline } from "@/components/results/Sparkline";
 import { ProductPicker, useAdsProduct } from "@/components/ads/ProductPicker";
 import { SortTh, useSortable } from "@/components/SortableTable";
 import { ProductThumb } from "@/components/ProductThumb";
+import { ExplainPanel, TargetsPanel } from "@/components/ads/AiPanels";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TERM_STATUS_LABEL, type Ratios, type TermStatus, type Totals } from "@/lib/ads/metrics";
 import { api } from "@/lib/ui/client";
@@ -110,6 +111,7 @@ function Dashboard({ d, load }: { d: Dash; load: () => void }) {
         <ProductSection key={a.asin} asin={a.asin} look={d.looks?.[a.asin]} stock={d.stock[a.asin]} plan={d.plans.find((p) => p.asin === a.asin)} onSaved={load}
           sub={`${a.campaigns} campaign${a.campaigns === 1 ? "" : "s"} · ${day(a.from)} – ${day(a.to)} · ${a.phase} · target ACoS ${pct(a.targetAcos, 0)}`}>
           <AsinTile a={a} onSaved={load} />
+          <ExplainPanel asin={a.asin} />
           <CampaignTable rows={d.campaigns.filter((c) => c.asin === a.asin)} onSaved={load} />
           <KeywordTable rows={d.keywords.filter((k) => k.asin === a.asin)} />
           <TermTable rows={d.terms.filter((t) => t.asin === a.asin)} campaigns={d.campaigns.filter((c) => c.asin === a.asin)} />
@@ -431,6 +433,7 @@ function EconEditor({ a, onSaved }: { a: AsinRow; onSaved: () => void }) {
         {!e.sizeKnown && <Button size="sm" variant="outline" onClick={keepa} disabled={!!busy}>{busy === "keepa" && <LoaderIcon className="animate-spin" />} Size and weight from Keepa (1 token)</Button>}
         <span className="text-xs text-muted-foreground">Referral category: {e.referralCategory}. Fees from the active rate card, VAT and the digital services fee included.</span>
       </div>
+      <TargetsPanel asin={a.asin} onApplied={onSaved} />
     </div>
   );
 }

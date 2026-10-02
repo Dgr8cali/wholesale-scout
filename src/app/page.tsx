@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangleIcon, ArrowRightIcon, BellIcon, BoxesIcon, BuildingIcon, CoinsIcon, MegaphoneIcon, PackageXIcon, ShoppingCartIcon, RefreshCwIcon, StarIcon, TagIcon, TelescopeIcon, UploadIcon } from "lucide-react";
+import { AlertTriangleIcon, ArrowRightIcon, BellIcon, BoxesIcon, BuildingIcon, CoinsIcon, MegaphoneIcon, PackageXIcon, ShoppingCartIcon, RefreshCwIcon, SparklesIcon, StarIcon, TagIcon, TelescopeIcon, UploadIcon } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 import { VerdictBar } from "@/components/VerdictBar";
@@ -98,6 +98,7 @@ export default function HomePage() {
   const pl = useLoad<PlDash>("/api/pl/dashboard");
   const ads = useLoad<AdsDash>("/api/ads/dashboard");
   const stock = useLoad<StockSummary>("/api/stock/summary");
+  const aiReview = useLoad<{ spend: { last30Gbp: number; last30Calls: number }; lastMonth: string; review: { result: { recommendations: { title: string }[] }; costGbp: number; at: string } | null }>("/api/ads/ai/spend");
 
   return (
     <div className="space-y-6">
@@ -180,6 +181,15 @@ export default function HomePage() {
             const waste = a.terms.filter((x) => x.status === "waste").length;
             return <Stat icon={<MegaphoneIcon />} label="Sponsored Products spend" href="/ads/dashboard" value={`£${t.cost.toFixed(2)}`}
               hint={`ACoS ${t.sales ? Math.round((t.cost / t.sales) * 100) : "—"}% on £${t.sales.toFixed(2)} sales · ${waste} search term${waste === 1 ? "" : "s"} wasting spend`} />;
+          }}
+        </Section>
+        <Section load={aiReview} skeleton={<StatSkeleton />}>
+          {(r) => {
+            const month = new Date(`${r.lastMonth}-01`).toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+            const ai = `AI: £${r.spend.last30Gbp.toFixed(2)} over ${r.spend.last30Calls} call${r.spend.last30Calls === 1 ? "" : "s"} in 30 days`;
+            return r.review
+              ? <Stat icon={<SparklesIcon />} label={`Review of ${month}`} href={`/ads/review?month=${r.lastMonth}`} value={r.review.result.recommendations[0]?.title ?? "Done"} hint={`Top recommendation · this review cost £${r.review.costGbp.toFixed(2)} · ${ai}`} />
+              : <Stat icon={<SparklesIcon />} label={`Review of ${month}`} href={`/ads/review?month=${r.lastMonth}`} value="Not run" hint={`Run it on Ads → Review · ${ai}`} />;
           }}
         </Section>
       </div>

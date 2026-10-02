@@ -17,6 +17,7 @@ order: 20
 | **Proposals** | The changes your rules suggest, grouped by product and rule, with the reason in real numbers and a confidence. Approve, skip or snooze; export the approved ones as a bulk sheet to upload in Amazon Ads. Nothing changes in Amazon Ads without your upload. |
 | **N-grams** | Every search term's words and word pairs, with spend, orders, ACoS and waste per product; Rules 9 and 10 act on them. |
 | **Launch** | A new product's four launch campaigns as one bulk Create sheet, and its 60-day plan. See [Ads: launching a product](/help/howto/ads-launching-a-product). |
+| **Review** | The monthly AI review: per product and account-wide, whether last month's batches worked, and three ranked recommendations. See [Ads: AI review](/help/howto/ads-ai-review). |
 
 ## Target ACoS and break-even
 

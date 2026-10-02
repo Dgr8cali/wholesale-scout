@@ -1,0 +1,1128 @@
+{
+ "asin": "B0H9ZKYYHZ",
+ "title": "Weekly Pill Organiser Box | 7 Day 3 Times a Day | 21 Compartments",
+ "period": {
+  "from": "2026-08-10",
+  "to": "2026-10-02"
+ },
+ "phase": "launch",
+ "targetAcos": 0.3,
+ "breakEvenAcos": 0.4874455442486013,
+ "price": 8.99,
+ "totals": {
+  "impressions": 31698,
+  "clicks": 195,
+  "cost": 107.25000000000001,
+  "orders": 13,
+  "sales": 125.86,
+  "units": 14
+ },
+ "profitAfterAds": -45.90010380087105,
+ "totalSales": {
+  "revenue": 243.61999999999998,
+  "units": 28
+ },
+ "terms": [
+  {
+   "term": "pill organiser 3 times a day",
+   "campaign": "PILL EXACT HERO",
+   "clicks": 29,
+   "cost": 19.81,
+   "orders": 2,
+   "sales": 17.98,
+   "status": "over_target"
+  },
+  {
+   "term": "pill organiser",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 23,
+   "cost": 12.760000000000002,
+   "orders": 0,
+   "sales": 0,
+   "status": "waste"
+  },
+  {
+   "term": "7 day pill box organiser",
+   "campaign": "PILL EXACT HERO",
+   "clicks": 9,
+   "cost": 5.51,
+   "orders": 1,
+   "sales": 8.99,
+   "status": "over_target"
+  },
+  {
+   "term": "pill box",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 8,
+   "cost": 4.97,
+   "orders": 2,
+   "sales": 17.98,
+   "status": "converting"
+  },
+  {
+   "term": "medication organizer",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 8,
+   "cost": 4.94,
+   "orders": 1,
+   "sales": 8.99,
+   "status": "over_target"
+  },
+  {
+   "term": "pill organiser 3 times a day",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 5,
+   "cost": 2.4699999999999998,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "7 day pill box organiser",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 4,
+   "cost": 1.87,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "pill organiser",
+   "campaign": "PILL EXACT HERO",
+   "clicks": 4,
+   "cost": 1.42,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "pill box organiser",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 2,
+   "cost": 1.34,
+   "orders": 1,
+   "sales": 8.99,
+   "status": "converting"
+  },
+  {
+   "term": "monthly pill box organiser",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 2,
+   "cost": 1.1,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "dossett pill box 7 day 3 compartments",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 2,
+   "cost": 1.08,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "three times a day pill box",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 2,
+   "cost": 0.95,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "large pill box organiser 3 times a day",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.84,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "weekly pill organiser am pm",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.8,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "three times a day pill box organiser",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.77,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "7 day pill box organiser 3 times a day",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.74,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "wooden tablet organiser three times a day",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.74,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "pill boxes 7 day 3 times a day small",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.74,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "small pill box for three times a day",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.74,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "pill box weekly 3 containers per day",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.74,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "pill box",
+   "campaign": "PILL EXACT HERO",
+   "clicks": 2,
+   "cost": 0.73,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "dossett pill box 7 day morning afternoon evening",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.71,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "pill organiser twice a day 14 day",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.71,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "7 day morning noon and night pill box organiser",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.69,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "weekly pill organiser 3 times a day easy open",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.69,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "weekly pill box",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.67,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "day and night pill box",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.67,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "large capacity pill box 7 day",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.67,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "large pill box organiser",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.67,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "large print pill box 3 x day",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.67,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "medication pill box organiser 14 days",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.67,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "colour coded pill organiser large print",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.67,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "pill organiser 3 times a day large",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.67,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "7 slot pill box 3 times a day",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.66,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "medicine organiser 3 times a day",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.66,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "7 day large pill organiser",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.66,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "large compartment weekly pill box",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.65,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "28 day pill box organiser am pm",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.61,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "4 weeks pill box organiser am & pm",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.61,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "daily pill organiser 7 day",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.61,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "monthly pill box organiser easy open",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.61,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "pill organiser 21 days",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.61,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "pill organiser 3 times a day small",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.61,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "pill organiser 30 day",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.61,
+   "orders": 1,
+   "sales": 8.99,
+   "status": "converting"
+  },
+  {
+   "term": "7 day pill box",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.61,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "hourly pill box 6 times a day",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.61,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "pill organiser 4 weeks",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.6,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "sliding pill organiser",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.6,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "weekly pill organiser 3 times a day",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.59,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "pill container 7 day",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.58,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "31 day pill box organiser",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.58,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "seven day pill box organiser",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.58,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "large compartment monthly pill box",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.57,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "7 day pill box stack organiser",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.57,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "tablet organiser 28 day",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.55,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "pill box weekly 2x day",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.55,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "6 times a day, 7 day pill box",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.54,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "coloured pill box 7 days",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.54,
+   "orders": 1,
+   "sales": 8.99,
+   "status": "converting"
+  },
+  {
+   "term": "pill box 7 day 5 times a day",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.54,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "meds organiser 5x a day",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.54,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "3 times a day pill box",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.54,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "pill boxes 3 times a day",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.54,
+   "orders": 1,
+   "sales": 8.99,
+   "status": "converting"
+  },
+  {
+   "term": "xl pill box 3 times a day",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.54,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "round tablet organiser 3 times a day",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.53,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "vitamin box organiser 7 days",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.53,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "pill organiser 5 times a day",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.53,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "7 day x5 pull organiser",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.52,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "pill boxes month 1 times a day",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.52,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "pill organiser 7 day 2 times a day",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.52,
+   "orders": 1,
+   "sales": 8.99,
+   "status": "converting"
+  },
+  {
+   "term": "weekly pill organiser",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.49,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "tablet organiser 3 times a day",
+   "campaign": "PILL AUTO DISCOVERY",
+   "clicks": 2,
+   "cost": 0.48,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "tablet organiser 4 times a day",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.47,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "pill boxes 7 day 3 times a day",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.46,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "pill organiser",
+   "campaign": "Pill Box AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.46,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "3 part pill box",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.45,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "pill box organiser morning, evening and night",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.45,
+   "orders": 1,
+   "sales": 17.98,
+   "status": "converting"
+  },
+  {
+   "term": "travel pill box",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.45,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "xxl pill box",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.45,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "pill boxes 28 day 2 times a day",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.43,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "pill box organizer",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.43,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "pill box with fourteen compartments",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.43,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "push button pill box",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.43,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "weekly pill organisers 3 times a day croatian",
+   "campaign": "PILL BROAD RESEARCH",
+   "clicks": 2,
+   "cost": 0.43,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "pill box organiser",
+   "campaign": "PILL EXACT HERO",
+   "clicks": 1,
+   "cost": 0.4,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "pill box 3 compartment medicine pill case",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.39,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "31 day pill box",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.37,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "6 compartment pill box",
+   "campaign": "AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.35,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "3 times a day pill organiser 7 day",
+   "campaign": "PILL BROAD RESEARCH",
+   "clicks": 1,
+   "cost": 0.32,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "pill box 3 times a day",
+   "campaign": "PILL BROAD RESEARCH",
+   "clicks": 1,
+   "cost": 0.31,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "3 times a day pill organizer",
+   "campaign": "PILL BROAD RESEARCH",
+   "clicks": 1,
+   "cost": 0.3,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "family pill organiser for 3 people",
+   "campaign": "PILL BROAD RESEARCH",
+   "clicks": 1,
+   "cost": 0.3,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "large capacity pill organiser 3 times a day",
+   "campaign": "PILL BROAD RESEARCH",
+   "clicks": 1,
+   "cost": 0.3,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "large compartment pill box",
+   "campaign": "PILL BROAD RESEARCH",
+   "clicks": 1,
+   "cost": 0.3,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "large pill box organiser",
+   "campaign": "PILL BROAD RESEARCH",
+   "clicks": 1,
+   "cost": 0.3,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "medication organizer",
+   "campaign": "PILL BROAD RESEARCH",
+   "clicks": 1,
+   "cost": 0.3,
+   "orders": 1,
+   "sales": 8.99,
+   "status": "converting"
+  },
+  {
+   "term": "pill box",
+   "campaign": "PILL BROAD RESEARCH",
+   "clicks": 1,
+   "cost": 0.3,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "pill box morning and night",
+   "campaign": "PILL BROAD RESEARCH",
+   "clicks": 1,
+   "cost": 0.3,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "pill organiser 3 times a day compact",
+   "campaign": "PILL BROAD RESEARCH",
+   "clicks": 1,
+   "cost": 0.3,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "weekly pill organisers 3 times a day smaller",
+   "campaign": "PILL BROAD RESEARCH",
+   "clicks": 1,
+   "cost": 0.3,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "family pill organiser",
+   "campaign": "PILL BROAD RESEARCH",
+   "clicks": 1,
+   "cost": 0.3,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "pill organiser big writing",
+   "campaign": "PILL BROAD RESEARCH",
+   "clicks": 1,
+   "cost": 0.29,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "pill boxes",
+   "campaign": "PILL AUTO DISCOVERY",
+   "clicks": 1,
+   "cost": 0.27,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "tablet organiser",
+   "campaign": "PILL BROAD RESEARCH",
+   "clicks": 1,
+   "cost": 0.24,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "pill dosing box with 3 compartments",
+   "campaign": "PILL AUTO DISCOVERY",
+   "clicks": 1,
+   "cost": 0.24,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "pill boxes 7 day 3 times a day",
+   "campaign": "Pill Box AD_READY: B0H9ZKYYHZ",
+   "clicks": 1,
+   "cost": 0.24,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  },
+  {
+   "term": "tablet organiser 3 times a day large",
+   "campaign": "PILL AUTO DISCOVERY",
+   "clicks": 1,
+   "cost": 0.18,
+   "orders": 0,
+   "sales": 0,
+   "status": "watch"
+  }
+ ],
+ "placements": [
+  {
+   "placement": "top",
+   "clicks": 32,
+   "cost": 23.040000000000003,
+   "orders": 2,
+   "sales": 17.98
+  },
+  {
+   "placement": "rest of search",
+   "clicks": 98,
+   "cost": 46.980000000000004,
+   "orders": 7,
+   "sales": 71.92
+  },
+  {
+   "placement": "product page",
+   "clicks": 65,
+   "cost": 37.230000000000004,
+   "orders": 4,
+   "sales": 35.96
+  },
+  {
+   "placement": "Amazon Business",
+   "clicks": 1,
+   "cost": 0.61,
+   "orders": 0,
+   "sales": 0
+  }
+ ],
+ "campaigns": [
+  {
+   "name": "AD_READY: B0H9ZKYYHZ",
+   "state": "paused",
+   "budget": 10,
+   "clicks": 126,
+   "cost": 72.62,
+   "orders": 9,
+   "sales": 89.9
+  },
+  {
+   "name": "PILL EXACT HERO",
+   "state": "paused",
+   "budget": 7,
+   "clicks": 45,
+   "cost": 27.87,
+   "orders": 3,
+   "sales": 26.97
+  },
+  {
+   "name": "PILL BROAD RESEARCH",
+   "state": "paused",
+   "budget": 2,
+   "clicks": 17,
+   "cost": 4.89,
+   "orders": 1,
+   "sales": 8.99
+  },
+  {
+   "name": "PILL AUTO DISCOVERY",
+   "state": "paused",
+   "budget": 3,
+   "clicks": 5,
+   "cost": 1.17,
+   "orders": 0,
+   "sales": 0
+  },
+  {
+   "name": "Pill Box AD_READY: B0H9ZKYYHZ",
+   "state": "paused",
+   "budget": 10,
+   "clicks": 2,
+   "cost": 0.7,
+   "orders": 0,
+   "sales": 0
+  }
+ ],
+ "budgetLimitedDays": null,
+ "proposals": [
+  {
+   "rule": "Bid down",
+   "entity": "keyword: pill organiser (broad)",
+   "current": "£0.27",
+   "proposed": "£0.23",
+   "reason": "35 clicks, 3 orders, £19.58 spent, £35.96 sales = 54.4% ACoS, over 1.2 × the 30% target (10 Aug – 2 Oct). The bid for 30% ACoS at £8.99 and 8.6% conversion is £0.23.",
+   "confidence": "high",
+   "status": "exported, awaiting upload"
+  },
+  {
+   "rule": "Harvest",
+   "entity": "search term: pill box",
+   "current": "broad in AD_READY: B0H9ZKYYHZ",
+   "proposed": "already exact in PILL EXACT HERO + negative exact in AD_READY: B0H9ZKYYHZ",
+   "reason": "\"pill box\": 8 clicks, 2 orders, £4.97 spent, £17.98 sales = 27.6% ACoS, at or under the 30% target (10 Aug – 2 Oct), found by broad in AD_READY: B0H9ZKYYHZ. PILL EXACT HERO already has it as an exact keyword, so only the negative is needed.",
+   "confidence": "low",
+   "status": "exported, awaiting upload"
+  },
+  {
+   "rule": "Negative",
+   "entity": "search term: pill organiser",
+   "current": "showing",
+   "proposed": "negative exact",
+   "reason": "23 clicks, 0 orders, £12.76 spent = 142% of the £8.99 price (10 Aug – 2 Oct). No order after 15+ clicks.",
+   "confidence": "medium",
+   "status": "exported, awaiting upload"
+  },
+  {
+   "rule": "Bid down",
+   "entity": "keyword: pill organiser (broad)",
+   "current": "£0.30",
+   "proposed": "£0.19",
+   "reason": "14 clicks, 1 order, £3.96 spent, £8.99 sales = 44.0% ACoS, over 1.2 × the 30% target (10 Aug – 2 Oct). The bid for 30% ACoS at £8.99 and 7.1% conversion is £0.19.",
+   "confidence": "medium",
+   "status": "exported, awaiting upload"
+  },
+  {
+   "rule": "Bid down",
+   "entity": "keyword: pill organiser 3 times a day (exact)",
+   "current": "£0.40",
+   "proposed": "£0.19",
+   "reason": "29 clicks, 2 orders, £19.81 spent, £17.98 sales = 110.2% ACoS, over 1.2 × the 30% target (10 Aug – 2 Oct). The bid for 30% ACoS at £8.99 and 6.9% conversion is £0.19.",
+   "confidence": "medium",
+   "status": "exported, awaiting upload"
+  },
+  {
+   "rule": "Bid down",
+   "entity": "keyword: day organiser (broad)",
+   "current": "£0.33",
+   "proposed": "£0.10",
+   "reason": "12 clicks, 0 orders, £7.01 spent, no sales (10 Aug – 2 Oct). No order yet: down to the £0.10 floor.",
+   "confidence": "medium",
+   "status": "exported, awaiting upload"
+  },
+  {
+   "rule": "Bid down",
+   "entity": "keyword: day pill box (broad)",
+   "current": "£0.36",
+   "proposed": "£0.27",
+   "reason": "10 clicks, 1 order, £4.97 spent, £8.99 sales = 55.3% ACoS, over 1.2 × the 30% target (10 Aug – 2 Oct). The bid for 30% ACoS at £8.99 and 10.0% conversion is £0.27.",
+   "confidence": "medium",
+   "status": "exported, awaiting upload"
+  }
+ ],
+ "stock": {
+  "total": 93,
+  "daysOfCover": 9999
+ }
+}

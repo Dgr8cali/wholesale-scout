@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/watchlist",
       "schedule": "0 6 * * 0"
+    },
+    {
+      "path": "/api/cron/ads-review",
+      "schedule": "0 6 1 * *"
     }
   ]
 }

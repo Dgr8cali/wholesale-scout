@@ -1,8 +1,8 @@
 # Wholesale Scout: status
 
 Read this first in a new session. Keep it current: every commit that changes a feature updates
-it (what's built, the backlog, the rough edges). Last updated: 2 Oct 2026 (Stock workspace,
-anonymised StockPilot sample).
+it (what's built, the backlog, the rough edges). Last updated: 2 Oct 2026 (Ads Phase 4: the AI research
+layer).
 
 Wholesale Scout is a single-user Amazon UK seller's workbench: Next.js 16 (App Router, `proxy.ts`
 password gate), Supabase (Postgres, RLS on, service-role access from the server only), Vercel
@@ -47,7 +47,11 @@ bottom. Thirteen rules (harvest, negatives, bids, pause, placement, budget, revi
 negative/winner, stock guard, ranked, slipping) raise proposals to approve, skip or snooze; the
 approved export as a bulk sheet in Amazon's own column order, as batches that can be reverted,
 with snapshots to restore. Also: n-grams, the launcher (Auto/Broad/Exact/PT Create sheet and a
-60-day plan), extension rank checks.
+60-day plan), extension rank checks. The AI research layer (Claude, on your click only): Explain this product (a cited
+narrative per product), Recommend targets (launch and steady ACoS, Apply writes them) and the
+monthly review on Ads → Review (per product, account-wide, did applied batches work, three ranked
+recommendations mapped to rules; optional schedule on the 1st, off by default). Every call is
+logged in `ads_ai_calls` with tokens and £ cost; answers are cached per data hash.
 
 **Stock: track what you hold.** Your own items (stock_items) in three buckets: self-ship and TikTok
 FBT are ledgers of movements (received, sale, return, adjustment, transfer); Amazon FBA is SP-API's
@@ -65,16 +69,16 @@ imported (3 items). Ads days of cover and the stock guard count every bucket.
 | **Keepa** | Live. About 21 tokens a minute refill; spend is logged per feature (Home's Keepa tile). Token-conscious: estimate before spending, report what was spent. |
 | **SP-API** | Live: orders report, FBA inventory (getInventorySummaries), catalog, fee estimates, listing restrictions, offers. Nightly sync plus on demand. The **Brand Analytics** and **Finance** roles are approved but the token still gets 403: no Buy Box %, no exact fees charged (the fee estimate stands in). Retry later. |
 | **Amazon Ads API** | **Pending approval.** LWA client credentials are in the env (`ADS_LWA_CLIENT_ID`, `ADS_LWA_CLIENT_SECRET`); no connector yet (backlog). Until then: bulk export in, bulk sheet out. |
-| **Anthropic API** | `ANTHROPIC_API_KEY` is set; the app doesn't call it yet. |
+| **Anthropic API** | Live (`@anthropic-ai/sdk`): Ads Explain, Recommend targets and the monthly review, only on a click or the monthly schedule (off by default). Model and prices in Settings → Ads (Sonnet 5.5 default); cost per call logged in `ads_ai_calls`. |
 | **Supabase** | Postgres with RLS on every table; pg_cron + pg_net run the watchdog (restarts stalled runs and hunts). |
-| **Vercel** | Hosting; crons: Qogita nightly 03:00, Watchlist Sunday 06:00. Env vars set there (Sensitive), including Qogita and `SPAPI_SELLER_ID`. |
+| **Vercel** | Hosting; crons: Qogita nightly 03:00, Watchlist Sunday 06:00, Ads review 1st of the month 06:00 (does nothing unless turned on). Env vars set there (Sensitive), including Qogita and `SPAPI_SELLER_ID`. |
 | **Qogita** | Live: nightly catalogue and offer pull. |
 | **Resend** | Watchlist alert emails, sent only when `RESEND_API_KEY` and `ALERT_EMAIL_TO` are set (not set locally). |
 
 ## Backlog (priority order)
 
-1. **Ads: Phase 4, research layer** (keyword and competitor research feeding the rules and the launcher).
-2. **Ads: Phase 3, the Ads API connector**, once approved: pull reports and entities, apply approved proposals (rules in Auto mode), hourly data for budget timing, impression share, keyword-level days.
+1. **Ads: Phase 3, the Ads API connector**, once approved: pull reports and entities, apply approved proposals (rules in Auto mode), hourly data for budget timing, impression share, keyword-level days.
+2. **Ads: keyword and competitor research** (the old Phase 4 idea: feeding the rules and the launcher; the AI layer now covers narrative, targets and the monthly review).
 3. **Private label: Gate 4 reviews helper** (mine the 1–3★ reviews of the top listings for the fixable complaint).
 4. **Stock: TikTok/eBay sales recording in use** (record real sales so demand, cover and reorder points mean something; a faster entry path or imports from TikTok Shop/eBay order exports).
 5. **General: move pg_net out of the public schema** (Supabase advisor: extension in public).
@@ -92,6 +96,8 @@ imported (3 items). Ads days of cover and the stock guard count every bucket.
 - **Gate 7's stock line** from a quote is units × the rounded landed cost per unit (pennies off the quote's total).
 - **Stock** demand for the pill box is thin: no Amazon orders after 13 Sept in the sync, 0 FBA units, and no TikTok/eBay sales recorded yet.
 - **The StockPilot app** still runs against its own Supabase project; a Dyad chat log on disk (`~/dyad-apps/StockPilot/.dyad/chats/44/…`, gitignored) holds its old project's anon key in plain text.
+- **AI prices are assumed defaults** ($3/$15 per M tokens for Sonnet 5.5, $1/$5 Haiku 4.5, $5/$25 Opus 5.5, £0.79 per $): check them against Anthropic's pricing and edit in Settings → Ads.
+- **The monthly review** needs the daily Campaign report for per-month figures and batch before/after verdicts; with range data only it says so. No batch has been uploaded yet, so no verdict has been tested on real data.
 - **SP-API roles** (Brand Analytics, Finance): see above.
 
 ## Conventions for every session

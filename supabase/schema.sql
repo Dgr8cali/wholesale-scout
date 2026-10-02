@@ -1,5 +1,5 @@
 -- Wholesale Scout schema, dumped by scripts/schema-backup.mjs. No data.
--- Dumped 2026-10-02T16:35:54.718Z. Safe to re-run. Restore: npm run schema:restore
+-- Dumped 2026-10-02T17:06:48.834Z. Safe to re-run. Restore: npm run schema:restore
 
 -- @section extensions
 create extension if not exists "pg_cron";
@@ -41,6 +41,50 @@ alter table "ads_ad_groups" add column if not exists "sales" numeric default 0;
 alter table "ads_ad_groups" add column if not exists "units" integer;
 alter table "ads_ad_groups" add column if not exists "import_id" uuid;
 alter table "ads_ad_groups" enable row level security;
+
+create table if not exists "ads_ai_calls" (
+  "id" uuid default gen_random_uuid() not null,
+  "feature" text not null,
+  "subject" text not null,
+  "data_hash" text not null,
+  "model" text not null,
+  "input_tokens" integer default 0 not null,
+  "output_tokens" integer default 0 not null,
+  "cache_read_tokens" integer default 0 not null,
+  "cache_write_tokens" integer default 0 not null,
+  "cost_usd" numeric default 0 not null,
+  "cost_gbp" numeric default 0 not null,
+  "trigger" text default 'user'::text not null,
+  "result" jsonb,
+  "error" text,
+  "created_at" timestamp with time zone default now() not null
+);
+alter table "ads_ai_calls" add column if not exists "id" uuid default gen_random_uuid();
+alter table "ads_ai_calls" add column if not exists "feature" text;
+alter table "ads_ai_calls" add column if not exists "subject" text;
+alter table "ads_ai_calls" add column if not exists "data_hash" text;
+alter table "ads_ai_calls" add column if not exists "model" text;
+alter table "ads_ai_calls" add column if not exists "input_tokens" integer default 0;
+alter table "ads_ai_calls" add column if not exists "output_tokens" integer default 0;
+alter table "ads_ai_calls" add column if not exists "cache_read_tokens" integer default 0;
+alter table "ads_ai_calls" add column if not exists "cache_write_tokens" integer default 0;
+alter table "ads_ai_calls" add column if not exists "cost_usd" numeric default 0;
+alter table "ads_ai_calls" add column if not exists "cost_gbp" numeric default 0;
+alter table "ads_ai_calls" add column if not exists "trigger" text default 'user'::text;
+alter table "ads_ai_calls" add column if not exists "result" jsonb;
+alter table "ads_ai_calls" add column if not exists "error" text;
+alter table "ads_ai_calls" add column if not exists "created_at" timestamp with time zone default now();
+alter table "ads_ai_calls" enable row level security;
+
+create table if not exists "ads_ai_settings" (
+  "key" text not null,
+  "value" text not null,
+  "updated_at" timestamp with time zone default now() not null
+);
+alter table "ads_ai_settings" add column if not exists "key" text;
+alter table "ads_ai_settings" add column if not exists "value" text;
+alter table "ads_ai_settings" add column if not exists "updated_at" timestamp with time zone default now();
+alter table "ads_ai_settings" enable row level security;
 
 create table if not exists "ads_campaign_daily" (
   "campaign" uuid not null,
@@ -1931,6 +1975,16 @@ do $$ begin
   end if;
 end $$;
 do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'ads_ai_calls_pkey' and conrelid = '"ads_ai_calls"'::regclass) then
+    alter table "ads_ai_calls" add constraint "ads_ai_calls_pkey" PRIMARY KEY (id);
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'ads_ai_settings_pkey' and conrelid = '"ads_ai_settings"'::regclass) then
+    alter table "ads_ai_settings" add constraint "ads_ai_settings_pkey" PRIMARY KEY (key);
+  end if;
+end $$;
+do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'ads_campaign_daily_pkey' and conrelid = '"ads_campaign_daily"'::regclass) then
     alter table "ads_campaign_daily" add constraint "ads_campaign_daily_pkey" PRIMARY KEY (campaign, date);
   end if;
@@ -2388,6 +2442,16 @@ end $$;
 do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'suppliers_name_key' and conrelid = '"suppliers"'::regclass) then
     alter table "suppliers" add constraint "suppliers_name_key" UNIQUE (name);
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'ads_ai_calls_feature_check' and conrelid = '"ads_ai_calls"'::regclass) then
+    alter table "ads_ai_calls" add constraint "ads_ai_calls_feature_check" CHECK ((feature = ANY (ARRAY['explain'::text, 'review'::text, 'targets'::text])));
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'ads_ai_calls_trigger_check' and conrelid = '"ads_ai_calls"'::regclass) then
+    alter table "ads_ai_calls" add constraint "ads_ai_calls_trigger_check" CHECK ((trigger = ANY (ARRAY['user'::text, 'schedule'::text])));
   end if;
 end $$;
 do $$ begin
@@ -2927,6 +2991,7 @@ do $$ begin
 end $$;
 
 -- @section indexes
+CREATE INDEX IF NOT EXISTS ads_ai_calls_subject ON ads_ai_calls USING btree (feature, subject, created_at DESC);
 CREATE INDEX IF NOT EXISTS ads_campaigns_asin ON ads_campaigns USING btree (asin);
 CREATE INDEX IF NOT EXISTS ads_campaigns_name ON ads_campaigns USING btree (lower(name));
 CREATE INDEX IF NOT EXISTS ads_keywords_campaign ON ads_keywords USING btree (campaign);
@@ -3204,3 +3269,4 @@ insert into schema_migrations (name) values ('20261002001100_niche_hunt_direct.s
 insert into schema_migrations (name) values ('20261002001200_ads_daily_products.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261002001300_pl_quotes_launch.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261002001400_stock.sql') on conflict do nothing;
+insert into schema_migrations (name) values ('20261002001500_ads_ai.sql') on conflict do nothing;
