@@ -1,26 +1,55 @@
 ---
 title: Niche Hunt
 summary: Private label's Niche Hunt asks Keepa's Product Finder for products that already pass Gate 0 and Gate 1, groups them into niches, and turns a niche into a candidate.
-synonyms: [niche hunt, niche finder, private label hunt, find niches, product finder, gatekeeper hunt, niche ideas]
+synonyms: [niche hunt, niche finder, private label hunt, find niches, product finder, gatekeeper hunt, niche ideas, direct mode, leaf mode, token cap]
 order: 6
 workspace: pl
 route: /pl/niche-hunt
 ---
-Niche Hunt is a page in the [Private label](/help/pages/private-label) workspace (**Private label → Niche Hunt**). Instead of guessing a niche, you ask Keepa's Product Finder for products that already pass Gate 0 and Gate 1. It hunts **leaf by leaf**: a leaf browse category (such as "Cutlery Trays" or "Shaving Mirrors") is Amazon's own grouping of like products, and each leaf is a niche. It uses the same Keepa client, token ledger and stored categories as the wholesale [Hunt](/help/pages/hunt).
+Niche Hunt is a page in the [Private label](/help/pages/private-label) workspace (**Private label → Niche Hunt**). Instead of guessing a niche, you ask Keepa's Product Finder for products that already pass Gate 0 and Gate 1, and group them by leaf browse category: a leaf (such as "Cutlery Trays" or "Shaving Mirrors") is Amazon's own grouping of like products, and each leaf is a niche. It uses the same Keepa client, token ledger and stored categories as the wholesale [Hunt](/help/pages/hunt).
 
-## How a hunt runs
+There are two modes, picked at the top of the filters.
 
-A hunt runs in the background, like a screening run: it carries on with the page closed, and the watchdog restarts it if it stalls. The page shows where it has got to, for example "Sizing leaves 23/60 → Detailing 4/15", with **Cancel**.
+## Direct mode (the default)
+
+One Product Finder query per category you pick, with every qualifying threshold **Keepa applies itself**, sorted by 90-day rank drops (most first), in pages of 50:
+
+| Applied by Keepa | Default |
+|---|---|
+| The category the product ranks in | the roots you pick |
+| Buy Box price | £15–40 |
+| Rating | 3.6–4.5 |
+| Reviews | at most 500 |
+| Sales a month (Amazon's "bought in past month") | at least 100 (rank drops ÷ 3) |
+| No Amazon offer now | on |
+| Tracked by Keepa for at least | 6 months |
+| Not an Amazon brand | on |
+
+**Pages a category** (4, up to 10) sets how many pages of 50 it takes from each category. The products found are then detailed (about 2 tokens each, free for any fetched in the last 7 days), checked for what Keepa's query can't check (Amazon in the last 90 days, weight, the small-parcel size), and grouped by their own leaf category.
+
+What Keepa's query can't do, found by testing it:
+
+- **Rank drops** can be filtered (salesRankDrops90), but Keepa's count tops out low: no Pet Supplies product under these filters had 300 drops in 90 days (81 had 100). So direct mode asks for sales a month instead, and sorts by rank drops.
+- **Weight** can be filtered, but the filter drops products whose weight Keepa doesn't know. So weight is checked on the detail, where unknown weight isn't a miss.
+- With reviews capped in the query, direct mode finds few **incumbents** (products over the review cap). Use leaf mode to see a niche's incumbents.
+
+The page shows "Finder pages 6/10 (300 ASINs) → Detailing 150/500" as it goes. For example, Garden, Pet Supplies, Sports & Outdoors, Baby Products and Stationery & Office Supplies at 2 pages each found 500 products (of 2,125 matches) for 1,104 tokens: 135 qualifying and 48 near misses.
+
+## Leaf mode
+
+Leaf by leaf: each leaf is sized with wide finder filters, then the most promising leaves are detailed. It costs more (a finder call per leaf, and the category tree), but shows each leaf's whole page one, incumbents included.
+
+The page shows where it has got to, for example "Sizing leaves 23/60 → Detailing 4/15", with **Cancel**. Either mode runs in the background, like a screening run: it carries on with the page closed, and the watchdog restarts it if it stalls.
 
 1. **Leaves.** The leaf categories under the roots you picked, from Keepa's category tree. The biggest branches are listed first, up to 400 categories a root (40 tokens). The tree is kept for a week. The largest leaves by product count are taken, up to **Leaves to size** (60).
 2. **Stage 1: size the leaves.** One Product Finder call per leaf with your filters and no product detail: about 11 tokens a leaf. It records how many products match, and keeps the leaf's 50 best sellers for stage 2. A leaf's count is reused for 7 days under the same finder filters. A leaf with fewer than **Skip leaves under … matches** (5) isn't detailed. **Show leaves sized** lists every leaf with its matches, what sizing it cost (0 when reused) and what happened in stage 2.
 3. **Stage 2: detail the promising leaves.** The **N** leaves with the most matches (**Leaves to detail**, 15). For each, the detail of up to **ASINs per leaf** (12) best sellers: about 2 tokens each, free for any product fetched in the last 7 days. Each product is then qualified, and the leaf becomes a niche.
 
-## The filters: hunt wide, qualify strict
+## The filters
 
-The gates' pass thresholds used as hard finder filters compound: the first real hunt (60 leaves, 148 products detailed) found 7 that qualified. So the filters come in two groups. The defaults can be changed and saved as named presets (**Save as preset**, **Load a preset…**, **Delete preset**); **Reset to defaults** puts them back. Two presets come ready: **Home & Kitchen — first pass** and **Garden + Pet + Sports**.
+In leaf mode, the gates' pass thresholds used as hard finder filters compound: the first real hunt (60 leaves, 148 products detailed) found 7 that qualified. So leaf mode's filters come in two groups; direct mode uses the qualifying thresholds as its query. The defaults can be changed and saved as named presets (**Save as preset**, **Load a preset…**, **Delete preset**); **Reset to defaults** puts them back. Two presets come ready: **Home & Kitchen — first pass** and **Garden + Pet + Sports**.
 
-**Finder filters (wide — what Keepa searches)**, asked of the Product Finder for each leaf:
+**Finder filters (wide — what Keepa searches)**, leaf mode only, asked of the Product Finder for each leaf:
 
 | Filter | Default |
 |---|---|
@@ -33,23 +62,23 @@ The gates' pass thresholds used as hard finder filters compound: the first real 
 
 There's no weight or size filter in the finder: Keepa often lacks them, and the finder drops a product it can't measure.
 
-**Qualifying thresholds (strict — what counts as page-one material)**, the gates' pass band, checked on each product's detail:
+**Qualifying thresholds (what counts as page-one material)**, checked on each product's detail in both modes. They default to the gates' **warn band**: a hunt finds; the candidate's scorecard then judges on the pass band (£18–35, 3.8–4.3).
 
 | Check | Default |
 |---|---|
-| Price | £18–35 |
-| Rating | 3.8–4.3 |
+| Price | £15–40 |
+| Rating | 3.6–4.5 |
 | Demand | 300 rank drops in 90 days (100 sales a month) by the app's sales rule: rank drops ÷ 3, or Amazon's bought-past-month for a fast seller. A fast seller (90-day average rank under 5,000) without bought-past-month passes on its rank, because rank drops undercount it |
 | No Amazon in the last 90 days | on |
 | Not an Amazon brand | on |
-| Package weight | 500 g or less |
+| Package weight | 500 g or less (unknown weight passes, marked "weight unknown") |
 | Small parcel (35 × 25 × 12 cm) | on, when Keepa has the size |
 | Max reviews | 500 |
 
 Each detailed product is then one of:
 
 - **Qualifies**: passes everything.
-- **Near miss**: fails only the gates' warn band (price £15–40, rating 3.6–4.5, weight up to 700 g), or is missing its weight or size. Demand, Amazon and brand are never near misses.
+- **Near miss**: fails only the gates' warn band (price £15–40, rating 3.6–4.5, weight up to 700 g), or is missing its size. Unknown weight isn't a miss: the product qualifies, marked "weight unknown". Demand, Amazon and brand are never near misses.
 - **Incumbent**: no hard fail, but over the review cap. Incumbents are the competition: they count for the niche's shape and max reviews, not its size.
 - **Fails**: anything else, with the reason.
 
@@ -79,7 +108,11 @@ Each detailed leaf is a niche, named after the leaf in lower case. Correct the n
 
 ## Tokens
 
-The estimate is shown before you run, line by line, against your balance:
+The estimate is shown before you run, line by line, against your balance. **A hunt never spends more than its estimate + 10%**: it starts no Keepa call that would take it past that (the page shows "it stops at …"), and finishes with what it has, saying "Stopped at the token cap". Before each call it checks the balance: if the call doesn't fit, it waits for Keepa's refill and carries on.
+
+Direct mode: **finder pages** (categories × pages a category) × 11 tokens, plus **detail** of up to 50 products a page × about 2 tokens, less products fetched in the last 7 days. No category tree. The finder pages must fit the balance less the reserve to start; detail may wait for the refill.
+
+Leaf mode:
 
 - **Category tree**: up to 40 tokens a root not listed in the last week (1 token per 10 categories).
 - **Stage 1**: the leaves to size × 11 tokens. A leaf counted in the last 7 days under the same finder filters is free (the qualifying thresholds don't affect counts). Stage 1's spend is **capped by the balance**: the largest leaves are sized first, as many as the balance allows after the reserve, the tree and stage 2. Leaves that don't fit show "not sized (balance)".
@@ -87,4 +120,4 @@ The estimate is shown before you run, line by line, against your balance:
 
 A hunt keeps **100 tokens** in the balance. If not even N leaves can be sized, it won't start, and the page offers to detail fewer (**Detail K leaves instead**); or wait for the refill (21 tokens a minute). **Only one hunt runs at a time**: a second is refused while one is running, since two at once can't reuse each other's counts. If Keepa runs out part-way, the hunt waits ("Waiting for Keepa tokens") and carries on after the refill. Each hunt's spend is recorded on the hunt and counted in Home's Keepa spend. Hunts are kept: pick an earlier one from the list above the niches.
 
-For example, one leaf sized and detailed (Shaving Mirrors, 9 products) cost 20 tokens; the first real Home & Kitchen hunt (60 leaves, 15 detailed) cost 769.
+For example, one leaf sized and detailed (Shaving Mirrors, 9 products) cost 20 tokens; the first real Home & Kitchen hunt (60 leaves, 15 detailed) cost 769. A leaf hunt over five categories estimated 1,154 and spent 1,875 before the cap existed: listing the trees reset its sizing budget, so it sized all 120 leaves.

@@ -29,27 +29,36 @@ interface Start {
   hunts: { id: string; name: string; finder_total: number | null; fetched: number; reused: number; token_cost: number; created_at: string }[];
 }
 interface HuntLeaf { id: number; name: string; products: number | null; matches?: number; finderTokens?: number; cached?: boolean; skipped?: boolean; detail?: boolean; detailed?: boolean; fetched?: number; reused?: number }
-type HuntStatus = "listing" | "sizing" | "detailing" | "done" | "error" | "cancelled";
-interface Plan { estimate: HuntEstimate; balance: number | null; fits: boolean; fittingDetailLeaves: number | null; leavesKnown: boolean; leavesWanted: number; sizingCapped: boolean }
+type HuntStatus = "listing" | "sizing" | "finding" | "detailing" | "done" | "error" | "cancelled";
+interface Plan { estimate: HuntEstimate; balance: number | null; fits: boolean; fittingDetailLeaves: number | null; leavesKnown: boolean; leavesWanted: number; sizingCapped: boolean; cap: number; waitsForRefill: boolean }
 interface HuntResult {
   hunt: {
     id: string; name: string; filters: NicheHuntFilters; asins: string[]; finder_total: number | null; fetched: number; reused: number; finder_tokens: number; detail_tokens: number;
     token_cost: number; created_at: string; status: HuntStatus; leaves: HuntLeaf[] | null; note: string | null; finished_at: string | null;
+    progress?: { pages?: Record<string, number>; detailIndex?: number; cap?: number; estimate?: HuntEstimate } | null;
   };
   niches: Niche[];
   qualifying: number;
   near: number;
   incumbents: number;
-  funnel: { start: number; steps: { label: string; removed: number; near: number }[]; incumbents: number; near: number; qualifying: number };
+  funnel: { start: number; steps: { label: string; removed: number; near: number; unknown?: number }[]; incumbents: number; near: number; qualifying: number };
 }
 
 const n0 = (v: number | null | undefined) => (v == null ? "—" : Math.round(v).toLocaleString("en-GB"));
-const running = (s: HuntStatus) => s === "listing" || s === "sizing" || s === "detailing";
+const running = (s: HuntStatus) => s === "listing" || s === "sizing" || s === "finding" || s === "detailing";
 const OE_URL = "https://sellercentral.amazon.co.uk/opportunity-explorer";
 
 /** "Sizing leaves 23/60 → Detailing 4/15": where a hunt has got to. */
 function progressLine(h: HuntResult["hunt"]): string {
   if (h.status === "listing") return "Listing the leaf categories…";
+  if (!h.leaves) {
+    // Direct mode: finder pages per root, then detail.
+    const pages = Object.values(h.progress?.pages ?? {});
+    const done = pages.reduce((a, p) => a + (p === -1 ? h.filters.pagesPerRoot : p), 0);
+    const finding = `Finder pages ${done}/${h.filters.categories.length * h.filters.pagesPerRoot} (${h.asins.length} ASINs)`;
+    if (h.status === "finding") return `${finding} → Detailing`;
+    return `${finding} → Detailing ${Math.min(h.progress?.detailIndex ?? 0, h.asins.length)}/${h.asins.length}`;
+  }
   const leaves = h.leaves ?? [];
   const sized = leaves.filter((l) => l.matches != null || l.skipped).length, picked = leaves.filter((l) => l.detail).length, detailed = leaves.filter((l) => l.detailed).length;
   const size = `Sizing leaves ${sized}/${leaves.length}`;
@@ -164,7 +173,17 @@ export function NicheHunt({ onCandidate }: { onCandidate: (id: string) => void }
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="space-y-1">
             <h2 className="section-label">Hunt filters</h2>
-            <p className="max-w-3xl text-sm text-muted-foreground">Defaults from Gate 0 and Gate 1. The finder checks price, rating, rank, Amazon now, package size, listing age, category and Amazon brands. Rank drops, Amazon in the last 90 days, the exact parcel fit and reviews are checked on each product&apos;s detail. Products over the review cap stay in their niche as the incumbents to beat.</p>
+            <p className="max-w-3xl text-sm text-muted-foreground">Defaults from Gate 0 and Gate 1, qualifying on the warn band (£15–40, rating 3.6–4.5); the candidate scorecard judges on the pass band. {f.mode === "direct"
+              ? "Direct: one Keepa query per category with every threshold Keepa can check itself (price, rating, reviews, sales a month, no Amazon, listing age, Amazon brands), best rank drops first; then each product's detail is checked (Amazon in 90 days, weight, parcel size) and grouped by its leaf category."
+              : "Leaf: each leaf category is sized with wide filters, then the most promising leaves are detailed and qualified. Products over the review cap stay in their niche as the incumbents to beat."}</p>
+            <div className="flex gap-1 pt-1" role="radiogroup" aria-label="Hunt mode">
+              {(["direct", "leaf"] as const).map((m) => (
+                <button key={m} type="button" role="radio" aria-checked={f.mode === m} onClick={() => set({ mode: m })}
+                  className={cn("rounded-md border px-3 py-1 text-sm", f.mode === m ? "border-brand bg-brand-soft font-medium text-brand" : "text-muted-foreground hover:bg-surface-2")}>
+                  {m === "direct" ? "Direct (one query per category)" : "Leaf by leaf"}
+                </button>
+              ))}
+            </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {start.presets.length > 0 && (
@@ -179,6 +198,20 @@ export function NicheHunt({ onCandidate }: { onCandidate: (id: string) => void }
           </div>
         </div>
         <div className="grid gap-4 lg:grid-cols-2">
+          {f.mode === "direct" ? (
+          <fieldset className="space-y-3 rounded-lg border p-3">
+            <legend className="px-1 text-sm font-semibold">Direct query <span className="font-normal text-muted-foreground">(Keepa applies the qualifying thresholds itself)</span></legend>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <Num label={`Pages a category (1–${LIMITS.pagesPerRoot})`} value={f.pagesPerRoot} onChange={(v) => set({ pagesPerRoot: v })} hint="50 ASINs a page, most rank drops first, 11 tokens" />
+              <Num label="Listed at least (months)" value={f.minListedMonths} onChange={(v) => set({ minListedMonths: v })} />
+            </div>
+            <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+              <Toggle label="No Amazon offer (now; 90 days when qualifying)" checked={f.noAmazon} onChange={(v) => set({ noAmazon: v })} />
+              <Toggle label="Leave out Amazon's own brands" checked={f.excludeAmazonBrands} onChange={(v) => set({ excludeAmazonBrands: v })} />
+            </div>
+            <p className="text-xs text-muted-foreground">Keepa checks price, rating, reviews (at most the cap), sales a month (Amazon&apos;s &quot;bought in past month&quot;, at least rank drops ÷ 3), no Amazon offer, listing age and brands. Not weight: Keepa&apos;s weight filter drops products whose weight it doesn&apos;t know, so weight is checked on the detail (unknown weight isn&apos;t a miss). With reviews capped in the query, few incumbents come back: the leaf mode shows the incumbents.</p>
+          </fieldset>
+          ) : (
           <fieldset className="space-y-3 rounded-lg border p-3">
             <legend className="px-1 text-sm font-semibold">Finder filters <span className="font-normal text-muted-foreground">(wide — what Keepa searches)</span></legend>
             <div className="grid gap-3 sm:grid-cols-3">
@@ -195,6 +228,7 @@ export function NicheHunt({ onCandidate }: { onCandidate: (id: string) => void }
             </div>
             <p className="text-xs text-muted-foreground">No weight or size filter here: Keepa often lacks them, and the finder would drop those products. They&apos;re checked when qualifying.</p>
           </fieldset>
+          )}
           <fieldset className="space-y-3 rounded-lg border p-3">
             <legend className="px-1 text-sm font-semibold">Qualifying thresholds <span className="font-normal text-muted-foreground">(strict — what counts as page-one material)</span></legend>
             <div className="grid gap-3 sm:grid-cols-3">
@@ -210,15 +244,15 @@ export function NicheHunt({ onCandidate }: { onCandidate: (id: string) => void }
             <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
               <Toggle label="Small parcel (35 × 25 × 12 cm) when Keepa has the size" checked={f.smallParcel} onChange={(v) => set({ smallParcel: v })} />
             </div>
-            <p className="text-xs text-muted-foreground">A <b>near miss</b> fails only the gates&apos; warn band (£15–40, rating 3.6–4.5, 700 g) or is missing its weight or size.</p>
+            <p className="text-xs text-muted-foreground">A <b>near miss</b> fails only the gates&apos; warn band (£15–40, rating 3.6–4.5, 700 g) or is missing its size. Unknown weight isn&apos;t a miss: the product qualifies, marked &quot;weight unknown&quot;.</p>
           </fieldset>
         </div>
-        <div className="grid gap-3 sm:grid-cols-4">
+        {f.mode === "leaf" && <div className="grid gap-3 sm:grid-cols-4">
           <Num label={`Leaves to size (1–${LIMITS.leavesCap})`} value={f.leavesCap} onChange={(v) => set({ leavesCap: v })} step={10} hint="Stage 1: the largest first, ~11 tokens each, capped by the balance" />
           <Num label="Skip leaves under … matches" value={f.minLeafMatches} onChange={(v) => set({ minLeafMatches: v })} />
           <Num label={`Leaves to detail, N (1–${LIMITS.detailLeaves})`} value={f.detailLeaves} onChange={(v) => set({ detailLeaves: v })} hint="Stage 2: most matches first" />
           <Num label={`ASINs per leaf (1–${LIMITS.perLeaf})`} value={f.perLeaf} onChange={(v) => set({ perLeaf: v })} hint="Best-selling first, ~2 tokens each" />
-        </div>
+        </div>}
         <div className="space-y-1.5">
           <span className="field-label">Categories (the category a product ranks in)</span>
           <div className="flex flex-wrap gap-1.5">
@@ -240,12 +274,20 @@ export function NicheHunt({ onCandidate }: { onCandidate: (id: string) => void }
           <Button onClick={run} disabled={!!busy || busyHunt || !start.keepa || !f.categories.length || !plan?.fits}>
             {busy === "run" ? <LoaderIcon className="animate-spin" /> : <CrosshairIcon />} Hunt niches
           </Button>
-          {plan ? (
+          {plan && f.mode === "direct" ? (
+            <div className="space-y-0.5 text-sm text-muted-foreground">
+              <div>Finder: <span className="num">{f.categories.length}</span> categor{f.categories.length === 1 ? "y" : "ies"} × {f.pagesPerRoot} page{f.pagesPerRoot === 1 ? "" : "s"} × 11 = <span className="num">{plan.estimate.finder}</span> tokens</div>
+              <div>Detail: up to <span className="num">{(plan.estimate.finderPages ?? 0) * 50}</span> ASINs × ~2 = <span className="num">{plan.estimate.detail}</span> tokens (less any fetched in the last 7 days)</div>
+              <div className="text-foreground">Total up to <b className="num">{plan.estimate.total}</b>; it stops at <b className="num">{plan.cap}</b> (+10%) · balance <span className="num">{plan.balance?.toLocaleString("en-GB") ?? "—"}</span>, {TOKEN_RESERVE} kept in reserve</div>
+              {plan.waitsForRefill && plan.fits && <div className="text-warn">More than the balance: it waits for Keepa&apos;s refill part-way (about 21 tokens a minute).</div>}
+              {!plan.fits && <div className="text-fail">The finder pages alone are over the balance less the reserve: fewer pages, or wait for the refill.</div>}
+            </div>
+          ) : plan ? (
             <div className="space-y-0.5 text-sm text-muted-foreground">
               {plan.estimate.tree > 0 && <div>Category tree: up to <span className="num">{plan.estimate.tree}</span> tokens (listed once, kept a week)</div>}
               <div>Stage 1, size leaves: <span className="num">{plan.estimate.leavesToSize}</span>{plan.sizingCapped ? ` of ${plan.leavesWanted} (capped by the balance; the largest first)` : plan.leavesKnown ? "" : " (up to)"} × 11 = <span className="num">{plan.estimate.sizing}</span> tokens{plan.leavesKnown && plan.leavesWanted < (f.leafIds?.length ?? f.leavesCap) ? " (the rest counted in the last 7 days)" : ""}</div>
               <div>Stage 2, detail: <span className="num">{Math.min(f.detailLeaves, f.leafIds?.length ?? f.detailLeaves)}</span> leaves × {f.perLeaf} ASINs × ~2 = <span className="num">{plan.estimate.detail}</span> tokens (less any fetched in the last 7 days)</div>
-              <div className="text-foreground">Total up to <b className="num">{plan.estimate.total}</b> · balance <span className="num">{plan.balance?.toLocaleString("en-GB") ?? "—"}</span>, {TOKEN_RESERVE} kept in reserve</div>
+              <div className="text-foreground">Total up to <b className="num">{plan.estimate.total}</b>; it stops at <b className="num">{plan.cap}</b> (+10%) · balance <span className="num">{plan.balance?.toLocaleString("en-GB") ?? "—"}</span>, {TOKEN_RESERVE} kept in reserve</div>
               {!plan.fits && (
                 <div className="flex flex-wrap items-center gap-2 text-fail">
                   Over the balance less the reserve.
@@ -437,7 +479,7 @@ function Results({ result, start, onReload, onPick, onCandidate, onStart, onRequ
                             <td className="num px-2 py-1.5 text-right">{a.snap.rating?.toFixed(1) ?? "—"}</td>
                             <td className="num px-2 py-1.5 text-right">{n0(a.snap.avg_rank_90d)}</td>
                             <td className="num px-2 py-1.5 text-right">{a.salesFloor ? "≥ " : ""}{n0(a.sales)}</td>
-                            <td className="px-2 py-1.5">{a.qualifies ? <span className="font-medium text-pass">Qualifies</span>
+                            <td className="px-2 py-1.5">{a.qualifies ? <span><span className="font-medium text-pass">Qualifies</span>{a.unknown?.length ? <span className="text-muted-foreground"> ({a.unknown.join(", ")})</span> : null}</span>
                               : a.near ? <span><span className="font-medium text-warn">Near miss</span> <span className="text-muted-foreground">({a.reasons.join(", ")})</span></span>
                               : a.incumbent ? <span><span className="font-medium text-ink-2">Incumbent</span> <span className="text-muted-foreground">(over the review cap{a.reasons.length ? `; ${a.reasons.join(", ")}` : ""})</span></span>
                               : <span><span className="font-medium text-fail">Fails</span> <span className="text-muted-foreground">({a.reasons.join(", ")})</span></span>}</td>

@@ -12,7 +12,7 @@ export default function NicheHuntPage() {
     <div className="space-y-4">
       <div>
         <h1 className="page-title">Niche Hunt</h1>
-        <p className="text-sm text-muted-foreground">Leaf by leaf: Keepa sizes each leaf category with wide filters, then the most promising are detailed and qualified strictly against Gate 0 and Gate 1. Turn a niche into a candidate.</p>
+        <p className="text-sm text-muted-foreground">Products that already pass Gates 0 and 1, from Keepa&apos;s Product Finder, grouped by leaf category: each leaf is a niche. Direct mode asks Keepa once per category with the thresholds applied; leaf mode sizes each leaf first. Turn a niche into a candidate.</p>
       </div>
       <NicheHunt onCandidate={(id) => router.push(`/pl/candidates?c=${id}`)} />
     </div>

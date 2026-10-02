@@ -3,7 +3,8 @@ import { referralCategoryFor } from "../fees/engine";
 import { addDailyTokens, PL_KEEP_DAYS, type TokensByDay } from "../keepaLedger";
 import { getKeepa, hasFinder, type KeepaCategory, type KeepaClient, type KeepaFinder, type KeepaProduct, type OnKeepaResponse } from "../keepa/client";
 import {
-  defaultFilters, filtersKey, finderSelection, fittingDetailLeaves, funnel, groupNiches, huntEstimate, SIZING_TOKENS, TOKEN_RESERVE, TREE_MAX_CATEGORIES,
+  defaultFilters, DETAIL_TOKENS_PER_ASIN, DIRECT_PAGE, DIRECT_PAGE_TOKENS, directEstimate, directSelection, filtersKey, finderSelection, fittingDetailLeaves, funnel, groupNiches, huntEstimate,
+  SIZING_TOKENS, spendCap, TOKEN_RESERVE, TREE_MAX_CATEGORIES,
   type HuntAsin, type HuntEstimate, type Niche, type NicheHuntFilters,
 } from "../pl/hunt";
 import { activeRateCard, chunks, db, must } from "./db";
@@ -34,13 +35,25 @@ export interface HuntLeaf {
   detail?: boolean; detailed?: boolean; fetched?: number; reused?: number;
 }
 
-export type HuntStatus = "listing" | "sizing" | "detailing" | "done" | "error" | "cancelled";
+export type HuntStatus = "listing" | "sizing" | "finding" | "detailing" | "done" | "error" | "cancelled";
+const RUNNING: HuntStatus[] = ["listing", "sizing", "finding", "detailing"];
+
+/**
+ * A hunt's progress. `cap`: it starts no Keepa call that would take its spend past the estimate +
+ * 10%. Direct mode: finder pages done per root (-1 when a root ran out of results), and how far
+ * detail has got through the found ASINs.
+ */
+export interface HuntProgressState {
+  estimate?: HuntEstimate; cap?: number; sizingBudget?: number; leavesWanted?: number;
+  pages?: Record<string, number>; detailIndex?: number; capped?: boolean;
+  [k: string]: unknown;
+}
 
 export interface HuntRow {
   id: string; name: string; filters: NicheHuntFilters; asins: string[]; finder_total: number | null; fetched: number; reused: number;
   finder_tokens: number; detail_tokens: number; token_cost: number; created_at: string;
   status: HuntStatus; leaves: HuntLeaf[] | null; note: string | null; finished_at: string | null;
-  progress: { sizingBudget?: number; leavesWanted?: number } | null;
+  progress: HuntProgressState | null;
 }
 export interface Preset { id: string; name: string; filters: NicheHuntFilters }
 export interface Dismissal { key: string; name: string | null; reason: string | null; created_at: string }
@@ -189,6 +202,10 @@ async function plannedLeaves(f: NicheHuntFilters): Promise<{ leaves: HuntLeaf[] 
 
 export interface HuntPlan {
   estimate: HuntEstimate; balance: number | null; fits: boolean; fittingDetailLeaves: number | null; leavesKnown: boolean;
+  /** The most the hunt will spend: the estimate + 10%. */
+  cap: number;
+  /** More than the balance less the reserve: it waits for Keepa's refill part-way. */
+  waitsForRefill: boolean;
   /** Leaves that would need sizing, and how many the balance allows (stage 1's spend is capped by it). */
   leavesWanted: number; sizingCapped: boolean;
 }
@@ -200,6 +217,16 @@ export interface HuntPlan {
  */
 export async function planHunt(f: NicheHuntFilters): Promise<HuntPlan> {
   const keepa = getKeepa();
+  if (f.mode === "direct") {
+    // Direct: no tree; the finder pages must fit now, detail may wait for the refill.
+    const estimate = directEstimate({ roots: f.categories.length, pages: f.pagesPerRoot });
+    const status = keepa.available ? await keepa.tokenStatus().catch(() => null) : null;
+    const balance = status?.tokensLeft ?? null;
+    return {
+      estimate, balance, fits: balance != null && balance - TOKEN_RESERVE >= (estimate.finder ?? 0), fittingDetailLeaves: null, leavesKnown: true,
+      leavesWanted: 0, sizingCapped: false, cap: spendCap(estimate.total), waitsForRefill: balance != null && estimate.total > balance - TOKEN_RESERVE,
+    };
+  }
   const { leaves, rootsWithoutTree } = await plannedLeaves(f);
   let leavesToSize = f.leafIds?.length ?? f.leavesCap;
   let cachedAsins = 0;
@@ -224,6 +251,7 @@ export async function planHunt(f: NicheHuntFilters): Promise<HuntPlan> {
   const fits = balance != null && room > 0 && sizable + cachedLeaves >= Math.min(detailLeaves, leavesToSize + cachedLeaves);
   return {
     estimate, balance, fits, leavesKnown: !!leaves, leavesWanted: leavesToSize, sizingCapped: sizable < leavesToSize,
+    cap: spendCap(estimate.total), waitsForRefill: false,
     fittingDetailLeaves: balance == null ? null : fittingDetailLeaves({ ...full, sizing: Math.min(full.sizing, detailLeaves * SIZING_TOKENS) }, f.perLeaf, balance),
   };
 }
@@ -237,10 +265,11 @@ export async function startNicheHunt(f: NicheHuntFilters, name?: string | null):
   finderOrThrow();
   // One hunt at a time: two at once can't reuse each other's leaf counts (two started 6 s apart
   // spent 873 + 769 tokens on the same leaves).
-  const runningNow = must(await db().from("pl_hunts").select("id, name").in("status", ["listing", "sizing", "detailing"]).limit(1), "running hunts") as { id: string; name: string }[];
+  const runningNow = must(await db().from("pl_hunts").select("id, name").in("status", RUNNING).limit(1), "running hunts") as { id: string; name: string }[];
   if (runningNow.length) throw new Error(`A hunt is already running (${runningNow[0].name}): wait for it, or cancel it`);
   const plan = await planHunt(f);
   if (plan.balance == null) throw new Error("Couldn't read Keepa's token balance");
+  if (!plan.fits && f.mode === "direct") throw new HuntRefused(`The finder pages need ${plan.estimate.finder} tokens: ${plan.balance} in the balance, ${TOKEN_RESERVE} kept in reserve. Fewer pages, or wait for the refill.`, plan);
   if (!plan.fits) {
     throw new HuntRefused(
       `This hunt needs more than the balance allows: ${plan.balance} tokens, ${TOKEN_RESERVE} kept in reserve. ` +
@@ -249,12 +278,21 @@ export async function startNicheHunt(f: NicheHuntFilters, name?: string | null):
     );
   }
   const names = await categoryNames();
+  if (f.mode === "direct") {
+    const roots = f.categories.map((id) => names.get(id) ?? String(id)).join(", ");
+    const row = must(await db().from("pl_hunts").insert({
+      name: (name?.trim() || `Niche Hunt · direct · ${roots} · ${f.pagesPerRoot} page${f.pagesPerRoot === 1 ? "" : "s"} a root`).slice(0, 200),
+      filters: f, asins: [], status: "finding", leaves: null, last_progress_at: new Date().toISOString(),
+      progress: { estimate: plan.estimate, cap: plan.cap, pages: {}, detailIndex: 0 },
+    }).select("id").single(), "start hunt") as { id: string };
+    return { id: row.id, plan };
+  }
   const label = f.leafIds?.length ? `${f.leafIds.length} leaf${f.leafIds.length === 1 ? "" : "s"}` : f.categories.map((id) => names.get(id) ?? String(id)).join(", ");
   const { leaves } = await plannedLeaves(f);
   const row = must(await db().from("pl_hunts").insert({
     name: (name?.trim() || `Niche Hunt · ${label} · ${f.leafIds?.length ?? f.leavesCap} leaves → ${f.detailLeaves} × ${f.perLeaf}`).slice(0, 200),
     filters: f, asins: [], status: leaves ? "sizing" : "listing", leaves, last_progress_at: new Date().toISOString(),
-    progress: { leaves: leaves?.length ?? null, sized: 0, detail: null, detailed: 0, estimate: plan.estimate, sizingBudget: plan.estimate.sizing, leavesWanted: plan.leavesWanted },
+    progress: { leaves: leaves?.length ?? null, sized: 0, detail: null, detailed: 0, estimate: plan.estimate, sizingBudget: plan.estimate.sizing, leavesWanted: plan.leavesWanted, cap: plan.cap },
   }).select("id").single(), "start hunt") as { id: string };
   return { id: row.id, plan };
 }
@@ -315,6 +353,14 @@ export async function processHunt(id: string, budgetMs = 40_000): Promise<HuntPr
     h = await read();
   };
   const time = () => Date.now() - t0 < budgetMs;
+  // The cap: what's left of the estimate + 10% (older hunts have none).
+  const left = () => (h.progress?.cap ?? Infinity) - (h.token_cost ?? 0);
+  const capNote = () => `Stopped at the token cap: ${h.token_cost} spent of ${h.progress?.cap} (the estimate + 10%)`;
+  // Before a call: wait for Keepa's refill rather than run the balance dry (the watchdog carries on).
+  const waitForTokens = async (cost: number) => {
+    const st = await keepa.tokenStatus().catch(() => null);
+    if (st && st.tokensLeft < cost) throw new Error(`Keepa tokens: ${st.tokensLeft} left, the next call needs ${cost}`);
+  };
   try {
     // Stage 0: the leaves.
     if (h.status === "listing") {
@@ -326,12 +372,19 @@ export async function processHunt(id: string, budgetMs = 40_000): Promise<HuntPr
       } else {
         const all: HuntLeaf[] = [];
         for (const root of f.categories) {
-          const tree = (await storedTree(root)) ?? (await listTree(keepa, root, (t) => addTokens(id, t, "finder")));
+          let tree = await storedTree(root);
+          if (!tree) {
+            if (left() < Math.ceil(TREE_MAX_CATEGORIES / 10)) throw new CapReached();
+            await waitForTokens(Math.ceil(TREE_MAX_CATEGORIES / 10));
+            tree = await listTree(keepa, root, (t) => addTokens(id, t, "finder"));
+            h = await read();
+          }
           all.push(...leavesOf(tree).map((c) => ({ id: c.id, name: c.name, products: c.products })));
         }
         leaves = [...new Map(all.map((l) => [l.id, l])).values()].sort((a, b) => (b.products ?? 0) - (a.products ?? 0)).slice(0, f.leavesCap);
       }
-      await save({ status: "sizing", leaves, progress: { leaves: leaves.length, sized: 0 } });
+      // Keep the estimate, the sizing budget and the cap (overwriting them let a hunt size every leaf).
+      await save({ status: "sizing", leaves, progress: { ...(h.progress ?? {}), leaves: leaves.length, sized: 0 } });
     }
     // Stage 1: size each leaf with one finder call (no detail), reusing counts from the last 7 days.
     if (h.status === "sizing") {
@@ -345,9 +398,10 @@ export async function processHunt(id: string, budgetMs = 40_000): Promise<HuntPr
         if (l.matches != null || l.skipped) continue;
         const c = cached.get(l.id);
         if (c) Object.assign(l, { matches: c.matches, asins: c.asins, finderTokens: 0, cached: true });
-        else if (spentSizing + SIZING_TOKENS > budget) l.skipped = true;
+        else if (spentSizing + SIZING_TOKENS > budget || left() < SIZING_TOKENS) l.skipped = true;
         else {
           if (!time()) break;
+          await waitForTokens(SIZING_TOKENS);
           const r = await keepa.productFinder(finderSelection(f, l.id));
           await addTokens(id, r.tokensUsed, "finder");
           Object.assign(l, { matches: r.total, asins: r.asins.map((a) => a.toUpperCase()), finderTokens: r.tokensUsed, cached: false });
@@ -364,7 +418,7 @@ export async function processHunt(id: string, budgetMs = 40_000): Promise<HuntPr
       }
     }
     // Stage 2: detail the picked leaves' best sellers, reusing snapshots under 7 days old.
-    if (h.status === "detailing") {
+    if (h.status === "detailing" && h.leaves) {
       const names = await categoryNames();
       const leaves = [...h.leaves!];
       for (const l of leaves) {
@@ -372,7 +426,13 @@ export async function processHunt(id: string, budgetMs = 40_000): Promise<HuntPr
         if (!time()) break;
         const asins = (l.asins ?? []).slice(0, f.perLeaf);
         const cached = await freshHuntAsins(asins);
-        const need = asins.filter((a) => !cached.has(a));
+        let need = asins.filter((a) => !cached.has(a));
+        const room = Math.max(0, Math.floor(left() / DETAIL_TOKENS_PER_ASIN));
+        if (need.length > room) {
+          if (!room) { await save({ status: "done", finished_at: new Date().toISOString(), note: capNote(), progress: { ...(h.progress ?? {}), capped: true } }); break; }
+          need = need.slice(0, room);
+        }
+        if (need.length) await waitForTokens(need.length * DETAIL_TOKENS_PER_ASIN);
         let spent = 0, exhausted = false;
         const fetched: KeepaProduct[] = [];
         if (need.length) {
@@ -394,9 +454,80 @@ export async function processHunt(id: string, budgetMs = 40_000): Promise<HuntPr
         const all = [...new Set([...h.asins, ...asins])];
         await save({ leaves, asins: all, fetched: (h.fetched ?? 0) + fetched.length, reused: (h.reused ?? 0) + cached.size });
       }
-      if (leaves.every((l) => !l.detail || l.detailed)) await save({ status: "done", finished_at: new Date().toISOString(), note: null });
+      if (h.status === "detailing" && leaves.every((l) => !l.detail || l.detailed)) await save({ status: "done", finished_at: new Date().toISOString(), note: null });
+    }
+    // Direct mode, stage 1: one filtered finder query per root, page by page, rank drops first.
+    if (h.status === "finding") {
+      const pages: Record<string, number> = { ...(h.progress?.pages ?? {}) };
+      const found = new Set(h.asins);
+      let total = h.finder_total ?? 0;
+      let capped = false;
+      roots: for (const root of f.categories) {
+        while (pages[root] !== -1 && (pages[root] ?? 0) < f.pagesPerRoot) {
+          if (!time()) break roots;
+          if (left() < DIRECT_PAGE_TOKENS) { capped = true; break roots; }
+          await waitForTokens(DIRECT_PAGE_TOKENS);
+          const page = pages[root] ?? 0;
+          const r = await keepa.productFinder({ ...directSelection(f, root), perPage: DIRECT_PAGE, page });
+          await addTokens(id, r.tokensUsed, "finder");
+          for (const a of r.asins) found.add(a.toUpperCase());
+          if (page === 0) total += r.total;
+          // A short page: the root has no more.
+          pages[root] = r.asins.length < DIRECT_PAGE ? -1 : page + 1;
+          await save({ asins: [...found], finder_total: total, progress: { ...(h.progress ?? {}), pages } });
+        }
+      }
+      const finished = f.categories.every((r) => pages[r] === -1 || (pages[r] ?? 0) >= f.pagesPerRoot);
+      if (capped) await save({ status: found.size ? "detailing" : "done", note: capNote(), progress: { ...(h.progress ?? {}), pages, capped: true }, ...(found.size ? {} : { finished_at: new Date().toISOString() }) });
+      else if (finished) await save({ status: found.size ? "detailing" : "done", progress: { ...(h.progress ?? {}), pages }, ...(found.size ? {} : { finished_at: new Date().toISOString(), note: "The finder found nothing under these filters" }) });
+    }
+    // Direct mode, stage 2: detail the found ASINs 50 at a time, reusing snapshots under 7 days old.
+    if (h.status === "detailing" && !h.leaves) {
+      const names = await categoryNames();
+      let idx = h.progress?.detailIndex ?? 0;
+      while (idx < h.asins.length) {
+        if (!time()) break;
+        const batch = h.asins.slice(idx, idx + 50);
+        const cached = await freshHuntAsins(batch);
+        let need = batch.filter((a) => !cached.has(a));
+        const room = Math.max(0, Math.floor(left() / DETAIL_TOKENS_PER_ASIN));
+        const capped = need.length > room;
+        if (capped) need = need.slice(0, room);
+        let spent = 0, exhausted = false;
+        const fetched: KeepaProduct[] = [];
+        if (need.length) {
+          await waitForTokens(need.length * DETAIL_TOKENS_PER_ASIN);
+          const onResponse: OnKeepaResponse = (m) => { spent += m.tokensConsumed; };
+          try {
+            const res = await keepa.lookupByAsins(need, onResponse, { buyBox: false, rating: true });
+            fetched.push(...res.byAsin.values());
+            exhausted = !!res.exhausted;
+          } finally {
+            await addTokens(id, spent, "detail");
+          }
+          const snaps = fetched.map((k) => huntSnapshot(k, names));
+          if (snaps.length) must(await d.from("pl_hunt_asins").upsert(snaps, { onConflict: "asin" }), "save hunt snapshots");
+          for (const k of fetched) await saveSnapshot(k).catch((e) => console.error(`[pl hunt] keepa snapshot for ${k.asin} not stored: ${(e as Error).message}`));
+          if (exhausted) throw new Error("Keepa: not enough tokens");
+        }
+        const counts = { fetched: (h.fetched ?? 0) + fetched.length, reused: (h.reused ?? 0) + cached.size };
+        if (capped) {
+          // The hunt keeps only what was detailed: the rest of the found ASINs aren't judged on old data.
+          const kept = [...h.asins.slice(0, idx), ...cached.keys(), ...fetched.map((k) => k.asin)];
+          await save({ ...counts, asins: [...new Set(kept)], status: "done", finished_at: new Date().toISOString(), note: capNote(), progress: { ...(h.progress ?? {}), detailIndex: idx + batch.length, capped: true } });
+          break;
+        }
+        idx += batch.length;
+        await save({ ...counts, progress: { ...(h.progress ?? {}), detailIndex: idx } });
+      }
+      if (h.status === "detailing" && (h.progress?.detailIndex ?? 0) >= h.asins.length) await save({ status: "done", finished_at: new Date().toISOString(), note: h.progress?.capped ? h.note : null });
     }
   } catch (e) {
+    if (e instanceof CapReached) {
+      await save({ status: "done", finished_at: new Date().toISOString(), note: capNote(), progress: { ...(h.progress ?? {}), capped: true } });
+      await d.from("pl_hunts").update({ lease_until: null }).eq("id", id);
+      return report(false);
+    }
     if (tokensOut(e)) {
       await save({ note: "Waiting for Keepa tokens: it carries on after the refill" });
       await d.from("pl_hunts").update({ lease_until: null }).eq("id", id);
@@ -409,14 +540,18 @@ export async function processHunt(id: string, budgetMs = 40_000): Promise<HuntPr
   return report(false);
 }
 
+/** The hunt reached its cap (the estimate + 10%) before a call it needed. */
+class CapReached extends Error {}
+
 /** Filters stored on a hunt, with defaults for anything added since. */
 function validFiltersOrStored(f: NicheHuntFilters): NicheHuntFilters {
-  return { ...defaultFilters([]), ...f, categories: f.categories ?? [] };
+  // Hunts from before direct mode were leaf hunts.
+  return { ...defaultFilters([]), ...f, mode: f.mode ?? "leaf", categories: f.categories ?? [] };
 }
 
 /** Hunts whose chain has died: work left, no lease, nothing moved for 3 minutes (the watchdog restarts them). */
 export async function stalledHunts(now = Date.now()): Promise<string[]> {
-  const res = await db().from("pl_hunts").select("id, lease_until, last_progress_at, created_at").in("status", ["listing", "sizing", "detailing"]);
+  const res = await db().from("pl_hunts").select("id, lease_until, last_progress_at, created_at").in("status", RUNNING);
   if (res.error) return []; // before the migration
   return (res.data as { id: string; lease_until: string | null; last_progress_at: string | null; created_at: string }[])
     .filter((h) => !(h.lease_until && Date.parse(h.lease_until) > now) && now - Date.parse(h.last_progress_at ?? h.created_at) > 3 * 60_000)
@@ -424,7 +559,7 @@ export async function stalledHunts(now = Date.now()): Promise<string[]> {
 }
 
 export async function cancelHunt(id: string) {
-  must(await db().from("pl_hunts").update({ status: "cancelled", finished_at: new Date().toISOString(), lease_until: null }).eq("id", id).in("status", ["listing", "sizing", "detailing"]), "cancel hunt");
+  must(await db().from("pl_hunts").update({ status: "cancelled", finished_at: new Date().toISOString(), lease_until: null }).eq("id", id).in("status", RUNNING), "cancel hunt");
 }
 
 /**

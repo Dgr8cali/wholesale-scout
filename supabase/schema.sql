@@ -1,5 +1,5 @@
 -- Wholesale Scout schema, dumped by scripts/schema-backup.mjs. No data.
--- Dumped 2026-10-02T13:51:26.818Z. Safe to re-run. Restore: npm run schema:restore
+-- Dumped 2026-10-02T14:16:44.453Z. Safe to re-run. Restore: npm run schema:restore
 
 -- @section extensions
 create extension if not exists "pg_cron";
@@ -2193,7 +2193,7 @@ do $$ begin
 end $$;
 do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'pl_hunts_status_check' and conrelid = '"pl_hunts"'::regclass) then
-    alter table "pl_hunts" add constraint "pl_hunts_status_check" CHECK ((status = ANY (ARRAY['listing'::text, 'sizing'::text, 'detailing'::text, 'done'::text, 'error'::text, 'cancelled'::text])));
+    alter table "pl_hunts" add constraint "pl_hunts_status_check" CHECK ((status = ANY (ARRAY['listing'::text, 'sizing'::text, 'finding'::text, 'detailing'::text, 'done'::text, 'error'::text, 'cancelled'::text])));
   end if;
 end $$;
 do $$ begin
@@ -2773,3 +2773,4 @@ insert into schema_migrations (name) values ('20261002000700_ads_upsert_keys.sql
 insert into schema_migrations (name) values ('20261002000800_ads_bulk.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261002000900_ads_rules_proposals.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261002001000_ads_phase25.sql') on conflict do nothing;
+insert into schema_migrations (name) values ('20261002001100_niche_hunt_direct.sql') on conflict do nothing;

@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { defaultFilters, disqualify, filtersKey, finderSelection, fittingDetailLeaves, funnel, groupNiches, huntEstimate, nicheOfAsin, nicheOfTitle, qualify, shapeOf, validFilters, type HuntAsin } from "./hunt";
+import { defaultFilters, directEstimate, directSelection, disqualify, filtersKey, finderSelection, fittingDetailLeaves, funnel, groupNiches, huntEstimate, nicheOfAsin, nicheOfTitle, qualify, shapeOf, spendCap, validFilters, type HuntAsin } from "./hunt";
 
 const CATS = [{ id: 11052681, name: "Home & Kitchen" }, { id: 117332031, name: "Beauty" }, { id: 79903031, name: "DIY & Tools" }];
 const F = defaultFilters(CATS);
+/** Gatekeeper's pass band, for the near-miss tests (the defaults qualify on the warn band). */
+const PASS = { ...F, priceMin: 18, priceMax: 35, ratingMin: 3.8, ratingMax: 4.3 };
 
 const snap = (asin: string, title: string, over: Partial<HuntAsin> = {}): HuntAsin => ({
   asin, title, position: 0, is_reference: false, brand: "Acme", image: null, price: 24, rating: 4.1, review_count: 200, rank: 8000, avg_rank_90d: 8000,
@@ -15,7 +17,10 @@ describe("Niche Hunt", () => {
   it("defaults to Gate 0's categories and Gatekeeper's thresholds", () => {
     // Wide finder, strict qualifying.
     expect(F).toMatchObject({ finderPriceMin: 14, finderPriceMax: 45, finderRatingMin: 3.5, finderRatingMax: 4.7, maxRank90: 100000, noAmazon: true, minListedMonths: 6, excludeAmazonBrands: true });
-    expect(F).toMatchObject({ priceMin: 18, priceMax: 35, maxReviews: 500, ratingMin: 3.8, ratingMax: 4.3, minRankDrops90: 300, maxWeightG: 500, smallParcel: true, minAsins: 3 });
+    // Qualifying on the warn band by default; direct mode, 4 pages a root.
+    expect(F).toMatchObject({ mode: "direct", pagesPerRoot: 4, priceMin: 15, priceMax: 40, maxReviews: 500, ratingMin: 3.6, ratingMax: 4.5, minRankDrops90: 300, maxWeightG: 500, smallParcel: true, minAsins: 3 });
+    expect(validFilters({ ...F, pagesPerRoot: 11 })).toMatch(/1–10/);
+    expect(validFilters({ ...F, mode: "leaf" })).toMatchObject({ mode: "leaf" });
     expect(F).toMatchObject({ leavesCap: 120, detailLeaves: 15, perLeaf: 12, minLeafMatches: 5 });
     expect(F.categories).toEqual([11052681, 79903031]); // Beauty is an avoid category
     expect(validFilters({ ...F, leavesCap: 300 })).toMatch(/1–200/);
@@ -32,6 +37,23 @@ describe("Niche Hunt", () => {
     });
     expect((s.brand as string[])[0]).toBe("✜Amazon Basics");
     for (const k of ["packageWeight_lte", "packageLength_lte", "current_COUNT_REVIEWS_lte", "buyBoxStatsAmazon90_lte"]) expect(s).not.toHaveProperty(k);
+  });
+
+  it("direct mode: every qualifying threshold Keepa can apply, per root, by rank drops; no weight filter", () => {
+    const s = directSelection(F, 340840031, Date.UTC(2026, 9, 2));
+    expect(s).toMatchObject({
+      salesRankReference: [340840031], current_BUY_BOX_SHIPPING_gte: 1500, current_BUY_BOX_SHIPPING_lte: 4000, current_RATING_gte: 36, current_RATING_lte: 45,
+      current_COUNT_REVIEWS_lte: 500, monthlySold_gte: 100, availabilityAmazon: [-1], productType: [0], singleVariation: true, sort: [["salesRankDrops90", "desc"]],
+    });
+    expect(s.trackingSince_lte).toBe(Math.floor((Date.UTC(2026, 9, 2) - 6 * 30.44 * 86_400_000) / 60_000) - 21_564_000);
+    for (const k of ["packageWeight_lte", "salesRankDrops90_gte", "perPage", "page"]) expect(s).not.toHaveProperty(k);
+  });
+
+  it("direct estimate: pages × 11, then ~2 a detailed ASIN; the cap is the estimate + 10%", () => {
+    // 5 roots × 2 pages = 10 pages, 110 tokens; up to 500 ASINs × 2.
+    expect(directEstimate({ roots: 5, pages: 2 })).toMatchObject({ finderPages: 10, finder: 110, detail: 1000, total: 1110, tree: 0 });
+    expect(directEstimate({ roots: 5, pages: 2, cachedAsins: 120 }).detail).toBe(760);
+    expect(spendCap(1154)).toBe(1270);
   });
 
   it("estimates both stages, and how many leaves to detail fit the balance less the 100 reserve", () => {
@@ -103,30 +125,32 @@ describe("Niche Hunt", () => {
 
 describe("Niche Hunt qualifying: strict, near misses, the funnel", () => {
   it("near misses fail only Gatekeeper's warn band, or miss data; hard fails are fails", () => {
-    expect(qualify(snap("A", "x"), F).status).toBe("qualifies");
-    expect(qualify(snap("A", "x", { price: 38 }), F)).toMatchObject({ status: "near", near: ["price £38.00"] });
-    expect(qualify(snap("A", "x", { price: 44 }), F)).toMatchObject({ status: "fails", fails: ["price £44.00"] });
-    expect(qualify(snap("A", "x", { rating: 4.5 }), F).status).toBe("near");
-    expect(qualify(snap("A", "x", { rating: 4.6 }), F).status).toBe("fails");
-    expect(qualify(snap("A", "x", { weight: 650 }), F).status).toBe("near");
-    expect(qualify(snap("A", "x", { weight: 800 }), F).status).toBe("fails");
-    expect(qualify(snap("A", "x", { weight: null, dimensions: null }), F)).toMatchObject({ status: "near", near: ["no weight", "no size"] });
-    expect(qualify(snap("A", "x", { rank_drops_90d: 60 }), F).status).toBe("fails");
-    expect(qualify(snap("A", "x", { review_count: 1200, price: 38 }), F).status).toBe("incumbent");
-    expect(disqualify(snap("A", "x", { price: 38, weight: 2000 }), F)).toEqual(["2000 g", "price £38.00"]);
+    expect(qualify(snap("A", "x"), PASS).status).toBe("qualifies");
+    expect(qualify(snap("A", "x", { price: 38 }), PASS)).toMatchObject({ status: "near", near: ["price £38.00"] });
+    expect(qualify(snap("A", "x", { price: 44 }), PASS)).toMatchObject({ status: "fails", fails: ["price £44.00"] });
+    expect(qualify(snap("A", "x", { rating: 4.5 }), PASS).status).toBe("near");
+    expect(qualify(snap("A", "x", { rating: 4.6 }), PASS).status).toBe("fails");
+    expect(qualify(snap("A", "x", { weight: 650 }), PASS).status).toBe("near");
+    expect(qualify(snap("A", "x", { weight: 800 }), PASS).status).toBe("fails");
+    // Unknown weight isn't a miss: it qualifies, marked unknown. Missing size is still a near miss.
+    expect(qualify(snap("A", "x", { weight: null }), PASS)).toMatchObject({ status: "qualifies", unknown: ["weight unknown"] });
+    expect(qualify(snap("A", "x", { weight: null, dimensions: null }), PASS)).toMatchObject({ status: "near", near: ["no size"], unknown: ["weight unknown"] });
+    expect(qualify(snap("A", "x", { rank_drops_90d: 60 }), PASS).status).toBe("fails");
+    expect(qualify(snap("A", "x", { review_count: 1200, price: 38 }), PASS).status).toBe("incumbent");
+    expect(disqualify(snap("A", "x", { price: 38, weight: 2000 }), PASS)).toEqual(["2000 g", "price £38.00"]);
   });
 
   it("counts near misses towards a niche unless strict, and shows every product's status", () => {
     const rows = [
       snap("A1", "x", { leaf_category: "Bath Mats", leaf_category_id: 1 }),
       snap("A2", "x", { leaf_category: "Bath Mats", leaf_category_id: 1, price: 39 }),
-      snap("A3", "x", { leaf_category: "Bath Mats", leaf_category_id: 1, weight: null }),
+      snap("A3", "x", { leaf_category: "Bath Mats", leaf_category_id: 1, dimensions: null }),
       snap("A4", "x", { leaf_category: "Bath Mats", leaf_category_id: 1, rank_drops_90d: 30 }),
     ];
-    const [n] = groupNiches(rows, F);
+    const [n] = groupNiches(rows, PASS);
     expect(n).toMatchObject({ count: 1, nearCount: 2, incumbentCount: 0, maxReviews: 200 });
     expect(n.asins.map((a) => [a.asin, a.status])).toEqual([["A1", "qualifies"], ["A2", "near"], ["A3", "near"], ["A4", "fails"]]);
-    expect(groupNiches(rows, F, new Set(), { strict: true })).toEqual([]);
+    expect(groupNiches(rows, PASS, new Set(), { strict: true })).toEqual([]);
   });
 
   it("says which check removed how many, in order", () => {
@@ -135,7 +159,7 @@ describe("Niche Hunt qualifying: strict, near misses, the funnel", () => {
       snap("A5", "x", { rank_drops_90d: 30 }), snap("A6", "x", { amazon_last_seen_days: 10 }), snap("A7", "x", { weight: 900 }),
       snap("A8", "x", { review_count: 3000 }),
     ];
-    const r = funnel(rows, F);
+    const r = funnel(rows, PASS);
     expect(r.start).toBe(8);
     expect(r.steps.map((x) => [x.label, x.removed, x.near])).toEqual([
       ["price £18–35", 1, 1], ["rating 3.8–4.3", 1, 0], ["100+ sales a month", 1, 0], ["no Amazon in 90 days", 1, 0],
