@@ -11,6 +11,7 @@ import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Skeleton } from "@/components/ui/skeleton";
 import { RULE_IDS, RULE_LABEL, type Confidence, type RuleId } from "@/lib/ads/rules";
 import { ProductPicker, useAdsProduct } from "@/components/ads/ProductPicker";
+import { SortTh, useSortable } from "@/components/SortableTable";
 import { api } from "@/lib/ui/client";
 import type { NgramData } from "../ngrams/page";
 import { cn } from "@/lib/utils";
@@ -24,6 +25,7 @@ interface Row {
 interface Data { proposals: Row[]; notes: Partial<Record<RuleId, string[]>>; held: { skipped: number; snoozed: number }; batchesAwaitingUpload: number }
 
 const CONF_CLS: Record<Confidence, string> = { high: "bg-pass-soft text-pass", medium: "bg-warn-soft text-warn", low: "bg-empty-soft text-ink-2" };
+const CONF_RANK: Record<Confidence, number> = { high: 3, medium: 2, low: 1 };
 
 /** Ads → Proposals: what the rules suggest, to approve, skip or snooze, and export as a bulk sheet. */
 export default function AdsProposalsPage() {
@@ -42,17 +44,21 @@ export default function AdsProposalsPage() {
   useEffect(() => { load(); api<NgramData>("/api/ads/ngrams").then(setGrams).catch(() => {}); }, [load]);
 
   const shown = useMemo(() => (data?.proposals ?? []).filter((p) => (!pick || p.asin === pick) && (!rule || p.rule === rule) && (!conf || p.confidence === conf) && (!campaign || p.campaign === campaign)), [data, pick, rule, conf, campaign]);
+  const sorter = useSortable("ads.proposals", shown, {
+    entity: { value: (p) => p.entity.label, kind: "text" }, change: { value: (p) => p.proposed_value, kind: "text" },
+    reason: { value: (p) => p.reason, kind: "text" }, confidence: { value: (p) => CONF_RANK[p.confidence], kind: "number" },
+  });
   const groups = useMemo(() => {
     const byAsin = new Map<string, Map<string, Row[]>>();
-    for (const p of shown) {
+    for (const p of sorter.rows) {
       const a = p.asin ?? "No ASIN";
       const g = byAsin.get(a) ?? new Map<string, Row[]>();
       const k = `${p.rule}${p.grp ? `|${p.grp}` : ""}`;
       g.set(k, [...(g.get(k) ?? []), p]);
       byAsin.set(a, g);
     }
-    return [...byAsin.entries()].map(([asin, g]) => ({ asin, rules: [...g.entries()].sort((a, b) => RULE_IDS.indexOf(a[0].split("|")[0] as RuleId) - RULE_IDS.indexOf(b[0].split("|")[0] as RuleId) || a[0].localeCompare(b[0])) }));
-  }, [shown]);
+    return [...byAsin.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([asin, g]) => ({ asin, rules: [...g.entries()].sort((a, b) => RULE_IDS.indexOf(a[0].split("|")[0] as RuleId) - RULE_IDS.indexOf(b[0].split("|")[0] as RuleId) || a[0].localeCompare(b[0])) }));
+  }, [sorter.rows]);
 
   if (error) return <ErrorState title="Couldn't load the proposals" message={error} />;
   if (!data) return <Skeleton className="h-64 rounded-lg" />;
@@ -148,6 +154,10 @@ export default function AdsProposalsPage() {
                 <span className="text-xs font-normal text-muted-foreground">{rows.length}</span>
               </div>
               <table className="w-full text-sm">
+                <thead><tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase">
+                  <SortTh {...sorter.th("entity")} className="px-3 py-1">Entity</SortTh><SortTh {...sorter.th("change")} className="px-3 py-1">Change</SortTh>
+                  <SortTh {...sorter.th("reason")} className="px-3 py-1">Reason</SortTh><SortTh {...sorter.th("confidence")} className="px-3 py-1">Confidence</SortTh><th />
+                </tr></thead>
                 <tbody>{rows.map((p) => (
                   <tr key={p.id} className={cn("border-b align-top last:border-b-0", p.status === "approved" && "bg-pass-soft/40")}>
                     <td className="w-[28%] px-3 py-2">

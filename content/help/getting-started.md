@@ -76,6 +76,10 @@ On the [run's page](/help/pages/runs) you filter the table (say, pass and warn o
 | [Settings](/help/pages/settings) | Edit profiles, rules, the rate card, waivers and saved filters. |
 | [Help](/help/pages/help) | Search these articles. |
 
+## Sorting
+
+Every table sorts by any column: click its header. The first click puts numbers and dates highest or newest first, and text A–Z; click again to reverse. A small arrow marks the column a table is sorted by. Numbers sort as numbers ("≥ 201" sorts as 201, "£12.50" as 12.50), and blank cells always go last, whichever the direction. Each table remembers its sort in this browser, so it opens the way you left it.
+
 ## Terms worth knowing
 
 The [glossary](/help/reference/glossary) explains the app's own words. The ones you'll meet first are [hurdle price](/help/reference/glossary#hurdle-price) (the sell price at which a product clears every profit floor), [max landed](/help/reference/glossary#max-landed) (the most it can cost you delivered to Amazon and still clear them), [your share](/help/reference/glossary#your-share) (the sales a month you can expect once you're one of the sellers) and [months to sell](/help/reference/glossary#months-to-sell).

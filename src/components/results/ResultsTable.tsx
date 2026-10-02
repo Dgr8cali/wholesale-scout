@@ -55,8 +55,8 @@ const COLS: ColSpec[] = [
   { id: "months", label: "Months to sell", header: <>Months<br />to sell</>, hint: "Order qty ÷ your share / mo", sort: "months", numeric: true, size: 76, min: 60, max: 120 },
   { id: "sellers", label: "Sellers", sort: "sellers", numeric: true, size: 72, min: 56, max: 120 },
   { id: "buybox", label: "Buy Box", header: <>Buy<br />Box</>, sort: "buybox", numeric: true, size: 80, min: 64, max: 140 },
-  { id: "rank90", label: "Rank, 90 days", header: <>Rank<br />90 d</>, hint: "Sales rank over 90 days from the stored Keepa snapshot; up is a better rank", size: 92, min: 80, max: 220 },
-  { id: "bb90", label: "Buy Box, 90 days", header: <>Buy Box<br />90 d</>, hint: "Buy Box price over 90 days from the stored Keepa snapshot", size: 92, min: 80, max: 220 },
+  { id: "rank90", label: "Rank, 90 days", header: <>Rank<br />90 d</>, hint: "Sales rank over 90 days from the stored Keepa snapshot; up is a better rank. Sorts by the 90-day average (best first), the current rank until the sparkline has loaded", sort: "rank90", numeric: true, size: 92, min: 80, max: 220 },
+  { id: "bb90", label: "Buy Box, 90 days", header: <>Buy Box<br />90 d</>, hint: "Buy Box price over 90 days from the stored Keepa snapshot. Sorts by the 90-day average, the current Buy Box until the sparkline has loaded", sort: "bb90", numeric: true, size: 92, min: 80, max: 220 },
   { id: "landed", label: "Landed", sort: "landed_cost", numeric: true, size: 80, min: 64, max: 140 },
   { id: "sell", label: "Sell", sort: "sell_price", numeric: true, size: 80, min: 64, max: 140 },
   { id: "profit", label: "Profit", sort: "profit", numeric: true, size: 80, min: 64, max: 140 },
@@ -64,7 +64,7 @@ const COLS: ColSpec[] = [
   { id: "roi", label: "ROI", sort: "roi", numeric: true, size: 68, min: 56, max: 120 },
   { id: "margin", label: "Margin", sort: "margin", numeric: true, size: 72, min: 56, max: 120 },
   { id: "hurdle", label: "Hurdle", sort: "hurdle_price", numeric: true, size: 80, min: 64, max: 140, hint: "Sell price at which this clears every profit floor" },
-  { id: "why", label: "Why", size: 320, min: 200, max: 900 },
+  { id: "why", label: "Why", sort: "why", size: 320, min: 200, max: 900 },
 ];
 const SPEC = Object.fromEntries(COLS.map((c) => [c.id, c])) as Record<string, ColSpec>;
 const IDS = COLS.map((c) => c.id);

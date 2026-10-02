@@ -19,7 +19,8 @@ import type { Fav, Result } from "@/components/results/types";
 import { ErrorState } from "@/components/States";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortTableHead, useSortable } from "@/components/SortableTable";
+import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { brandKey } from "@/lib/brands";
 import type { Decision } from "@/lib/product";
 import { GATE_LABELS, type GateId } from "@/lib/screening/config";
@@ -71,6 +72,23 @@ export default function ProductPage() {
   const { confirm } = useDialogs();
   const [v, setV] = useState<ProductView | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const roomOf = (o: ProductView["offers"][number]) => (o.landedGbp != null && v?.maxLandedGbp != null ? v.maxLandedGbp - o.landedGbp : null);
+  const offerSort = useSortable("wholesale.productOffers", v?.offers ?? [], {
+    supplier: { value: (o) => o.supplier?.name ?? null, kind: "text" },
+    unit: { value: (o) => (o.costKnown ? o.unitCostGbp : null), kind: "number" },
+    landed: { value: (o) => o.landedGbp, kind: "number" },
+    room: { value: roomOf, kind: "number" },
+    moq: { value: (o) => o.moq, kind: "number" },
+    seen: { value: (o) => o.seenAt, kind: "date" },
+  });
+  const historySort = useSortable("wholesale.productHistory", v?.history ?? [], {
+    when: { value: (h) => h.at, kind: "date" },
+    run: { value: (h) => h.runName, kind: "text" },
+    verdict: { value: (h) => (h.verdict ? `${{ pass: 1, warn: 2, fail: 3 }[h.verdict] ?? 4} ${h.verdict}` : null), kind: "text" },
+    score: { value: (h) => h.score, kind: "number" },
+    sell: { value: (h) => h.sellPrice, kind: "number" },
+    profit: { value: (h) => h.profit, kind: "number" },
+  });
   const load = useCallback(() => {
     api<ProductView>(`/api/products/${asin}`).then(setV).catch((e: Error) => setError(e.message));
   }, [asin]);
@@ -218,10 +236,14 @@ export default function ProductPage() {
           {v.offers.length ? (
             <div className="overflow-x-auto">
               <Table>
-                <TableHeader><TableRow><TableHead>Supplier</TableHead><TableHead className="text-right">Unit (ex-VAT)</TableHead><TableHead className="text-right">Landed</TableHead><TableHead className="text-right">Room</TableHead><TableHead className="text-right">MOQ</TableHead><TableHead>Seen</TableHead></TableRow></TableHeader>
+                <TableHeader><TableRow>
+                  <SortTableHead {...offerSort.th("supplier")}>Supplier</SortTableHead><SortTableHead {...offerSort.th("unit")} numeric>Unit (ex-VAT)</SortTableHead>
+                  <SortTableHead {...offerSort.th("landed")} numeric>Landed</SortTableHead><SortTableHead {...offerSort.th("room")} numeric>Room</SortTableHead>
+                  <SortTableHead {...offerSort.th("moq")} numeric>MOQ</SortTableHead><SortTableHead {...offerSort.th("seen")}>Seen</SortTableHead>
+                </TableRow></TableHeader>
                 <TableBody>
-                  {v.offers.map((o) => {
-                    const room = o.landedGbp != null && v.maxLandedGbp != null ? v.maxLandedGbp - o.landedGbp : null;
+                  {offerSort.rows.map((o) => {
+                    const room = roomOf(o);
                     return (
                       <TableRow key={o.id} data-verdict={room == null ? "empty" : room >= 0 ? "pass" : "fail"}>
                         <TableCell>{o.supplier ? <Link className="font-medium text-brand hover:underline" href={`/suppliers/${o.supplier.id}`}>{o.supplier.name}</Link> : "—"}</TableCell>
@@ -244,9 +266,13 @@ export default function ProductPage() {
         <Panel title={<>Screened <span>· {v.history.length} time{v.history.length === 1 ? "" : "s"}, newest first</span></>}>
           <div className="max-h-80 overflow-auto">
             <Table>
-              <TableHeader><TableRow><TableHead>When</TableHead><TableHead>Run</TableHead><TableHead>Verdict</TableHead><TableHead className="text-right">Score</TableHead><TableHead className="text-right">Sells at</TableHead><TableHead className="text-right">Profit</TableHead></TableRow></TableHeader>
+              <TableHeader><TableRow>
+                <SortTableHead {...historySort.th("when")}>When</SortTableHead><SortTableHead {...historySort.th("run")}>Run</SortTableHead>
+                <SortTableHead {...historySort.th("verdict")}>Verdict</SortTableHead><SortTableHead {...historySort.th("score")} numeric>Score</SortTableHead>
+                <SortTableHead {...historySort.th("sell")} numeric>Sells at</SortTableHead><SortTableHead {...historySort.th("profit")} numeric>Profit</SortTableHead>
+              </TableRow></TableHeader>
               <TableBody>
-                {v.history.map((h) => (
+                {historySort.rows.map((h) => (
                   <TableRow key={h.id} data-verdict={h.verdict ?? "empty"}>
                     <TableCell className="num text-xs whitespace-nowrap">{new Date(h.at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</TableCell>
                     <TableCell className="max-w-48 truncate"><Link className="text-brand hover:underline" href={`/runs/${h.runId}`}>{h.runName}</Link>{h.profile && <span className="block text-2xs text-muted-foreground">{h.profile}</span>}</TableCell>

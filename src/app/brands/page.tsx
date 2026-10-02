@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDownIcon, ArrowUpIcon, BuildingIcon, ExternalLinkIcon, LoaderIcon, SearchIcon } from "lucide-react";
+import { BuildingIcon, ExternalLinkIcon, LoaderIcon, SearchIcon } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { usePageCrumbs } from "@/components/Crumbs";
@@ -11,25 +11,28 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortTableHead, useSortable, type SortColumn } from "@/components/SortableTable";
+import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { GATING_LABELS, GATING_VARIANT, type BrandSummary } from "@/lib/brandMap";
 import { api, gbp } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
 
-type SortKey = "score" | "brand" | "asins" | "passing" | "sellers" | "amazon" | "buyBox" | "maxLanded" | "ipRisk";
 const IP_VARIANT = { high: "fail", medium: "warn", low: "muted" } as const;
 const IP_RANK = { high: 3, medium: 2, low: 1 } as const;
-const VALUE: Record<SortKey, (b: BrandSummary) => number | string | null> = {
-  score: (b) => b.score,
-  brand: (b) => b.brand.toLowerCase(),
-  asins: (b) => b.asins,
-  passing: (b) => b.pass * 1000 + b.warn,
-  sellers: (b) => b.avgSellers,
-  amazon: (b) => b.amazonSharePct,
-  buyBox: (b) => b.avgBuyBox,
-  maxLanded: (b) => b.medianMaxLanded,
-  ipRisk: (b) => (b.ipRisk ? IP_RANK[b.ipRisk.level] : null),
+/** Each column's sort (the shared table sort: numbers highest first, text A–Z, blanks last). */
+const COLUMNS: Record<string, SortColumn<BrandSummary>> = {
+  score: { value: (b) => b.score, kind: "number" },
+  brand: { value: (b) => b.brand, kind: "text" },
+  asins: { value: (b) => b.asins, kind: "number" },
+  passing: { value: (b) => b.pass * 1000 + b.warn, kind: "number" },
+  sellers: { value: (b) => b.avgSellers, kind: "number" },
+  amazon: { value: (b) => b.amazonSharePct, kind: "number" },
+  buyBox: { value: (b) => b.avgBuyBox, kind: "number" },
+  maxLanded: { value: (b) => b.medianMaxLanded, kind: "number" },
+  gating: { value: (b) => GATING_LABELS[b.gating], kind: "text" },
+  ipRisk: { value: (b) => (b.ipRisk ? IP_RANK[b.ipRisk.level] : null), kind: "number" },
+  carried: { value: (b) => b.suppliers[0]?.name ?? null, kind: "text" },
 };
 const PAGE = 200;
 
@@ -41,7 +44,6 @@ export default function BrandsPage() {
   const [q, setQ] = useState("");
   const [gating, setGating] = useState<"all" | "listable" | "approval" | "approved" | "blocked">("all");
   const [passingOnly, setPassingOnly] = useState(false);
-  const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "score", dir: -1 });
   const [limit, setLimit] = useState(PAGE);
 
   // While the map is being rebuilt in the background, check back every few seconds.
@@ -55,7 +57,7 @@ export default function BrandsPage() {
     return () => { stop = true; clearTimeout(timer); };
   }, []);
 
-  const shown = useMemo(() => {
+  const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
     const list = (data?.brands ?? []).filter((b) => {
       if (needle && !b.brand.toLowerCase().includes(needle) && !b.suppliers.some((s) => s.name.toLowerCase().includes(needle))) return false;
@@ -66,23 +68,13 @@ export default function BrandsPage() {
       if (gating === "blocked") return b.gating === "blocked";
       return true;
     });
-    const v = VALUE[sort.key];
-    return [...list].sort((a, b) => {
-      const x = v(a), y = v(b);
-      if (x == null && y == null) return 0;
-      if (x == null) return 1;
-      if (y == null) return -1;
-      return (x < y ? -1 : x > y ? 1 : 0) * sort.dir || b.score - a.score;
-    });
-  }, [data, q, gating, passingOnly, sort]);
-
-  const th = (key: SortKey, label: string, className?: string, title?: string) => (
-    <TableHead className={className} title={title} aria-sort={sort.key === key ? (sort.dir === 1 ? "ascending" : "descending") : undefined}>
-      <button className="inline-flex items-center gap-1 hover:text-foreground" onClick={() => setSort((s) => ({ key, dir: s.key === key ? (s.dir === 1 ? -1 : 1) : key === "brand" ? 1 : -1 }))}>
-        {label}
-        {sort.key === key && (sort.dir === 1 ? <ArrowUpIcon className="size-3" /> : <ArrowDownIcon className="size-3" />)}
-      </button>
-    </TableHead>
+    // Ties keep the score order.
+    return list.sort((a, b) => b.score - a.score);
+  }, [data, q, gating, passingOnly]);
+  const sorting = useSortable("wholesale.brands", filtered, COLUMNS, { key: "score", dir: "desc" });
+  const shown = sorting.rows;
+  const th = (key: string, label: string, className?: string, title?: string) => (
+    <SortTableHead {...sorting.th(key)} numeric={className?.includes("text-right")} className={className?.replace("text-right", "")} title={title}>{label}</SortTableHead>
   );
 
   const header = (
@@ -144,9 +136,9 @@ export default function BrandsPage() {
               {th("amazon", "Amazon", "text-right", "Share of its listings Amazon sells or sold")}
               {th("buyBox", "Buy Box", "text-right", "Average Buy Box")}
               {th("maxLanded", "Max landed", "text-right", "Median of the most each product can cost landed and clear the floors")}
-              <TableHead>Gating</TableHead>
+              {th("gating", "Gating")}
               {th("ipRisk", "IP risk", undefined, "On your IP-risk list (Settings → IP risk); high halves the score")}
-              <TableHead className="pr-4">Carried by</TableHead>
+              {th("carried", "Carried by", "pr-4", "Sorts by the first supplier")}
             </TableRow>
           </TableHeader>
           <TableBody>

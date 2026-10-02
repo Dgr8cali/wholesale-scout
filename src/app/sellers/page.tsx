@@ -8,6 +8,7 @@ import { EmptyState, ErrorState } from "@/components/States";
 import { VerdictBar } from "@/components/VerdictBar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { SortTableHead, useSortable } from "@/components/SortableTable";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { storefrontUrl } from "@/lib/check/seller";
 import type { ScannedSeller } from "@/lib/server/sellerScan";
@@ -19,6 +20,13 @@ export default function SellersPage() {
   usePageCrumbs([{ label: "Sellers" }]);
   const [sellers, setSellers] = useState<ScannedSeller[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const sorting = useSortable("wholesale.sellers", sellers ?? [], {
+    seller: { value: (s) => s.name ?? s.sellerId, kind: "text" },
+    rating: { value: (s) => s.ratingPct, kind: "number" },
+    storefront: { value: (s) => s.storefrontSize, kind: "number" },
+    brands: { value: (s) => s.brands[0]?.brand ?? null, kind: "text" },
+    lastScan: { value: (s) => s.lastScan?.at ?? null, kind: "date" },
+  });
 
   useEffect(() => {
     api<{ sellers: ScannedSeller[] }>("/api/sellers").then((r) => setSellers(r.sellers)).catch((e) => setError(e.message));
@@ -46,16 +54,16 @@ export default function SellersPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="pl-4">Seller</TableHead>
-                  <TableHead className="text-right">Rating</TableHead>
-                  <TableHead className="text-right">Storefront</TableHead>
-                  <TableHead>Brand mix</TableHead>
-                  <TableHead>Last scan</TableHead>
+                  <SortTableHead {...sorting.th("seller")} className="pl-4">Seller</SortTableHead>
+                  <SortTableHead {...sorting.th("rating")} numeric>Rating</SortTableHead>
+                  <SortTableHead {...sorting.th("storefront")} numeric>Storefront</SortTableHead>
+                  <SortTableHead {...sorting.th("brands")} title="Sorts by the top brand">Brand mix</SortTableHead>
+                  <SortTableHead {...sorting.th("lastScan")}>Last scan</SortTableHead>
                   <TableHead className="pr-4" />
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sellers.map((s) => {
+                {sorting.rows.map((s) => {
                   const r = s.results;
                   const screened = r ? r.pass + r.warn + r.fail : 0;
                   return (

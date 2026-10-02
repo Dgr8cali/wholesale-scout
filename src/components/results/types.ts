@@ -89,7 +89,7 @@ export interface Progress {
 }
 
 
-export type SortKey = "score" | "profit" | "roi" | "margin" | "sell_price" | "landed_cost" | "hurdle_price" | "title" | "verdict" | "sales" | "sellers" | "buybox" | "share" | "profitMo" | "orderQty" | "months";
+export type SortKey = "score" | "profit" | "roi" | "margin" | "sell_price" | "landed_cost" | "hurdle_price" | "title" | "verdict" | "sales" | "sellers" | "buybox" | "share" | "profitMo" | "orderQty" | "months" | "rank90" | "bb90" | "why";
 
 /** Figures computed from the stored market data, for display and sorting. */
 const FIGURES = {

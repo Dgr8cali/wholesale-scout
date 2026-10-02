@@ -8,6 +8,7 @@ import { usePageCrumbs } from "@/components/Crumbs";
 import { ErrorState } from "@/components/States";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SortTh, useSortable } from "@/components/SortableTable";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { LaunchCampaign, PlanStep } from "@/lib/ads/launch";
@@ -53,6 +54,10 @@ export default function AdsLaunchPage() {
     return () => clearTimeout(t);
   }, [form]);
 
+  const cs = useSortable("ads.launch", preview?.campaigns ?? [], {
+    name: { value: (c) => c.name, kind: "text" }, budget: { value: (c) => c.budget, kind: "number" },
+    bid: { value: (c) => c.bid, kind: "number" }, targets: { value: (c) => c.targets.length, kind: "number" },
+  });
   if (error) return <ErrorState title="Couldn't load the launcher" message={error} />;
   if (!pick || !form) return <Skeleton className="h-96 rounded-lg" />;
   const set = (k: keyof Form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setForm({ ...form, [k]: e.target.value });
@@ -109,8 +114,11 @@ export default function AdsLaunchPage() {
             <>
               <div className="overflow-x-auto rounded-lg border">
                 <table className="w-full text-sm">
-                  <thead><tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase"><th className="px-2 py-1.5">Campaign</th><th className="px-2 py-1.5 text-right">Budget</th><th className="px-2 py-1.5 text-right">Bid</th><th className="px-2 py-1.5">Targets</th></tr></thead>
-                  <tbody>{preview.campaigns.map((c) => (
+                  <thead><tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase">
+                    <SortTh {...cs.th("name")} className="px-2 py-1.5">Campaign</SortTh><SortTh {...cs.th("budget")} numeric className="px-2 py-1.5 text-right">Budget</SortTh>
+                    <SortTh {...cs.th("bid")} numeric className="px-2 py-1.5 text-right">Bid</SortTh><SortTh {...cs.th("targets")} className="px-2 py-1.5">Targets</SortTh>
+                  </tr></thead>
+                  <tbody>{cs.rows.map((c) => (
                     <tr key={c.name} className="border-b last:border-b-0"><td className="px-2 py-1.5 font-medium">{c.name}</td><td className="num px-2 py-1.5 text-right">£{c.budget.toFixed(2)}/day <span className="text-xs text-muted-foreground">{Math.round(c.share * 100)}%</span></td><td className="num px-2 py-1.5 text-right">£{c.bid.toFixed(2)}</td><td className="px-2 py-1.5 text-xs text-muted-foreground">{c.targets.join(", ")}</td></tr>
                   ))}</tbody>
                 </table>

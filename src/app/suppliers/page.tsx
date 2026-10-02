@@ -8,7 +8,8 @@ import { EmptyState, ErrorState } from "@/components/States";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortTableHead, useSortable } from "@/components/SortableTable";
+import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import type { SupplierRecord, SupplierStats } from "@/lib/server/suppliers";
 import { api, when } from "@/lib/ui/client";
 
@@ -25,10 +26,21 @@ export default function SuppliersPage() {
   useEffect(() => {
     api<{ suppliers: Row[] }>("/api/suppliers?stats=1").then((r) => setRows(r.suppliers)).catch((e) => setError(e.message));
   }, []);
-  const shown = useMemo(() => {
+  const filtered = useMemo(() => {
     const n = q.trim().toLowerCase();
     return (rows ?? []).filter((s) => !n || s.name.toLowerCase().includes(n) || s.stats.brands.some((b) => b.brand.toLowerCase().includes(n)));
   }, [rows, q]);
+  const sorting = useSortable("wholesale.suppliers", filtered, {
+    supplier: { value: (s) => s.name, kind: "text" },
+    runs: { value: (s) => s.stats.runs, kind: "number" },
+    products: { value: (s) => s.stats.products, kind: "number" },
+    passing: { value: (s) => s.stats.pass * 1000 + s.stats.warn, kind: "number" },
+    brands: { value: (s) => s.stats.brands[0]?.brand ?? null, kind: "text" },
+    terms: { value: (s) => s.mov, kind: "number" },
+    paperwork: { value: (s) => (s.importer_of_record ? 1 : 0) + (s.invoice_accepted_for_approval ? 1 : 0), kind: "number" },
+    rating: { value: (s) => s.rating || null, kind: "number" },
+  });
+  const shown = sorting.rows;
 
   const header = (
     <div>
@@ -57,14 +69,14 @@ export default function SuppliersPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="pl-4">Supplier</TableHead>
-                  <TableHead className="text-right">Runs</TableHead>
-                  <TableHead className="text-right">Products</TableHead>
-                  <TableHead className="text-right" title="On your default profile">Pass / warn</TableHead>
-                  <TableHead>Brands</TableHead>
-                  <TableHead>Terms</TableHead>
-                  <TableHead title="Importer of record · labelling · invoice accepted for brand approval">Paperwork</TableHead>
-                  <TableHead className="pr-4 text-right">Rating</TableHead>
+                  <SortTableHead {...sorting.th("supplier")} className="pl-4">Supplier</SortTableHead>
+                  <SortTableHead {...sorting.th("runs")} numeric>Runs</SortTableHead>
+                  <SortTableHead {...sorting.th("products")} numeric>Products</SortTableHead>
+                  <SortTableHead {...sorting.th("passing")} numeric title="On your default profile">Pass / warn</SortTableHead>
+                  <SortTableHead {...sorting.th("brands")} title="Sorts by the top brand">Brands</SortTableHead>
+                  <SortTableHead {...sorting.th("terms")} title="Sorts by the minimum order value">Terms</SortTableHead>
+                  <SortTableHead {...sorting.th("paperwork")} title="Importer of record · labelling · invoice accepted for brand approval. Sorts by how many of importer of record and invoice accepted are yes">Paperwork</SortTableHead>
+                  <SortTableHead {...sorting.th("rating")} numeric className="pr-4">Rating</SortTableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

@@ -8,7 +8,8 @@ import { EmptyState, ErrorState } from "@/components/States";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortTableHead, useSortable } from "@/components/SortableTable";
+import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { Actuals } from "@/lib/actuals";
 import type { Purchase } from "@/lib/server/purchases";
@@ -50,7 +51,19 @@ export default function TrackerPage() {
       .then((r) => setRows(r.purchases))
       .catch((e: Error) => setError(e.message));
   }, [nonce]);
-  const shown = useMemo(() => (rows ?? []).filter((p) => show === "all" || p.status !== "closed"), [rows, show]);
+  const filtered = useMemo(() => (rows ?? []).filter((p) => show === "all" || p.status !== "closed"), [rows, show]);
+  // Status sorts in pipeline order; the predicted · actual columns by the actual figure.
+  const sorting = useSortable("wholesale.tracker", filtered, {
+    product: { value: (p) => p.product?.title ?? p.asin, kind: "text" },
+    status: { value: (p) => `${String(PURCHASE_STATUSES.findIndex((x) => x.id === p.status)).padStart(2, "0")} ${p.status}`, kind: "text" },
+    units: { value: (p) => p.units, kind: "number" },
+    landed: { value: (p) => p.landed_gbp, kind: "number" },
+    profit: { value: (p) => p.actuals?.profitPerUnit ?? null, kind: "number" },
+    sales: { value: (p) => p.actuals?.unitsPerMonth ?? null, kind: "number" },
+    sold: { value: (p) => p.actuals?.unitsSold ?? null, kind: "number" },
+    profitToDate: { value: (p) => p.actuals?.profitToDate ?? null, kind: "number" },
+  });
+  const shown = sorting.rows;
 
   if (error) return <ErrorState title="Couldn't load the tracker" message={error} />;
   if (!rows) return <Skeleton className="h-64" />;
@@ -99,14 +112,14 @@ export default function TrackerPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="pl-4">Product</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Units</TableHead>
-                  <TableHead className="text-right">Landed</TableHead>
-                  <TableHead className="text-right">Profit / unit<br /><span className="font-normal text-muted-foreground">predicted · actual</span></TableHead>
-                  <TableHead className="text-right">Sales / mo<br /><span className="font-normal text-muted-foreground">predicted · actual</span></TableHead>
-                  <TableHead className="text-right">Sold</TableHead>
-                  <TableHead className="pr-4 text-right">Profit to date</TableHead>
+                  <SortTableHead {...sorting.th("product")} className="pl-4">Product</SortTableHead>
+                  <SortTableHead {...sorting.th("status")} title="In pipeline order">Status</SortTableHead>
+                  <SortTableHead {...sorting.th("units")} numeric>Units</SortTableHead>
+                  <SortTableHead {...sorting.th("landed")} numeric>Landed</SortTableHead>
+                  <SortTableHead {...sorting.th("profit")} numeric title="Sorts by the actual figure">Profit / unit<br /><span className="font-normal text-muted-foreground">predicted · actual</span></SortTableHead>
+                  <SortTableHead {...sorting.th("sales")} numeric title="Sorts by the actual figure">Sales / mo<br /><span className="font-normal text-muted-foreground">predicted · actual</span></SortTableHead>
+                  <SortTableHead {...sorting.th("sold")} numeric>Sold</SortTableHead>
+                  <SortTableHead {...sorting.th("profitToDate")} numeric className="pr-4">Profit to date</SortTableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

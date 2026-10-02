@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
+import { SortTh, useSortable } from "@/components/SortableTable";
 import { RULES, type RuleConfig, type RuleId, type RuleMeta, type RulesConfig, type Threshold } from "@/lib/ads/rules";
 import { api } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
@@ -121,6 +122,11 @@ function RuleCard({ meta, cfg, changed, dry, running, onEdit, onSave, onReset }:
 function DryRunByProduct({ dry }: { dry: DryRun }) {
   const asins = [...new Set(Object.values(dry.counts).flatMap((c) => Object.keys(c.byAsin)))].sort();
   const firing = RULES.filter((r) => dry.counts[r.id]?.total);
+  const s = useSortable("ads.dryrun", asins, {
+    product: { value: (a) => a, kind: "text" },
+    ...Object.fromEntries(firing.map((r) => [r.id, { value: (a: string) => dry.counts[r.id].byAsin[a] ?? null, kind: "number" as const }])),
+    all: { value: (a) => firing.reduce((x, r) => x + (dry.counts[r.id].byAsin[a] ?? 0), 0), kind: "number" },
+  });
   if (!asins.length) return <p className="panel p-3 text-sm text-muted-foreground">Dry run: no rule would propose anything on the data imported now.</p>;
   return (
     <section className="panel space-y-2 p-3">
@@ -128,9 +134,9 @@ function DryRunByProduct({ dry }: { dry: DryRun }) {
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead><tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase">
-            <th className="px-2 py-1">Product</th>{firing.map((r) => <th key={r.id} className="px-2 py-1 text-right">{r.label}</th>)}<th className="px-2 py-1 text-right">All</th>
+            <SortTh {...s.th("product")} className="px-2 py-1">Product</SortTh>{firing.map((r) => <SortTh key={r.id} {...s.th(r.id)} numeric className="px-2 py-1 text-right">{r.label}</SortTh>)}<SortTh {...s.th("all")} numeric className="px-2 py-1 text-right">All</SortTh>
           </tr></thead>
-          <tbody>{asins.map((a) => (
+          <tbody>{s.rows.map((a) => (
             <tr key={a} className="border-b last:border-b-0">
               <td className="num px-2 py-1">{a}</td>
               {firing.map((r) => <td key={r.id} className="num px-2 py-1 text-right">{dry.counts[r.id].byAsin[a] ?? "—"}</td>)}

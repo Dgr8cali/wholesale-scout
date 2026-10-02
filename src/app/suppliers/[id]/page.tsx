@@ -12,7 +12,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortTableHead, useSortable } from "@/components/SortableTable";
+import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import type { BestProduct, SupplierRecord, SupplierStats } from "@/lib/server/suppliers";
 import { api, gbp, when } from "@/lib/ui/client";
@@ -52,6 +53,14 @@ export default function SupplierPage() {
   const [data, setData] = useState<Detail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
+  const sorting = useSortable("wholesale.supplierProducts", data?.best ?? [], {
+    product: { value: (b) => b.title ?? b.ean, kind: "text" },
+    verdict: { value: (b) => `${b.verdict === "pass" ? 1 : b.verdict === "warn" ? 2 : 3} ${b.verdict}`, kind: "text" },
+    buyBox: { value: (b) => b.buyBox, kind: "number" },
+    landed: { value: (b) => b.landed, kind: "number" },
+    maxLanded: { value: (b) => b.maxLanded, kind: "number" },
+    room: { value: (b) => b.headroom, kind: "number" },
+  });
   usePageCrumbs([{ label: "Suppliers", href: "/suppliers" }, { label: data?.supplier.name ?? "…" }]);
 
   const load = useCallback(() => { api<Detail>(`/api/suppliers/${id}`).then(setData).catch((e) => setError(e.message)); }, [id]);
@@ -143,16 +152,16 @@ export default function SupplierPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="pl-4">Product</TableHead>
-                    <TableHead>Verdict</TableHead>
-                    <TableHead className="text-right">Buy Box</TableHead>
-                    <TableHead className="text-right">Landed</TableHead>
-                    <TableHead className="text-right">Max landed</TableHead>
-                    <TableHead className="pr-4 text-right">Room</TableHead>
+                    <SortTableHead {...sorting.th("product")} className="pl-4">Product</SortTableHead>
+                    <SortTableHead {...sorting.th("verdict")}>Verdict</SortTableHead>
+                    <SortTableHead {...sorting.th("buyBox")} numeric>Buy Box</SortTableHead>
+                    <SortTableHead {...sorting.th("landed")} numeric>Landed</SortTableHead>
+                    <SortTableHead {...sorting.th("maxLanded")} numeric>Max landed</SortTableHead>
+                    <SortTableHead {...sorting.th("room")} numeric className="pr-4">Room</SortTableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {data.best.map((b) => (
+                  {sorting.rows.map((b) => (
                     <TableRow key={b.productId} data-verdict={b.verdict}>
                       <TableCell className="max-w-80 pl-4 whitespace-normal">
                         <p className="line-clamp-2 text-sm">{b.title ?? b.ean}</p>

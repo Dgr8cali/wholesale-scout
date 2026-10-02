@@ -7,6 +7,7 @@ import { approvalRequestUrl, RestrictionLink } from "@/lib/ui/RestrictionLink";
 import { applyLinks } from "@/lib/spapi/parse";
 import { ApplyKit } from "@/components/documents/ApplyKit";
 import { gbp } from "@/lib/ui/client";
+import { SortTableHead, useSortable } from "@/components/SortableTable";
 import { cn } from "@/lib/utils";
 import { lastSeenLabel } from "@/lib/screening/dormant";
 import { dormantOf } from "@/lib/ui/resultRows";
@@ -317,7 +318,19 @@ function SellerGap({ r }: { r: Result }) {
 function QogitaOfferList({ q, stacked }: { q: QogitaOffers; stacked: boolean }) {
   const cur = q.currency === "EUR" ? "€" : `${q.currency} `;
   const m = (n: number) => `${cur}${n.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  const sorted = [...q.offers].sort((a, b) => a.basePrice - b.basePrice);
+  // Cheapest first until a column is clicked.
+  const sorting = useSortable("wholesale.qogitaOffers", q.offers, {
+    supplier: { value: (o) => o.seller, kind: "text" },
+    price: { value: (o) => o.basePrice, kind: "number" },
+    gbp: { value: (o) => o.basePrice * q.fxRate, kind: "number" },
+    mov: { value: (o) => o.baseMov, kind: "number" },
+    tiers: { value: (o) => o.tiers.length, kind: "number" },
+    case: { value: (o) => o.unit, kind: "number" },
+    stock: { value: (o) => o.inventory, kind: "number" },
+    delivery: { value: (o) => o.deliveryWeeks, kind: "number" },
+  }, { key: "price", dir: "asc" });
+  const sorted = sorting.rows;
+  const th = (key: string, label: string, numeric = true) => <SortTableHead {...sorting.th(key)} numeric={numeric} className="h-auto py-1.5 text-xs">{label}</SortTableHead>;
   return (
     <div className="space-y-1.5">
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -331,14 +344,14 @@ function QogitaOfferList({ q, stacked }: { q: QogitaOffers; stacked: boolean }) 
           <table className="num w-full text-xs">
             <thead className="text-left text-muted-foreground">
               <tr className="border-b">
-                <th className="px-2 py-1.5 font-medium">Supplier</th>
-                <th className="px-2 py-1.5 text-right font-medium">Price / piece</th>
-                <th className="px-2 py-1.5 text-right font-medium">≈ GBP</th>
-                <th className="px-2 py-1.5 text-right font-medium">MOV</th>
-                {!stacked && <th className="px-2 py-1.5 text-right font-medium">Tiers</th>}
-                <th className="px-2 py-1.5 text-right font-medium">Case</th>
-                <th className="px-2 py-1.5 text-right font-medium">In stock</th>
-                <th className="px-2 py-1.5 text-right font-medium">Delivery</th>
+                {th("supplier", "Supplier", false)}
+                {th("price", "Price / piece")}
+                {th("gbp", "≈ GBP")}
+                {th("mov", "MOV")}
+                {!stacked && th("tiers", "Tiers")}
+                {th("case", "Case")}
+                {th("stock", "In stock")}
+                {th("delivery", "Delivery")}
               </tr>
             </thead>
             <tbody>

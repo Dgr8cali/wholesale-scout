@@ -13,7 +13,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortTableHead, useSortable } from "@/components/SortableTable";
+import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { GATING_LABELS, GATING_VARIANT, type BrandProduct, type BrandSummary } from "@/lib/brandMap";
 import { APPROVAL_STATUSES, STATUS_LABELS, type ApprovalStatus } from "@/lib/brands";
 import { api, gbp, when } from "@/lib/ui/client";
@@ -42,6 +43,17 @@ export default function BrandPage() {
   const { key } = useParams<{ key: string }>();
   const [data, setData] = useState<{ summary: BrandSummary; products: Product[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Verdict sorts pass, warn, fail (A–Z on the first click); unpriced last.
+  const sorting = useSortable("wholesale.brandProducts", data?.products ?? [], {
+    product: { value: (p) => p.title ?? p.ean, kind: "text" },
+    verdict: { value: (p) => (p.priced && p.verdict ? `${{ pass: 1, warn: 2, fail: 3 }[p.verdict]} ${p.verdict}` : null), kind: "text" },
+    buyBox: { value: (p) => p.buy_box, kind: "number" },
+    sellers: { value: (p) => p.fba_sellers, kind: "number" },
+    amazon: { value: (p) => (p.amazon == null ? null : p.amazon ? "sells / sold" : "no"), kind: "text" },
+    maxLanded: { value: (p) => p.max_landed, kind: "number" },
+    offer: { value: (p) => p.bestOffer?.unitCostGbp ?? null, kind: "number" },
+    gating: { value: (p) => (p.restriction ? RESTRICTION[p.restriction]?.label ?? p.restriction : null), kind: "text" },
+  });
   usePageCrumbs([{ label: "Brands", href: "/brands" }, { label: data?.summary.brand ?? "…" }]);
 
   const load = useCallback(() => {
@@ -160,18 +172,18 @@ export default function BrandPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="pl-4">Product</TableHead>
-                <TableHead>Verdict</TableHead>
-                <TableHead className="text-right">Buy Box</TableHead>
-                <TableHead className="text-right">Sellers</TableHead>
-                <TableHead>Amazon</TableHead>
-                <TableHead className="text-right" title="The most a unit can cost landed and clear the floors">Max landed</TableHead>
-                <TableHead>Best offer</TableHead>
-                <TableHead className="pr-4">Gating</TableHead>
+                <SortTableHead {...sorting.th("product")} className="pl-4">Product</SortTableHead>
+                <SortTableHead {...sorting.th("verdict")}>Verdict</SortTableHead>
+                <SortTableHead {...sorting.th("buyBox")} numeric>Buy Box</SortTableHead>
+                <SortTableHead {...sorting.th("sellers")} numeric>Sellers</SortTableHead>
+                <SortTableHead {...sorting.th("amazon")}>Amazon</SortTableHead>
+                <SortTableHead {...sorting.th("maxLanded")} numeric title="The most a unit can cost landed and clear the floors">Max landed</SortTableHead>
+                <SortTableHead {...sorting.th("offer")} title="Sorts by the best unit cost">Best offer</SortTableHead>
+                <SortTableHead {...sorting.th("gating")} className="pr-4">Gating</SortTableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {data.products.map((p) => {
+              {sorting.rows.map((p) => {
                 const r = p.restriction ? RESTRICTION[p.restriction] : undefined;
                 return (
                   <TableRow key={p.product_id} data-verdict={p.priced && p.verdict ? p.verdict : "empty"}>

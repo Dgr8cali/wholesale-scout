@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Sparkline } from "@/components/results/Sparkline";
 import { ProductPicker, useAdsProduct } from "@/components/ads/ProductPicker";
+import { SortTh, useSortable } from "@/components/SortableTable";
 import { ProductThumb } from "@/components/ProductThumb";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TERM_STATUS_LABEL, type Ratios, type TermStatus, type Totals } from "@/lib/ads/metrics";
@@ -463,6 +464,15 @@ function AsinCell({ c, onSaved }: { c: CampaignRow; onSaved: () => void }) {
 
 function CampaignTable({ rows, onSaved }: { rows: CampaignRow[]; onSaved: () => void }) {
   const [open, setOpen] = useState<Set<string>>(new Set());
+  const s = useSortable("ads.campaigns", rows, {
+    name: { value: (c) => c.name, kind: "text" }, asin: { value: (c) => c.asin, kind: "text" },
+    impressions: { value: (c) => c.totals?.impressions, kind: "number" }, clicks: { value: (c) => c.totals?.clicks, kind: "number" },
+    ctr: { value: (c) => c.ratios?.ctr, kind: "number" }, cost: { value: (c) => c.totals?.cost, kind: "number" },
+    cpc: { value: (c) => c.ratios?.cpc, kind: "number" }, orders: { value: (c) => c.totals?.orders, kind: "number" },
+    conversion: { value: (c) => c.ratios?.conversion, kind: "number" }, sales: { value: (c) => c.totals?.sales, kind: "number" },
+    acos: { value: (c) => c.ratios?.acos, kind: "number" }, breakEven: { value: (c) => c.breakEvenAcos, kind: "number" },
+    perOrder: { value: (c) => c.ratios?.costPerOrder, kind: "number" }, profit: { value: (c) => c.profitAfterAds, kind: "number" },
+  });
   const toggle = (id: string) => setOpen((cur) => { const next = new Set(cur); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   return (
     <section className="space-y-2">
@@ -470,12 +480,15 @@ function CampaignTable({ rows, onSaved }: { rows: CampaignRow[]; onSaved: () => 
       <div className="overflow-x-auto rounded-lg border">
         <table className="w-full text-sm">
           <thead><tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase">
-            <th className="px-2 py-1.5">Campaign</th><th className="px-2 py-1.5">ASIN</th><th className="px-2 py-1.5 text-right">Impr.</th><th className="px-2 py-1.5 text-right">Clicks</th>
-            <th className="px-2 py-1.5 text-right">CTR</th><th className="px-2 py-1.5 text-right">Spend</th><th className="px-2 py-1.5 text-right">CPC</th><th className="px-2 py-1.5 text-right">Orders</th>
-            <th className="px-2 py-1.5 text-right">Conv.</th><th className="px-2 py-1.5 text-right">Sales</th><th className="px-2 py-1.5 text-right">ACoS</th><th className="px-2 py-1.5 text-right">Break-even</th>
-            <th className="px-2 py-1.5 text-right">Per order</th><th className="px-2 py-1.5 text-right">Profit after ads</th>
+            <SortTh {...s.th("name")} className="px-2 py-1.5">Campaign</SortTh><SortTh {...s.th("asin")} className="px-2 py-1.5">ASIN</SortTh>
+            <SortTh {...s.th("impressions")} numeric className="px-2 py-1.5 text-right">Impr.</SortTh><SortTh {...s.th("clicks")} numeric className="px-2 py-1.5 text-right">Clicks</SortTh>
+            <SortTh {...s.th("ctr")} numeric className="px-2 py-1.5 text-right">CTR</SortTh><SortTh {...s.th("cost")} numeric className="px-2 py-1.5 text-right">Spend</SortTh>
+            <SortTh {...s.th("cpc")} numeric className="px-2 py-1.5 text-right">CPC</SortTh><SortTh {...s.th("orders")} numeric className="px-2 py-1.5 text-right">Orders</SortTh>
+            <SortTh {...s.th("conversion")} numeric className="px-2 py-1.5 text-right">Conv.</SortTh><SortTh {...s.th("sales")} numeric className="px-2 py-1.5 text-right">Sales</SortTh>
+            <SortTh {...s.th("acos")} numeric className="px-2 py-1.5 text-right">ACoS</SortTh><SortTh {...s.th("breakEven")} numeric className="px-2 py-1.5 text-right">Break-even</SortTh>
+            <SortTh {...s.th("perOrder")} numeric className="px-2 py-1.5 text-right">Per order</SortTh><SortTh {...s.th("profit")} numeric className="px-2 py-1.5 text-right">Profit after ads</SortTh>
           </tr></thead>
-          <tbody>{rows.map((c) => (
+          <tbody>{s.rows.map((c) => (
             <Fragment key={c.id}>
             <tr className="border-b last:border-b-0">
               <td className="px-2 py-1.5">
@@ -527,15 +540,16 @@ function CampaignTable({ rows, onSaved }: { rows: CampaignRow[]; onSaved: () => 
   );
 }
 
-type TermSort = "cost" | "clicks" | "orders" | "acos";
-
 function TermTable({ rows, campaigns }: { rows: TermRow[]; campaigns: CampaignRow[] }) {
   const [campaign, setCampaign] = useState("");
   const [status, setStatus] = useState<"" | TermStatus>("");
-  const [sort, setSort] = useState<TermSort>("cost");
-  const shown = useMemo(() => rows
-    .filter((t) => (!campaign || t.campaign === campaign) && (!status || t.status === status))
-    .sort((a, b) => sort === "acos" ? (b.ratios.acos ?? -1) - (a.ratios.acos ?? -1) : (b.totals[sort] as number) - (a.totals[sort] as number)), [rows, campaign, status, sort]);
+  const filtered = useMemo(() => rows.filter((t) => (!campaign || t.campaign === campaign) && (!status || t.status === status)), [rows, campaign, status]);
+  const s = useSortable("ads.terms", filtered, {
+    term: { value: (t) => t.term, kind: "text" }, campaign: { value: (t) => t.campaignName, kind: "text" },
+    clicks: { value: (t) => t.totals.clicks, kind: "number" }, orders: { value: (t) => t.totals.orders, kind: "number" },
+    cost: { value: (t) => t.totals.cost, kind: "number" }, acos: { value: (t) => t.ratios.acos, kind: "number" },
+    breakEven: { value: (t) => t.breakEvenAcos, kind: "number" }, status: { value: (t) => TERM_STATUS_LABEL[t.status], kind: "text" },
+  }, { key: "cost", dir: "desc" });
   const counts = useMemo(() => rows.filter((t) => !campaign || t.campaign === campaign).reduce<Record<string, number>>((a, t) => ({ ...a, [t.status]: (a[t.status] ?? 0) + 1 }), {}), [rows, campaign]);
   return (
     <section className="space-y-2">
@@ -551,18 +565,16 @@ function TermTable({ rows, campaigns }: { rows: TermRow[]; campaigns: CampaignRo
             <NativeSelectOption value="">Any ({Object.values(counts).reduce((a, b) => a + b, 0)})</NativeSelectOption>
             {(Object.keys(TERM_STATUS_LABEL) as TermStatus[]).map((s) => <NativeSelectOption key={s} value={s}>{TERM_STATUS_LABEL[s]} ({counts[s] ?? 0})</NativeSelectOption>)}
           </NativeSelect></label>
-        <label className="space-y-1"><span className="field-label">Sort</span>
-          <NativeSelect value={sort} onChange={(e) => setSort(e.target.value as TermSort)}>
-            <NativeSelectOption value="cost">Spend</NativeSelectOption><NativeSelectOption value="clicks">Clicks</NativeSelectOption><NativeSelectOption value="orders">Orders</NativeSelectOption><NativeSelectOption value="acos">ACoS</NativeSelectOption>
-          </NativeSelect></label>
       </div>
       <div className="overflow-x-auto rounded-lg border">
         <table className="w-full text-sm">
           <thead><tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase">
-            <th className="px-2 py-1.5">Search term</th><th className="px-2 py-1.5">Campaign</th><th className="px-2 py-1.5 text-right">Clicks</th><th className="px-2 py-1.5 text-right">Orders</th>
-            <th className="px-2 py-1.5 text-right">Spend</th><th className="px-2 py-1.5 text-right">ACoS</th><th className="px-2 py-1.5 text-right">Break-even</th><th className="px-2 py-1.5">Status</th>
+            <SortTh {...s.th("term")} className="px-2 py-1.5">Search term</SortTh><SortTh {...s.th("campaign")} className="px-2 py-1.5">Campaign</SortTh>
+            <SortTh {...s.th("clicks")} numeric className="px-2 py-1.5 text-right">Clicks</SortTh><SortTh {...s.th("orders")} numeric className="px-2 py-1.5 text-right">Orders</SortTh>
+            <SortTh {...s.th("cost")} numeric className="px-2 py-1.5 text-right">Spend</SortTh><SortTh {...s.th("acos")} numeric className="px-2 py-1.5 text-right">ACoS</SortTh>
+            <SortTh {...s.th("breakEven")} numeric className="px-2 py-1.5 text-right">Break-even</SortTh><SortTh {...s.th("status")} className="px-2 py-1.5">Status</SortTh>
           </tr></thead>
-          <tbody>{shown.map((t) => (
+          <tbody>{s.rows.map((t) => (
             <Fragment key={`${t.campaign}|${t.term}`}>
               <tr className="border-b last:border-b-0">
                 <td className="px-2 py-1.5">
@@ -601,7 +613,15 @@ function RankCell({ ranks }: { ranks: KeywordRow["ranks"] }) {
 
 function KeywordTable({ rows }: { rows: KeywordRow[] }) {
   const [all, setAll] = useState(false);
-  const shown = rows.filter((r) => all || r.clicks > 0 || r.ranks.length > 0);
+  const s = useSortable("ads.keywords", rows.filter((r) => all || r.clicks > 0 || r.ranks.length > 0), {
+    keyword: { value: (k) => k.text, kind: "text" }, campaign: { value: (k) => k.campaignName, kind: "text" },
+    bid: { value: (k) => k.bid, kind: "number" }, clicks: { value: (k) => k.clicks, kind: "number" },
+    cost: { value: (k) => k.cost, kind: "number" }, orders: { value: (k) => k.orders, kind: "number" },
+    // Spend with no sales counts as the highest ACoS.
+    acos: { value: (k) => (k.sales ? k.cost / k.sales : k.cost ? 1e9 : null), kind: "number" },
+    // The latest check's position; not in the top 48, or never checked, last.
+    rank: { value: (k) => k.ranks.at(-1)?.position ?? null, kind: "number" },
+  });
   if (!rows.length) return null;
   return (
     <section className="space-y-2">
@@ -612,10 +632,13 @@ function KeywordTable({ rows }: { rows: KeywordRow[] }) {
       <div className="overflow-x-auto rounded-lg border">
         <table className="w-full text-sm">
           <thead><tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase">
-            <th className="px-2 py-1.5">Keyword</th><th className="px-2 py-1.5">Campaign</th><th className="px-2 py-1.5 text-right">Bid</th><th className="px-2 py-1.5 text-right">Clicks</th>
-            <th className="px-2 py-1.5 text-right">Spend</th><th className="px-2 py-1.5 text-right">Orders</th><th className="px-2 py-1.5 text-right">ACoS</th><th className="px-2 py-1.5" title="Organic position on the extension's rank checks: the latest, and the last 8">Organic rank</th>
+            <SortTh {...s.th("keyword")} className="px-2 py-1.5">Keyword</SortTh><SortTh {...s.th("campaign")} className="px-2 py-1.5">Campaign</SortTh>
+            <SortTh {...s.th("bid")} numeric className="px-2 py-1.5 text-right">Bid</SortTh><SortTh {...s.th("clicks")} numeric className="px-2 py-1.5 text-right">Clicks</SortTh>
+            <SortTh {...s.th("cost")} numeric className="px-2 py-1.5 text-right">Spend</SortTh><SortTh {...s.th("orders")} numeric className="px-2 py-1.5 text-right">Orders</SortTh>
+            <SortTh {...s.th("acos")} numeric className="px-2 py-1.5 text-right">ACoS</SortTh>
+            <SortTh {...s.th("rank")} className="px-2 py-1.5" title="Organic position on the extension's rank checks: the latest, and the last 8">Organic rank</SortTh>
           </tr></thead>
-          <tbody>{shown.slice(0, 200).map((k) => (
+          <tbody>{s.rows.slice(0, 200).map((k) => (
             <tr key={k.keywordId} className={cn("border-b last:border-b-0", /paused|archived/i.test(k.state ?? "") && "text-muted-foreground")}>
               <td className="px-2 py-1.5">{k.text} <span className="text-xs text-muted-foreground">{k.matchType.toLowerCase()}{k.state && k.state !== "enabled" ? ` · ${k.state}` : ""}</span></td>
               <td className="px-2 py-1.5 text-xs text-muted-foreground">{k.campaignName}</td>

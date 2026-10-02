@@ -10,6 +10,7 @@ import { EmptyState, ErrorState } from "@/components/States";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { SortTh, useSortable } from "@/components/SortableTable";
 import { RULE_LABEL, type RuleId } from "@/lib/ads/rules";
 import { api } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
@@ -43,6 +44,14 @@ export default function AdsExportsPage() {
     api<{ snapshots: Snap[] }>("/api/ads/snapshots").then((r) => setSnaps(r.snapshots)),
   ]).catch((e: Error) => setError(e.message)), []);
   useEffect(() => { load(); }, [load]);
+  const bs = useSortable("ads.exports", batches ?? [], {
+    label: { value: (b) => b.label, kind: "text" }, created: { value: (b) => b.created_at, kind: "date" },
+    rows: { value: (b) => b.rows, kind: "number" }, uploaded: { value: (b) => b.uploaded_at, kind: "date" },
+  });
+  const ss = useSortable("ads.snapshots", snaps, {
+    label: { value: (x) => x.label, kind: "text" }, created: { value: (x) => x.created_at, kind: "date" },
+    keywords: { value: (x) => x.counts.keywords, kind: "number" },
+  });
   if (error) return <ErrorState title="Couldn't load the exports" message={error} />;
   if (!batches) return <Skeleton className="h-48 rounded-lg" />;
 
@@ -93,9 +102,10 @@ export default function AdsExportsPage() {
         <div className="overflow-x-auto rounded-lg border">
           <table className="w-full text-sm">
             <thead><tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase">
-              <th className="px-2 py-1.5">Batch</th><th className="px-2 py-1.5">Exported</th><th className="px-2 py-1.5 text-right">Rows</th><th className="px-2 py-1.5">Uploaded</th><th />
+              <SortTh {...bs.th("label")} className="px-2 py-1.5">Batch</SortTh><SortTh {...bs.th("created")} className="px-2 py-1.5">Exported</SortTh>
+              <SortTh {...bs.th("rows")} numeric className="px-2 py-1.5 text-right">Rows</SortTh><SortTh {...bs.th("uploaded")} className="px-2 py-1.5">Uploaded</SortTh><th />
             </tr></thead>
-            <tbody>{batches.map((b) => (
+            <tbody>{bs.rows.map((b) => (
               <Fragment key={b.id}>
                 <tr className="border-b">
                   <td className="px-2 py-1.5">
@@ -144,7 +154,12 @@ export default function AdsExportsPage() {
           <Button onClick={() => call(() => api("/api/ads/snapshots", { method: "POST", json: { label } }).then(() => setLabel("")), "Snapshot taken")}><CameraIcon /> Snapshot now</Button>
         </div>
         {!snaps.length ? <p className="text-sm text-muted-foreground">None yet.</p> : (
-          <table className="w-full text-sm"><tbody>{snaps.map((s) => (
+          <table className="w-full text-sm">
+            <thead><tr className="text-left text-[11px] tracking-wide text-muted-foreground uppercase">
+              <SortTh {...ss.th("label")} className="py-1 pr-3">Snapshot</SortTh><SortTh {...ss.th("created")} className="pr-3">Taken</SortTh>
+              <SortTh {...ss.th("keywords")} className="pr-3">Contents</SortTh><th />
+            </tr></thead>
+            <tbody>{ss.rows.map((s) => (
             <tr key={s.id} className="border-t">
               <td className="py-1.5 pr-3 font-medium">{s.label}</td>
               <td className="pr-3 text-muted-foreground whitespace-nowrap">{when(s.created_at)}</td>

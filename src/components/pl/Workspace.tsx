@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { useDialogs } from "@/components/Dialogs";
 import { ProductThumb } from "@/components/ProductThumb";
+import { SortTh, useSortable } from "@/components/SortableTable";
 import { ErrorState } from "@/components/States";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -239,15 +240,26 @@ function Header({ data, ev, card, busy, onRefresh, onPatch }: {
 }
 
 function AsinTable({ data }: { data: CandidateDetail }) {
+  const t = useSortable("pl.pageOne", data.asins, {
+    title: { value: (a) => a.title, kind: "text" },
+    price: { value: (a) => priceOf(a), kind: "number" },
+    rating: { value: (a) => a.rating, kind: "number" },
+    reviews: { value: (a) => a.review_count, kind: "number" },
+    rank: { value: (a) => a.rank, kind: "number" },
+    sales: { value: (a) => monthlySales(a).value, kind: "number" },
+    flags: { value: (a) => (a.amazon_brand ? 2 : 0) + (a.amazon_ever_seller ? 1 : 0), kind: "number" },
+  });
   if (!data.asins.length) return <p className="text-sm text-muted-foreground">No ASINs yet: Edit to add up to ten from page one of the niche.</p>;
   return (
     <div className="table-wrap overflow-x-auto rounded-lg border">
       <table className="w-full text-sm">
         <thead><tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase">
-          <th className="px-2 py-1.5">Listing</th><th className="px-2 py-1.5 text-right">Price</th><th className="px-2 py-1.5 text-right">Rating</th><th className="px-2 py-1.5 text-right">Reviews</th>
-          <th className="px-2 py-1.5 text-right">Rank</th><th className="px-2 py-1.5 text-right">Sales / mo</th><th className="px-2 py-1.5">Flags</th></tr></thead>
+          <SortTh {...t.th("title")} className="px-2 py-1.5">Listing</SortTh><SortTh {...t.th("price")} numeric className="px-2 py-1.5 text-right">Price</SortTh>
+          <SortTh {...t.th("rating")} numeric className="px-2 py-1.5 text-right">Rating</SortTh><SortTh {...t.th("reviews")} numeric className="px-2 py-1.5 text-right">Reviews</SortTh>
+          <SortTh {...t.th("rank")} numeric className="px-2 py-1.5 text-right">Rank</SortTh><SortTh {...t.th("sales")} numeric className="px-2 py-1.5 text-right">Sales / mo</SortTh>
+          <SortTh {...t.th("flags")} className="px-2 py-1.5" title="Amazon brand, then Amazon has sold">Flags</SortTh></tr></thead>
         <tbody>
-          {data.asins.map((a) => {
+          {t.rows.map((a) => {
             const s = monthlySales(a);
             return (
               <tr key={a.asin} className="border-b last:border-b-0">
@@ -362,43 +374,12 @@ function GateExtras({ g, data, fields, settings, card }: { g: GateDef; data: Can
     if (!p) return <p className="rounded-lg bg-surface-2 px-3 py-2.5 text-xs text-muted-foreground">No Opportunity Explorer capture yet. Open the niche in Seller Central → Growth → Product Opportunity Explorer with the extension loaded, then click <b>Send to Private label</b> in its panel. A niche whose title matches this candidate&apos;s niche keyword attaches by itself.</p>;
     if (g.id === "g3") return <p className="rounded-lg bg-surface-2 px-3 py-2.5 text-xs text-muted-foreground">From Opportunity Explorer{p.niche_title ? `: “${p.niche_title}”` : ""}, captured {ago(p.captured_at)}. Send the niche again to update.</p>;
     const terms = p.search_terms.slice(0, 12);
-    return terms.length ? (
-      <div className="overflow-x-auto rounded-lg border">
-        <table className="w-full text-sm">
-          <thead><tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase"><th className="px-2 py-1.5">Search term</th><th className="px-2 py-1.5 text-right">Searches / mo</th><th className="px-2 py-1.5 text-right">Click share</th><th className="px-2 py-1.5 text-right">Conversion</th></tr></thead>
-          <tbody>{terms.map((t) => (
-            <tr key={t.term} className={cn("border-b last:border-b-0", t.volume >= 300 && t.volume <= 2000 && "bg-brand-soft/40")}>
-              <td className="px-2 py-1.5">{t.term}</td><td className="num px-2 py-1.5 text-right">{n0(t.volume)}</td>
-              <td className="num px-2 py-1.5 text-right">{t.click_share == null ? "—" : `${t.click_share}%`}</td><td className="num px-2 py-1.5 text-right">{t.conversion == null ? "—" : `${t.conversion}%`}</td>
-            </tr>
-          ))}</tbody>
-        </table>
-        <p className="border-t px-2 py-1.5 text-xs text-muted-foreground">{p.search_terms.length} terms captured; highlighted rows are long-tail (300–2,000 a month).</p>
-      </div>
-    ) : null;
+    return terms.length ? <SearchTermsTable terms={terms} captured={p.search_terms.length} /> : null;
   }
   if (g.id === "g4") {
     const top = data.asins.slice(0, 5);
     if (!top.length) return null;
-    return (
-      <div className="overflow-x-auto rounded-lg border">
-        <table className="w-full text-sm">
-          <thead><tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase"><th className="px-2 py-1.5">Listing</th><th className="px-2 py-1.5 text-right">Rating</th><th className="px-2 py-1.5 text-right">Reviews</th><th className="px-2 py-1.5">1–3★ reviews</th></tr></thead>
-          <tbody>{top.map((a) => (
-            <tr key={a.asin} className="border-b last:border-b-0">
-              <td className="px-2 py-1.5"><span className="num text-xs">{a.asin}</span> <span className="text-xs text-muted-foreground">{a.brand ?? ""}</span></td>
-              <td className="num px-2 py-1.5 text-right">{a.rating?.toFixed(1) ?? "—"}</td>
-              <td className="num px-2 py-1.5 text-right">{n0(a.review_count)}</td>
-              <td className="px-2 py-1.5">
-                <a className="inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline" target="_blank" rel="noreferrer"
-                  href={`https://www.amazon.co.uk/product-reviews/${a.asin}/?filterByStar=critical&sortBy=recent&reviewerType=all_reviews`}>Read the critical reviews <ExternalLinkIcon className="size-3" /></a>
-              </td>
-            </tr>
-          ))}</tbody>
-        </table>
-        <p className="border-t px-2 py-1.5 text-xs text-muted-foreground">Keepa carries the rating and review count but not the star breakdown: Amazon&apos;s critical filter shows the 1–3★ reviews.</p>
-      </div>
-    );
+    return <CriticalReviewsTable asins={top} />;
   }
   if (g.id === "g6") {
     const e = econ(f, settings, data.candidate.category, card);
@@ -446,6 +427,13 @@ function GateExtras({ g, data, fields, settings, card }: { g: GateDef; data: Can
 
 function ScorecardPanel({ ev }: { ev: Evaluation }) {
   const sc = ev.sc;
+  const t = useSortable("pl.scorecard", sc.rows, {
+    n: { value: (r) => r.n, kind: "number" },
+    label: { value: (r) => r.label, kind: "text" },
+    pts: { value: (r) => r.pts, kind: "number" },
+    why: { value: (r) => (r.pts == null ? null : r.why[r.pts]), kind: "text" },
+    structural: { value: (r) => (r.structural ? "structural" : null), kind: "text" },
+  });
   const PTS = ["bg-fail-soft text-fail", "bg-warn-soft text-warn", "bg-brand-soft text-brand", "bg-pass-soft text-pass"];
   return (
     <section className="panel p-4">
@@ -460,8 +448,11 @@ function ScorecardPanel({ ev }: { ev: Evaluation }) {
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead><tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase"><th className="px-2 py-1.5">#</th><th className="px-2 py-1.5">Criterion</th><th className="px-2 py-1.5 text-center">Pts</th><th className="px-2 py-1.5">Reads as</th><th /></tr></thead>
-          <tbody>{sc.rows.map((r) => (
+          <thead><tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase">
+            <SortTh {...t.th("n")} numeric className="px-2 py-1.5">#</SortTh><SortTh {...t.th("label")} className="px-2 py-1.5">Criterion</SortTh>
+            <SortTh {...t.th("pts")} numeric className="px-2 py-1.5 text-center">Pts</SortTh><SortTh {...t.th("why")} className="px-2 py-1.5">Reads as</SortTh>
+            <SortTh {...t.th("structural")} className="px-2 py-1.5">Type</SortTh></tr></thead>
+          <tbody>{t.rows.map((r) => (
             <tr key={r.n} className="border-b">
               <td className="num px-2 py-2 text-muted-foreground">{r.n}</td>
               <td className="px-2 py-2">{r.label}</td>
@@ -514,17 +505,26 @@ function CheckRow({ row: r, gate, gateWaived, onWaive, onUnwaive }: { row: GateR
 
 /** Every waiver on the candidate, with its reason and date; one no longer needed says so. */
 function WaiversPanel({ waivers, ev, onUnwaive }: { waivers: Waiver[]; ev: Evaluation; onUnwaive: (w: Waiver) => void }) {
-  if (!waivers.length) return null;
   const inEffect = (w: Waiver) => (w.check_label == null ? true : ev.waived.some((x) => x.waiver.id === w.id));
+  const gateOf = (w: Waiver) => ev.gates.find((x) => x.g.id === w.gate_id)?.g;
+  const t = useSortable("pl.waivers", waivers, {
+    gate: { value: (w) => { const g = gateOf(w); return g ? `${g.n} · ${g.title}` : w.gate_id; }, kind: "text" },
+    check: { value: (w) => w.check_label ?? "Whole gate", kind: "text" },
+    reason: { value: (w) => w.reason, kind: "text" },
+    waived: { value: (w) => w.created_at, kind: "date" },
+  });
+  if (!waivers.length) return null;
   return (
     <section className="panel p-4">
       <h2 className="mb-1 font-heading text-base font-bold">Waivers</h2>
       <p className="mb-3 text-xs text-muted-foreground">Each waived check counts as a pass for its gate. The scorecard isn&apos;t affected, and the verdict lists every waived check.</p>
       <div className="overflow-x-auto rounded-lg border">
         <table className="w-full text-sm">
-          <thead><tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase"><th className="px-2 py-1.5">Gate</th><th className="px-2 py-1.5">Check</th><th className="px-2 py-1.5">Reason</th><th className="px-2 py-1.5">Waived</th><th /></tr></thead>
-          <tbody>{waivers.map((w) => {
-            const g = ev.gates.find((x) => x.g.id === w.gate_id)?.g;
+          <thead><tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase">
+            <SortTh {...t.th("gate")} className="px-2 py-1.5">Gate</SortTh><SortTh {...t.th("check")} className="px-2 py-1.5">Check</SortTh>
+            <SortTh {...t.th("reason")} className="px-2 py-1.5">Reason</SortTh><SortTh {...t.th("waived")} numeric className="px-2 py-1.5">Waived</SortTh><th /></tr></thead>
+          <tbody>{t.rows.map((w) => {
+            const g = gateOf(w);
             return (
               <tr key={w.id} className="border-b last:border-b-0 align-top">
                 <td className="px-2 py-2 whitespace-nowrap">{g ? `${g.n} · ${g.title}` : w.gate_id}</td>
@@ -538,5 +538,63 @@ function WaiversPanel({ waivers, ev, onUnwaive }: { waivers: Waiver[]; ev: Evalu
         </table>
       </div>
     </section>
+  );
+}
+
+type PoeTerm = NonNullable<CandidateDetail["poe"]>["search_terms"][number];
+
+/** Gate 5: the niche's top search terms; long-tail rows (300–2,000 a month) highlighted. */
+function SearchTermsTable({ terms, captured }: { terms: PoeTerm[]; captured: number }) {
+  const t = useSortable("pl.searchTerms", terms, {
+    term: { value: (x) => x.term, kind: "text" },
+    volume: { value: (x) => x.volume, kind: "number" },
+    clickShare: { value: (x) => x.click_share, kind: "number" },
+    conversion: { value: (x) => x.conversion, kind: "number" },
+  });
+  return (
+    <div className="overflow-x-auto rounded-lg border">
+      <table className="w-full text-sm">
+        <thead><tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase">
+          <SortTh {...t.th("term")} className="px-2 py-1.5">Search term</SortTh><SortTh {...t.th("volume")} numeric className="px-2 py-1.5 text-right">Searches / mo</SortTh>
+          <SortTh {...t.th("clickShare")} numeric className="px-2 py-1.5 text-right">Click share</SortTh><SortTh {...t.th("conversion")} numeric className="px-2 py-1.5 text-right">Conversion</SortTh></tr></thead>
+        <tbody>{t.rows.map((x) => (
+          <tr key={x.term} className={cn("border-b last:border-b-0", x.volume >= 300 && x.volume <= 2000 && "bg-brand-soft/40")}>
+            <td className="px-2 py-1.5">{x.term}</td><td className="num px-2 py-1.5 text-right">{n0(x.volume)}</td>
+            <td className="num px-2 py-1.5 text-right">{x.click_share == null ? "—" : `${x.click_share}%`}</td><td className="num px-2 py-1.5 text-right">{x.conversion == null ? "—" : `${x.conversion}%`}</td>
+          </tr>
+        ))}</tbody>
+      </table>
+      <p className="border-t px-2 py-1.5 text-xs text-muted-foreground">{captured} terms captured; highlighted rows are long-tail (300–2,000 a month).</p>
+    </div>
+  );
+}
+
+/** Gate 4: the top five listings, with a link to each one's critical reviews. */
+function CriticalReviewsTable({ asins }: { asins: CandidateDetail["asins"] }) {
+  const t = useSortable("pl.criticalReviews", asins, {
+    listing: { value: (a) => a.asin, kind: "text" },
+    rating: { value: (a) => a.rating, kind: "number" },
+    reviews: { value: (a) => a.review_count, kind: "number" },
+  });
+  return (
+    <div className="overflow-x-auto rounded-lg border">
+      <table className="w-full text-sm">
+        <thead><tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase">
+          <SortTh {...t.th("listing")} className="px-2 py-1.5">Listing</SortTh><SortTh {...t.th("rating")} numeric className="px-2 py-1.5 text-right">Rating</SortTh>
+          <SortTh {...t.th("reviews")} numeric className="px-2 py-1.5 text-right">Reviews</SortTh><th className="px-2 py-1.5">1–3★ reviews</th></tr></thead>
+        <tbody>{t.rows.map((a) => (
+          <tr key={a.asin} className="border-b last:border-b-0">
+            <td className="px-2 py-1.5"><span className="num text-xs">{a.asin}</span> <span className="text-xs text-muted-foreground">{a.brand ?? ""}</span></td>
+            <td className="num px-2 py-1.5 text-right">{a.rating?.toFixed(1) ?? "—"}</td>
+            <td className="num px-2 py-1.5 text-right">{n0(a.review_count)}</td>
+            <td className="px-2 py-1.5">
+              <a className="inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline" target="_blank" rel="noreferrer"
+                href={`https://www.amazon.co.uk/product-reviews/${a.asin}/?filterByStar=critical&sortBy=recent&reviewerType=all_reviews`}>Read the critical reviews <ExternalLinkIcon className="size-3" /></a>
+            </td>
+          </tr>
+        ))}</tbody>
+      </table>
+      <p className="border-t px-2 py-1.5 text-xs text-muted-foreground">Keepa carries the rating and review count but not the star breakdown: Amazon&apos;s critical filter shows the 1–3★ reviews.</p>
+    </div>
   );
 }

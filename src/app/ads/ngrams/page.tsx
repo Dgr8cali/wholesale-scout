@@ -6,6 +6,7 @@ import { usePageCrumbs } from "@/components/Crumbs";
 import { EmptyState, ErrorState } from "@/components/States";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { ProductPicker, useAdsProduct } from "@/components/ads/ProductPicker";
+import { SortTh, useSortable } from "@/components/SortableTable";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
@@ -19,7 +20,6 @@ export interface NgramData { range: { from: string; to: string } | null; product
 const gbp = (v: number) => `£${v.toFixed(2)}`;
 const acosTxt = (g: GramRow) => (g.acos != null ? `${(g.acos * 100).toFixed(1)}%` : g.cost > 0 ? "no sales" : "—");
 const day = (d: string) => new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-type Sort = "cost" | "waste" | "clicks" | "orders" | "terms";
 
 /** Ads → N-grams: every search term's words and word pairs, summed per product. */
 export default function AdsNgramsPage() {
@@ -29,9 +29,14 @@ export default function AdsNgramsPage() {
   const [stored, setAsin] = useAdsProduct(d?.products.map((p) => p.asin) ?? []);
   const asin = stored || d?.products[0]?.asin || "";
   const [size, setSize] = useState<"" | "1" | "2">("");
-  const [sort, setSort] = useState<Sort>("cost");
   useEffect(() => { api<NgramData>("/api/ads/ngrams").then(setD).catch((e: Error) => setError(e.message)); }, []);
-  const rows = useMemo(() => (d?.rows ?? []).filter((r) => (!asin || r.asin === asin) && (!size || String(r.size) === size)).sort((a, b) => (b[sort] as number) - (a[sort] as number)), [d, asin, size, sort]);
+  const filtered = useMemo(() => (d?.rows ?? []).filter((r) => (!asin || r.asin === asin) && (!size || String(r.size) === size)), [d, asin, size]);
+  const { rows, th } = useSortable("ads.ngrams", filtered, {
+    gram: { value: (g) => g.gram, kind: "text" }, terms: { value: (g) => g.terms, kind: "number" }, impressions: { value: (g) => g.impressions, kind: "number" },
+    clicks: { value: (g) => g.clicks, kind: "number" }, cost: { value: (g) => g.cost, kind: "number" }, orders: { value: (g) => g.orders, kind: "number" },
+    sales: { value: (g) => g.sales, kind: "number" }, acos: { value: (g) => (g.acos != null ? g.acos : g.cost > 0 ? 1e9 : null), kind: "number" },
+    waste: { value: (g) => g.waste, kind: "number" }, trigger: { value: (g) => (g.trigger === "negative" ? "Rule 9: negative" : g.trigger === "winner" ? "Rule 10: winner" : null), kind: "text" },
+  }, { key: "cost", dir: "desc" });
   if (error) return <ErrorState title="Couldn't load the n-grams" message={error} />;
   if (!d) return <Skeleton className="h-96 rounded-lg" />;
   const p = d.products.find((x) => x.asin === asin);
@@ -53,19 +58,17 @@ export default function AdsNgramsPage() {
           <NativeSelect value={size} onChange={(e) => setSize(e.target.value as "" | "1" | "2")}>
             <NativeSelectOption value="">Words and pairs</NativeSelectOption><NativeSelectOption value="1">Words</NativeSelectOption><NativeSelectOption value="2">Word pairs</NativeSelectOption>
           </NativeSelect></label>
-        <label className="space-y-1"><span className="field-label">Sort</span>
-          <NativeSelect value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
-            <NativeSelectOption value="cost">Spend</NativeSelectOption><NativeSelectOption value="waste">Waste (spend, no order)</NativeSelectOption>
-            <NativeSelectOption value="clicks">Clicks</NativeSelectOption><NativeSelectOption value="orders">Orders</NativeSelectOption><NativeSelectOption value="terms">Terms</NativeSelectOption>
-          </NativeSelect></label>
         {p && <span className="pb-2 text-sm text-muted-foreground">Price {p.price != null ? gbp(p.price) : "unknown"} · target ACoS {Math.round(p.targetAcos * 100)}%</span>}
       </div>
       {!rows.length ? <EmptyState title="No search terms yet">Import a bulk export with search term data.</EmptyState> : (
         <div className="overflow-x-auto rounded-lg border">
           <table className="w-full text-sm">
             <thead><tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase">
-              <th className="px-2 py-1.5">Gram</th><th className="px-2 py-1.5 text-right">Terms</th><th className="px-2 py-1.5 text-right">Impr.</th><th className="px-2 py-1.5 text-right">Clicks</th>
-              <th className="px-2 py-1.5 text-right">Spend</th><th className="px-2 py-1.5 text-right">Orders</th><th className="px-2 py-1.5 text-right">Sales</th><th className="px-2 py-1.5 text-right">ACoS</th><th className="px-2 py-1.5 text-right">Waste</th><th className="px-2 py-1.5">Rules</th>
+              <SortTh {...th("gram")} className="px-2 py-1.5">Gram</SortTh><SortTh {...th("terms")} numeric className="px-2 py-1.5 text-right">Terms</SortTh>
+              <SortTh {...th("impressions")} numeric className="px-2 py-1.5 text-right">Impr.</SortTh><SortTh {...th("clicks")} numeric className="px-2 py-1.5 text-right">Clicks</SortTh>
+              <SortTh {...th("cost")} numeric className="px-2 py-1.5 text-right">Spend</SortTh><SortTh {...th("orders")} numeric className="px-2 py-1.5 text-right">Orders</SortTh>
+              <SortTh {...th("sales")} numeric className="px-2 py-1.5 text-right">Sales</SortTh><SortTh {...th("acos")} numeric className="px-2 py-1.5 text-right">ACoS</SortTh>
+              <SortTh {...th("waste")} numeric className="px-2 py-1.5 text-right">Waste</SortTh><SortTh {...th("trigger")} className="px-2 py-1.5">Rules</SortTh>
             </tr></thead>
             <tbody>{rows.slice(0, 300).map((g) => (
               <tr key={g.gram} className="border-b last:border-b-0">

@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  ArchiveIcon, ArchiveRestoreIcon, ArrowDownIcon, ArrowUpIcon, ChevronRightIcon, ChevronsUpIcon, DownloadCloudIcon, DownloadIcon, ExternalLinkIcon, FileSpreadsheetIcon, ImageIcon, ListChecksIcon, MoonIcon, MoreHorizontalIcon, PauseIcon, PencilIcon, PlayIcon, RefreshCwIcon, ScanSearchIcon, SearchIcon, StarIcon, StoreIcon, Trash2Icon, UploadIcon,
+  ArchiveIcon, ArchiveRestoreIcon, ChevronRightIcon, ChevronsUpIcon, DownloadCloudIcon, DownloadIcon, ExternalLinkIcon, FileSpreadsheetIcon, ImageIcon, ListChecksIcon, MoonIcon, MoreHorizontalIcon, PauseIcon, PencilIcon, PlayIcon, RefreshCwIcon, ScanSearchIcon, SearchIcon, StarIcon, StoreIcon, Trash2Icon, UploadIcon,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
+import { SortTableHead, useSortable } from "@/components/SortableTable";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { withDefaults, type ProfileConfig } from "@/lib/screening/config";
 import { api, when } from "@/lib/ui/client";
@@ -45,8 +46,6 @@ interface Run {
   summary: Summary | null;
 }
 
-type SortKey = "started" | "name" | "rows";
-
 /** The run's newest Keepa data is over 7 days old. */
 const isStale = (r: Run) => !!r.summary?.newestKeepa && Date.now() - Date.parse(r.summary.newestKeepa) > 7 * 86_400_000;
 
@@ -69,7 +68,6 @@ export default function RunsPage() {
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [archived, setArchived] = useState(false);
-  const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "started", dir: -1 });
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
   const [keepaQueue, setKeepaQueue] = useState<string[]>([]);
@@ -97,15 +95,20 @@ export default function RunsPage() {
       const sorted = [...rs].sort((a, b) => b.started_at.localeCompare(a.started_at));
       return { key: sorted[0].id, lead: sorted[0], older: sorted.slice(1) };
     });
-    const val = (r: Run) => (sort.key === "name" ? (r.name || r.source).toLowerCase() : sort.key === "rows" ? r.row_count : r.started_at);
-    return gs.sort((a, b) => {
-      const x = val(a.lead), y = val(b.lead);
-      return (x < y ? -1 : x > y ? 1 : 0) * sort.dir;
-    });
-  }, [runs, q, sort]);
-  const visibleIds = groups.flatMap((g) => [g.lead.id, ...(openGroups.has(g.key) ? g.older.map((r) => r.id) : [])]);
+    return gs;
+  }, [runs, q]);
+  // Each group sorts by its newest run; the older ones stay folded under it, newest first.
+  const sorting = useSortable("wholesale.runs", groups, {
+    name: { value: (g) => g.lead.name || g.lead.source, kind: "text" },
+    supplier: { value: (g) => g.lead.summary?.suppliers[0] ?? null, kind: "text" },
+    started: { value: (g) => g.lead.started_at, kind: "date" },
+    rows: { value: (g) => g.lead.row_count, kind: "number" },
+    results: { value: (g) => g.lead.summary?.pass ?? null, kind: "number" },
+    status: { value: (g) => (g.lead.status === "done" ? "Done" : g.lead.status === "error" ? "Error" : g.lead.paused_at ? "Paused" : "Screening"), kind: "text" },
+  }, { key: "started", dir: "desc" });
+  const sortedGroups = sorting.rows;
+  const visibleIds = sortedGroups.flatMap((g) => [g.lead.id, ...(openGroups.has(g.key) ? g.older.map((r) => r.id) : [])]);
 
-  const setSortKey = (key: SortKey) => setSort((s) => ({ key, dir: s.key === key ? (s.dir === 1 ? -1 : 1) : key === "name" ? 1 : -1 }));
   const toggle = (id: string) => setSelected((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
 
   async function archive(ids: string[], on: boolean) {
@@ -288,11 +291,6 @@ export default function RunsPage() {
     );
   };
 
-  const header = (key: SortKey, label: string) => (
-    <button className={cn("inline-flex items-center gap-1 hover:text-foreground", sort.key === key && "text-foreground")} onClick={() => setSortKey(key)}>
-      {label}{sort.key === key && (sort.dir === 1 ? <ArrowUpIcon className="size-3" /> : <ArrowDownIcon className="size-3" />)}
-    </button>
-  );
   const allChecked = visibleIds.length > 0 && visibleIds.every((id) => selected.has(id));
   const someChecked = visibleIds.some((id) => selected.has(id));
   const sel = [...selected];
@@ -351,17 +349,17 @@ export default function RunsPage() {
                   <Checkbox aria-label={allChecked ? "Clear selection" : "Select all shown"} checked={allChecked ? true : someChecked ? "indeterminate" : false}
                     onCheckedChange={() => setSelected(allChecked ? new Set() : new Set(visibleIds))} />
                 </TableHead>
-                <TableHead>{header("name", "Run")}</TableHead>
-                <TableHead className="hidden md:table-cell">Supplier</TableHead>
-                <TableHead className="hidden md:table-cell">{header("started", "Started")}</TableHead>
-                <TableHead className="hidden text-right md:table-cell">{header("rows", "Rows")}</TableHead>
-                <TableHead className="hidden md:table-cell">Results</TableHead>
-                <TableHead className="hidden md:table-cell">Status</TableHead>
+                <SortTableHead {...sorting.th("name")}>Run</SortTableHead>
+                <SortTableHead {...sorting.th("supplier")} className="hidden md:table-cell">Supplier</SortTableHead>
+                <SortTableHead {...sorting.th("started")} className="hidden md:table-cell">Started</SortTableHead>
+                <SortTableHead {...sorting.th("rows")} numeric className="hidden md:table-cell">Rows</SortTableHead>
+                <SortTableHead {...sorting.th("results")} className="hidden md:table-cell" title="Sorts by how many passed">Results</SortTableHead>
+                <SortTableHead {...sorting.th("status")} className="hidden md:table-cell">Status</SortTableHead>
                 <TableHead className="pr-3"><span className="sr-only">Actions</span></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {groups.map((g) => (
+              {sortedGroups.map((g) => (
                 <Fragment key={g.key}>
                   {row(g.lead, { count: g.older.length, groupKey: g.key })}
                   {openGroups.has(g.key) && g.older.map((r) => row(r, { older: true }))}

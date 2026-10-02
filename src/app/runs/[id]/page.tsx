@@ -17,7 +17,7 @@ import { ResultsTable, type DisplayRow } from "@/components/results/ResultsTable
 import { eanOf, type Fav, type Progress, type Result, type Run, type SortKey } from "@/components/results/types";
 import { useSparks } from "@/components/results/useSparks";
 import { downloadXlsx, exportRows } from "@/components/results/exportXlsx";
-import { compareResults } from "@/components/results/sort";
+import { compareResults, loadResultSort, nextResultSort, saveResultSort } from "@/components/results/sort";
 import { ErrorState } from "@/components/States";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -52,7 +52,10 @@ export default function RunPage() {
   const { sparks, observe: observeSparks } = useSparks();
   // EANs whose other ASINs are shown.
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "score", dir: -1 });
+  const [sort, setSortState] = useState<{ key: SortKey; dir: 1 | -1 }>(() => loadResultSort("results"));
+  const setSort = (next: { key: SortKey; dir: 1 | -1 }) => { setSortState(next); saveResultSort("results", next); };
+  // The sparklines only reorder rows when sorting by them (they load as rows scroll into view).
+  const sortSparks = sort.key === "rank90" || sort.key === "bb90" ? sparks : undefined;
   // Filters, remembered per run in this browser.
   const storageKey = `ws.filters.run.${id}`;
   const [filters, setFiltersState] = useState<FilterSet>(() => {
@@ -311,10 +314,10 @@ export default function RunPage() {
   }, [run?.profile_snapshot]);
   const rows = useMemo(() => {
     const filtered = done.filter((r) => matches(toFilterRow(r, favourites), filters));
-    const order = compareResults(sort.key, sort.dir, lineBudget);
+    const order = compareResults(sort.key, sort.dir, lineBudget, sortSparks);
     // One line per EAN: its best ASIN leads, the others sit collapsed beneath it.
     return groupRows(filtered, eanOf, order);
-  }, [done, filters, favourites, sort, lineBudget]);
+  }, [done, filters, favourites, sort, lineBudget, sortSparks]);
   const listingCount = rows.reduce((a, g) => a + 1 + g.others.length, 0);
   // What the table shows: each EAN's lead, plus its other ASINs when expanded.
   const displayRows = useMemo<DisplayRow[]>(() => rows.flatMap((g) => [
@@ -496,7 +499,7 @@ export default function RunPage() {
         open={open} onToggleOpen={(rid) => setOpen((s) => { const n = new Set(s); if (n.has(rid)) n.delete(rid); else n.add(rid); return n; })}
         activeId={active?.id ?? null} onActivate={(rid) => setActiveId((cur) => (cur === rid ? null : rid))}
         favourites={favourites} onStar={toggleFavourite} scanSellerId={run.stats?.scan?.sellerId ?? null}
-        sort={sort} onSort={(key) => setSort((s) => ({ key, dir: s.key === key ? (s.dir === 1 ? -1 : 1) : key === "title" ? 1 : -1 }))}
+        sort={sort} onSort={(key) => setSort(nextResultSort(sort, key))}
         sparks={sparks} observeSparks={observeSparks}
         renderDetail={(r) => <Detail r={r} fav={favOf(r)} onNote={saveNote} onWaive={waive} onWatch={watch} onCost={(r, c) => cost([r.id], c)} budgetGbp={lineBudget} />}
         empty={done.length ? "Nothing matches these filters." : "Rows appear here as they're screened."}

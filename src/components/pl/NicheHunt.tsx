@@ -4,6 +4,7 @@ import { ChevronRightIcon, CrosshairIcon, ExternalLinkIcon, LoaderIcon, PlusIcon
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useDialogs } from "@/components/Dialogs";
+import { SortTh, useSortable } from "@/components/SortableTable";
 import { ProductThumb } from "@/components/ProductThumb";
 import { EmptyState, ErrorState } from "@/components/States";
 import { Button } from "@/components/ui/button";
@@ -341,7 +342,6 @@ function Results({ result, start, onReload, onPick, onCandidate, onStart, onRequ
   const [shape, setShape] = useState<"" | Shape>("");
   const [strict, setStrict] = useState(false);
   const [minCount, setMinCount] = useState(result.hunt.filters.minAsins ?? 3);
-  const [sort, setSort] = useState<"sales" | "count" | "price">("sales");
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState<string | null>(null);
   const [showDismissed, setShowDismissed] = useState(false);
@@ -349,9 +349,20 @@ function Results({ result, start, onReload, onPick, onCandidate, onStart, onRequ
   const h = result.hunt;
   const [showLeaves, setShowLeaves] = useState(false);
 
-  const rows = useMemo(() => result.niches
-    .filter((n) => n.count + (strict ? 0 : n.nearCount) >= minCount && (!shape || n.shape === shape))
-    .sort((a, b) => (sort === "count" ? b.count - a.count : sort === "price" ? (a.medianPrice ?? 0) - (b.medianPrice ?? 0) : b.salesSum - a.salesSum)), [result, minCount, shape, sort, strict]);
+  const filtered = useMemo(() => result.niches
+    .filter((n) => n.count + (strict ? 0 : n.nearCount) >= minCount && (!shape || n.shape === shape)), [result, minCount, shape, strict]);
+  const s = useSortable("pl.niches", filtered, {
+    name: { value: (n) => n.name, kind: "text" },
+    category: { value: (n) => n.rootCategory, kind: "text" },
+    count: { value: (n) => n.count, kind: "number" },
+    price: { value: (n) => n.medianPrice, kind: "number" },
+    reviews: { value: (n) => n.medianReviews, kind: "number" },
+    rating: { value: (n) => n.medianRating, kind: "number" },
+    sales: { value: (n) => n.salesSum, kind: "number" },
+    maxReviews: { value: (n) => n.maxReviews, kind: "number" },
+    shape: { value: (n) => SHAPE_RANK[n.shape], kind: "number" },
+  }, { key: "sales", dir: "desc" });
+  const rows = s.rows;
   const smaller = result.niches.filter((n) => n.count + (strict ? 0 : n.nearCount) < minCount && n.count + n.nearCount > 0).length;
 
   const create = async (n: Niche) => {
@@ -428,10 +439,6 @@ function Results({ result, start, onReload, onPick, onCandidate, onStart, onRequ
           title="Qualify this hunt's fetched products again with the thresholds above: 0 tokens">
           {busy === "requalify" ? <LoaderIcon className="animate-spin" /> : null} Re-qualify this hunt
         </Button>
-        <label className="space-y-1"><span className="field-label">Sort</span>
-          <NativeSelect value={sort} onChange={(e) => setSort(e.target.value as typeof sort)}>
-            <NativeSelectOption value="sales">Sales a month, most first</NativeSelectOption><NativeSelectOption value="count">Qualifying ASINs</NativeSelectOption><NativeSelectOption value="price">Median price</NativeSelectOption>
-          </NativeSelect></label>
       </div>
 
       {!rows.length ? (
@@ -442,8 +449,11 @@ function Results({ result, start, onReload, onPick, onCandidate, onStart, onRequ
         <div className="overflow-x-auto rounded-lg border">
           <table className="w-full text-sm">
             <thead><tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase">
-              <th className="px-2 py-1.5">Niche</th><th className="px-2 py-1.5 text-right" title="Qualifying · near misses · incumbents">Q · near · inc</th><th className="px-2 py-1.5 text-right">Median price</th><th className="px-2 py-1.5 text-right">Median reviews</th>
-              <th className="px-2 py-1.5 text-right">Median rating</th><th className="px-2 py-1.5 text-right">Sales / mo</th><th className="px-2 py-1.5 text-right">Max reviews</th><th className="px-2 py-1.5">Shape</th><th />
+              <SortTh {...s.th("name")} className="px-2 py-1.5">Niche</SortTh><SortTh {...s.th("category")} className="px-2 py-1.5">Category</SortTh>
+              <SortTh {...s.th("count")} numeric className="px-2 py-1.5 text-right" title="Qualifying · near misses · incumbents (sorts by qualifying)">Q · near · inc</SortTh>
+              <SortTh {...s.th("price")} numeric className="px-2 py-1.5 text-right">Median price</SortTh><SortTh {...s.th("reviews")} numeric className="px-2 py-1.5 text-right">Median reviews</SortTh>
+              <SortTh {...s.th("rating")} numeric className="px-2 py-1.5 text-right">Median rating</SortTh><SortTh {...s.th("sales")} numeric className="px-2 py-1.5 text-right">Sales / mo</SortTh>
+              <SortTh {...s.th("maxReviews")} numeric className="px-2 py-1.5 text-right">Max reviews</SortTh><SortTh {...s.th("shape")} className="px-2 py-1.5" title="Open → contested → dominated">Shape</SortTh><th />
             </tr></thead>
             <tbody>
               {rows.map((n) => (
@@ -453,8 +463,8 @@ function Results({ result, start, onReload, onPick, onCandidate, onStart, onRequ
                       <button type="button" className="flex items-center gap-1.5 text-left font-medium" onClick={() => toggle(n.key)}>
                         <ChevronRightIcon className={cn("size-4 flex-none text-muted-foreground transition-transform", open.has(n.key) && "rotate-90")} />{n.name}
                       </button>
-                      <span className="pl-6 text-xs text-muted-foreground">{n.rootCategory ?? ""}</span>
                     </td>
+                    <td className="px-2 py-2 text-xs text-muted-foreground">{n.rootCategory ?? "—"}</td>
                     <td className="num px-2 py-2 text-right whitespace-nowrap"><b>{n.count}</b> · <span className="text-warn">{n.nearCount}</span> · <span className="text-muted-foreground">{n.incumbentCount}</span></td>
                     <td className="num px-2 py-2 text-right">{money(n.medianPrice)}</td>
                     <td className="num px-2 py-2 text-right">{n0(n.medianReviews)}</td>
@@ -473,30 +483,8 @@ function Results({ result, start, onReload, onPick, onCandidate, onStart, onRequ
                     </td>
                   </tr>
                   {open.has(n.key) && (
-                    <tr className="border-b bg-surface-2/50"><td colSpan={9} className="px-2 py-2">
-                      <table className="w-full text-xs">
-                        <thead><tr className="text-left text-[10.5px] tracking-wide text-muted-foreground uppercase"><th className="px-2 py-1">Listing</th><th className="px-2 py-1 text-right">Price</th><th className="px-2 py-1 text-right">Reviews</th><th className="px-2 py-1 text-right">Rating</th><th className="px-2 py-1 text-right">Rank</th><th className="px-2 py-1 text-right">Sales / mo</th><th className="px-2 py-1">Status</th></tr></thead>
-                        <tbody>{n.asins.map((a) => (
-                          <tr key={a.asin} className="border-t">
-                            <td className="px-2 py-1.5">
-                              <div className="flex w-[min(30rem,50vw)] items-center gap-2">
-                                <ProductThumb url={a.snap.image} asin={a.asin} title={a.snap.title} brand={a.snap.brand} size={32} />
-                                <div className="min-w-0"><div className="truncate font-medium" title={a.snap.title ?? ""}>{a.snap.title}</div>
-                                  <div className="num text-muted-foreground"><a className="hover:underline" href={`https://www.amazon.co.uk/dp/${a.asin}`} target="_blank" rel="noreferrer">{a.asin}</a>{a.snap.brand ? ` · ${a.snap.brand}` : ""}</div></div>
-                              </div>
-                            </td>
-                            <td className="num px-2 py-1.5 text-right">{money(priceOf(a.snap))}</td>
-                            <td className="num px-2 py-1.5 text-right">{n0(a.snap.review_count)}</td>
-                            <td className="num px-2 py-1.5 text-right">{a.snap.rating?.toFixed(1) ?? "—"}</td>
-                            <td className="num px-2 py-1.5 text-right">{n0(a.snap.avg_rank_90d)}</td>
-                            <td className="num px-2 py-1.5 text-right">{a.salesFloor ? "≥ " : ""}{n0(a.sales)}</td>
-                            <td className="px-2 py-1.5">{a.qualifies ? <span><span className="font-medium text-pass">Qualifies</span>{a.unknown?.length ? <span className="text-muted-foreground"> ({a.unknown.join(", ")})</span> : null}</span>
-                              : a.near ? <span><span className="font-medium text-warn">Near miss</span> <span className="text-muted-foreground">({a.reasons.join(", ")})</span></span>
-                              : a.incumbent ? <span><span className="font-medium text-ink-2">Incumbent</span> <span className="text-muted-foreground">(over the review cap{a.reasons.length ? `; ${a.reasons.join(", ")}` : ""})</span></span>
-                              : <span><span className="font-medium text-fail">Fails</span> <span className="text-muted-foreground">({a.reasons.join(", ")})</span></span>}</td>
-                          </tr>
-                        ))}</tbody>
-                      </table>
+                    <tr className="border-b bg-surface-2/50"><td colSpan={10} className="px-2 py-2">
+                      <NicheAsins asins={n.asins} />
                     </td></tr>
                   )}
                 </Fragment>
@@ -522,17 +510,7 @@ function Results({ result, start, onReload, onPick, onCandidate, onStart, onRequ
           <button type="button" className="text-xs font-medium text-brand hover:underline" onClick={() => setShowLeaves((v) => !v)}>{showLeaves ? "Hide" : "Show"} leaves sized ({h.leaves.filter((l) => l.matches != null).length}/{h.leaves.length})</button>
           {showLeaves && (
             <div className="mt-2 overflow-x-auto rounded-lg border">
-              <table className="w-full text-xs">
-                <thead><tr className="border-b text-left text-[10.5px] tracking-wide text-muted-foreground uppercase"><th className="px-2 py-1.5">Leaf</th><th className="px-2 py-1.5 text-right">Matches</th><th className="px-2 py-1.5 text-right">Finder cost</th><th className="px-2 py-1.5">Stage 2</th></tr></thead>
-                <tbody>{[...h.leaves].sort((a, b) => (b.matches ?? -1) - (a.matches ?? -1)).map((l) => (
-                  <tr key={l.id} className="border-b last:border-b-0">
-                    <td className="px-2 py-1.5">{l.name} <span className="num text-muted-foreground">{l.id}</span></td>
-                    <td className="num px-2 py-1.5 text-right">{l.matches == null ? "…" : l.matches.toLocaleString("en-GB")}</td>
-                    <td className="num px-2 py-1.5 text-right">{l.matches == null ? "" : l.cached ? "0 (counted in the last 7 days)" : l.finderTokens}</td>
-                    <td className="px-2 py-1.5 text-muted-foreground">{l.skipped ? "not sized (balance)" : l.detailed ? `detailed: ${l.fetched ?? 0} fetched, ${l.reused ?? 0} reused` : l.detail ? "to detail" : l.matches != null && l.matches < h.filters.minLeafMatches ? `skipped (under ${h.filters.minLeafMatches})` : l.matches != null ? "not in the top N" : ""}</td>
-                  </tr>
-                ))}</tbody>
-              </table>
+              <LeavesTable leaves={h.leaves} minLeafMatches={h.filters.minLeafMatches} />
             </div>
           )}
         </div>
@@ -552,5 +530,79 @@ function Results({ result, start, onReload, onPick, onCandidate, onStart, onRequ
         </div>
       )}
     </section>
+  );
+}
+
+const SHAPE_RANK: Record<Shape, number> = { open: 0, contested: 1, dominated: 2 };
+
+const ASIN_STATUS_RANK = { qualifies: 0, near: 1, incumbent: 2, fails: 3 } as const;
+
+/** A niche's ASINs: every column sorts (status in the order qualifies → near miss → incumbent → fails). */
+function NicheAsins({ asins }: { asins: Niche["asins"] }) {
+  const s = useSortable("pl.nicheAsins", asins, {
+    title: { value: (a) => a.snap.title, kind: "text" },
+    price: { value: (a) => priceOf(a.snap), kind: "number" },
+    reviews: { value: (a) => a.snap.review_count, kind: "number" },
+    rating: { value: (a) => a.snap.rating, kind: "number" },
+    rank: { value: (a) => a.snap.avg_rank_90d, kind: "number" },
+    sales: { value: (a) => a.sales, kind: "number" },
+    status: { value: (a) => ASIN_STATUS_RANK[a.status], kind: "number" },
+  });
+  return (
+    <table className="w-full text-xs">
+      <thead><tr className="text-left text-[10.5px] tracking-wide text-muted-foreground uppercase">
+        <SortTh {...s.th("title")} className="px-2 py-1">Listing</SortTh><SortTh {...s.th("price")} numeric className="px-2 py-1 text-right">Price</SortTh>
+        <SortTh {...s.th("reviews")} numeric className="px-2 py-1 text-right">Reviews</SortTh><SortTh {...s.th("rating")} numeric className="px-2 py-1 text-right">Rating</SortTh>
+        <SortTh {...s.th("rank")} numeric className="px-2 py-1 text-right">Rank</SortTh><SortTh {...s.th("sales")} numeric className="px-2 py-1 text-right">Sales / mo</SortTh>
+        <SortTh {...s.th("status")} className="px-2 py-1" title="Qualifies → near miss → incumbent → fails">Status</SortTh>
+      </tr></thead>
+      <tbody>{s.rows.map((a) => (
+        <tr key={a.asin} className="border-t">
+          <td className="px-2 py-1.5">
+            <div className="flex w-[min(30rem,50vw)] items-center gap-2">
+              <ProductThumb url={a.snap.image} asin={a.asin} title={a.snap.title} brand={a.snap.brand} size={32} />
+              <div className="min-w-0"><div className="truncate font-medium" title={a.snap.title ?? ""}>{a.snap.title}</div>
+                <div className="num text-muted-foreground"><a className="hover:underline" href={`https://www.amazon.co.uk/dp/${a.asin}`} target="_blank" rel="noreferrer">{a.asin}</a>{a.snap.brand ? ` · ${a.snap.brand}` : ""}</div></div>
+            </div>
+          </td>
+          <td className="num px-2 py-1.5 text-right">{money(priceOf(a.snap))}</td>
+          <td className="num px-2 py-1.5 text-right">{n0(a.snap.review_count)}</td>
+          <td className="num px-2 py-1.5 text-right">{a.snap.rating?.toFixed(1) ?? "—"}</td>
+          <td className="num px-2 py-1.5 text-right">{n0(a.snap.avg_rank_90d)}</td>
+          <td className="num px-2 py-1.5 text-right">{a.salesFloor ? "≥ " : ""}{n0(a.sales)}</td>
+          <td className="px-2 py-1.5">{a.qualifies ? <span><span className="font-medium text-pass">Qualifies</span>{a.unknown?.length ? <span className="text-muted-foreground"> ({a.unknown.join(", ")})</span> : null}</span>
+            : a.near ? <span><span className="font-medium text-warn">Near miss</span> <span className="text-muted-foreground">({a.reasons.join(", ")})</span></span>
+            : a.incumbent ? <span><span className="font-medium text-ink-2">Incumbent</span> <span className="text-muted-foreground">(over the review cap{a.reasons.length ? `; ${a.reasons.join(", ")}` : ""})</span></span>
+            : <span><span className="font-medium text-fail">Fails</span> <span className="text-muted-foreground">({a.reasons.join(", ")})</span></span>}</td>
+        </tr>
+      ))}</tbody>
+    </table>
+  );
+}
+
+/** The leaves a leaf-mode hunt sized: most matches first until you sort otherwise. */
+function LeavesTable({ leaves, minLeafMatches }: { leaves: HuntLeaf[]; minLeafMatches: number }) {
+  const stage = (l: HuntLeaf) => (l.skipped ? "not sized (balance)" : l.detailed ? `detailed: ${l.fetched ?? 0} fetched, ${l.reused ?? 0} reused` : l.detail ? "to detail" : l.matches != null && l.matches < minLeafMatches ? `skipped (under ${minLeafMatches})` : l.matches != null ? "not in the top N" : "");
+  const s = useSortable("pl.leaves", leaves, {
+    name: { value: (l) => l.name, kind: "text" },
+    matches: { value: (l) => l.matches, kind: "number" },
+    cost: { value: (l) => (l.matches == null ? null : l.cached ? 0 : l.finderTokens), kind: "number" },
+    stage: { value: stage, kind: "text" },
+  }, { key: "matches", dir: "desc" });
+  return (
+    <table className="w-full text-xs">
+      <thead><tr className="border-b text-left text-[10.5px] tracking-wide text-muted-foreground uppercase">
+        <SortTh {...s.th("name")} className="px-2 py-1.5">Leaf</SortTh><SortTh {...s.th("matches")} numeric className="px-2 py-1.5 text-right">Matches</SortTh>
+        <SortTh {...s.th("cost")} numeric className="px-2 py-1.5 text-right">Finder cost</SortTh><SortTh {...s.th("stage")} className="px-2 py-1.5">Stage 2</SortTh>
+      </tr></thead>
+      <tbody>{s.rows.map((l) => (
+        <tr key={l.id} className="border-b last:border-b-0">
+          <td className="px-2 py-1.5">{l.name} <span className="num text-muted-foreground">{l.id}</span></td>
+          <td className="num px-2 py-1.5 text-right">{l.matches == null ? "…" : l.matches.toLocaleString("en-GB")}</td>
+          <td className="num px-2 py-1.5 text-right">{l.matches == null ? "" : l.cached ? "0 (counted in the last 7 days)" : l.finderTokens}</td>
+          <td className="px-2 py-1.5 text-muted-foreground">{stage(l)}</td>
+        </tr>
+      ))}</tbody>
+    </table>
   );
 }

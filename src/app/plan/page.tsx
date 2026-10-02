@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
+import { SortTableHead, useSortable } from "@/components/SortableTable";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { GATE_LABELS, type GateId } from "@/lib/screening/config";
 import { monthsLabel } from "@/lib/screening/order";
@@ -83,6 +84,20 @@ export default function PlanPage() {
 
   const plan = useMemo(() => (data ? planOrder(data.candidates, data.limits, { pinned, excluded, qty }) : null), [data, pinned, excluded, qty]);
   const approval = useMemo(() => (data?.candidates ?? []).filter((c) => c.approvalOnly), [data]);
+  // Lines sort within their supplier (each supplier is one order); the suppliers keep their order.
+  const allLines = useMemo(() => plan?.groups.flatMap((g) => g.lines) ?? [], [plan]);
+  const sorting = useSortable("wholesale.plan", allLines, {
+    product: { value: (x) => x.c.title ?? x.c.ean, kind: "text" },
+    qty: { value: (x) => qty.get(x.c.key) ?? x.qty, kind: "number" },
+    landed: { value: (x) => x.c.landedGbp, kind: "number" },
+    profit: { value: (x) => x.c.profitUnit, kind: "number" },
+    share: { value: (x) => x.c.shareMonth, kind: "number" },
+    months: { value: (x) => x.months, kind: "number" },
+    total: { value: (x) => x.lineTotal, kind: "number" },
+    profitMo: { value: (x) => x.profitMonth, kind: "number" },
+  });
+  const lineOrder = new Map(sorting.rows.map((x, i) => [x.c.key, i]));
+  const ordered = (lines: PlanLine[]) => (sorting.sort ? [...lines].sort((a, b) => (lineOrder.get(a.c.key) ?? 0) - (lineOrder.get(b.c.key) ?? 0)) : lines);
 
   const toggle = (set: Set<string>, setter: (s: Set<string>) => void, key: string) => {
     const n = new Set(set);
@@ -181,14 +196,14 @@ export default function PlanPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="pl-4">Product</TableHead>
-                <TableHead className="text-right">Qty</TableHead>
-                <TableHead className="text-right">Landed / unit</TableHead>
-                <TableHead className="text-right">Profit / unit</TableHead>
-                <TableHead className="text-right">Your share</TableHead>
-                <TableHead className="text-right">Months to sell</TableHead>
-                <TableHead className="text-right">Line total</TableHead>
-                <TableHead className="text-right">Profit / mo</TableHead>
+                <SortTableHead {...sorting.th("product")} className="pl-4" title="Sorts within each supplier">Product</SortTableHead>
+                <SortTableHead {...sorting.th("qty")} numeric>Qty</SortTableHead>
+                <SortTableHead {...sorting.th("landed")} numeric>Landed / unit</SortTableHead>
+                <SortTableHead {...sorting.th("profit")} numeric>Profit / unit</SortTableHead>
+                <SortTableHead {...sorting.th("share")} numeric>Your share</SortTableHead>
+                <SortTableHead {...sorting.th("months")} numeric>Months to sell</SortTableHead>
+                <SortTableHead {...sorting.th("total")} numeric>Line total</SortTableHead>
+                <SortTableHead {...sorting.th("profitMo")} numeric>Profit / mo</SortTableHead>
                 <TableHead className="w-20 pr-4" />
               </TableRow>
             </TableHeader>
@@ -210,7 +225,7 @@ export default function PlanPage() {
                       </div>
                     </TableCell>
                   </TableRow>
-                  {g.lines.map((x) => <Line key={x.c.key} x={x} lineCap={l.lineCap}
+                  {ordered(g.lines).map((x) => <Line key={x.c.key} x={x} lineCap={l.lineCap}
                     onPin={() => toggle(pinned, setPinned, x.c.key)} onExclude={() => toggle(excluded, setExcluded, x.c.key)}
                     ownQty={qty.get(x.c.key)} onQty={(v) => setLineQty(x.c.key, v)} />)}
                 </Fragment>

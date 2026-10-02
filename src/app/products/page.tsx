@@ -11,7 +11,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortTableHead, useSortable } from "@/components/SortableTable";
+import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { ProductListItem } from "@/lib/server/productPage";
 import { api, gbp } from "@/lib/ui/client";
@@ -27,6 +28,16 @@ export default function ProductsPage() {
   const [page, setPage] = useState(0);
   const [data, setData] = useState<{ items: ProductListItem[]; more: boolean } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // The list comes 50 at a time, newest screening first; a column sort orders the page shown.
+  const sorting = useSortable("wholesale.products", data?.items ?? [], {
+    product: { value: (p) => p.title ?? p.asin, kind: "text" },
+    verdict: { value: (p) => (p.verdict ? `${{ pass: 1, warn: 2, fail: 3 }[p.verdict] ?? 4} ${p.verdict}` : null), kind: "text" },
+    sell: { value: (p) => p.sell_price, kind: "number" },
+    maxLanded: { value: (p) => p.max_landed, kind: "number" },
+    sellers: { value: (p) => p.fba_sellers, kind: "number" },
+    share: { value: (p) => p.share_month, kind: "number" },
+    screened: { value: (p) => p.screened_at, kind: "date" },
+  });
 
   // Search as you type, a moment after the last key.
   useEffect(() => { const t = setTimeout(() => { setText(q); setPage(0); }, 300); return () => clearTimeout(t); }, [q]);
@@ -75,17 +86,17 @@ export default function ProductsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="pl-4">Product</TableHead>
-                  <TableHead>Verdict</TableHead>
-                  <TableHead className="text-right">Sells at</TableHead>
-                  <TableHead className="text-right">Max landed</TableHead>
-                  <TableHead className="text-right">FBA sellers</TableHead>
-                  <TableHead className="text-right">Your share / mo</TableHead>
-                  <TableHead className="pr-4">Screened</TableHead>
+                  <SortTableHead {...sorting.th("product")} className="pl-4" title="Sorts this page (50 products a page, newest screening first)">Product</SortTableHead>
+                  <SortTableHead {...sorting.th("verdict")}>Verdict</SortTableHead>
+                  <SortTableHead {...sorting.th("sell")} numeric>Sells at</SortTableHead>
+                  <SortTableHead {...sorting.th("maxLanded")} numeric>Max landed</SortTableHead>
+                  <SortTableHead {...sorting.th("sellers")} numeric>FBA sellers</SortTableHead>
+                  <SortTableHead {...sorting.th("share")} numeric>Your share / mo</SortTableHead>
+                  <SortTableHead {...sorting.th("screened")} className="pr-4">Screened</SortTableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.items.map((p) => (
+                {sorting.rows.map((p) => (
                   <TableRow key={p.asin} data-verdict={p.verdict ?? "empty"}>
                     <TableCell className="max-w-md pl-4 whitespace-normal">
                       <div className="flex gap-2.5">

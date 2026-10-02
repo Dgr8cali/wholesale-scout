@@ -8,6 +8,7 @@ import { usePageCrumbs } from "@/components/Crumbs";
 import { useDialogs } from "@/components/Dialogs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SortTh, useSortable } from "@/components/SortableTable";
 import { Skeleton } from "@/components/ui/skeleton";
 import { parseBulk, type ParsedBulk } from "@/lib/ads/bulk";
 import { parseReport, REPORT_LABEL, type ParsedReport, type ReportType } from "@/lib/ads/parse";
@@ -30,6 +31,11 @@ export default function AdsImportsPage() {
   const [picked, setPicked] = useState<Picked[]>([]);
   const [bulks, setBulks] = useState<PickedBulk[]>([]);
   const [past, setPast] = useState<ImportRow[] | null>(null);
+  const ps = useSortable("ads.imports", past ?? [], {
+    imported: { value: (i) => i.imported_at, kind: "date" }, file: { value: (i) => i.file_name, kind: "text" },
+    report: { value: (i) => LABEL[i.report_type] ?? i.report_type, kind: "text" }, rows: { value: (i) => i.rows, kind: "number" },
+    covers: { value: (i) => i.date_from, kind: "date" },
+  });
   const [over, setOver] = useState(false);
   const [busy, setBusy] = useState(false);
   const input = useRef<HTMLInputElement>(null);
@@ -142,8 +148,12 @@ export default function AdsImportsPage() {
         {!past ? <Skeleton className="h-24 rounded-lg" /> : !past.length ? <p className="text-sm text-muted-foreground">None yet.</p> : (
           <div className="overflow-x-auto rounded-lg border">
             <table className="w-full text-sm">
-              <thead><tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase"><th className="px-2 py-1.5">Imported</th><th className="px-2 py-1.5">File</th><th className="px-2 py-1.5">Report</th><th className="px-2 py-1.5 text-right">Rows</th><th className="px-2 py-1.5">Covers</th><th /></tr></thead>
-              <tbody>{past.map((i) => (
+              <thead><tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase">
+                <SortTh {...ps.th("imported")} className="px-2 py-1.5">Imported</SortTh><SortTh {...ps.th("file")} className="px-2 py-1.5">File</SortTh>
+                <SortTh {...ps.th("report")} className="px-2 py-1.5">Report</SortTh><SortTh {...ps.th("rows")} numeric className="px-2 py-1.5 text-right">Rows</SortTh>
+                <SortTh {...ps.th("covers")} className="px-2 py-1.5">Covers</SortTh><th />
+              </tr></thead>
+              <tbody>{ps.rows.map((i) => (
                 <tr key={i.id} className="border-b last:border-b-0">
                   <td className="px-2 py-1.5 whitespace-nowrap">{new Date(i.imported_at).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</td>
                   <td className="px-2 py-1.5">{i.file_name}</td>
@@ -162,6 +172,11 @@ export default function AdsImportsPage() {
 }
 
 function Preview({ p, onRemove }: { p: Picked; onRemove: () => void }) {
+  const s = useSortable("ads.import-preview", p.parsed?.rows ?? [], {
+    campaign: { value: (x) => x.campaignName, kind: "text" }, term: { value: (x) => x.searchTerm, kind: "text" },
+    dates: { value: (x) => x.dateFrom ?? x.campaignStart, kind: "date" }, clicks: { value: (x) => x.clicks, kind: "number" },
+    cost: { value: (x) => x.cost, kind: "number" }, orders: { value: (x) => x.orders, kind: "number" }, sales: { value: (x) => x.sales, kind: "number" },
+  });
   if (!p.parsed) {
     return (
       <div className="panel flex items-start gap-3 border-fail/40 p-3">
@@ -189,10 +204,11 @@ function Preview({ p, onRemove }: { p: Picked; onRemove: () => void }) {
       <div className="overflow-x-auto rounded border">
         <table className="w-full text-xs">
           <thead><tr className="border-b text-left text-[10.5px] tracking-wide text-muted-foreground uppercase">
-            <th className="px-2 py-1">Campaign</th>{isTerms && <th className="px-2 py-1">Search term</th>}<th className="px-2 py-1">Dates</th>
-            <th className="px-2 py-1 text-right">Clicks</th><th className="px-2 py-1 text-right">Spend</th><th className="px-2 py-1 text-right">Orders</th><th className="px-2 py-1 text-right">Sales</th>
+            <SortTh {...s.th("campaign")} className="px-2 py-1">Campaign</SortTh>{isTerms && <SortTh {...s.th("term")} className="px-2 py-1">Search term</SortTh>}<SortTh {...s.th("dates")} className="px-2 py-1">Dates</SortTh>
+            <SortTh {...s.th("clicks")} numeric className="px-2 py-1 text-right">Clicks</SortTh><SortTh {...s.th("cost")} numeric className="px-2 py-1 text-right">Spend</SortTh>
+            <SortTh {...s.th("orders")} numeric className="px-2 py-1 text-right">Orders</SortTh><SortTh {...s.th("sales")} numeric className="px-2 py-1 text-right">Sales</SortTh>
           </tr></thead>
-          <tbody>{r.rows.slice(0, 8).map((x, i) => (
+          <tbody>{s.rows.slice(0, 8).map((x, i) => (
             <tr key={i} className="border-b last:border-b-0">
               <td className="px-2 py-1">{x.campaignName}</td>{isTerms && <td className="px-2 py-1">{x.searchTerm}</td>}
               <td className="px-2 py-1 whitespace-nowrap">{x.dateFrom ? (x.dateFrom === x.dateTo ? day(x.dateFrom) : `${day(x.dateFrom)} – ${day(x.dateTo)}`) : x.campaignStart ? `from ${day(x.campaignStart)} (as exported)` : "as exported"}</td>
@@ -208,6 +224,13 @@ function Preview({ p, onRemove }: { p: Picked; onRemove: () => void }) {
 }
 
 function BulkPreview({ b, onChange, onRemove }: { b: PickedBulk; onChange: (patch: Partial<PickedBulk>) => void; onRemove: () => void }) {
+  const bp = b.parsed;
+  const s = useSortable("ads.import-bulk", bp?.campaigns ?? [], {
+    campaign: { value: (c) => c.name, kind: "text" }, asin: { value: (c) => bp?.campaignAsins.get(c.campaignId) ?? null, kind: "text" },
+    state: { value: (c) => c.state, kind: "text" }, keywords: { value: (c) => bp?.keywords.filter((k) => k.campaignId === c.campaignId).length ?? 0, kind: "number" },
+    clicks: { value: (c) => c.clicks, kind: "number" }, cost: { value: (c) => c.cost, kind: "number" },
+    orders: { value: (c) => c.orders, kind: "number" }, sales: { value: (c) => c.sales, kind: "number" },
+  });
   if (!b.parsed) {
     return (
       <div className="panel flex items-start gap-3 border-fail/40 p-3">
@@ -240,10 +263,11 @@ function BulkPreview({ b, onChange, onRemove }: { b: PickedBulk; onChange: (patc
       <div className="overflow-x-auto rounded border">
         <table className="w-full text-xs">
           <thead><tr className="border-b text-left text-[10.5px] tracking-wide text-muted-foreground uppercase">
-            <th className="px-2 py-1">Campaign</th><th className="px-2 py-1">ASIN (from product ads)</th><th className="px-2 py-1">State</th>
-            <th className="px-2 py-1 text-right">Keywords</th><th className="px-2 py-1 text-right">Clicks</th><th className="px-2 py-1 text-right">Spend</th><th className="px-2 py-1 text-right">Orders</th><th className="px-2 py-1 text-right">Sales</th>
+            <SortTh {...s.th("campaign")} className="px-2 py-1">Campaign</SortTh><SortTh {...s.th("asin")} className="px-2 py-1">ASIN (from product ads)</SortTh><SortTh {...s.th("state")} className="px-2 py-1">State</SortTh>
+            <SortTh {...s.th("keywords")} numeric className="px-2 py-1 text-right">Keywords</SortTh><SortTh {...s.th("clicks")} numeric className="px-2 py-1 text-right">Clicks</SortTh>
+            <SortTh {...s.th("cost")} numeric className="px-2 py-1 text-right">Spend</SortTh><SortTh {...s.th("orders")} numeric className="px-2 py-1 text-right">Orders</SortTh><SortTh {...s.th("sales")} numeric className="px-2 py-1 text-right">Sales</SortTh>
           </tr></thead>
-          <tbody>{r.campaigns.map((c) => (
+          <tbody>{s.rows.map((c) => (
             <tr key={c.campaignId} className="border-b last:border-b-0">
               <td className="px-2 py-1">{c.name}</td>
               <td className="px-2 py-1">{r.campaignAsins.get(c.campaignId) ?? <span className="text-muted-foreground">{r.productAds.some((p) => p.campaignId === c.campaignId) ? "several" : "none"}</span>}</td>

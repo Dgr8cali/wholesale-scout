@@ -13,7 +13,7 @@ import { Detail } from "@/components/results/Detail";
 import { DetailDrawer } from "@/components/results/DetailDrawer";
 import { downloadXlsx, exportRows } from "@/components/results/exportXlsx";
 import { ResultsTable, type DisplayRow } from "@/components/results/ResultsTable";
-import { compareResults } from "@/components/results/sort";
+import { compareResults, loadResultSort, nextResultSort, saveResultSort } from "@/components/results/sort";
 import type { Fav, Result, SortKey } from "@/components/results/types";
 import { useSparks } from "@/components/results/useSparks";
 import { EmptyState, ErrorState } from "@/components/States";
@@ -60,8 +60,11 @@ export default function FavouritesPage() {
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "score", dir: -1 });
+  const [sort, setSortState] = useState<{ key: SortKey; dir: 1 | -1 }>(() => loadResultSort("favourites"));
+  const setSort = (next: { key: SortKey; dir: 1 | -1 }) => { setSortState(next); saveResultSort("favourites", next); };
   const { sparks, observe: observeSparks } = useSparks();
+  // The sparklines only reorder rows when sorting by them (they load as rows scroll into view).
+  const sortSparks = sort.key === "rank90" || sort.key === "bb90" ? sparks : undefined;
   const [filters, setFiltersState] = useState<FilterSet>(() => {
     if (typeof window === "undefined") return EMPTY_FILTERS;
     try {
@@ -100,9 +103,9 @@ export default function FavouritesPage() {
   const byRow = useMemo(() => new Map(all.map((x) => [x.r.id, x.item])), [all]);
   const starred = useMemo(() => new Set(all.map((x) => `${x.item.favourite.ean}/${x.item.favourite.asin ?? ""}`)), [all]);
   const shown = useMemo(() => {
-    const order = compareResults(sort.key, sort.dir, lineBudget);
+    const order = compareResults(sort.key, sort.dir, lineBudget, sortSparks);
     return all.filter((x) => matches(toFilterRow(x.r, starred), filters)).sort((a, b) => order(a.r, b.r));
-  }, [all, starred, filters, sort, lineBudget]);
+  }, [all, starred, filters, sort, lineBudget, sortSparks]);
   const displayRows = useMemo<DisplayRow[]>(() => shown.map((x) => ({ r: x.r, alt: false, groupKey: x.r.id, others: 0 })), [shown]);
   const visibleIds = useMemo(() => shown.map((x) => x.r.id), [shown]);
 
@@ -254,7 +257,7 @@ export default function FavouritesPage() {
             open={open} onToggleOpen={(id) => setOpen((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; })}
             activeId={active?.id ?? null} onActivate={(id) => setActiveId((cur) => (cur === id ? null : id))}
             favourites={starred} onStar={unstarRow}
-            sort={sort} onSort={(key) => setSort((s) => ({ key, dir: s.key === key ? (s.dir === 1 ? -1 : 1) : key === "title" ? 1 : -1 }))}
+            sort={sort} onSort={(key) => setSort(nextResultSort(sort, key))}
             sparks={sparks} observeSparks={observeSparks}
             rowNote={(r) => {
               const i = byRow.get(r.id);

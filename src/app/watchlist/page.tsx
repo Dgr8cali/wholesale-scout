@@ -10,7 +10,8 @@ import { EmptyState, ErrorState } from "@/components/States";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortTableHead, useSortable } from "@/components/SortableTable";
+import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import type { LastCheck, WatchAlert } from "@/lib/server/watchlist";
 import { api, gbp, when } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
@@ -35,6 +36,14 @@ export default function WatchlistPage() {
   const [data, setData] = useState<{ items: Item[]; alerts: WatchAlert[]; email: boolean } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const sorting = useSortable("wholesale.watchlist", data?.items ?? [], {
+    product: { value: (i) => i.latest?.product?.title ?? i.favourite.asin ?? i.favourite.ean, kind: "text" },
+    condition: { value: (i) => conditionLabel(i.favourite.condition), kind: "text" },
+    lastCheck: { value: (i) => i.lastCheck?.at ?? null, kind: "date" },
+    buyBox: { value: (i) => i.lastCheck?.buyBox ?? null, kind: "number" },
+    maxLanded: { value: (i) => i.lastCheck?.maxLanded ?? null, kind: "number" },
+    latest: { value: (i) => (i.latest?.verdict ? `${{ pass: 1, warn: 2, fail: 3 }[i.latest.verdict]} ${i.latest.verdict}` : null), kind: "text" },
+  });
 
   const load = useCallback(() => {
     api<{ items: Item[]; alerts: WatchAlert[]; email: boolean }>("/api/watchlist").then(setData).catch((e) => setError(e.message));
@@ -126,16 +135,16 @@ export default function WatchlistPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="pl-4">Product</TableHead>
-                  <TableHead>Waiting for</TableHead>
-                  <TableHead>Last check</TableHead>
-                  <TableHead className="text-right">Buy Box</TableHead>
-                  <TableHead className="text-right">Max landed</TableHead>
-                  <TableHead className="pr-4">Latest result</TableHead>
+                  <SortTableHead {...sorting.th("product")} className="pl-4">Product</SortTableHead>
+                  <SortTableHead {...sorting.th("condition")}>Waiting for</SortTableHead>
+                  <SortTableHead {...sorting.th("lastCheck")}>Last check</SortTableHead>
+                  <SortTableHead {...sorting.th("buyBox")} numeric>Buy Box</SortTableHead>
+                  <SortTableHead {...sorting.th("maxLanded")} numeric>Max landed</SortTableHead>
+                  <SortTableHead {...sorting.th("latest")} className="pr-4" title="Sorts by verdict: pass, warn, fail">Latest result</SortTableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.items.map((i) => {
+                {sorting.rows.map((i) => {
                   const c = i.lastCheck;
                   const f = i.favourite;
                   return (
