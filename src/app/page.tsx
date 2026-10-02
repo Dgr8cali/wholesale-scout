@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangleIcon, ArrowRightIcon, BellIcon, BuildingIcon, CoinsIcon, MegaphoneIcon, RefreshCwIcon, StarIcon, TagIcon, TelescopeIcon, UploadIcon } from "lucide-react";
+import { AlertTriangleIcon, ArrowRightIcon, BellIcon, BoxesIcon, BuildingIcon, CoinsIcon, MegaphoneIcon, PackageXIcon, ShoppingCartIcon, RefreshCwIcon, StarIcon, TagIcon, TelescopeIcon, UploadIcon } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 import { VerdictBar } from "@/components/VerdictBar";
@@ -24,6 +24,7 @@ interface AdsDash {
   campaigns: { totals: { cost: number; sales: number } | null }[];
   terms: { status: string }[];
 }
+interface StockSummary { items: number; value: number; units: { home: number; fba: number; tiktok_fbt: number }; low: number; reorderDue: number }
 interface PlDash {
   candidates: number; verdicts: Record<"pass" | "warn" | "fail" | "empty", number>;
   lastHunt: { id: string; name: string; status: string; created_at: string; token_cost: number } | null;
@@ -96,13 +97,14 @@ export default function HomePage() {
   const brands = useLoad<{ brands: BrandSummary[]; updating: boolean; awaiting: { brands: number; passing: number } }>("/api/brands?chase=5");
   const pl = useLoad<PlDash>("/api/pl/dashboard");
   const ads = useLoad<AdsDash>("/api/ads/dashboard");
+  const stock = useLoad<StockSummary>("/api/stock/summary");
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="page-title">Home</h1>
-          <p className="text-sm text-muted-foreground">Each workspace at a glance: Wholesale, Private label and Ads.</p>
+          <p className="text-sm text-muted-foreground">Each workspace at a glance: Wholesale, Private label, Ads and Stock.</p>
         </div>
         <Button asChild size="lg"><Link href="/upload"><UploadIcon /> Upload price list</Link></Button>
       </div>
@@ -179,6 +181,25 @@ export default function HomePage() {
             return <Stat icon={<MegaphoneIcon />} label="Sponsored Products spend" href="/ads/dashboard" value={`£${t.cost.toFixed(2)}`}
               hint={`ACoS ${t.sales ? Math.round((t.cost / t.sales) * 100) : "—"}% on £${t.sales.toFixed(2)} sales · ${waste} search term${waste === 1 ? "" : "s"} wasting spend`} />;
           }}
+        </Section>
+      </div>
+
+      <RowTitle href="/stock/levels">Stock</RowTitle>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Section load={stock} skeleton={<StatSkeleton />}>
+          {(s) => !s.items
+            ? <Stat icon={<BoxesIcon />} label="Stock" href="/stock/import" value="—" hint="No stock items yet — import from StockPilot or a CSV" />
+            : <Stat icon={<BoxesIcon />} label="Stock value at cost" href="/stock/levels" value={`£${s.value.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} hint={`${s.items} item${s.items === 1 ? "" : "s"}`} />}
+        </Section>
+        <Section load={stock} skeleton={<StatSkeleton />}>
+          {(s) => <Stat icon={<BoxesIcon />} label="Units by bucket" href="/stock/levels" value={(s.units.home + s.units.fba + s.units.tiktok_fbt).toLocaleString("en-GB")}
+            hint={`Self-ship ${s.units.home} · FBA ${s.units.fba} · TikTok ${s.units.tiktok_fbt}`} />}
+        </Section>
+        <Section load={stock} skeleton={<StatSkeleton />}>
+          {(s) => <Stat icon={<PackageXIcon />} label="Low or out of stock" href="/stock/levels" value={s.low} hint={s.low ? "at or under the low-stock level" : "every item above its low-stock level"} />}
+        </Section>
+        <Section load={stock} skeleton={<StatSkeleton />}>
+          {(s) => <Stat icon={<ShoppingCartIcon />} label="Reorders due or soon" href="/stock/reorder" value={s.reorderDue} hint={s.reorderDue ? "at the reorder point, or within a week of it" : "nothing to reorder yet"} />}
         </Section>
       </div>
 

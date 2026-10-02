@@ -5,7 +5,6 @@ import { useEffect, useMemo, useState } from "react";
 import { usePageCrumbs } from "@/components/Crumbs";
 import { ProductThumb } from "@/components/ProductThumb";
 import { EmptyState, ErrorState } from "@/components/States";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SortTableHead, useSortable } from "@/components/SortableTable";
@@ -20,6 +19,9 @@ import { PackageIcon } from "lucide-react";
 import { SyncStatus } from "@/components/product/SyncStatus";
 import { CalibrationPanel } from "@/components/product/CalibrationPanel";
 import { RecordPurchaseDialog } from "@/components/product/RecordPurchaseDialog";
+import { ReceiveDialog, StockPurchaseDialog } from "@/components/tracker/StockPurchase";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { toast } from "sonner";
 
 type Row = Purchase & { actuals?: Actuals | null };
 const label = (s: PurchaseStatus) => PURCHASE_STATUSES.find((x) => x.id === s)?.label ?? s;
@@ -46,6 +48,23 @@ export default function TrackerPage() {
   const [error, setError] = useState<string | null>(null);
   const [show, setShow] = useState<"open" | "all">("open");
   const [nonce, setNonce] = useState(0);
+  // From Stock → Reorder: ?new=stock&item=<id>&qty=<n>&supplier=<id> opens a prefilled purchase.
+  const [stockNew, setStockNew] = useState<{ item: string; qty: number | null; supplier: string | null } | null>(() => {
+    if (typeof window === "undefined") return null;
+    const q = new URLSearchParams(window.location.search);
+    return q.get("new") === "stock" && q.get("item") ? { item: q.get("item")!, qty: Number(q.get("qty")) || null, supplier: q.get("supplier") || null } : null;
+  });
+  const [receiving, setReceiving] = useState<Row | null>(null);
+  const setStatus = async (p: Row, status: PurchaseStatus, bucket?: "home" | "tiktok_fbt" | null) => {
+    if (status === "received" && bucket === undefined) { setReceiving(p); return; }
+    try {
+      const r = await api<{ stock: { created: boolean } | null }>(`/api/purchases/${p.id}`, { method: "PATCH", json: { status, ...(bucket ? { bucket } : {}) } });
+      toast.success(r.stock?.created ? `${label(status)}: ${p.units} units into Stock` : label(status));
+      setNonce((n) => n + 1);
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
   useEffect(() => {
     api<{ purchases: Row[] }>("/api/purchases?actuals=1")
       .then((r) => setRows(r.purchases))
@@ -54,7 +73,7 @@ export default function TrackerPage() {
   const filtered = useMemo(() => (rows ?? []).filter((p) => show === "all" || p.status !== "closed"), [rows, show]);
   // Status sorts in pipeline order; the predicted · actual columns by the actual figure.
   const sorting = useSortable("wholesale.tracker", filtered, {
-    product: { value: (p) => p.product?.title ?? p.asin, kind: "text" },
+    product: { value: (p) => p.product?.title ?? p.stock?.name ?? p.asin, kind: "text" },
     status: { value: (p) => `${String(PURCHASE_STATUSES.findIndex((x) => x.id === p.status)).padStart(2, "0")} ${p.status}`, kind: "text" },
     units: { value: (p) => p.units, kind: "number" },
     landed: { value: (p) => p.landed_gbp, kind: "number" },
@@ -88,6 +107,8 @@ export default function TrackerPage() {
           <RecordPurchaseDialog />
         </div>
       </div>
+      {stockNew && <StockPurchaseDialog open itemId={stockNew.item} qty={stockNew.qty} supplierId={stockNew.supplier} onOpenChange={(o) => { if (!o) { setStockNew(null); window.history.replaceState(null, "", "/tracker"); } }} onSaved={() => setNonce((n) => n + 1)} />}
+      {receiving && <ReceiveDialog open units={receiving.units} onOpenChange={(o) => { if (!o) setReceiving(null); }} onReceive={(bucket) => { const p = receiving; setReceiving(null); setStatus(p, "received", bucket); }} />}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Tile label="Money in stock" value={gbp(invested, 0)} hint={`${open.length} open purchase${open.length === 1 ? "" : "s"}, landed`} />
@@ -130,14 +151,20 @@ export default function TrackerPage() {
                     <TableRow key={p.id} data-verdict={a?.profitPerUnit != null ? (a.profitPerUnit > 0 ? "pass" : "fail") : "empty"}>
                       <TableCell className="max-w-80 pl-4 whitespace-normal">
                         <div className="flex gap-2.5">
-                          <ProductThumb url={p.product?.image_url ?? null} asin={p.asin} title={p.product?.title ?? p.asin} brand={p.product?.brand ?? null} size={36} />
+                          <ProductThumb url={p.product?.image_url ?? p.stock?.image_url ?? null} asin={p.asin} title={p.product?.title ?? p.stock?.name ?? p.asin} brand={p.product?.brand ?? null} size={36} />
                           <div className="min-w-0">
-                            <Link className="line-clamp-2 text-sm hover:text-brand hover:underline" href={`/products/${p.asin}`}>{p.product?.title ?? p.asin}</Link>
-                            <p className="num text-2xs text-muted-foreground">{p.asin} · {p.supplier_name ?? "—"} · {p.ordered_on}</p>
+                            {p.product || !p.stock
+                              ? <Link className="line-clamp-2 text-sm hover:text-brand hover:underline" href={`/products/${p.asin}`}>{p.product?.title ?? p.asin}</Link>
+                              : <Link className="line-clamp-2 text-sm hover:text-brand hover:underline" href={`/stock/levels?item=${p.stock_item_id}`}>{p.stock.name}</Link>}
+                            <p className="num text-2xs text-muted-foreground">{p.asin ?? p.stock?.sku ?? "—"} · {p.supplier_name ?? "—"} · {p.ordered_on}{p.received_bucket ? ` · in Stock (${p.received_bucket === "home" ? "self-ship" : "TikTok FBT"})` : ""}</p>
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell><Badge variant={p.status === "live" ? "pass" : p.status === "closed" ? "muted" : "brand"}>{label(p.status)}</Badge></TableCell>
+                      <TableCell>
+                        <NativeSelect className="h-8 w-36" value={p.status} onChange={(e) => setStatus(p, e.target.value as PurchaseStatus)} aria-label="Status">
+                          {PURCHASE_STATUSES.map((s) => <NativeSelectOption key={s.id} value={s.id}>{s.label}</NativeSelectOption>)}
+                        </NativeSelect>
+                      </TableCell>
                       <TableCell className="num text-right">{p.units}</TableCell>
                       <TableCell className="num text-right">{gbp(p.landed_gbp)}</TableCell>
                       <TableCell className="num text-right">{gbp(p.prediction.profitPerUnit)} · {a ? gbp(a.profitPerUnit) : "—"}</TableCell>

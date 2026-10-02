@@ -4,11 +4,14 @@ import { db, must } from "./db";
 import { productView } from "./productPage";
 
 export interface Purchase {
-  id: string; asin: string; ean: string | null; product_id: string | null; supplier_id: string | null; supplier_name: string | null;
+  id: string; asin: string | null; ean: string | null; product_id: string | null; supplier_id: string | null; supplier_name: string | null;
   units: number; unit_cost_gbp: number | null; landed_gbp: number; ordered_on: string; status: PurchaseStatus;
   status_dates: Partial<Record<PurchaseStatus, string>>; note: string | null; prediction: Prediction; created_at: string;
   /** For lists: the product's title and image. */
   product?: { title: string | null; brand: string | null; image_url: string | null } | null;
+  /** A purchase of a stock item (Stock → Reorder), and the bucket it was received into. */
+  stock_item_id?: string | null; received_bucket?: string | null;
+  stock?: { sku: string; name: string; image_url: string | null } | null;
 }
 
 export interface NewPurchase {
@@ -16,7 +19,7 @@ export interface NewPurchase {
   supplierId?: string | null; supplierName?: string | null; orderedOn?: string | null; note?: string | null;
 }
 
-const COLS = "*, product:products(title, brand, image_url)";
+const COLS = "*, product:products(title, brand, image_url), stock:stock_items(sku, name, image_url)";
 /** Today in the UK, as YYYY-MM-DD (the server runs in UTC). */
 const ukToday = () => new Date().toLocaleDateString("en-CA", { timeZone: "Europe/London" });
 const isDate = (s: unknown): s is string => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s);

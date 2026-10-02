@@ -4,7 +4,7 @@
  * Help belong to all three. Pure: the shell, the layout and the tests share it.
  */
 
-export type WorkspaceId = "wholesale" | "pl" | "ads";
+export type WorkspaceId = "wholesale" | "pl" | "ads" | "stock";
 
 export interface NavItem { href: string; label: string; soon?: boolean }
 
@@ -58,6 +58,16 @@ export const WORKSPACES: Workspace[] = [
       { href: "/ads/launch", label: "Launch" },
     ],
   },
+  {
+    id: "stock", label: "Stock", tagline: "Track what you hold", landing: "/stock/levels",
+    nav: [
+      { href: "/stock/levels", label: "Levels" },
+      { href: "/stock/movements", label: "Movements" },
+      { href: "/stock/sales", label: "Sales" },
+      { href: "/stock/reorder", label: "Reorder" },
+      { href: "/stock/import", label: "Import" },
+    ],
+  },
 ];
 
 /** In every workspace. */
@@ -81,11 +91,12 @@ export function workspaceForPath(path: string): WorkspaceId | null {
   if (SHARED_NAV.some((n) => (n.href === "/" ? path === "/" : under(path, n.href)))) return null;
   if (under(path, "/pl")) return "pl";
   if (under(path, "/ads")) return "ads";
+  if (under(path, "/stock")) return "stock";
   // A wholesale page, or one of its detail pages (/runs/…, /products/…, /suppliers/…).
   return WORKSPACES[0].nav.some((n) => under(path, n.href)) ? "wholesale" : null;
 }
 
-/** The cookie's workspace, or the default when it's missing or not one of the three. */
+/** The cookie's workspace, or the default when it's missing or not one of the four. */
 export function parseWorkspace(value: string | null | undefined): WorkspaceId {
   return WORKSPACES.some((w) => w.id === value) ? (value as WorkspaceId) : DEFAULT_WORKSPACE;
 }
@@ -93,7 +104,7 @@ export function parseWorkspace(value: string | null | undefined): WorkspaceId {
 /** The cookie that remembers a workspace (read by the layout on the next visit). */
 export const workspaceCookie = (id: WorkspaceId) => `${WORKSPACE_COOKIE}=${id}; path=/; max-age=${WORKSPACE_COOKIE_MAX_AGE}; samesite=lax`;
 
-/** The next workspace round (the keyboard shortcut cycles Wholesale → Private label → Ads → Wholesale). */
+/** The next workspace round (the keyboard shortcut cycles Wholesale → Private label → Ads → Stock → Wholesale). */
 export function nextWorkspace(id: WorkspaceId): WorkspaceId {
   const i = WORKSPACES.findIndex((w) => w.id === id);
   return WORKSPACES[(i + 1) % WORKSPACES.length].id;
@@ -124,4 +135,5 @@ export const LEGACY_REDIRECTS = [
   { source: "/private-label", destination: "/pl/candidates", permanent: false },
   { source: "/pl", destination: "/pl/candidates", permanent: false },
   { source: "/ads", destination: "/ads/dashboard", permanent: false },
+  { source: "/stock", destination: "/stock/levels", permanent: false },
 ];

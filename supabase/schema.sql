@@ -1,5 +1,5 @@
 -- Wholesale Scout schema, dumped by scripts/schema-backup.mjs. No data.
--- Dumped 2026-10-02T15:31:26.827Z. Safe to re-run. Restore: npm run schema:restore
+-- Dumped 2026-10-02T16:35:54.718Z. Safe to re-run. Restore: npm run schema:restore
 
 -- @section extensions
 create extension if not exists "pg_cron";
@@ -1476,7 +1476,7 @@ alter table "profiles" enable row level security;
 
 create table if not exists "purchases" (
   "id" uuid default gen_random_uuid() not null,
-  "asin" text not null,
+  "asin" text,
   "ean" text,
   "product_id" uuid,
   "supplier_id" uuid,
@@ -1488,9 +1488,11 @@ create table if not exists "purchases" (
   "status" text default 'ordered'::text not null,
   "status_dates" jsonb default '{}'::jsonb not null,
   "note" text,
-  "prediction" jsonb not null,
+  "prediction" jsonb default '{}'::jsonb not null,
   "created_at" timestamp with time zone default now() not null,
-  "updated_at" timestamp with time zone default now() not null
+  "updated_at" timestamp with time zone default now() not null,
+  "stock_item_id" uuid,
+  "received_bucket" text
 );
 alter table "purchases" add column if not exists "id" uuid default gen_random_uuid();
 alter table "purchases" add column if not exists "asin" text;
@@ -1505,9 +1507,11 @@ alter table "purchases" add column if not exists "ordered_on" date default CURRE
 alter table "purchases" add column if not exists "status" text default 'ordered'::text;
 alter table "purchases" add column if not exists "status_dates" jsonb default '{}'::jsonb;
 alter table "purchases" add column if not exists "note" text;
-alter table "purchases" add column if not exists "prediction" jsonb;
+alter table "purchases" add column if not exists "prediction" jsonb default '{}'::jsonb;
 alter table "purchases" add column if not exists "created_at" timestamp with time zone default now();
 alter table "purchases" add column if not exists "updated_at" timestamp with time zone default now();
+alter table "purchases" add column if not exists "stock_item_id" uuid;
+alter table "purchases" add column if not exists "received_bucket" text;
 alter table "purchases" enable row level security;
 
 create table if not exists "qogita_presets" (
@@ -1673,6 +1677,144 @@ create table if not exists "schema_migrations" (
 alter table "schema_migrations" add column if not exists "name" text;
 alter table "schema_migrations" add column if not exists "applied_at" timestamp with time zone default now();
 alter table "schema_migrations" enable row level security;
+
+create table if not exists "stock_items" (
+  "id" uuid default gen_random_uuid() not null,
+  "sku" text not null,
+  "name" text not null,
+  "asin" text,
+  "barcode" text,
+  "category" text,
+  "status" text default 'active'::text not null,
+  "parent_sku" text,
+  "unit_cost" numeric,
+  "packaging_cost" numeric,
+  "reorder_level" integer,
+  "supplier_id" uuid,
+  "lead_time_days" integer,
+  "image_url" text,
+  "notes" text,
+  "source_ref" text,
+  "created_at" timestamp with time zone default now() not null,
+  "updated_at" timestamp with time zone default now() not null
+);
+alter table "stock_items" add column if not exists "id" uuid default gen_random_uuid();
+alter table "stock_items" add column if not exists "sku" text;
+alter table "stock_items" add column if not exists "name" text;
+alter table "stock_items" add column if not exists "asin" text;
+alter table "stock_items" add column if not exists "barcode" text;
+alter table "stock_items" add column if not exists "category" text;
+alter table "stock_items" add column if not exists "status" text default 'active'::text;
+alter table "stock_items" add column if not exists "parent_sku" text;
+alter table "stock_items" add column if not exists "unit_cost" numeric;
+alter table "stock_items" add column if not exists "packaging_cost" numeric;
+alter table "stock_items" add column if not exists "reorder_level" integer;
+alter table "stock_items" add column if not exists "supplier_id" uuid;
+alter table "stock_items" add column if not exists "lead_time_days" integer;
+alter table "stock_items" add column if not exists "image_url" text;
+alter table "stock_items" add column if not exists "notes" text;
+alter table "stock_items" add column if not exists "source_ref" text;
+alter table "stock_items" add column if not exists "created_at" timestamp with time zone default now();
+alter table "stock_items" add column if not exists "updated_at" timestamp with time zone default now();
+alter table "stock_items" enable row level security;
+
+create table if not exists "stock_listings" (
+  "id" uuid default gen_random_uuid() not null,
+  "item_id" uuid not null,
+  "marketplace" text not null,
+  "marketplace_sku" text,
+  "title" text,
+  "url" text,
+  "price" numeric,
+  "fee_pct" numeric,
+  "default_bucket" text,
+  "status" text default 'active'::text not null,
+  "source_ref" text,
+  "created_at" timestamp with time zone default now() not null
+);
+alter table "stock_listings" add column if not exists "id" uuid default gen_random_uuid();
+alter table "stock_listings" add column if not exists "item_id" uuid;
+alter table "stock_listings" add column if not exists "marketplace" text;
+alter table "stock_listings" add column if not exists "marketplace_sku" text;
+alter table "stock_listings" add column if not exists "title" text;
+alter table "stock_listings" add column if not exists "url" text;
+alter table "stock_listings" add column if not exists "price" numeric;
+alter table "stock_listings" add column if not exists "fee_pct" numeric;
+alter table "stock_listings" add column if not exists "default_bucket" text;
+alter table "stock_listings" add column if not exists "status" text default 'active'::text;
+alter table "stock_listings" add column if not exists "source_ref" text;
+alter table "stock_listings" add column if not exists "created_at" timestamp with time zone default now();
+alter table "stock_listings" enable row level security;
+
+create table if not exists "stock_movements" (
+  "id" uuid default gen_random_uuid() not null,
+  "item_id" uuid not null,
+  "bucket" text not null,
+  "quantity" integer not null,
+  "kind" text not null,
+  "date" date not null,
+  "reason" text,
+  "unit_cost" numeric,
+  "sale_id" uuid,
+  "purchase_id" uuid,
+  "note" text,
+  "source_ref" text,
+  "created_at" timestamp with time zone default now() not null
+);
+alter table "stock_movements" add column if not exists "id" uuid default gen_random_uuid();
+alter table "stock_movements" add column if not exists "item_id" uuid;
+alter table "stock_movements" add column if not exists "bucket" text;
+alter table "stock_movements" add column if not exists "quantity" integer;
+alter table "stock_movements" add column if not exists "kind" text;
+alter table "stock_movements" add column if not exists "date" date;
+alter table "stock_movements" add column if not exists "reason" text;
+alter table "stock_movements" add column if not exists "unit_cost" numeric;
+alter table "stock_movements" add column if not exists "sale_id" uuid;
+alter table "stock_movements" add column if not exists "purchase_id" uuid;
+alter table "stock_movements" add column if not exists "note" text;
+alter table "stock_movements" add column if not exists "source_ref" text;
+alter table "stock_movements" add column if not exists "created_at" timestamp with time zone default now();
+alter table "stock_movements" enable row level security;
+
+create table if not exists "stock_sales" (
+  "id" uuid default gen_random_uuid() not null,
+  "item_id" uuid not null,
+  "listing_id" uuid,
+  "channel" text not null,
+  "order_id" text,
+  "date" date not null,
+  "quantity" integer not null,
+  "price_each" numeric not null,
+  "cost_snapshot" jsonb default '{}'::jsonb not null,
+  "returned_quantity" integer default 0 not null,
+  "note" text,
+  "source_ref" text,
+  "created_at" timestamp with time zone default now() not null
+);
+alter table "stock_sales" add column if not exists "id" uuid default gen_random_uuid();
+alter table "stock_sales" add column if not exists "item_id" uuid;
+alter table "stock_sales" add column if not exists "listing_id" uuid;
+alter table "stock_sales" add column if not exists "channel" text;
+alter table "stock_sales" add column if not exists "order_id" text;
+alter table "stock_sales" add column if not exists "date" date;
+alter table "stock_sales" add column if not exists "quantity" integer;
+alter table "stock_sales" add column if not exists "price_each" numeric;
+alter table "stock_sales" add column if not exists "cost_snapshot" jsonb default '{}'::jsonb;
+alter table "stock_sales" add column if not exists "returned_quantity" integer default 0;
+alter table "stock_sales" add column if not exists "note" text;
+alter table "stock_sales" add column if not exists "source_ref" text;
+alter table "stock_sales" add column if not exists "created_at" timestamp with time zone default now();
+alter table "stock_sales" enable row level security;
+
+create table if not exists "stock_settings" (
+  "key" text not null,
+  "value" numeric not null,
+  "updated_at" timestamp with time zone default now() not null
+);
+alter table "stock_settings" add column if not exists "key" text;
+alter table "stock_settings" add column if not exists "value" numeric;
+alter table "stock_settings" add column if not exists "updated_at" timestamp with time zone default now();
+alter table "stock_settings" enable row level security;
 
 create table if not exists "supplier_mappings" (
   "id" uuid default gen_random_uuid() not null,
@@ -2104,6 +2246,31 @@ do $$ begin
   end if;
 end $$;
 do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'stock_items_pkey' and conrelid = '"stock_items"'::regclass) then
+    alter table "stock_items" add constraint "stock_items_pkey" PRIMARY KEY (id);
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'stock_listings_pkey' and conrelid = '"stock_listings"'::regclass) then
+    alter table "stock_listings" add constraint "stock_listings_pkey" PRIMARY KEY (id);
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'stock_movements_pkey' and conrelid = '"stock_movements"'::regclass) then
+    alter table "stock_movements" add constraint "stock_movements_pkey" PRIMARY KEY (id);
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'stock_sales_pkey' and conrelid = '"stock_sales"'::regclass) then
+    alter table "stock_sales" add constraint "stock_sales_pkey" PRIMARY KEY (id);
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'stock_settings_pkey' and conrelid = '"stock_settings"'::regclass) then
+    alter table "stock_settings" add constraint "stock_settings_pkey" PRIMARY KEY (key);
+  end if;
+end $$;
+do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'supplier_mappings_pkey' and conrelid = '"supplier_mappings"'::regclass) then
     alter table "supplier_mappings" add constraint "supplier_mappings_pkey" PRIMARY KEY (id);
   end if;
@@ -2186,6 +2353,31 @@ end $$;
 do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'results_run_id_product_id_key' and conrelid = '"results"'::regclass) then
     alter table "results" add constraint "results_run_id_product_id_key" UNIQUE (run_id, product_id);
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'stock_items_sku_key' and conrelid = '"stock_items"'::regclass) then
+    alter table "stock_items" add constraint "stock_items_sku_key" UNIQUE (sku);
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'stock_items_source_ref_key' and conrelid = '"stock_items"'::regclass) then
+    alter table "stock_items" add constraint "stock_items_source_ref_key" UNIQUE (source_ref);
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'stock_listings_source_ref_key' and conrelid = '"stock_listings"'::regclass) then
+    alter table "stock_listings" add constraint "stock_listings_source_ref_key" UNIQUE (source_ref);
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'stock_movements_source_ref_key' and conrelid = '"stock_movements"'::regclass) then
+    alter table "stock_movements" add constraint "stock_movements_source_ref_key" UNIQUE (source_ref);
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'stock_sales_source_ref_key' and conrelid = '"stock_sales"'::regclass) then
+    alter table "stock_sales" add constraint "stock_sales_source_ref_key" UNIQUE (source_ref);
   end if;
 end $$;
 do $$ begin
@@ -2334,6 +2526,11 @@ do $$ begin
   end if;
 end $$;
 do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'purchases_received_bucket_check' and conrelid = '"purchases"'::regclass) then
+    alter table "purchases" add constraint "purchases_received_bucket_check" CHECK ((received_bucket = ANY (ARRAY['home'::text, 'fba'::text, 'tiktok_fbt'::text])));
+  end if;
+end $$;
+do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'purchases_status_check' and conrelid = '"purchases"'::regclass) then
     alter table "purchases" add constraint "purchases_status_check" CHECK ((status = ANY (ARRAY['ordered'::text, 'received'::text, 'sent'::text, 'live'::text, 'closed'::text])));
   end if;
@@ -2366,6 +2563,41 @@ end $$;
 do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'runs_status_check' and conrelid = '"runs"'::regclass) then
     alter table "runs" add constraint "runs_status_check" CHECK ((status = ANY (ARRAY['pending'::text, 'processing'::text, 'done'::text, 'failed'::text])));
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'stock_items_status_check' and conrelid = '"stock_items"'::regclass) then
+    alter table "stock_items" add constraint "stock_items_status_check" CHECK ((status = ANY (ARRAY['active'::text, 'discontinued'::text])));
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'stock_listings_default_bucket_check' and conrelid = '"stock_listings"'::regclass) then
+    alter table "stock_listings" add constraint "stock_listings_default_bucket_check" CHECK ((default_bucket = ANY (ARRAY['home'::text, 'fba'::text, 'tiktok_fbt'::text])));
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'stock_listings_status_check' and conrelid = '"stock_listings"'::regclass) then
+    alter table "stock_listings" add constraint "stock_listings_status_check" CHECK ((status = ANY (ARRAY['active'::text, 'inactive'::text])));
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'stock_movements_bucket_check' and conrelid = '"stock_movements"'::regclass) then
+    alter table "stock_movements" add constraint "stock_movements_bucket_check" CHECK ((bucket = ANY (ARRAY['home'::text, 'fba'::text, 'tiktok_fbt'::text])));
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'stock_movements_kind_check' and conrelid = '"stock_movements"'::regclass) then
+    alter table "stock_movements" add constraint "stock_movements_kind_check" CHECK ((kind = ANY (ARRAY['receipt'::text, 'sale'::text, 'return'::text, 'adjustment'::text, 'transfer_in'::text, 'transfer_out'::text])));
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'stock_movements_quantity_check' and conrelid = '"stock_movements"'::regclass) then
+    alter table "stock_movements" add constraint "stock_movements_quantity_check" CHECK ((quantity <> 0));
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'stock_sales_quantity_check' and conrelid = '"stock_sales"'::regclass) then
+    alter table "stock_sales" add constraint "stock_sales_quantity_check" CHECK ((quantity > 0));
   end if;
 end $$;
 do $$ begin
@@ -2594,6 +2826,11 @@ do $$ begin
   end if;
 end $$;
 do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'purchases_stock_item_id_fkey' and conrelid = '"purchases"'::regclass) then
+    alter table "purchases" add constraint "purchases_stock_item_id_fkey" FOREIGN KEY (stock_item_id) REFERENCES stock_items(id) ON DELETE SET NULL;
+  end if;
+end $$;
+do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'purchases_supplier_id_fkey' and conrelid = '"purchases"'::regclass) then
     alter table "purchases" add constraint "purchases_supplier_id_fkey" FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE SET NULL;
   end if;
@@ -2631,6 +2868,41 @@ end $$;
 do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'runs_profile_id_fkey' and conrelid = '"runs"'::regclass) then
     alter table "runs" add constraint "runs_profile_id_fkey" FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE SET NULL;
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'stock_items_supplier_id_fkey' and conrelid = '"stock_items"'::regclass) then
+    alter table "stock_items" add constraint "stock_items_supplier_id_fkey" FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE SET NULL;
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'stock_listings_item_id_fkey' and conrelid = '"stock_listings"'::regclass) then
+    alter table "stock_listings" add constraint "stock_listings_item_id_fkey" FOREIGN KEY (item_id) REFERENCES stock_items(id) ON DELETE CASCADE;
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'stock_movements_item_id_fkey' and conrelid = '"stock_movements"'::regclass) then
+    alter table "stock_movements" add constraint "stock_movements_item_id_fkey" FOREIGN KEY (item_id) REFERENCES stock_items(id) ON DELETE CASCADE;
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'stock_movements_purchase_id_fkey' and conrelid = '"stock_movements"'::regclass) then
+    alter table "stock_movements" add constraint "stock_movements_purchase_id_fkey" FOREIGN KEY (purchase_id) REFERENCES purchases(id) ON DELETE SET NULL;
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'stock_movements_sale_id_fkey' and conrelid = '"stock_movements"'::regclass) then
+    alter table "stock_movements" add constraint "stock_movements_sale_id_fkey" FOREIGN KEY (sale_id) REFERENCES stock_sales(id) ON DELETE CASCADE;
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'stock_sales_item_id_fkey' and conrelid = '"stock_sales"'::regclass) then
+    alter table "stock_sales" add constraint "stock_sales_item_id_fkey" FOREIGN KEY (item_id) REFERENCES stock_items(id) ON DELETE CASCADE;
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'stock_sales_listing_id_fkey' and conrelid = '"stock_sales"'::regclass) then
+    alter table "stock_sales" add constraint "stock_sales_listing_id_fkey" FOREIGN KEY (listing_id) REFERENCES stock_listings(id) ON DELETE SET NULL;
   end if;
 end $$;
 do $$ begin
@@ -2700,6 +2972,8 @@ CREATE INDEX IF NOT EXISTS results_run_score ON results USING btree (run_id, sco
 CREATE INDEX IF NOT EXISTS results_run_updated ON results USING btree (run_id, updated_at);
 CREATE INDEX IF NOT EXISTS results_run_verdict_score ON results USING btree (run_id, verdict, score DESC NULLS LAST);
 CREATE INDEX IF NOT EXISTS results_updated ON results USING btree (updated_at) WHERE (status = 'done'::text);
+CREATE INDEX IF NOT EXISTS stock_items_asin ON stock_items USING btree (asin);
+CREATE INDEX IF NOT EXISTS stock_movements_item ON stock_movements USING btree (item_id, date);
 CREATE INDEX IF NOT EXISTS supplier_mappings_fingerprint_idx ON supplier_mappings USING btree (header_fingerprint);
 CREATE INDEX IF NOT EXISTS watch_alerts_open_idx ON watch_alerts USING btree (created_at DESC) WHERE (dismissed_at IS NULL);
 CREATE INDEX IF NOT EXISTS watchlist_product_idx ON watchlist USING btree (product_id);
@@ -2929,3 +3203,4 @@ insert into schema_migrations (name) values ('20261002001000_ads_phase25.sql') o
 insert into schema_migrations (name) values ('20261002001100_niche_hunt_direct.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261002001200_ads_daily_products.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261002001300_pl_quotes_launch.sql') on conflict do nothing;
+insert into schema_migrations (name) values ('20261002001400_stock.sql') on conflict do nothing;

@@ -3,6 +3,7 @@ import { LAUNCH_STEPS, STEP_KEYS, statusFromSteps, type LaunchStep, type PlStatu
 import type { Fill } from "../pl/fill";
 import { CURRENCIES, QUOTE_SOURCES, QUOTE_STATUSES, landedCost, type LandedInputs, type Quote } from "../pl/quotes";
 import { adsDashboard, saveAdsProduct } from "./ads";
+import { ensureStockItemForAsin } from "./stock";
 import { db, must } from "./db";
 import { applyAuto } from "./pl";
 
@@ -125,7 +126,8 @@ export async function setLaunchStep(candidateId: string, step: string, patch: { 
 
 /**
  * The candidate's own listing: set, it becomes (or joins) an Ads product carrying the candidate's
- * landed cost, so profit after ads shows on the candidate and on the Ads dashboard.
+ * landed cost, so profit after ads shows on the candidate and on the Ads dashboard, and it shares
+ * that ASIN's stock item (Stock), made if missing.
  */
 export async function setListingAsin(candidateId: string, asin: string | null) {
   const a = asin?.trim().toUpperCase() || null;
@@ -139,6 +141,8 @@ export async function setListingAsin(candidateId: string, asin: string | null) {
   const cur = (must(await d.from("ads_products").select("title, landed_cost").eq("asin", a), "ads product") as { title: string | null; landed_cost: number | null }[])[0];
   await saveAdsProduct(a, { ...(cur?.title ? {} : { title: c.name }), ...(cur?.landed_cost != null || landed == null ? {} : { landed_cost: landed }) });
   must(await d.from("ads_products").update({ pl_candidate_id: candidateId }).eq("asin", a), "link ads product");
+  // The same stock item as the Ads product (by ASIN), made now if there isn't one.
+  await ensureStockItemForAsin(a, { name: c.name, unitCost: landed });
 }
 
 /** The listing's ads figures from the Ads dashboard (empty until campaigns for it are imported). */

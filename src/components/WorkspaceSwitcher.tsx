@@ -1,6 +1,6 @@
 "use client";
 
-import { MegaphoneIcon, PackageIcon, TagIcon } from "lucide-react";
+import { BoxesIcon, MegaphoneIcon, PackageIcon, TagIcon } from "lucide-react";
 import type { ComponentType } from "react";
 import { WORKSPACES, workspace, type WorkspaceId } from "@/lib/workspaces";
 import { cn } from "@/lib/utils";
@@ -9,11 +9,12 @@ export const WORKSPACE_ICON: Record<WorkspaceId, ComponentType<{ className?: str
   wholesale: PackageIcon,
   pl: TagIcon,
   ads: MegaphoneIcon,
+  stock: BoxesIcon,
 };
 
 /**
- * The sidebar's workspace switcher: a segmented control (Wholesale / Private label / Ads) with what
- * the current one is for underneath. Collapsed to icons, just the three icons.
+ * The sidebar's workspace switcher: a segmented control (Wholesale / Private label / Ads / Stock) with what
+ * the current one is for underneath. Collapsed to icons, just the four icons.
  */
 export function WorkspaceSwitcher({ value, onChange }: { value: WorkspaceId; onChange: (id: WorkspaceId) => void }) {
   return (
@@ -24,10 +25,11 @@ export function WorkspaceSwitcher({ value, onChange }: { value: WorkspaceId; onC
           const on = w.id === value;
           return (
             <button key={w.id} type="button" role="radio" aria-checked={on} title={`${w.label}: ${w.tagline}`} onClick={() => onChange(w.id)}
-              className={cn("flex min-w-0 flex-1 items-center justify-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium transition-colors",
+              className={cn("flex min-w-0 items-center justify-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium transition-colors", on ? "flex-1" : "flex-none px-2",
                 on ? "bg-background text-foreground shadow-xs" : "text-muted-foreground hover:text-foreground")}>
               <Icon className="size-3.5 flex-none" />
-              <span className="truncate group-data-[collapsible=icon]:hidden">{w.id === "pl" ? "Private label" : w.label}</span>
+              {/* Four don't fit side by side: the current one is named, the others are icons (named on hover and to screen readers). */}
+              <span className={cn("truncate group-data-[collapsible=icon]:hidden", !on && "sr-only")}>{w.id === "pl" ? "Private label" : w.label}</span>
             </button>
           );
         })}

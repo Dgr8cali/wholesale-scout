@@ -8,7 +8,8 @@ export const GET = handle(async (req: NextRequest) => {
   const q = req.nextUrl.searchParams;
   const purchases = await listPurchases(q.get("asin"));
   if (q.get("actuals") !== "1") return Response.json({ purchases });
-  const actuals = await actualsFor(purchases);
+  // Amazon's figures are by ASIN: a stock purchase without one has none.
+  const actuals = await actualsFor(purchases.filter((p) => p.asin));
   return Response.json({ purchases: purchases.map((p) => ({ ...p, actuals: actuals.get(p.id) ?? null })) });
 });
 

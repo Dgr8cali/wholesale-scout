@@ -8,7 +8,7 @@
  *   route: /runs          (a page's article: the page it explains)
  *   gate: priceBand       (a gate's article: the gate it explains)
  *   order: 2              (position within its section)
- *   workspace: pl         (wholesale | pl | ads | general; else from the route or folder)
+ *   workspace: pl         (wholesale | pl | ads | stock | general; else from the route or folder)
  *   ---
  *
  * The slug is the path without ".md" (pages/runs), the section comes from the folder.
@@ -29,13 +29,14 @@ export interface ArticleMeta {
   workspace: HelpWorkspace;
 }
 
-export type HelpWorkspace = "wholesale" | "pl" | "ads" | "general";
+export type HelpWorkspace = "wholesale" | "pl" | "ads" | "stock" | "general";
 
 /** The Help page's top-level groups, in order. */
 export const HELP_WORKSPACES: { id: HelpWorkspace; label: string }[] = [
   { id: "wholesale", label: "Wholesale" },
   { id: "pl", label: "Private label" },
   { id: "ads", label: "Ads" },
+  { id: "stock", label: "Stock" },
   { id: "general", label: "General" },
 ];
 

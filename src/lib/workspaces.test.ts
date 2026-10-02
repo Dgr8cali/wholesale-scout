@@ -23,12 +23,14 @@ async function redirected(url: string): Promise<string | null> {
 }
 
 describe("workspaces", () => {
-  it("are Wholesale, Private label and Ads, each with its own nav", () => {
+  it("are Wholesale, Private label, Ads and Stock, each with its own nav", () => {
     expect(WORKSPACES.map((w) => [w.id, w.label, w.tagline])).toEqual([
       ["wholesale", "Wholesale", "Resell existing listings"],
       ["pl", "Private label", "Launch your own product"],
       ["ads", "Ads", "Run and tune Sponsored Products"],
+      ["stock", "Stock", "Track what you hold"],
     ]);
+    expect(workspace("stock").nav.map((n) => n.href)).toEqual(["/stock/levels", "/stock/movements", "/stock/sales", "/stock/reorder", "/stock/import"]);
     expect(workspace("pl").nav.map((n) => [n.href, n.soon ?? false])).toEqual([["/pl/candidates", false], ["/pl/niche-hunt", false], ["/pl/quotes", false], ["/pl/launch", false]]);
     expect(workspace("ads").nav.map((n) => n.href)).toEqual(["/ads/dashboard", "/ads/imports", "/ads/rules", "/ads/proposals", "/ads/ngrams", "/ads/launch"]);
     expect(workspace("ads").nav.some((n) => n.soon)).toBe(false);
@@ -40,6 +42,7 @@ describe("workspaces", () => {
     expect(workspaceForPath("/products/B0ABC12345")).toBe("wholesale");
     expect(workspaceForPath("/pl/candidates")).toBe("pl");
     expect(workspaceForPath("/ads/rules")).toBe("ads");
+    expect(workspaceForPath("/stock/levels")).toBe("stock");
     for (const p of ["/", "/settings", "/help", "/help/pages/runs"]) expect(workspaceForPath(p)).toBeNull();
   });
 
@@ -51,7 +54,7 @@ describe("workspaces", () => {
   });
 
   it("cycles with Alt+Shift+W (Option+Shift+W on a Mac)", () => {
-    expect([nextWorkspace("wholesale"), nextWorkspace("pl"), nextWorkspace("ads")]).toEqual(["pl", "ads", "wholesale"]);
+    expect([nextWorkspace("wholesale"), nextWorkspace("pl"), nextWorkspace("ads"), nextWorkspace("stock")]).toEqual(["pl", "ads", "stock", "wholesale"]);
     const k = (o: Partial<{ key: string; code: string; shiftKey: boolean; ctrlKey: boolean; metaKey: boolean; altKey: boolean }>) => ({ key: "W", code: "KeyW", shiftKey: true, ctrlKey: false, metaKey: false, altKey: true, ...o });
     expect(isSwitchShortcut(k({}))).toBe(true);
     // Option+Shift+W on a Mac types "„": the physical key decides.
@@ -79,15 +82,16 @@ describe("workspaces", () => {
     expect(await redirected("/private-label?tab=hunt")).toBe("/pl/niche-hunt?tab=hunt");
     expect(await redirected("/pl")).toBe("/pl/candidates");
     expect(await redirected("/ads")).toBe("/ads/dashboard");
+    expect(await redirected("/stock")).toBe("/stock/levels");
     expect(await redirected("/pl/candidates")).toBeNull();
   });
 
-  it("renders the switcher as three options with the current one checked", () => {
+  it("renders the switcher as four options with the current one checked", () => {
     const html = renderToStaticMarkup(createElement(WorkspaceSwitcher, { value: "pl", onChange: () => {} }));
     expect(html).toContain('role="radiogroup"');
-    expect(html.match(/role="radio"/g)).toHaveLength(3);
+    expect(html.match(/role="radio"/g)).toHaveLength(4);
     expect(html).toMatch(/aria-checked="true"[^>]*title="Private label: Launch your own product"/);
-    expect(html.match(/aria-checked="false"/g)).toHaveLength(2);
+    expect(html.match(/aria-checked="false"/g)).toHaveLength(3);
     expect(html).toContain("Launch your own product");
   });
 
@@ -100,6 +104,7 @@ describe("workspaces", () => {
     const by = (w: string) => articles().filter((a) => a.workspace === w).map((a) => a.slug);
     expect(by("pl")).toEqual(expect.arrayContaining(["pages/private-label", "concepts/niche-hunt"]));
     expect(by("ads")).toEqual(expect.arrayContaining(["pages/ads", "howto/ads-importing-reports"]));
+    expect(by("stock")).toEqual(expect.arrayContaining(["pages/stock"]));
     expect(by("general")).toEqual(expect.arrayContaining(["getting-started", "pages/home", "pages/settings", "pages/help", "pages/extension", "reference/glossary"]));
     expect(by("wholesale")).toEqual(expect.arrayContaining(["pages/runs", "gates/demand", "concepts/fees", "howto/waive-a-gate"]));
   });

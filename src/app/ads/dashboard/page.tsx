@@ -31,7 +31,7 @@ interface CampaignRow {
 }
 interface Matched { text: string; matchType: string | null; clicks: number; cost: number; orders: number }
 interface TermRow { campaign: string; campaignName: string; term: string; asin: string | null; totals: Totals; ratios: Ratios; status: TermStatus; why: string; from: string; to: string; breakEvenAcos: number | null; targetAcos: number; matched: Matched[] }
-interface Stock { fulfillable: number; inbound: number; unitsPerDay: number | null; daysOfCover: number | null; source: string; updatedAt: string | null }
+interface Stock { fulfillable: number; inbound: number; home?: number; tiktok_fbt?: number; total?: number; unitsPerDay: number | null; daysOfCover: number | null; source: string; updatedAt: string | null }
 interface Plan { asin: string; start_date: string; input: { price: number; headTerms: string[] }; plan: { from: string; to: string | null; title: string; detail: string }[]; batch_id: string | null }
 interface KeywordRow { keywordId: string; campaign: string; campaignName: string; asin: string | null; text: string; matchType: string; bid: number | null; state: string | null; clicks: number; cost: number; orders: number; sales: number; ranks: { position: number | null; page: number | null; checkedAt: string }[] }
 interface Dash { settings: { targetAcos: number; cpc: number; cpcAuto: boolean }; asins: AsinRow[]; campaigns: CampaignRow[]; terms: TermRow[]; imports: number; stock: Record<string, Stock>; plans: Plan[]; keywords: KeywordRow[];
@@ -295,8 +295,8 @@ function StockChip({ s }: { s: Stock | undefined }) {
   const days = d == null ? "—" : d >= 9999 ? "no sales" : `${d < 10 ? d.toFixed(1) : Math.round(d)} days`;
   return (
     <span className={cn("cursor-help rounded-full px-2 py-0.5 text-xs font-semibold", cls)}
-      title={`${s.fulfillable} fulfillable${s.inbound ? `, ${s.inbound} inbound` : ""}; ${s.unitsPerDay != null ? `${s.unitsPerDay.toFixed(2)} units a day` : "no sales rate"} (${s.source})${s.updatedAt ? `; stock as of ${new Date(s.updatedAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}` : ""}`}>
-      {s.fulfillable} in stock · {days} of cover
+      title={`${s.fulfillable} fulfillable at FBA${s.inbound ? `, ${s.inbound} inbound` : ""}${s.home || s.tiktok_fbt ? `; ${s.home ?? 0} self-ship, ${s.tiktok_fbt ?? 0} TikTok FBT (Stock)` : ""}; ${s.unitsPerDay != null ? `${s.unitsPerDay.toFixed(2)} units a day` : "no sales rate"} (${s.source})${s.updatedAt ? `; stock as of ${new Date(s.updatedAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}` : ""}`}>
+      {s.total ?? s.fulfillable} in stock · {days} of cover
     </span>
   );
 }

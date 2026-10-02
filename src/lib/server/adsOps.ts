@@ -4,6 +4,7 @@ import { buildLaunch, type LaunchInput } from "../ads/launch";
 import { diffSnapshot, restoresFor, revertChanges, takeSnapshot, type EntityState, type Snapshot } from "../ads/snapshot";
 import { SpApiError, getSpApi } from "../spapi/client";
 import { adsSettings, saveAdsProduct } from "./ads";
+import { stockByAsinAllBuckets } from "./stock";
 import { syncStock } from "./amazonSync";
 import { chunks, db, must } from "./db";
 
@@ -94,20 +95,29 @@ export async function restoreSnapshot(id: string) {
 
 /* ===================== FBA stock and days of cover ===================== */
 
-export interface Stock { fulfillable: number; inbound: number; unitsPerDay: number | null; daysOfCover: number | null; source: string; updatedAt: string | null }
+export interface Stock {
+  fulfillable: number; inbound: number;
+  /** Your own stock (Stock workspace): self-ship and TikTok FBT. */
+  home: number; tiktok_fbt: number;
+  /** FBA + self-ship + TikTok: what days of cover counts. */
+  total: number;
+  unitsPerDay: number | null; daysOfCover: number | null; source: string; updatedAt: string | null;
+}
 /** "No end": stock and no sales. */
 export const NO_END = 9999;
 
 /**
- * Stock per ASIN (Amazon's FBA inventory, synced nightly with the orders and on demand) and days
- * of cover = fulfillable ÷ units a day over the last 14 days. Units come from the orders sync when
- * it ran in the last two days (it includes ad sales); else from the ads' own units over the
- * imported range, and the source says so.
+ * Stock per ASIN across every bucket: Amazon's FBA inventory (synced nightly with the orders and
+ * on demand) plus your own self-ship and TikTok stock (the Stock workspace), and days of cover =
+ * that total ÷ units a day over the last 14 days. Units come from the orders sync when it ran in
+ * the last two days (it includes ad sales), plus the sales recorded in Stock; else from the ads'
+ * own units over the imported range, and the source says so.
  */
 export async function stockByAsin(asins: string[], adsUnitsPerDay: Map<string, number | null>): Promise<Record<string, Stock>> {
   if (!asins.length) return {};
   const d = db();
   const since = new Date(Date.now() - 14 * DAY).toLocaleDateString("en-CA", { timeZone: "Europe/London" });
+  const [own, ownSales] = await Promise.all([stockByAsinAllBuckets(asins), stockSalesByAsin(asins, since)]);
   const [inv, sales, sync] = await Promise.all([
     d.from("amazon_inventory").select("asin, fulfillable, inbound, updated_at").in("asin", asins),
     d.from("amazon_sales").select("asin, units").in("asin", asins).eq("channel", "Amazon").gte("day", since),
@@ -119,18 +129,32 @@ export async function stockByAsin(asins: string[], adsUnitsPerDay: Map<string, n
   const out: Record<string, Stock> = {};
   for (const asin of asins) {
     const rows = (inv.data as { asin: string; fulfillable: number; inbound: number; updated_at: string }[]).filter((r) => r.asin === asin);
-    if (!rows.length) continue;
+    const mine = own.get(asin) ?? { home: 0, tiktok_fbt: 0 };
+    if (!rows.length && !own.has(asin)) continue;
     const fulfillable = rows.reduce((a, r) => a + Number(r.fulfillable), 0);
+    const total = fulfillable + Math.max(0, mine.home) + Math.max(0, mine.tiktok_fbt);
     let unitsPerDay: number | null, source: string;
     if (salesCurrent) {
-      unitsPerDay = (sales.data as { asin: string; units: number }[]).filter((s) => s.asin === asin).reduce((a, s) => a + Number(s.units), 0) / 14;
-      source = "Amazon orders, last 14 days";
+      unitsPerDay = ((sales.data as { asin: string; units: number }[]).filter((s) => s.asin === asin).reduce((a, s) => a + Number(s.units), 0) + (ownSales.get(asin) ?? 0)) / 14;
+      source = ownSales.get(asin) ? "Amazon orders and Stock's other sales, last 14 days" : "Amazon orders, last 14 days";
     } else {
       unitsPerDay = adsUnitsPerDay.get(asin) ?? null;
       source = "ads units only: no current orders data";
     }
-    const daysOfCover = unitsPerDay && unitsPerDay > 0 ? fulfillable / unitsPerDay : fulfillable === 0 ? 0 : NO_END;
-    out[asin] = { fulfillable, inbound: rows.reduce((a, r) => a + Number(r.inbound), 0), unitsPerDay, daysOfCover, source, updatedAt: rows[0].updated_at };
+    const daysOfCover = unitsPerDay && unitsPerDay > 0 ? total / unitsPerDay : total === 0 ? 0 : NO_END;
+    out[asin] = { fulfillable, inbound: rows.reduce((a, r) => a + Number(r.inbound), 0), home: mine.home, tiktok_fbt: mine.tiktok_fbt, total, unitsPerDay, daysOfCover, source, updatedAt: rows[0]?.updated_at ?? null };
+  }
+  return out;
+}
+
+/** Units sold outside Amazon (Stock → Sales) per ASIN since a day. */
+async function stockSalesByAsin(asins: string[], since: string): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  const res = await db().from("stock_sales").select("quantity, returned_quantity, item:stock_items(asin)").gte("date", since);
+  if (res.error) return out;
+  for (const r of res.data as unknown as { quantity: number; returned_quantity: number; item: { asin: string | null } | null }[]) {
+    const a = r.item?.asin;
+    if (a && asins.includes(a)) out.set(a, (out.get(a) ?? 0) + r.quantity - r.returned_quantity);
   }
   return out;
 }

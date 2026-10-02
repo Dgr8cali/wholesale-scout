@@ -173,7 +173,7 @@ export interface Perf { impressions: number | null; clicks: number; cost: number
 export interface RuleProduct {
   asin: string; price: number | null; /** Fraction (0.3). */ targetAcos: number; sku: string | null;
   /** FBA stock and days of cover (Stock guard); null when unknown. */
-  stock?: { fulfillable: number; unitsPerDay: number | null; daysOfCover: number | null; source: string } | null;
+  stock?: { fulfillable: number; unitsPerDay: number | null; daysOfCover: number | null; source: string; total?: number; home?: number; tiktok_fbt?: number } | null;
   /** The values a stock-guard batch changed, to put back once stock recovers. */
   guard?: { label: string; restores: BulkChange[] } | null;
   /** Launch plan start: weeks 1–2 are harvest only. */
@@ -662,7 +662,10 @@ export function runRules(input: RulesInput, config: RulesConfig = DEFAULT_RULES)
       if (!st || st.daysOfCover == null) continue;
       const cover = st.daysOfCover;
       const camps = input.campaigns.filter((c) => c.asin === p.asin && c.campaignId && notArchived(c.state));
-      const coverTxt = `${st.fulfillable} in FBA stock, selling ${st.unitsPerDay != null ? st.unitsPerDay.toFixed(1) : "0"} a day (${st.source}) = ${Number.isFinite(cover) ? `${cover.toFixed(1)} days` : "no end"} of cover`;
+      const held = st.total != null && st.total !== st.fulfillable
+        ? `${st.total} in stock (FBA ${st.fulfillable}, self-ship ${st.home ?? 0}, TikTok ${st.tiktok_fbt ?? 0})`
+        : `${st.fulfillable} in FBA stock`;
+      const coverTxt = `${held}, selling ${st.unitsPerDay != null ? st.unitsPerDay.toFixed(1) : "0"} a day (${st.source}) = ${Number.isFinite(cover) ? `${cover.toFixed(1)} days` : "no end"} of cover`;
       if (cover < t.pauseDays) {
         for (const c of camps.filter((x) => live(x.state))) out.push({
           ...base("stock_guard", c), key: `stock:${c.id}`,
