@@ -16,7 +16,7 @@ The app has three workspaces. Switch between them at the top of the sidebar:
 - **Private label**: launch your own product. [Candidates](/help/pages/private-label) and [Niche Hunt](/help/concepts/niche-hunt); Quotes and Launch are coming soon.
 - **Ads**: run and tune Sponsored Products. [Dashboard, Imports, Rules and Proposals](/help/pages/ads) are coming once Amazon Ads API access is approved.
 
-Home, Settings and Help are in every workspace. The app remembers the workspace you used last and opens in it next time. Opening a page from another workspace (a link or a bookmark) switches to that workspace. **Ctrl+Shift+W** cycles the workspaces where the browser lets the page have that shortcut: on a Mac, Ctrl (not Cmd); Windows browsers keep Ctrl+Shift+W for closing the window. Browser tabs read "Candidates · Private label · Wholesale Scout".
+Home, Settings and Help are in every workspace. The app remembers the workspace you used last and opens in it next time. Opening a page from another workspace (a link or a bookmark) switches to that workspace. **Alt+Shift+W** (**Option+Shift+W** on a Mac) cycles the workspaces: Wholesale, Private label, Ads. Browser tabs read "Candidates · Private label · Wholesale Scout".
 
 ## The flow in five steps
 

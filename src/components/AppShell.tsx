@@ -65,8 +65,7 @@ function WorkspaceProvider({ initial, children }: { initial: WorkspaceId; childr
     // On a shared page (Home, Settings, Help) it stays put; on another workspace's page it goes to the new one's first page.
     if (pageWs !== null && pageWs !== id) router.push(workspace(id).landing);
   }, [pageWs, router]);
-  // Ctrl+Shift+W (Cmd+Shift+W on a Mac) cycles Wholesale → Private label → Ads. Browsers keep
-  // Cmd/Ctrl+Shift+W for "close window" on most systems, so it only reaches the page where they don't.
+  // Alt+Shift+W (Option+Shift+W on a Mac) cycles Wholesale → Private label → Ads.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!isSwitchShortcut(e)) return;

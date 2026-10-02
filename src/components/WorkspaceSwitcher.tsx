@@ -32,7 +32,7 @@ export function WorkspaceSwitcher({ value, onChange }: { value: WorkspaceId; onC
           );
         })}
       </div>
-      <p className="px-1 text-2xs text-muted-foreground group-data-[collapsible=icon]:hidden">{workspace(value).tagline} · <kbd className="font-sans">Ctrl</kbd>+<kbd className="font-sans">Shift</kbd>+<kbd className="font-sans">W</kbd></p>
+      <p className="px-1 text-2xs text-muted-foreground group-data-[collapsible=icon]:hidden">{workspace(value).tagline} · <kbd className="font-sans" title="Option on a Mac">Alt</kbd>+<kbd className="font-sans">Shift</kbd>+<kbd className="font-sans">W</kbd></p>
     </div>
   );
 }

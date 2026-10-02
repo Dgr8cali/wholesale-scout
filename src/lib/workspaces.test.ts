@@ -49,13 +49,18 @@ describe("workspaces", () => {
     expect(parseWorkspace("nonsense")).toBe("wholesale");
   });
 
-  it("cycles with Ctrl/Cmd+Shift+W", () => {
+  it("cycles with Alt+Shift+W (Option+Shift+W on a Mac)", () => {
     expect([nextWorkspace("wholesale"), nextWorkspace("pl"), nextWorkspace("ads")]).toEqual(["pl", "ads", "wholesale"]);
-    const k = (o: Partial<{ key: string; shiftKey: boolean; ctrlKey: boolean; metaKey: boolean; altKey: boolean }>) => ({ key: "W", shiftKey: true, ctrlKey: false, metaKey: false, altKey: false, ...o });
-    expect(isSwitchShortcut(k({ ctrlKey: true }))).toBe(true);
-    expect(isSwitchShortcut(k({ metaKey: true, key: "w" }))).toBe(true);
-    expect(isSwitchShortcut(k({ ctrlKey: true, shiftKey: false }))).toBe(false);
-    expect(isSwitchShortcut(k({}))).toBe(false);
+    const k = (o: Partial<{ key: string; code: string; shiftKey: boolean; ctrlKey: boolean; metaKey: boolean; altKey: boolean }>) => ({ key: "W", code: "KeyW", shiftKey: true, ctrlKey: false, metaKey: false, altKey: true, ...o });
+    expect(isSwitchShortcut(k({}))).toBe(true);
+    // Option+Shift+W on a Mac types "„": the physical key decides.
+    expect(isSwitchShortcut(k({ key: "„" }))).toBe(true);
+    // Chrome's close-window shortcuts, and plain or partial chords, aren't it.
+    expect(isSwitchShortcut(k({ altKey: false, ctrlKey: true }))).toBe(false);
+    expect(isSwitchShortcut(k({ altKey: false, metaKey: true }))).toBe(false);
+    expect(isSwitchShortcut(k({ shiftKey: false }))).toBe(false);
+    expect(isSwitchShortcut(k({ altKey: false }))).toBe(false);
+    expect(isSwitchShortcut(k({ code: "KeyQ", key: "Q" }))).toBe(false);
   });
 
   it("titles browser tabs page · workspace · app", () => {

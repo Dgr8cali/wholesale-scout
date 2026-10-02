@@ -108,9 +108,13 @@ export function pageTitle(path: string, page: string | null | undefined): string
   return parts.filter((p, i) => p !== parts[i - 1]).join(" · ");
 }
 
-/** The keyboard shortcut: Ctrl+Shift+W, or Cmd+Shift+W on a Mac (see the shell for what browsers allow). */
-export const isSwitchShortcut = (e: { key: string; shiftKey: boolean; ctrlKey: boolean; metaKey: boolean; altKey: boolean }) =>
-  e.shiftKey && !e.altKey && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "w";
+/**
+ * The keyboard shortcut: Alt+Shift+W (Option+Shift+W on a Mac). Chrome keeps Ctrl/Cmd+Shift+W for
+ * "close window". Matched on the physical key (KeyW): on a Mac, Option changes the character typed
+ * (Option+Shift+W types "„").
+ */
+export const isSwitchShortcut = (e: { key: string; code?: string; shiftKey: boolean; ctrlKey: boolean; metaKey: boolean; altKey: boolean }) =>
+  e.altKey && e.shiftKey && !e.ctrlKey && !e.metaKey && (e.code === "KeyW" || e.key.toLowerCase() === "w");
 
 /** Old addresses kept working (next.config redirects): /private-label to the Private label workspace. */
 export const LEGACY_REDIRECTS = [
