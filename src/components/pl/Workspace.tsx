@@ -335,7 +335,7 @@ function GateExtras({ g, data, fields, settings, card }: { g: GateDef; data: Can
   const f = valuesOf(fields);
   if (g.id === "g3" || g.id === "g5") {
     const p = data.poe;
-    if (!p) return <p className="rounded-lg bg-surface-2 px-3 py-2.5 text-xs text-muted-foreground">No Opportunity Explorer capture yet. Open the niche in Seller Central → Growth → Product Opportunity Explorer with the extension loaded, then click <b>Send to Gatekeeper</b> in its panel. A niche whose title matches this candidate&apos;s niche keyword attaches by itself.</p>;
+    if (!p) return <p className="rounded-lg bg-surface-2 px-3 py-2.5 text-xs text-muted-foreground">No Opportunity Explorer capture yet. Open the niche in Seller Central → Growth → Product Opportunity Explorer with the extension loaded, then click <b>Send to Private label</b> in its panel. A niche whose title matches this candidate&apos;s niche keyword attaches by itself.</p>;
     if (g.id === "g3") return <p className="rounded-lg bg-surface-2 px-3 py-2.5 text-xs text-muted-foreground">From Opportunity Explorer{p.niche_title ? `: “${p.niche_title}”` : ""}, captured {ago(p.captured_at)}. Send the niche again to update.</p>;
     const terms = p.search_terms.slice(0, 12);
     return terms.length ? (

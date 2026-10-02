@@ -3,6 +3,7 @@ title: Add an environment variable
 summary: Every environment variable the app reads, what it does, and how to set it locally and on Vercel.
 synonyms: [env, env var, secret, api key, configuration, vercel, env.local, credentials]
 order: 7
+workspace: general
 ---
 Keys and passwords (Supabase, Amazon SP-API, Keepa, Qogita, email) aren't stored in the app's database or code. They're environment variables: set in `.env.local` on your computer, and in the Vercel project for the live app.
 

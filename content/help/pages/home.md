@@ -5,13 +5,13 @@ synonyms: [dashboard, overview, start page, keepa balance, token spend]
 route: /
 order: 1
 ---
-Home is the first page you see: your latest runs, Keepa's balance and today's spend, and short lists of things that need attention. It changes nothing by itself; every card links to the page where you act.
+Home is the first page you see, in every workspace: a row of tiles for each workspace (Wholesale, Private label, Ads), your latest runs, Keepa's balance and today's spend, and short lists of things that need attention. It changes nothing by itself; every card links to the page where you act.
 
 ## Top of the page
 
 **Upload price list** takes you to [Upload](/help/pages/upload) to screen a new supplier sheet.
 
-## The five tiles
+## Wholesale: the five tiles
 
 | Tile | What it shows | Click to |
 | --- | --- | --- |
@@ -22,6 +22,16 @@ Home is the first page you see: your latest runs, Keepa's balance and today's sp
 | **Brands awaiting approval** | Brands you're not yet approved for that have products passing, and how many passing products they hold back. | [Brands](/help/pages/brands) |
 
 A tile that couldn't load shows "Couldn't load:" and the reason; the rest of the page still works. See [Keepa tokens](/help/concepts/keepa-tokens) for how tokens are spent.
+
+## Private label
+
+- **Candidates by verdict**: how many candidates you have, split into order samples, check, drop and not scored yet. Opens [Candidates](/help/pages/private-label).
+- **Last Niche Hunt**: when it ran, whether it's done, and what it cost. Opens [Niche Hunt](/help/concepts/niche-hunt).
+- **Private label Keepa tokens this month**: what candidates' Keepa refreshes and Niche Hunts have spent this calendar month (UK days).
+
+## Ads
+
+One tile, "No ad data yet — import a report", until the [Ads](/help/pages/ads) workspace has data.
 
 ## Recent runs
 

@@ -3,8 +3,20 @@ title: Getting started
 summary: The whole flow from a supplier price list or a Qogita pull to a shortlist and an order, and what each page is for.
 synonyms: [overview, quick start, workflow, how it works, first steps, tour]
 order: 1
+workspace: general
 ---
 Wholesale Scout takes a supplier's price list, or products pulled from Qogita, and screens every line against Amazon UK: Amazon's own data (SP-API) and Keepa history, through a series of gates, then a score. What's left is a shortlist you can turn into an order.
+
+
+## Workspaces
+
+The app has three workspaces. Switch between them at the top of the sidebar:
+
+- **Wholesale**: resell existing listings. Runs, Upload, Check ASINs, Qogita, Sellers, Brands, Suppliers, Favourites, Watchlist, Plan, Hunt, Products and Tracker.
+- **Private label**: launch your own product. [Candidates](/help/pages/private-label) and [Niche Hunt](/help/concepts/niche-hunt); Quotes and Launch are coming soon.
+- **Ads**: run and tune Sponsored Products. [Dashboard, Imports, Rules and Proposals](/help/pages/ads) are coming once Amazon Ads API access is approved.
+
+Home, Settings and Help are in every workspace. The app remembers the workspace you used last and opens in it next time. Opening a page from another workspace (a link or a bookmark) switches to that workspace. **Ctrl+Shift+W** cycles the workspaces where the browser lets the page have that shortcut: on a Mac, Ctrl (not Cmd); Windows browsers keep Ctrl+Shift+W for closing the window. Browser tabs read "Candidates · Private label · Wholesale Scout".
 
 ## The flow in five steps
 

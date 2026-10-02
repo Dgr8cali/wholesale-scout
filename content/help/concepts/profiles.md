@@ -3,6 +3,7 @@ title: Profiles
 summary: What a screening profile holds, the four profiles the app ships with, and how to copy, switch and re-screen with one.
 synonyms: [screening profile, first order, test order, strict, dry goods only, default profile, settings, preset]
 order: 3
+workspace: wholesale
 ---
 A profile is one complete set of screening settings. It decides which gates run and how strictly, how rows are scored, and how fees and landed cost are worked out. You pick a profile each time you start a run, so you can screen the same list more strictly or more loosely without changing your settings back and forth.
 

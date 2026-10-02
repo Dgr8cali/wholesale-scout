@@ -3,6 +3,7 @@ title: Glossary
 summary: Exact meanings of the app's own terms, with the formulae and thresholds behind them.
 synonyms: [definitions, terms, jargon, meaning, dictionary]
 order: 1
+workspace: general
 ---
 The app's own words, defined exactly as the code works them out. Defaults are those of the shipped profiles; you can change most of them in [Settings](/help/pages/settings).
 

@@ -4,7 +4,7 @@
 // to the extension's panel (poe.js) by postMessage.
 // It never changes a request or a response, never sends anything anywhere and never acts on the
 // page: it only reads what the page already fetched. Nothing leaves the browser until you click
-// "Send to Gatekeeper" in the panel.
+// "Send to Private label" in the panel.
 (() => {
   if (window.__wsPoeObserver) return;
   window.__wsPoeObserver = true;

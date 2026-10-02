@@ -1,5 +1,5 @@
 -- Wholesale Scout schema, dumped by scripts/schema-backup.mjs. No data.
--- Dumped 2026-10-02T09:00:39.215Z. Safe to re-run. Restore: npm run schema:restore
+-- Dumped 2026-10-02T10:26:08.832Z. Safe to re-run. Restore: npm run schema:restore
 
 -- @section extensions
 create extension if not exists "pg_cron";
@@ -10,6 +10,16 @@ create extension if not exists "supabase_vault";
 create extension if not exists "uuid-ossp";
 
 -- @section tables
+create table if not exists "ads_settings" (
+  "key" text not null,
+  "value" numeric not null,
+  "updated_at" timestamp with time zone default now() not null
+);
+alter table "ads_settings" add column if not exists "key" text;
+alter table "ads_settings" add column if not exists "value" numeric;
+alter table "ads_settings" add column if not exists "updated_at" timestamp with time zone default now();
+alter table "ads_settings" enable row level security;
+
 create table if not exists "amazon_fee_estimates" (
   "asin" text not null,
   "price" numeric not null,
@@ -1140,6 +1150,11 @@ alter table "watchlist" enable row level security;
 
 -- @section constraints
 do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'ads_settings_pkey' and conrelid = '"ads_settings"'::regclass) then
+    alter table "ads_settings" add constraint "ads_settings_pkey" PRIMARY KEY (key);
+  end if;
+end $$;
+do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'amazon_fee_estimates_pkey' and conrelid = '"amazon_fee_estimates"'::regclass) then
     alter table "amazon_fee_estimates" add constraint "amazon_fee_estimates_pkey" PRIMARY KEY (asin);
   end if;
@@ -1917,3 +1932,4 @@ insert into schema_migrations (name) values ('20261002000100_poe_growth_windows.
 insert into schema_migrations (name) values ('20261002000200_niche_hunt.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261002000300_hunt_leaf_category.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261002000400_niche_hunt_leaves.sql') on conflict do nothing;
+insert into schema_migrations (name) values ('20261002000500_ads_settings.sql') on conflict do nothing;

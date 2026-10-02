@@ -3,6 +3,7 @@ import { Bricolage_Grotesque, IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/goo
 import { cookies } from "next/headers";
 import { AppShell } from "@/components/AppShell";
 import { Providers } from "@/components/Providers";
+import { parseWorkspace, WORKSPACE_COOKIE } from "@/lib/workspaces";
 import "./globals.css";
 
 // Gatekeeper's type: Bricolage Grotesque for headings and stat values, IBM Plex Sans for text,
@@ -18,13 +19,16 @@ export const metadata: Metadata = {
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
   // The sidebar remembers collapsed/expanded in a cookie; read it so the first paint matches.
-  const sidebarOpen = (await cookies()).get("sidebar_state")?.value !== "false";
+  const jar = await cookies();
+  const sidebarOpen = jar.get("sidebar_state")?.value !== "false";
+  // The workspace last used (Wholesale, Private label, Ads) opens again.
+  const ws = parseWorkspace(jar.get(WORKSPACE_COOKIE)?.value);
   return (
     // suppressHydrationWarning: next-themes sets the theme class on <html> before React hydrates.
     <html lang="en-GB" className={`${bricolage.variable} ${plexSans.variable} ${plexMono.variable} h-full antialiased`} suppressHydrationWarning>
       <body className="min-h-full font-sans">
         <Providers>
-          <AppShell defaultOpen={sidebarOpen} qogita={!!(process.env.QOGITA_EMAIL && process.env.QOGITA_PASSWORD)}>{children}</AppShell>
+          <AppShell defaultOpen={sidebarOpen} workspace={ws} qogita={!!(process.env.QOGITA_EMAIL && process.env.QOGITA_PASSWORD)}>{children}</AppShell>
         </Providers>
       </body>
     </html>

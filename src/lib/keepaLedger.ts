@@ -13,14 +13,17 @@ export function ukDay(at: Date = new Date()): string {
   return at.toLocaleDateString("en-CA", { timeZone: "Europe/London" });
 }
 
-/** Add tokens to a day's total, dropping days older than the retention window. */
-export function addDailyTokens(ledger: TokensByDay | null | undefined, tokens: number, at: Date = new Date()): TokensByDay {
+/** Days a private-label ledger keeps: enough for "this month" on Home. */
+export const PL_KEEP_DAYS = 62;
+
+/** Add tokens to a day's total, dropping days older than the retention window (14 days unless given). */
+export function addDailyTokens(ledger: TokensByDay | null | undefined, tokens: number, at: Date = new Date(), keepDays = KEEP_DAYS): TokensByDay {
   const out: TokensByDay = { ...(ledger ?? {}) };
   if (tokens > 0) {
     const day = ukDay(at);
     out[day] = (out[day] ?? 0) + tokens;
   }
-  const cutoff = ukDay(new Date(at.getTime() - KEEP_DAYS * 86_400_000));
+  const cutoff = ukDay(new Date(at.getTime() - keepDays * 86_400_000));
   for (const d of Object.keys(out)) if (d < cutoff) delete out[d];
   return out;
 }

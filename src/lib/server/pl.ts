@@ -1,10 +1,10 @@
 import "server-only";
-import { addDailyTokens, type TokensByDay } from "../keepaLedger";
+import { addDailyTokens, PL_KEEP_DAYS, ukDay, type TokensByDay } from "../keepaLedger";
 import { getKeepa, type KeepaProduct, type OnKeepaResponse, type Point } from "../keepa/client";
 import { rankDrops } from "../keepa/summarize";
 import { isAmazonBrand } from "../pl/amazon-brands";
 import { keepaFill, type Fill, type PlAsin, type PlHistory } from "../pl/fill";
-import { DEFAULT_SETTINGS, FIELD_KEYS, GATES, SETTINGS_DEF, type Settings, type Waiver } from "../pl/gatekeeper";
+import { DEFAULT_SETTINGS, evaluate, FIELD_KEYS, GATES, SETTINGS_DEF, type Settings, type Waiver } from "../pl/gatekeeper";
 import { bbTrend, offerTrend, rankTrend } from "../pl/history";
 import { extractPoe, poeFill, unreadFields, type PoeExtract } from "../pl/poe";
 import { activeRateCard, db, must } from "./db";
@@ -324,7 +324,7 @@ export async function refreshCandidate(id: string, opts: { force?: boolean } = {
     } finally {
       if (spent) {
         const cur = must(await d.from("pl_candidates").select("token_cost, keepa_by_day").eq("id", id).single(), "ledger") as { token_cost: number; keepa_by_day: TokensByDay };
-        must(await d.from("pl_candidates").update({ token_cost: (cur.token_cost ?? 0) + spent, keepa_by_day: addDailyTokens(cur.keepa_by_day, spent) }).eq("id", id), "ledger");
+        must(await d.from("pl_candidates").update({ token_cost: (cur.token_cost ?? 0) + spent, keepa_by_day: addDailyTokens(cur.keepa_by_day, spent, new Date(), PL_KEEP_DAYS) }).eq("id", id), "ledger");
       }
     }
   }
@@ -422,4 +422,30 @@ export async function plTokensByDay(): Promise<TokensByDay[]> {
   const res = await db().from("pl_candidates").select("keepa_by_day");
   if (res.error) return []; // before the migration
   return (res.data as { keepa_by_day: TokensByDay | null }[]).map((r) => r.keepa_by_day ?? {});
+}
+
+/**
+ * Home's Private label tiles: candidates by verdict, the last Niche Hunt, and the Keepa tokens
+ * private label has spent this month (candidates' refreshes and hunts, UK days).
+ */
+export async function plDashboard() {
+  const { candidates, settings, card } = await listCandidates();
+  const verdicts: Record<string, number> = { pass: 0, warn: 0, fail: 0, empty: 0 };
+  for (const c of candidates) {
+    const fields = Object.fromEntries(Object.entries(c.fields).map(([k, v]) => [k, v.value]));
+    verdicts[evaluate(fields, c.category, settings, card, new Date(), c.waivers).v.cls]++;
+  }
+  const hunts = await db().from("pl_hunts").select("id, name, status, created_at, token_cost, keepa_by_day").order("created_at", { ascending: false });
+  const huntRows = (hunts.error ? [] : hunts.data) as { id: string; name: string; status: string; created_at: string; token_cost: number; keepa_by_day: TokensByDay | null }[];
+  const month = ukDay().slice(0, 7);
+  const inMonth = (l: TokensByDay | null | undefined) => Object.entries(l ?? {}).reduce((a, [day, t]) => a + (day.startsWith(month) ? t : 0), 0);
+  const candidateLedgers = must(await db().from("pl_candidates").select("keepa_by_day"), "ledgers") as { keepa_by_day: TokensByDay | null }[];
+  const last = huntRows[0] ?? null;
+  return {
+    candidates: candidates.length,
+    verdicts,
+    lastHunt: last ? { id: last.id, name: last.name, status: last.status, created_at: last.created_at, token_cost: last.token_cost } : null,
+    tokensThisMonth: candidateLedgers.reduce((a, r) => a + inMonth(r.keepa_by_day), 0) + huntRows.reduce((a, h) => a + inMonth(h.keepa_by_day), 0),
+    month,
+  };
 }

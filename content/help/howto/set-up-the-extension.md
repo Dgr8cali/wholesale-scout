@@ -3,6 +3,7 @@ title: Set up the Chrome extension
 summary: Install the Wholesale Scout extension in Chrome, connect it to your app and check that it works.
 synonyms: [install extension, load unpacked, chrome, connect extension, app password, plugin]
 order: 6
+workspace: general
 ---
 This guide installs the Wholesale Scout extension in Chrome and connects it to your app. After that you'll see verdicts on Amazon UK product and search pages. To learn what each part of the extension does, see [Chrome extension](/help/pages/extension).
 

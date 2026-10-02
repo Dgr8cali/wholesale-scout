@@ -1,7 +1,7 @@
 // Opportunity Explorer panel. poe-page.js (page world) passes on every /ox-api/graphql response the
 // page receives (with its operation name) and the insights widget's. This keeps them all, in memory,
 // for the niche page you're on, since the page's tabs load their data in separate calls. Once the
-// niche itself (getNiche, data.niche) has arrived, it shows "Send to Gatekeeper"; the merged set is
+// niche itself (getNiche, data.niche) has arrived, it shows "Send to Private label"; the merged set is
 // sent only when you click. Nothing is scheduled, and the page is never read or clicked. Moving to
 // another niche or closing the tab forgets the capture.
 (() => {
@@ -90,14 +90,14 @@
     const { title } = describe();
     const isSent = niche && sent === niche;
     p.replaceChildren(
-      ws.h("strong", { text: "Wholesale Scout · Gatekeeper" }),
+      ws.h("strong", { text: "Wholesale Scout · Private label" }),
       niche
         ? ws.h("div", { text: `Niche captured: ${title || "title not found (sent anyway)"}` })
         : ws.h("div", { style: "color:#b45309", text: "No niche data yet. Open a niche; its page loads it (getNiche)." }),
       debugLine(),
       ws.h("div", { style: "color:#71717a;font-size:12px", text: "Kept in this tab only. Nothing is sent until you click." }),
       shown || ws.h("div", { style: "display:flex;gap:8px" }, [
-        niche ? btn(isSent ? "Send again" : "Send to Gatekeeper", send, true) : null,
+        niche ? btn(isSent ? "Send again" : "Send to Private label", send, true) : null,
         btn("Dismiss", () => { panel.remove(); panel = null; }),
       ]),
     );
@@ -149,7 +149,7 @@
     link.addEventListener("click", async (e) => {
       e.preventDefault();
       const s = await ws.send({ type: "settings" });
-      ws.send({ type: "open", url: `${s.appUrl}/private-label?c=${candidateId}` });
+      ws.send({ type: "open", url: `${s.appUrl}/pl/candidates?c=${candidateId}` });
     });
     return link;
   }

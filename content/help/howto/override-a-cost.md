@@ -3,6 +3,7 @@ title: Override a cost
 summary: Give a product your own cost (a landed cost, or a supplier price and its VAT basis). It competes with the sheet's price in every run; the cheaper is scored.
 synonyms: [cost override, manual cost, my cost, landed cost, set cost, clear cost, supplier price, manual supplier, better price]
 order: 3
+workspace: wholesale
 ---
 When you can buy a product cheaper than the sheet says (a cash-and-carry price, a quote from another supplier, a deal you've agreed), give the app your cost. The row is re-scored straight away from its stored data, with no Amazon or Keepa calls.
 

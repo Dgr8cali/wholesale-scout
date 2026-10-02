@@ -3,6 +3,7 @@ title: Apply for brand approval
 summary: Use the Apply links to request approval in Seller Central, then record it on the Brands page so runs treat the brand as open.
 synonyms: [ungate, ungating, apply to sell, gated brand, restricted brand, approval needed, brand approval]
 order: 3
+workspace: wholesale
 ---
 Some brands and categories are gated: Amazon wants you to request approval before you can list them. The app finds this with the [Gating and blocks](/help/gates/gating) gate and gives you a link to apply. Applying happens in Seller Central; the app keeps track of where you are.
 

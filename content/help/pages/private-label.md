@@ -2,7 +2,7 @@
 title: "Private label: how Gatekeeper works"
 summary: Should ~£1,000 launch your own product into a niche? Eight gates, a 10-line scorecard and a verdict, with Keepa and Opportunity Explorer filling most of the numbers.
 synonyms: [gatekeeper, private label, pl, own brand, product launch, niche research, opportunity explorer, poe, scorecard, launch budget]
-route: /private-label
+route: /pl
 order: 7
 ---
 Private label answers one question: should you spend about £1,000 launching your own product into this niche? It is Gatekeeper, moved into Wholesale Scout, with two changes to the fees so they agree with the rest of the app: storage carries VAT and the digital services fee, and peak rates follow the calendar (see [Gate 6](#gate-6-unit-economics-the-rate-card-then-you)). A candidate must clear **every gate** and **score well**. A good score never overrides a failed gate.
@@ -11,7 +11,7 @@ You used to type about 45 numbers per candidate from Jungle Scout, Keepa and Sel
 
 ## The page
 
-The page has two tabs: **Candidates** (below) and **Niche Hunt**, which proposes niches that already pass Gates 0 and 1 and turns one into a candidate. See [Niche Hunt](/help/concepts/niche-hunt).
+Private label is one of the app's three workspaces (switch at the top of the sidebar). Its pages are **Candidates** (below), **Niche Hunt**, which proposes niches that already pass Gates 0 and 1 and turns one into a candidate (see [Niche Hunt](/help/concepts/niche-hunt)), and **Quotes** and **Launch**, which are coming soon. The old /private-label address still works: it opens Candidates.
 
 - **Candidates** (left): each candidate with a dot in its verdict colour, its score (or how many of the 10 lines are scored, e.g. `6/10`), its status (draft, researching, samples, dropped, launched) and when Keepa last refreshed it.
 - **The workspace** (right): the selected candidate's header, the eight gates in order, the scorecard and the verdict.
@@ -63,7 +63,7 @@ An automatic field is read-only, with the figures it came from underneath it. Cl
 
 ### Gate 3: Amazon's own data (the extension)
 
-Search volume (360 days), growth, products in the niche, top-3 click share, search conversion and average units per product. These come from an Opportunity Explorer niche you send with the extension (see [Capturing Opportunity Explorer](#capturing-opportunity-explorer)). **Search volume growth** is Opportunity Explorer's "Growth past 180 days" (for example +5.92%), with "Growth past 90 days" shown under the field. Over +5% is growing, under −5% declining, otherwise flat. Without a 180-day figure the 90-day one is used. Without either, growth is worked out from the niche's weekly search volume, the last 52 weeks against the 52 before (**POE (derived)**). Search volume itself is the 360-day figure. Average units sold per product comes as a yearly range (for example 3,000–4,000); Gatekeeper uses its midpoint, a month.
+Search volume (360 days), growth, products in the niche, top-3 click share, search conversion and average units per product. These come from an Opportunity Explorer niche you send with the extension (see [Capturing Opportunity Explorer](#capturing-opportunity-explorer)). **Search volume growth** is Opportunity Explorer's "Growth past 180 days" (for example +5.92%), with "Growth past 90 days" shown under the field. Over +5% is growing, under −5% declining, otherwise flat. Without a 180-day figure the 90-day one is used. Without either, growth is worked out from the niche's weekly search volume, the last 52 weeks against the 52 before (**POE (derived)**). Search volume itself is the 360-day figure. Average units sold per product comes as a yearly range (for example 3,000–4,000); the midpoint is used, a month.
 
 **Search conversion** isn't given as a single niche figure. When Amazon's niche summary has one, it's used (**POE**). Otherwise it's worked out (**POE (derived)**):
 
@@ -132,7 +132,7 @@ The extension reads a niche **only when you ask it to**:
 
 1. In Seller Central, open **Growth → Product Opportunity Explorer** and open the niche.
 2. The extension watches the niche data the page itself loads from Amazon. It doesn't read the page's text, click anything or fetch anything on its own.
-3. Once a niche has loaded, a **Wholesale Scout · Gatekeeper** panel appears at the bottom right with **Send to Gatekeeper**. Nothing is sent before you click it. Nothing is scheduled. Closing the tab forgets the capture.
-4. On **Send to Gatekeeper**, the niche goes to the app. If a candidate's niche keyword equals the niche's title (ignoring case and spaces at the ends), it attaches there and fills Gates 3 and 5. Otherwise the panel lists your candidates to pick from.
+3. Once a niche has loaded, a **Wholesale Scout · Private label** panel appears at the bottom right with **Send to Private label**. Nothing is sent before you click it. Nothing is scheduled. Closing the tab forgets the capture.
+4. On **Send to Private label**, the niche goes to the app. If a candidate's niche keyword equals the niche's title (ignoring case and spaces at the ends), it attaches there and fills Gates 3 and 5. Otherwise the panel lists your candidates to pick from.
 
 Only sellercentral.amazon.co.uk is on by default. The popup's **Opportunity Explorer on .com and .de too** option adds the US and German Seller Central. Every capture is kept with the raw data Amazon sent, so a correction to how it's read can be applied later. See [Chrome extension](/help/pages/extension#opportunity-explorer-capture).

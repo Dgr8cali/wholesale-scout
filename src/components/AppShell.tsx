@@ -1,9 +1,15 @@
 "use client";
 
-import { TagIcon, BuildingIcon, BoxesIcon, CircleHelpIcon, CrosshairIcon, PackageIcon, DownloadCloudIcon, HomeIcon, ListChecksIcon, ScanSearchIcon, SettingsIcon, StarIcon, StoreIcon, UploadIcon, EyeIcon, TruckIcon, ClipboardListIcon } from "lucide-react";
+import {
+  BoxesIcon, BuildingIcon, CircleHelpIcon, ClipboardListIcon, CrosshairIcon, DownloadCloudIcon, EyeIcon, FileUpIcon, GaugeIcon, HomeIcon,
+  LightbulbIcon, ListChecksIcon, ListFilterIcon, PackageIcon, ReceiptIcon, RocketIcon, ScanSearchIcon, SettingsIcon, StarIcon, StoreIcon,
+  TagIcon, TelescopeIcon, TruckIcon, UploadIcon,
+} from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { Fragment, useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { createContext, Fragment, useCallback, useContext, useEffect, useState, type ComponentType, type CSSProperties, type ReactNode } from "react";
+import { WorkspaceSwitcher } from "@/components/WorkspaceSwitcher";
+import { isSwitchShortcut, nextWorkspace, SHARED_NAV, workspace, workspaceCookie, workspaceForPath, type NavItem, type WorkspaceId } from "@/lib/workspaces";
 import { CrumbsProvider, useCrumbs } from "@/components/Crumbs";
 import { QogitaCartButton, QogitaCartProvider } from "@/components/QogitaCart";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -15,37 +21,89 @@ import {
 } from "@/components/ui/breadcrumb";
 import { Separator } from "@/components/ui/separator";
 import {
-  Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarHeader, SidebarInset,
+  Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarHeader, SidebarInset,
   SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarRail, SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { api, sharedGet } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
 
-const NAV = [
-  { href: "/", label: "Home", icon: HomeIcon },
-  { href: "/runs", label: "Runs", icon: ListChecksIcon },
-  { href: "/upload", label: "Upload", icon: UploadIcon },
-  { href: "/check", label: "Check ASINs", icon: ScanSearchIcon },
-  { href: "/hunt", label: "Hunt", icon: CrosshairIcon },
-  { href: "/private-label", label: "Private label", icon: TagIcon },
-  { href: "/products", label: "Products", icon: BoxesIcon },
-  { href: "/sellers", label: "Sellers", icon: StoreIcon },
-  { href: "/suppliers", label: "Suppliers", icon: TruckIcon },
-  { href: "/qogita", label: "Qogita", icon: DownloadCloudIcon },
-  { href: "/favourites", label: "Favourites", icon: StarIcon },
-  { href: "/watchlist", label: "Watchlist", icon: EyeIcon },
-  { href: "/plan", label: "Plan", icon: ClipboardListIcon },
-  { href: "/tracker", label: "Tracker", icon: PackageIcon },
-  { href: "/brands", label: "Brands", icon: BuildingIcon },
-  { href: "/settings", label: "Settings", icon: SettingsIcon },
-  { href: "/help", label: "Help", icon: CircleHelpIcon },
-];
+/** Icons by page. */
+const ICON: Record<string, ComponentType> = {
+  "/": HomeIcon, "/runs": ListChecksIcon, "/upload": UploadIcon, "/check": ScanSearchIcon, "/qogita": DownloadCloudIcon,
+  "/sellers": StoreIcon, "/brands": BuildingIcon, "/suppliers": TruckIcon, "/favourites": StarIcon, "/watchlist": EyeIcon,
+  "/plan": ClipboardListIcon, "/hunt": CrosshairIcon, "/products": BoxesIcon, "/tracker": PackageIcon,
+  "/pl/candidates": TagIcon, "/pl/niche-hunt": TelescopeIcon, "/pl/quotes": ReceiptIcon, "/pl/launch": RocketIcon,
+  "/ads/dashboard": GaugeIcon, "/ads/imports": FileUpIcon, "/ads/rules": ListFilterIcon, "/ads/proposals": LightbulbIcon,
+  "/settings": SettingsIcon, "/help": CircleHelpIcon,
+};
 
 const isActive = (href: string, path: string) => (href === "/" ? path === "/" : path === href || path.startsWith(`${href}/`));
 
+/** The workspace in use: from the cookie at first, then whichever workspace the page belongs to. */
+const WorkspaceCtx = createContext<{ ws: WorkspaceId; switchTo: (id: WorkspaceId) => void }>({ ws: "wholesale", switchTo: () => {} });
+
+function WorkspaceProvider({ initial, children }: { initial: WorkspaceId; children: ReactNode }) {
+  const path = usePathname();
+  const router = useRouter();
+  const pageWs = workspaceForPath(path);
+  // The workspace chosen last: the cookie's at first, then the switcher's, then whichever workspace
+  // a page opened belongs to (a link or a bookmark into another workspace switches to it).
+  const [chosen, setChosen] = useState<WorkspaceId>(pageWs ?? initial);
+  const [seenPageWs, setSeenPageWs] = useState(pageWs);
+  if (pageWs !== seenPageWs) {
+    setSeenPageWs(pageWs);
+    if (pageWs) setChosen(pageWs);
+  }
+  const ws = pageWs ?? chosen;
+  // Remembered for the next visit (the layout reads it, so the first paint is right).
+  useEffect(() => {
+    document.cookie = workspaceCookie(ws);
+  }, [ws]);
+  const switchTo = useCallback((id: WorkspaceId) => {
+    setChosen(id);
+    // On a shared page (Home, Settings, Help) it stays put; on another workspace's page it goes to the new one's first page.
+    if (pageWs !== null && pageWs !== id) router.push(workspace(id).landing);
+  }, [pageWs, router]);
+  // Ctrl+Shift+W (Cmd+Shift+W on a Mac) cycles Wholesale → Private label → Ads. Browsers keep
+  // Cmd/Ctrl+Shift+W for "close window" on most systems, so it only reaches the page where they don't.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!isSwitchShortcut(e)) return;
+      e.preventDefault();
+      switchTo(nextWorkspace(ws));
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [ws, switchTo]);
+  return <WorkspaceCtx.Provider value={{ ws, switchTo }}>{children}</WorkspaceCtx.Provider>;
+}
+
+function NavList({ items, path }: { items: NavItem[]; path: string }) {
+  return (
+    <SidebarMenu>
+      {items.map((n) => {
+        const Icon = ICON[n.href] ?? CircleHelpIcon;
+        return (
+          <SidebarMenuItem key={n.href}>
+            <SidebarMenuButton asChild isActive={isActive(n.href, path)} tooltip={n.soon ? `${n.label} (coming soon)` : n.label}>
+              <Link href={n.href}>
+                <Icon />
+                <span>{n.label}</span>
+                {n.soon && <span className="ml-auto rounded bg-empty-soft px-1 text-[10px] font-medium text-empty">soon</span>}
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        );
+      })}
+    </SidebarMenu>
+  );
+}
+
 function AppSidebar() {
   const path = usePathname();
+  const { ws, switchTo } = useContext(WorkspaceCtx);
+  const home = SHARED_NAV.filter((n) => n.href === "/"), rest = SHARED_NAV.filter((n) => n.href !== "/");
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
@@ -59,20 +117,18 @@ function AppSidebar() {
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
+        <WorkspaceSwitcher value={ws} onChange={switchTo} />
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {NAV.map((n) => (
-                <SidebarMenuItem key={n.href}>
-                  <SidebarMenuButton asChild isActive={isActive(n.href, path)} tooltip={n.label}>
-                    <Link href={n.href}><n.icon /><span>{n.label}</span></Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
+          <SidebarGroupContent><NavList items={home} path={path} /></SidebarGroupContent>
+        </SidebarGroup>
+        <SidebarGroup>
+          <SidebarGroupLabel>{workspace(ws).label}</SidebarGroupLabel>
+          <SidebarGroupContent><NavList items={workspace(ws).nav} path={path} /></SidebarGroupContent>
+        </SidebarGroup>
+        <SidebarGroup className="mt-auto">
+          <SidebarGroupContent><NavList items={rest} path={path} /></SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
@@ -144,6 +200,7 @@ function StatusBar() {
 
 function Crumbs() {
   const crumbs = useCrumbs();
+  // Browser tab titles come from each route's layout metadata (pageTitle), Next's own mechanism.
   if (!crumbs.length) return null;
   return (
     <>
@@ -167,8 +224,9 @@ function Crumbs() {
 }
 
 /** Collapsible left sidebar, top bar with status and breadcrumbs, and the page. */
-export function AppShell({ defaultOpen, qogita, children }: { defaultOpen: boolean; qogita: boolean; children: ReactNode }) {
+export function AppShell({ defaultOpen, qogita, workspace: initialWorkspace, children }: { defaultOpen: boolean; qogita: boolean; workspace: WorkspaceId; children: ReactNode }) {
   return (
+    <WorkspaceProvider initial={initialWorkspace}>
     <QogitaCartProvider enabled={qogita}>
     <CrumbsProvider>
     <HelpProvider>
@@ -192,5 +250,6 @@ export function AppShell({ defaultOpen, qogita, children }: { defaultOpen: boole
     </HelpProvider>
     </CrumbsProvider>
     </QogitaCartProvider>
+    </WorkspaceProvider>
   );
 }

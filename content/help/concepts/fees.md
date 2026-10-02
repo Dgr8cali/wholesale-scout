@@ -3,6 +3,7 @@ title: Fee engine
 summary: Where each per-unit number comes from: referral and FBA fees, storage, returns, VAT and DSF, landed cost, profit, hurdle price and max landed.
 synonyms: [fba fee, referral fee, vat, dsf, digital services fee, rate card, size tier, landed cost]
 order: 2
+workspace: wholesale
 ---
 The fee engine turns a sell price and a supplier cost into profit per unit. It is what the [Fee engine gate](/help/gates/fees) checks and what the Margin group of the [score](/help/concepts/score) reads. Every row's details show the result in a **Per unit at £…** block.
 

@@ -1,10 +1,12 @@
 ---
 title: Niche Hunt
-summary: Private label's Niche Hunt asks Keepa's Product Finder for products that already pass Gatekeeper's Gate 0 and Gate 1, groups them into niches, and turns a niche into a candidate.
+summary: Private label's Niche Hunt asks Keepa's Product Finder for products that already pass Gate 0 and Gate 1, groups them into niches, and turns a niche into a candidate.
 synonyms: [niche hunt, niche finder, private label hunt, find niches, product finder, gatekeeper hunt, niche ideas]
 order: 6
+workspace: pl
+route: /pl/niche-hunt
 ---
-Niche Hunt is the second tab on the [Private label](/help/pages/private-label) page. Instead of guessing a niche, you ask Keepa's Product Finder for products that already pass Gatekeeper's Gate 0 and Gate 1. It hunts **leaf by leaf**: a leaf browse category (such as "Cutlery Trays" or "Shaving Mirrors") is Amazon's own grouping of like products, and each leaf is a niche. It uses the same Keepa client, token ledger and stored categories as the wholesale [Hunt](/help/pages/hunt).
+Niche Hunt is a page in the [Private label](/help/pages/private-label) workspace (**Private label → Niche Hunt**). Instead of guessing a niche, you ask Keepa's Product Finder for products that already pass Gate 0 and Gate 1. It hunts **leaf by leaf**: a leaf browse category (such as "Cutlery Trays" or "Shaving Mirrors") is Amazon's own grouping of like products, and each leaf is a niche. It uses the same Keepa client, token ledger and stored categories as the wholesale [Hunt](/help/pages/hunt).
 
 ## How a hunt runs
 
@@ -16,7 +18,7 @@ A hunt runs in the background, like a screening run: it carries on with the page
 
 ## The filters: hunt wide, qualify strict
 
-Gatekeeper's pass thresholds used as hard finder filters compound: the first real hunt (60 leaves, 148 products detailed) found 7 that qualified. So the filters come in two groups. The defaults can be changed and saved as named presets (**Save as preset**, **Load a preset…**, **Delete preset**); **Reset to defaults** puts them back. Two presets come ready: **Home & Kitchen — first pass** and **Garden + Pet + Sports**.
+The gates' pass thresholds used as hard finder filters compound: the first real hunt (60 leaves, 148 products detailed) found 7 that qualified. So the filters come in two groups. The defaults can be changed and saved as named presets (**Save as preset**, **Load a preset…**, **Delete preset**); **Reset to defaults** puts them back. Two presets come ready: **Home & Kitchen — first pass** and **Garden + Pet + Sports**.
 
 **Finder filters (wide — what Keepa searches)**, asked of the Product Finder for each leaf:
 
@@ -31,7 +33,7 @@ Gatekeeper's pass thresholds used as hard finder filters compound: the first rea
 
 There's no weight or size filter in the finder: Keepa often lacks them, and the finder drops a product it can't measure.
 
-**Qualifying thresholds (strict — what counts as page-one material)**, Gatekeeper's pass band, checked on each product's detail:
+**Qualifying thresholds (strict — what counts as page-one material)**, the gates' pass band, checked on each product's detail:
 
 | Check | Default |
 |---|---|
@@ -47,7 +49,7 @@ There's no weight or size filter in the finder: Keepa often lacks them, and the 
 Each detailed product is then one of:
 
 - **Qualifies**: passes everything.
-- **Near miss**: fails only Gatekeeper's warn band (price £15–40, rating 3.6–4.5, weight up to 700 g), or is missing its weight or size. Demand, Amazon and brand are never near misses.
+- **Near miss**: fails only the gates' warn band (price £15–40, rating 3.6–4.5, weight up to 700 g), or is missing its weight or size. Demand, Amazon and brand are never near misses.
 - **Incumbent**: no hard fail, but over the review cap. Incumbents are the competition: they count for the niche's shape and max reviews, not its size.
 - **Fails**: anything else, with the reason.
 

@@ -3,6 +3,7 @@ title: Import a DG report
 summary: Export a run's ASINs, look them up in Seller Central's Dangerous Goods lookup, and import the file it returns so the Compliance gate uses Amazon's answer.
 synonyms: [dangerous goods, hazmat, dg report, hazmat report, dg lookup, hazmat lookup, sds, upload dg, classification, export asins]
 order: 5
+workspace: wholesale
 ---
 Seller Central's Dangerous Goods lookup tells you, per ASIN, whether Amazon treats a product as dangerous goods (DG) and whether it can store it. Import the file it returns and the [Compliance category](/help/gates/compliance) gate uses that answer ahead of the catalogue's DG attributes and any keyword.
 

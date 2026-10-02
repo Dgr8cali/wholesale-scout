@@ -3,6 +3,7 @@ title: Build check
 summary: What has to pass before a change ships (tests, the help centre's coverage, the build), the database checks behind it, and the backlog of known follow-ups.
 synonyms: [build, deploy, ci, prebuild, checks, backlog, supabase advisor, security advisor]
 order: 2
+workspace: general
 ---
 Every change goes through the same checks before it's pushed, and Vercel deploys `main` once it is.
 

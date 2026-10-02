@@ -8,10 +8,13 @@
  *   route: /runs          (a page's article: the page it explains)
  *   gate: priceBand       (a gate's article: the gate it explains)
  *   order: 2              (position within its section)
+ *   workspace: pl         (wholesale | pl | ads | general; else from the route or folder)
  *   ---
  *
  * The slug is the path without ".md" (pages/runs), the section comes from the folder.
  */
+
+import { workspaceForPath } from "../workspaces";
 
 export interface ArticleMeta {
   slug: string;
@@ -22,6 +25,26 @@ export interface ArticleMeta {
   gate: string | null;
   section: string;
   order: number;
+  /** The workspace it's listed under on the Help page. */
+  workspace: HelpWorkspace;
+}
+
+export type HelpWorkspace = "wholesale" | "pl" | "ads" | "general";
+
+/** The Help page's top-level groups, in order. */
+export const HELP_WORKSPACES: { id: HelpWorkspace; label: string }[] = [
+  { id: "wholesale", label: "Wholesale" },
+  { id: "pl", label: "Private label" },
+  { id: "ads", label: "Ads" },
+  { id: "general", label: "General" },
+];
+
+/** An article's workspace: its header's, else the workspace of the page it explains, else its folder's. */
+export function workspaceOfArticle(slug: string, route: string | null, declared?: string): HelpWorkspace {
+  if (declared && HELP_WORKSPACES.some((w) => w.id === declared)) return declared as HelpWorkspace;
+  if (slug.startsWith("gates/")) return "wholesale";
+  if (route) return workspaceForPath(route) ?? "general";
+  return "general";
 }
 
 export interface Article extends ArticleMeta {
@@ -66,6 +89,7 @@ export function parseArticle(slug: string, raw: string): Article {
     gate: fields.gate ? unquote(fields.gate) : null,
     section: sectionOf(slug),
     order: fields.order ? Number(fields.order) : 100,
+    workspace: workspaceOfArticle(slug, fields.route ? unquote(fields.route) : null, fields.workspace ? unquote(fields.workspace) : undefined),
     body: m[2].trim(),
   };
 }

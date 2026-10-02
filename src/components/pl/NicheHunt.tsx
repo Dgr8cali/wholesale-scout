@@ -164,7 +164,7 @@ export function NicheHunt({ onCandidate }: { onCandidate: (id: string) => void }
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="space-y-1">
             <h2 className="section-label">Hunt filters</h2>
-            <p className="max-w-3xl text-sm text-muted-foreground">Defaults from Gatekeeper&apos;s Gate 0 and Gate 1. The finder checks price, rating, rank, Amazon now, package size, listing age, category and Amazon brands. Rank drops, Amazon in the last 90 days, the exact parcel fit and reviews are checked on each product&apos;s detail. Products over the review cap stay in their niche as the incumbents to beat.</p>
+            <p className="max-w-3xl text-sm text-muted-foreground">Defaults from Gate 0 and Gate 1. The finder checks price, rating, rank, Amazon now, package size, listing age, category and Amazon brands. Rank drops, Amazon in the last 90 days, the exact parcel fit and reviews are checked on each product&apos;s detail. Products over the review cap stay in their niche as the incumbents to beat.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {start.presets.length > 0 && (
@@ -210,7 +210,7 @@ export function NicheHunt({ onCandidate }: { onCandidate: (id: string) => void }
             <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
               <Toggle label="Small parcel (35 × 25 × 12 cm) when Keepa has the size" checked={f.smallParcel} onChange={(v) => set({ smallParcel: v })} />
             </div>
-            <p className="text-xs text-muted-foreground">A <b>near miss</b> fails only Gatekeeper&apos;s warn band (£15–40, rating 3.6–4.5, 700 g) or is missing its weight or size.</p>
+            <p className="text-xs text-muted-foreground">A <b>near miss</b> fails only the gates&apos; warn band (£15–40, rating 3.6–4.5, 700 g) or is missing its weight or size.</p>
           </fieldset>
         </div>
         <div className="grid gap-3 sm:grid-cols-4">

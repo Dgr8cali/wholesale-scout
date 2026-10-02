@@ -3,6 +3,7 @@ title: Change a threshold
 summary: Change a gate's limit or mode in a profile, save it, and re-screen a run to apply it.
 synonyms: [limit, setting, min roi, min profit, price band, gate mode, strictness, re-screen]
 order: 1
+workspace: wholesale
 ---
 Every gate limit (the price band, minimum profit, maximum sellers and so on) lives in a [profile](/help/concepts/profiles). You change it on the [Settings](/help/pages/settings) page, then re-screen a run to see the effect.
 

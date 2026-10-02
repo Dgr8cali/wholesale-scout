@@ -3,6 +3,7 @@ title: Score
 summary: How the 0–100 win score is built from six weighted groups, and how a row lands in green, amber or grey.
 synonyms: [win score, band, green, amber, grey, weights, scales, score groups]
 order: 1
+workspace: wholesale
 ---
 The score ranks the rows that got through the gates, so you can see which products are most worth a test order. It runs from 0 to 100 and puts each scored row in a band: green, amber or grey.
 

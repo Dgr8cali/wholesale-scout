@@ -3,6 +3,7 @@ title: Add a zero-quantity offer for DG review
 summary: Create a zero-stock offer in Seller Central so Amazon classifies the product for dangerous goods, then save the result to the app with the extension.
 synonyms: [dangerous goods, hazmat, dg review, sds, safety data sheet, fba dg, classification]
 order: 4
+workspace: wholesale
 ---
 Some products (perfume, aerosols, lithium batteries, many chemicals) are dangerous goods (DG) and need Amazon's hazmat review before FBA will take them. A common way to find out how Amazon classifies a product before you buy stock is to add an offer with zero quantity in Seller Central. The app can't create that offer for you: you do it in Seller Central, then bring the result back into the app with the [Chrome extension](/help/pages/extension).
 

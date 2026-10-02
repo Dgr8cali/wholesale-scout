@@ -1,6 +1,6 @@
 import "server-only";
 import { referralCategoryFor } from "../fees/engine";
-import { addDailyTokens, type TokensByDay } from "../keepaLedger";
+import { addDailyTokens, PL_KEEP_DAYS, type TokensByDay } from "../keepaLedger";
 import { getKeepa, hasFinder, type KeepaCategory, type KeepaClient, type KeepaFinder, type KeepaProduct, type OnKeepaResponse } from "../keepa/client";
 import {
   defaultFilters, filtersKey, finderSelection, fittingDetailLeaves, funnel, groupNiches, huntEstimate, SIZING_TOKENS, TOKEN_RESERVE, TREE_MAX_CATEGORIES,
@@ -278,7 +278,7 @@ async function addTokens(id: string, tokens: number, kind: "finder" | "detail") 
   const cur = must(await d.from("pl_hunts").select("token_cost, keepa_by_day, finder_tokens, detail_tokens").eq("id", id).single(), "ledger") as
     { token_cost: number; keepa_by_day: TokensByDay; finder_tokens: number; detail_tokens: number };
   must(await d.from("pl_hunts").update({
-    token_cost: (cur.token_cost ?? 0) + tokens, keepa_by_day: addDailyTokens(cur.keepa_by_day, tokens),
+    token_cost: (cur.token_cost ?? 0) + tokens, keepa_by_day: addDailyTokens(cur.keepa_by_day, tokens, new Date(), PL_KEEP_DAYS),
     ...(kind === "finder" ? { finder_tokens: (cur.finder_tokens ?? 0) + tokens } : { detail_tokens: (cur.detail_tokens ?? 0) + tokens }),
   }).eq("id", id), "ledger");
 }

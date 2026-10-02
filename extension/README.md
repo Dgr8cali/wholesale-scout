@@ -6,7 +6,7 @@ Wholesale Scout's verdict on Amazon UK, where you browse:
 - **Search results**: a badge on each product with its verdict colour and score, from what the app already knows (nothing is screened, 20 per request). A grey **?** hasn't been checked: click it to check it.
 - **Competitors' stock** (on request, per click): see below.
 - **Dangerous goods**: "Look up" opens Seller Central for the ASIN; a bar there reads the classification and, when you confirm it, saves it to the product in the app. Hazmat counts in the compliance gate the next time the product is screened.
-- **Opportunity Explorer → Gatekeeper** (on request, per click): send a Product Opportunity Explorer niche to the app's Private label page for Gates 3 and 5. See below.
+- **Opportunity Explorer → Private label** (on request, per click): send a Product Opportunity Explorer niche to the app's Private label workspace for Gates 3 and 5. See below.
 
 ## Install (load unpacked)
 
@@ -48,7 +48,7 @@ Seller Central's pages can't be read reliably, so the bar suggests hazmat / not 
 
 - **What it reads**: `poe-page.js` runs in the page's own world on `sellercentral.amazon.co.uk/opportunity-explorer/*` and wraps `fetch` (including `fetch(new Request(…))`, whose body it copies before the page's call) and `XMLHttpRequest` to *observe* the responses the page already receives: every `POST /ox-api/graphql` response with its operation name, and `/insightswidget-api/growth`. It never changes a request or a response, never makes a request of its own, and never reads the page's text or clicks anything. It passes a copy to `poe.js` by `postMessage`.
 - **What it keeps**: every GraphQL response on the niche page you're on, by operation name, plus the insights widget's. The page's tabs load their data in separate calls, so they're merged. The niche itself is the exact operation `getNiche` (its `data.niche`); a list operation such as `getNiches` is kept as context but never taken for the niche. Moving to another niche, closing or reloading the tab forgets it. The panel's grey debug line lists the operations seen ("Seen: getNiche, getNiches ×2; insights ×1").
-- **When it sends**: only when you click **Send to Gatekeeper** in the panel at the bottom right. The button appears only once `getNiche` has brought the niche; before that the panel says "No niche data yet". Nothing is scheduled and nothing is sent automatically. The panel's **Dismiss** hides it.
+- **When it sends**: only when you click **Send to Private label** in the panel at the bottom right. The button appears only once `getNiche` has brought the niche; before that the panel says "No niche data yet". Nothing is scheduled and nothing is sent automatically. The panel's **Dismiss** hides it.
 - **What it says back**: how many fields were filled, and which of the eight the app couldn't read (niche title, search volume, growth, products, top-3 click share, conversion, units per product, search terms). A capture with nothing readable says "captured but could not read 8 fields — raw saved", never success. The raw capture is stored either way, so the app can read it again after a parser fix (`POST /api/pl/poe/reparse`).
 - **Where it goes**: `POST /api/pl/poe` on your app with `{ nicheId, title, raw }` and your password, through `background.js` like every other call. The app stores the capture, reads Gate 3 (search volume, growth, products, top-3 click share, conversion, units per product) and Gate 5 (head-term volume, long-tail count) from it, and attaches it to the candidate whose niche keyword is the niche's title. Otherwise the panel lists your candidates and **Attach** sends it to the one you pick (`/api/pl/poe/attach`).
 - **Markets**: `.co.uk` only by default. `.com` and `.de` are optional permissions, registered only while the popup option is on.
@@ -67,7 +67,7 @@ The app allows the extension 60 checks and 120 other requests a minute from one 
 | `search.js` | Search-results badges |
 | `sellercentral.js` | The DG reading bar on Seller Central |
 | `poe-page.js` | Opportunity Explorer, page world: observes every GraphQL and insights response the page receives |
-| `poe.js` | Opportunity Explorer panel: merges the niche page's responses, Send to Gatekeeper, the candidate picker, what was and wasn't read |
+| `poe.js` | Opportunity Explorer panel: merges the niche page's responses, Send to Private label, the candidate picker, what was and wasn't read |
 | `popup.html`, `popup.js` | Settings and the connection test |
 
 The app's endpoints are under `/api/extension/`: `check`, `lookup`, `star`, `watch`, `stock`, `dg` and `ping`; Opportunity Explorer captures go to `/api/pl/poe` and `/api/pl/poe/attach`.

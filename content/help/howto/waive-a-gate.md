@@ -3,6 +3,7 @@ title: Waive a gate
 summary: Accept a failed gate or a warning for one product, in every run.
 synonyms: [waiver, override, accept, ignore gate, un-waive, exception]
 order: 2
+workspace: wholesale
 ---
 A [waiver](/help/reference/glossary#waiver) tells the app you accept a gate's result for one product:
 

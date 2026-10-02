@@ -3,6 +3,7 @@ title: Keepa tokens
 summary: What each Keepa call costs, how a run spends tokens in two stages, when it reuses data, and how to read the balance.
 synonyms: [tokens, balance, refill, keepa, token cost, go first, snapshot, stale]
 order: 4
+workspace: general
 ---
 Keepa sells its data by the token. Your Keepa plan refills your balance by a set number every minute. The app spends tokens on the price, rank and offer history that most gates and the score need. It is careful with them: rows that can be ruled out for free are ruled out first, the likeliest winners go first, and recent data is reused rather than bought again.
 

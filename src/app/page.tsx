@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangleIcon, ArrowRightIcon, BellIcon, BuildingIcon, CoinsIcon, RefreshCwIcon, StarIcon, UploadIcon } from "lucide-react";
+import { AlertTriangleIcon, ArrowRightIcon, BellIcon, BuildingIcon, CoinsIcon, MegaphoneIcon, RefreshCwIcon, StarIcon, TagIcon, TelescopeIcon, UploadIcon } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 import { VerdictBar } from "@/components/VerdictBar";
@@ -20,6 +20,16 @@ interface FavItem {
   outdated: boolean;
 }
 interface KeepaBalance { available: boolean; tokens: { tokensLeft: number; refillRate: number } | null }
+interface PlDash {
+  candidates: number; verdicts: Record<"pass" | "warn" | "fail" | "empty", number>;
+  lastHunt: { id: string; name: string; status: string; created_at: string; token_cost: number } | null;
+  tokensThisMonth: number; month: string;
+}
+
+/** A workspace's heading on Home. */
+const RowTitle = ({ children, href }: { children: ReactNode; href: string }) => (
+  <h2 className="section-label flex items-center gap-2"><Link href={href} className="hover:underline">{children}</Link></h2>
+);
 
 /** Loaded data, or the error that stopped it. */
 type Load<T> = { data: T } | { error: string } | null;
@@ -80,17 +90,19 @@ export default function HomePage() {
   const favs = useLoad<{ items: FavItem[]; unavailable?: string }>("/api/favourites");
   const alerts = useLoad<{ count: number }>("/api/watchlist/alerts", () => 300_000);
   const brands = useLoad<{ brands: BrandSummary[]; updating: boolean; awaiting: { brands: number; passing: number } }>("/api/brands?chase=5");
+  const pl = useLoad<PlDash>("/api/pl/dashboard");
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="page-title">Home</h1>
-          <p className="text-sm text-muted-foreground">Recent runs, what needs attention, and today&apos;s Keepa spend.</p>
+          <p className="text-sm text-muted-foreground">Each workspace at a glance: Wholesale, Private label and Ads.</p>
         </div>
         <Button asChild size="lg"><Link href="/upload"><UploadIcon /> Upload price list</Link></Button>
       </div>
 
+      <RowTitle href="/runs">Wholesale</RowTitle>
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <Section load={keepa} skeleton={<StatSkeleton />}>
           {(k) => (
@@ -120,6 +132,41 @@ export default function HomePage() {
           {(b) => <Stat icon={<BuildingIcon />} label="Brands awaiting approval" href="/brands" value={b.awaiting.brands}
             hint={`${b.awaiting.passing.toLocaleString("en-GB")} passing products held back`} />}
         </Section>
+      </div>
+
+      <RowTitle href="/pl/candidates">Private label</RowTitle>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <Section load={pl} skeleton={<StatSkeleton />}>
+          {(p) => (
+            <Stat icon={<TagIcon />} label="Candidates by verdict" href="/pl/candidates" value={p.candidates}
+              hint={p.candidates ? (
+                <span className="flex flex-wrap gap-x-2">
+                  <span className="text-pass">{p.verdicts.pass} order samples</span>
+                  <span className="text-warn">{p.verdicts.warn} check</span>
+                  <span className="text-fail">{p.verdicts.fail} drop</span>
+                  <span>{p.verdicts.empty} not scored yet</span>
+                </span>
+              ) : "none yet: hunt a niche or add one"} />
+          )}
+        </Section>
+        <Section load={pl} skeleton={<StatSkeleton />}>
+          {(p) => (
+            <Stat icon={<TelescopeIcon />} label="Last Niche Hunt" href="/pl/niche-hunt"
+              value={p.lastHunt ? when(p.lastHunt.created_at) : "—"}
+              hint={p.lastHunt ? `${p.lastHunt.status === "done" ? "done" : p.lastHunt.status} · ${p.lastHunt.token_cost.toLocaleString("en-GB")} tokens` : "no hunt yet"} />
+          )}
+        </Section>
+        <Section load={pl} skeleton={<StatSkeleton />}>
+          {(p) => (
+            <Stat icon={<CoinsIcon />} label="Private label Keepa tokens this month" value={p.tokensThisMonth.toLocaleString("en-GB")}
+              hint={`candidates' refreshes and Niche Hunts, ${new Date(`${p.month}-01`).toLocaleDateString("en-GB", { month: "long", year: "numeric" })}`} />
+          )}
+        </Section>
+      </div>
+
+      <RowTitle href="/ads/dashboard">Ads</RowTitle>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <Stat icon={<MegaphoneIcon />} label="Sponsored Products" href="/ads/imports" value="—" hint="No ad data yet — import a report" />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-5">

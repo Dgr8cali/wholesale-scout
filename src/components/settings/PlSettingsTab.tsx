@@ -37,7 +37,7 @@ export function PlSettingsTab() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
           <h2 className="section-label">Private label</h2>
-          <p className="max-w-3xl text-sm text-muted-foreground">Gatekeeper&apos;s budget, cost assumptions and Gate 6 floors, used for every candidate on the Private label page. Fees come from the rate card under Fees. Peak rates (October–December) apply automatically by date, as in screening.</p>
+          <p className="max-w-3xl text-sm text-muted-foreground">The budget, cost assumptions and Gate 6 floors used for every Private label candidate. Fees come from the rate card under Fees. Peak rates (October–December) apply automatically by date, as in screening.</p>
         </div>
         <Button variant="outline" onClick={save} disabled={saving || bad.length > 0}>Save</Button>
       </div>
@@ -46,7 +46,7 @@ export function PlSettingsTab() {
           <label key={d.k} className="space-y-1.5">
             <span className="field-label">{d.label} ({d.unit})</span>
             <Input className="num" type="number" step="any" value={s[d.k]} onChange={(e) => setS({ ...s, [d.k]: e.target.value })} />
-            <span className="block text-2xs text-muted-foreground">Gatekeeper default {d.d}</span>
+            <span className="block text-2xs text-muted-foreground">Default {d.d}</span>
           </label>
         ))}
       </div>

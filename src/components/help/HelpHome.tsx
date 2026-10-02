@@ -5,9 +5,9 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { usePageCrumbs } from "@/components/Crumbs";
 import { Input } from "@/components/ui/input";
-import { anchor, search, type SearchDoc } from "@/lib/help/catalog";
+import { anchor, HELP_WORKSPACES, search, type SearchDoc } from "@/lib/help/catalog";
 
-/** The Help page: a search box over every article, and the articles by section. */
+/** The Help page: a search box over every article, and the articles by workspace, then section. */
 export function HelpHome({ docs, sections }: { docs: SearchDoc[]; sections: string[] }) {
   usePageCrumbs([{ label: "Help" }]);
   const [q, setQ] = useState("");
@@ -40,21 +40,32 @@ export function HelpHome({ docs, sections }: { docs: SearchDoc[]; sections: stri
           </ul>
         ) : <p className="text-sm text-muted-foreground">Nothing matches &ldquo;{q}&rdquo;. Try fewer or different words.</p>
       ) : (
-        <div className="grid gap-6 sm:grid-cols-2">
-          {sections.map((s) => {
-            const list = docs.filter((d) => d.section === s);
-            if (!list.length) return null;
+        <div className="space-y-8">
+          {HELP_WORKSPACES.map((w) => {
+            const inWs = docs.filter((d) => d.workspace === w.id);
+            if (!inWs.length) return null;
             return (
-              <section key={s} className="space-y-2">
-                <h2 className="section-label">{s}</h2>
-                <ul className="space-y-1.5">
-                  {list.map((d) => (
-                    <li key={d.slug}>
-                      <Link href={`/help/${d.slug}`} className="text-sm font-medium text-brand hover:underline">{d.title}</Link>
-                      {d.summary && <p className="text-xs text-muted-foreground">{d.summary}</p>}
-                    </li>
-                  ))}
-                </ul>
+              <section key={w.id} className="space-y-3">
+                <h2 className="font-heading text-lg font-bold">{w.label}</h2>
+                <div className="grid gap-6 sm:grid-cols-2">
+                  {sections.map((s) => {
+                    const list = inWs.filter((d) => d.section === s);
+                    if (!list.length) return null;
+                    return (
+                      <div key={s} className="space-y-2">
+                        <h3 className="section-label">{s}</h3>
+                        <ul className="space-y-1.5">
+                          {list.map((d) => (
+                            <li key={d.slug}>
+                              <Link href={`/help/${d.slug}`} className="text-sm font-medium text-brand hover:underline">{d.title}</Link>
+                              {d.summary && <p className="text-xs text-muted-foreground">{d.summary}</p>}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    );
+                  })}
+                </div>
               </section>
             );
           })}

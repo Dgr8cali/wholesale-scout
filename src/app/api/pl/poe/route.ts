@@ -5,7 +5,7 @@ import { savePoe } from "@/lib/server/pl";
 
 export const OPTIONS = extOptions;
 /**
- * From the extension, only when you click "Send to Gatekeeper" on Opportunity Explorer:
+ * From the extension, only when you click "Send to Private label" on Opportunity Explorer:
  * { nicheId, title, raw: { niche, growth } }. Stored, read for Gates 3 and 5, and attached to the
  * candidate whose niche keyword is the niche's title; otherwise the candidates come back to pick from.
  */

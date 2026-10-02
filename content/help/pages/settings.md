@@ -7,7 +7,7 @@ order: 12
 ---
 Settings is where you decide how products are screened: which gates run and how strict they are, how the 0–100 score is built, and how fees and landed cost are worked out. It also holds the lists shared by every profile: compliance rules, the rate card, your waivers and your IP-risk brands.
 
-The page has eight tabs: **Gates**, **Score**, **Fees**, **Profiles**, **Waived**, **IP risk**, **Filter sets** and **Private label**. You can open a tab directly with `?tab=`, for example `/settings?tab=ip` (the Brands page links there).
+The page has nine tabs: **Gates**, **Score**, **Fees**, **Profiles**, **Waived**, **IP risk**, **Filter sets**, **Private label** and **Ads**. Settings is in every workspace. You can open a tab directly with `?tab=`, for example `/settings?tab=ip` (the Brands page links there).
 
 ## The profile bar
 
@@ -132,4 +132,8 @@ Filter sets are saved from a run's filter bar with **Save current filters…** a
 
 ## Private label tab
 
-Gatekeeper's thresholds and cost assumptions for [Private label](/help/pages/private-label), shared by every candidate. They are budget available, VAT rate, digital services fee, inbound shipping per unit, prep per unit, average months in storage, returns allowance, min price multiple, min launch margin, min steady margin and min profit per unit. Each shows Gatekeeper's default. **Save** applies them to every candidate straight away. The fees themselves come from the rate card on the **Fees** tab. There's no peak-rate switch here: Private label uses the peak rates in October–December automatically.
+The thresholds and cost assumptions for [Private label](/help/pages/private-label), shared by every candidate. They are budget available, VAT rate, digital services fee, inbound shipping per unit, prep per unit, average months in storage, returns allowance, min price multiple, min launch margin, min steady margin and min profit per unit. Each shows its default. **Save** applies them to every candidate straight away. The fees themselves come from the rate card on the **Fees** tab. There's no peak-rate switch here: Private label uses the peak rates in October–December automatically.
+
+## Ads tab
+
+The Ads workspace's settings, for when it's connected (nothing uses them yet). **Target ACoS** is 30% by default. **Break-even ACoS** is a product's margin before ads (profit before advertising ÷ sale price): above it, each ad sale loses money. Keep the target below each product's break-even. See [Ads](/help/pages/ads).
