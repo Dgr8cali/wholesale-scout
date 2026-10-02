@@ -13,6 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import type { RateCard } from "@/lib/fees/rateCard";
 import { monthlySales, priceOf } from "@/lib/pl/fill";
+import { adsDefaults, withAdsDefaults } from "@/lib/pl/adsDefaults";
 import { budget, econ, evaluate, money, pct, referralOptions, type Evaluation, type FieldDef, type GateDef, type GateResult, type Settings, type Status, type Waiver } from "@/lib/pl/gatekeeper";
 import { api } from "@/lib/ui/client";
 import { ago } from "@/lib/ui/when";
@@ -25,8 +26,10 @@ const CHECK_BG: Record<Status, string> = { pass: "bg-pass", warn: "bg-warn", fai
 const n0 = (v: number | null | undefined) => (v == null ? "—" : Math.round(v).toLocaleString("en-GB"));
 
 /** One candidate: its header, the eight gates, the scorecard and the verdict. */
-export function Workspace({ id, settings, card, onChanged, onDeleted }: {
+export function Workspace({ id, settings, card, adsCpc, onChanged, onDeleted }: {
   id: string; settings: Settings; card: RateCard;
+  /** The CPC the ads-per-unit defaults use (Settings → Ads). */
+  adsCpc: number;
   /** The list re-scores as you type. */
   onChanged: (id: string, patch: { fields?: FieldMap; name?: string; status?: string; refreshed_at?: string | null; category?: string; waivers?: Waiver[] }) => void;
   onDeleted: (id: string) => void;
@@ -58,7 +61,8 @@ export function Workspace({ id, settings, card, onChanged, onDeleted }: {
 
   const category = data?.candidate.category ?? "Everything else";
   const waivers = data?.waivers;
-  const ev: Evaluation | null = useMemo(() => (data ? evaluate(valuesOf(fields), category, settings, card, new Date(), waivers) : null), [data, fields, category, settings, card, waivers]);
+  const ev: Evaluation | null = useMemo(() => (data ? evaluate(withAdsDefaults(valuesOf(fields), adsCpc), category, settings, card, new Date(), waivers) : null), [data, fields, category, settings, card, waivers, adsCpc]);
+  const derived = useMemo(() => adsDefaults(valuesOf(fields), adsCpc), [fields, adsCpc]);
 
   if (error) return <ErrorState title="Couldn't load the candidate" message={error} onRetry={load} />;
   if (!data || !ev) return <div className="space-y-3"><Skeleton className="h-28 rounded-xl" /><Skeleton className="h-64 rounded-xl" /><Skeleton className="h-64 rounded-xl" /></div>;
@@ -157,6 +161,7 @@ export function Workspace({ id, settings, card, onChanged, onDeleted }: {
               <div className="grid grid-cols-1 gap-x-3.5 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
                 {g.fields.map((fd) => (
                   <FieldRow key={fd.k} def={fd} field={fields[fd.k]} why={data.why[fd.k]} onSave={saveField}
+                    derived={fd.k === "adsLaunch" || fd.k === "adsSteady" ? derived[fd.k] : undefined}
                     manualOnly={g.id === "g5" && ["headBid", "ltBid", "sponsored"].includes(fd.k)} />
                 ))}
               </div>
@@ -277,7 +282,26 @@ function AsinTable({ data }: { data: CandidateDetail }) {
 }
 
 /** One Gatekeeper field. Filled automatically: read-only with its source until you click edit. */
-function FieldRow({ def, field, why, onSave, manualOnly }: { def: FieldDef; field?: { value: string; source: string }; why?: string; onSave: (k: string, v: string, delay?: number) => void; manualOnly?: boolean }) {
+function FieldRow({ def, field, why, onSave, manualOnly, derived }: {
+  def: FieldDef; field?: { value: string; source: string }; why?: string; onSave: (k: string, v: string, delay?: number) => void; manualOnly?: boolean;
+  /** A default worked out from other figures (ads per unit): shown until you type a value. */
+  derived?: { value: number; why: string };
+}) {
+  if (!field && derived) {
+    return (
+      <div className="flex min-w-0 flex-col gap-1">
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs font-medium text-ink-2">{def.label}</span>
+          <span title="Worked out from Settings → Ads's CPC and the conversion: type a value to use your own" className="rounded bg-brand-soft px-1.5 py-px text-[10px] font-semibold tracking-wide text-brand uppercase">Derived</span>
+        </div>
+        <div className="flex min-h-9 items-center gap-2 rounded-lg border border-dashed bg-surface-2 px-2.5 py-1.5">
+          <span className="num flex-1 text-sm">£{derived.value.toFixed(2)}</span>
+          <button type="button" className="text-xs font-medium text-brand hover:underline" onClick={() => onSave(def.k, String(derived.value), 0)}>edit</button>
+        </div>
+        <span className="text-[11.5px] text-muted-foreground">{derived.why}</span>
+      </div>
+    );
+  }
   const value = field?.value ?? "";
   const auto = field && field.source !== "manual";
   const id = `f_${def.k}`;

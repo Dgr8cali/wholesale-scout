@@ -50,8 +50,8 @@ export const WORKSPACES: Workspace[] = [
   {
     id: "ads", label: "Ads", tagline: "Run and tune Sponsored Products", landing: "/ads/dashboard",
     nav: [
-      { href: "/ads/dashboard", label: "Dashboard", soon: true },
-      { href: "/ads/imports", label: "Imports", soon: true },
+      { href: "/ads/dashboard", label: "Dashboard" },
+      { href: "/ads/imports", label: "Imports" },
       { href: "/ads/rules", label: "Rules", soon: true },
       { href: "/ads/proposals", label: "Proposals", soon: true },
     ],

@@ -5,19 +5,19 @@ synonyms: [ads, sponsored products, ppc, acos, advertising, campaigns, bids, neg
 route: /ads
 order: 20
 ---
-**Ads** is the third workspace, next to Wholesale and Private label. It's for running and tuning Sponsored Products. Its pages are placeholders for now. **Connect Amazon Ads once API access is approved.**
+**Ads** is the third workspace, next to Wholesale and Private label, for running and tuning Sponsored Products. **Dashboard** and **Imports** work today, from reports you export from Amazon Ads: see [Ads: importing reports](/help/howto/ads-importing-reports). **Rules** and **Proposals** come with Phase 2. **Connect Amazon Ads once API access is approved.**
 
 ## The pages
 
-| Page | What it will do |
+| Page | What it does |
 |---|---|
-| **Dashboard** | Your Sponsored Products at a glance: spend, sales, ACoS against your target, and the campaigns, ad groups and search terms moving it most, per day and per week. |
-| **Imports** | Upload Amazon Ads reports (search term, targeting, campaign) until the Ads API is connected. Each import is kept, so trends build up over time. |
-| **Rules** | Your bidding and negative-keyword rules in plain terms. For example: lower the bid 15% on a target above your target ACoS after 20 clicks, or add a search term as a negative exact match after 15 clicks and no sale. |
-| **Proposals** | The changes your rules suggest, one by one: what, why and the expected effect, to approve or reject. Nothing changes in Amazon Ads without your approval. |
+| **Dashboard** | Per product: spend, sales, ACoS beside break-even ACoS, profit after ads, cost per order, CPC, conversion, CTR. The same per campaign. Search terms with a status chip (Converting, Over target, Watch, Waste). |
+| **Imports** | Drop Search term reports, Campaign reports and the Campaign Manager export. Each file's format is detected and previewed before you import. Re-importing doesn't double anything. |
+| **Rules** (coming) | Your bidding and negative-keyword rules in plain terms, using the same thresholds as the chips. |
+| **Proposals** (coming) | The changes your rules suggest, one by one, to approve or reject. Nothing changes in Amazon Ads without your approval. |
 
-## Target ACoS
+## Target ACoS and break-even
 
-**Settings → Ads** holds the target ACoS, 30% by default. **Break-even ACoS** is a product's margin before ads: profit before advertising ÷ sale price. Spend more than that per ad sale and each ad sale loses money. A product with a 35% margin breaks even at 35% ACoS, so a 30% target leaves 5 points of profit on ad sales. Keep the target below each product's break-even.
+**Settings → Ads** holds the default target ACoS, 30%. Each product can have its own, for launch and steady state, on the dashboard. **Break-even ACoS** is a product's margin before ads ÷ its price: spend more than that per ad sale and each ad sale loses money. Keep the target below it.
 
-On Home, the Ads row says "No ad data yet — import a report" until there's data.
+On Home, the Ads row shows the spend, the overall ACoS, and how many search terms are wasting spend.

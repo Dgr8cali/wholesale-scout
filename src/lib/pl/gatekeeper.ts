@@ -90,8 +90,8 @@ export const GATES: GateDef[] = [
     blurb: "Sell price, landed cost, size and weight carry over from Gate 0. The FBA fee is read from the July 2026 rate card by size tier and weight band; referral comes from the category; storage from the volume. Launch and steady-state must both clear.",
     fields: [
       { k: "fbaOverride", label: "FBA fee override (ex-VAT)", type: "num", unit: "£", step: "0.01", hint: "Leave blank to use the rate card. Enter Amazon's own figure if you have it" },
-      { k: "adsLaunch", label: "Ads per unit, launch", type: "num", unit: "£", step: "0.01", hint: "£4–6 first 60–90 days" },
-      { k: "adsSteady", label: "Ads per unit, steady state", type: "num", unit: "£", step: "0.01", hint: "£1–2 once ranked" },
+      { k: "adsLaunch", label: "Ads per unit, launch", type: "num", unit: "£", step: "0.01", hint: "Default: CPC ÷ conversion (Settings → Ads, Gate 3)" },
+      { k: "adsSteady", label: "Ads per unit, steady state", type: "num", unit: "£", step: "0.01", hint: "Default: launch × 0.4" },
     ] },
   { id: "g7", n: "7", title: "Launch budget", tool: "The whole cost, not the stock",
     blurb: "Stock is about 60% of a launch. A 10% buffer is added automatically.",

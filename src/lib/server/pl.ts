@@ -8,6 +8,8 @@ import { DEFAULT_SETTINGS, evaluate, FIELD_KEYS, GATES, SETTINGS_DEF, type Setti
 import { bbTrend, offerTrend, rankTrend } from "../pl/history";
 import { extractPoe, poeFill, unreadFields, type PoeExtract } from "../pl/poe";
 import { activeRateCard, db, must } from "./db";
+import { adsSettings } from "./ads";
+import { withAdsDefaults } from "../pl/adsDefaults";
 import { saveSnapshot } from "./process";
 
 /**
@@ -115,15 +117,17 @@ export async function removeWaiver(candidateId: string, waiverId: string) {
 
 /** Every candidate with its fields and waivers (the list scores them), newest first. */
 export async function listCandidates() {
-  const [rows, settings, card] = await Promise.all([
+  const [rows, settings, card, ads] = await Promise.all([
     db().from("pl_candidates").select("*").order("created_at", { ascending: false }),
     plSettings(),
     activeRateCard(),
+    adsSettings(),
   ]);
   const candidates = must(rows, "candidates") as PlCandidate[];
   const ids = candidates.map((c) => c.id);
   const [fields, waivers] = await Promise.all([fieldsOf(ids), waiversOf(ids)]);
-  return { candidates: candidates.map((c) => ({ ...c, fields: fields.get(c.id) ?? {}, waivers: waivers.get(c.id) ?? [] })), settings, card };
+  // adsCpc: the CPC the ads-per-unit defaults use (Settings → Ads; the account's once imported).
+  return { candidates: candidates.map((c) => ({ ...c, fields: fields.get(c.id) ?? {}, waivers: waivers.get(c.id) ?? [] })), settings, card, adsCpc: ads.cpc };
 }
 
 export async function getCandidate(id: string) {
@@ -429,11 +433,11 @@ export async function plTokensByDay(): Promise<TokensByDay[]> {
  * private label has spent this month (candidates' refreshes and hunts, UK days).
  */
 export async function plDashboard() {
-  const { candidates, settings, card } = await listCandidates();
+  const { candidates, settings, card, adsCpc } = await listCandidates();
   const verdicts: Record<string, number> = { pass: 0, warn: 0, fail: 0, empty: 0 };
   for (const c of candidates) {
     const fields = Object.fromEntries(Object.entries(c.fields).map(([k, v]) => [k, v.value]));
-    verdicts[evaluate(fields, c.category, settings, card, new Date(), c.waivers).v.cls]++;
+    verdicts[evaluate(withAdsDefaults(fields, adsCpc), c.category, settings, card, new Date(), c.waivers).v.cls]++;
   }
   const hunts = await db().from("pl_hunts").select("id, name, status, created_at, token_cost, keepa_by_day").order("created_at", { ascending: false });
   const huntRows = (hunts.error ? [] : hunts.data) as { id: string; name: string; status: string; created_at: string; token_cost: number; keepa_by_day: TokensByDay | null }[];

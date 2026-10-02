@@ -136,4 +136,4 @@ The thresholds and cost assumptions for [Private label](/help/pages/private-labe
 
 ## Ads tab
 
-The Ads workspace's settings, for when it's connected (nothing uses them yet). **Target ACoS** is 30% by default. **Break-even ACoS** is a product's margin before ads (profit before advertising ÷ sale price): above it, each ad sale loses money. Keep the target below each product's break-even. See [Ads](/help/pages/ads).
+**Target ACoS** is 30% by default: the Ads dashboard's default for every product (a product can have its own) and for the search-term chips. **CPC** (£0.60 to start) is what [Private label](/help/pages/private-label)'s ads-per-unit estimate uses. With **Follow the account's trailing CPC** on, each import sets it to the account's spend ÷ clicks over the last 60 days of dated data. **Break-even ACoS** is a product's margin before ads (profit before advertising ÷ sale price): above it, each ad sale loses money. Keep the target below each product's break-even. See [Ads](/help/pages/ads).

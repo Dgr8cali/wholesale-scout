@@ -98,7 +98,7 @@ describe("workspaces", () => {
     expect(workspaceOfArticle("concepts/niche-hunt", null, "pl")).toBe("pl");
     const by = (w: string) => articles().filter((a) => a.workspace === w).map((a) => a.slug);
     expect(by("pl")).toEqual(expect.arrayContaining(["pages/private-label", "concepts/niche-hunt"]));
-    expect(by("ads")).toEqual(["pages/ads"]);
+    expect(by("ads")).toEqual(expect.arrayContaining(["pages/ads", "howto/ads-importing-reports"]));
     expect(by("general")).toEqual(expect.arrayContaining(["getting-started", "pages/home", "pages/settings", "pages/help", "pages/extension", "reference/glossary"]));
     expect(by("wholesale")).toEqual(expect.arrayContaining(["pages/runs", "gates/demand", "concepts/fees", "howto/waive-a-gate"]));
   });

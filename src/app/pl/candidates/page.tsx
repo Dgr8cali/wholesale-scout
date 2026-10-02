@@ -17,6 +17,7 @@ import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { evaluate, referralOptions } from "@/lib/pl/gatekeeper";
+import { withAdsDefaults } from "@/lib/pl/adsDefaults";
 import { api } from "@/lib/ui/client";
 import { ago } from "@/lib/ui/when";
 import { cn } from "@/lib/utils";
@@ -43,7 +44,7 @@ function Candidates() {
     if (list && !selected && list.candidates.length) select(list.candidates[0].id);
   }, [list, selected, select]);
 
-  const scored = useMemo(() => (list ? list.candidates.map((c) => ({ c, ev: evaluate(valuesOf(c.fields), c.category, list.settings, list.card, new Date(), c.waivers ?? []) })) : []), [list]);
+  const scored = useMemo(() => (list ? list.candidates.map((c) => ({ c, ev: evaluate(withAdsDefaults(valuesOf(c.fields), list.adsCpc), c.category, list.settings, list.card, new Date(), c.waivers ?? []) })) : []), [list]);
 
   if (error) return <ErrorState title="Couldn't load Private label" message={error} onRetry={load} />;
   if (!list) return <div className="grid gap-5 lg:grid-cols-[260px_1fr]"><Skeleton className="h-80 rounded-xl" /><Skeleton className="h-[70vh] rounded-xl" /></div>;
@@ -92,7 +93,7 @@ function Candidates() {
         </aside>
         <main className="min-w-0">
           {selected && list.candidates.some((c) => c.id === selected) ? (
-            <Workspace key={selected} id={selected} settings={list.settings} card={list.card}
+            <Workspace key={selected} id={selected} settings={list.settings} card={list.card} adsCpc={list.adsCpc}
               onChanged={(id, p) => patchRow(id, p as Partial<CandidateRow>)}
               onDeleted={(id) => { setList((l) => l && { ...l, candidates: l.candidates.filter((c) => c.id !== id) }); select(null); }} />
           ) : (

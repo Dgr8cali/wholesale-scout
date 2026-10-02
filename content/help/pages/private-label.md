@@ -88,7 +88,7 @@ Gatekeeper's economics, using the app's rate card (Amazon UK FBA, July 2026: the
 
 Without packed dimensions and weight there's no FBA fee: the tier says **Enter dimensions and weight in Gate 0** instead of assuming a size. Profit and margins stay blank until they're in.
 
-You type **landed cost** (Gate 0), **ads per unit at launch** and **ads per unit at steady state**. **FBA fee override** replaces the rate-card fee with Amazon's own figure.
+You type **landed cost** (Gate 0). **Ads per unit** has a derived default until you type one (chip **Derived**, with the formula under the field): at launch, CPC ÷ conversion, where the CPC is Settings → Ads's (£0.60 to start, then the account's trailing CPC once [ads reports are imported](/help/howto/ads-importing-reports)) and the conversion is the candidate's Gate 3 search conversion, else 7%; at steady state, 40% of launch. Click **edit** to type your own. **FBA fee override** replaces the rate-card fee with Amazon's own figure.
 
 ### Gate 7: Launch budget (you)
 

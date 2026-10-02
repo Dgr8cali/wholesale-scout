@@ -21,7 +21,7 @@ export interface CandidateDetail {
   why: Record<string, string>;
 }
 
-export interface ListResponse { candidates: CandidateRow[]; settings: Settings; card: RateCard }
+export interface ListResponse { candidates: CandidateRow[]; settings: Settings; card: RateCard; adsCpc: number }
 
 export const STATUSES = ["draft", "researching", "samples", "dropped", "launched"] as const;
 
