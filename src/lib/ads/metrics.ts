@@ -1,7 +1,7 @@
 /**
  * Sponsored Products figures: the ratios, a campaign's totals without double counting, break-even
  * ACoS, profit after ads, and the search-term status chips. The chips' thresholds are the ones
- * Phase 2's proposals will act on (ADS_THRESHOLDS). Pure.
+ * the Negative rule starts from (ADS_THRESHOLDS). Pure.
  */
 
 export interface Totals { impressions: number | null; clicks: number; cost: number; orders: number; sales: number; units: number | null }
@@ -111,7 +111,7 @@ export function profitAfterAds(t: Totals, e: UnitEconomics): number | null {
 
 /* ===================== search-term status ===================== */
 
-/** The thresholds the chips use now and Phase 2's proposals will act on. */
+/** The thresholds the chips use; the Negative rule's defaults are the same (src/lib/ads/rules.ts). */
 export const ADS_THRESHOLDS = {
   /** Clicks with no order before a term is waste. */
   wasteClicks: 15,

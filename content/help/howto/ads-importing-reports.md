@@ -24,7 +24,7 @@ In Amazon Ads, go to **Campaign manager → Bulk operations**, pick a date range
 
 **Give the date range.** The bulk file doesn't record the range it was exported for, so the preview asks for it (it's filled in when the file name holds two dates). Enter the range you picked in Amazon Ads; the figures are kept as that range.
 
-Keyword, ad group and campaign IDs are kept exactly, so Phase 2 can send changes back as a bulk upload Amazon accepts: bids, states, budgets and placement percentages updated, keywords and negatives created, in the export's own column order.
+Keyword, ad group and campaign IDs are kept exactly, so [Proposals](/help/howto/ads-rules-and-proposals) can send changes back as a bulk sheet Amazon accepts: bids, states, budgets and placement percentages updated, keywords and negatives created, in the export's own column order.
 
 ## CSV reports
 
@@ -81,7 +81,7 @@ A bulk export links each campaign to the ASIN its product ads advertise. That wi
 | **Watch** | No order yet, under 15 clicks and under half the product's price spent |
 | **Waste** | No order after 15 clicks, or after spending half the product's price |
 
-Phase 2's proposals (negatives and bid changes) will use exactly these thresholds.
+The Negative rule's defaults are the same thresholds (15 clicks, or half the price, with no order): change them on [Ads → Rules](/help/howto/ads-rules-and-proposals).
 
 ## Private label's ad estimate
 

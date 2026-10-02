@@ -185,6 +185,7 @@ export async function importBulk(data: Uint8Array, fileName: string, dateFrom?: 
   await upsert("ads_ad_groups", b.adGroups.map((g) => ({ ad_group_id: g.adGroupId, campaign: camp(g.campaignId), name: g.name, default_bid: g.defaultBid, state: g.state, ...perfRow(g, from, to, imp.id) })), "ad_group_id");
   await upsert("ads_product_ads", b.productAds.map((a) => ({ ad_id: a.adId, campaign: camp(a.campaignId), ad_group_id: a.adGroupId, sku: a.sku, asin: a.asin, state: a.state, eligibility: a.eligibility, ...perfRow(a, from, to, imp.id) })), "ad_id");
   await upsert("ads_keywords", b.keywords.filter((k) => k.keywordId).map((k) => ({ keyword_id: k.keywordId, campaign: camp(k.campaignId), ad_group_id: k.adGroupId, keyword_text: k.text, match_type: k.matchType, bid: k.bid, state: k.state, ...perfRow(k, from, to, imp.id) })), "keyword_id");
+  await upsert("ads_keyword_ranges", b.keywords.filter((k) => k.keywordId).map((k) => ({ keyword_id: k.keywordId, ...perfRow(k, from, to, imp.id) })), "keyword_id,date_from,date_to");
   await upsert("ads_negative_keywords", b.negatives.filter((k) => k.keywordId).map((k) => ({ keyword_id: k.keywordId, campaign: camp(k.campaignId), ad_group_id: k.adGroupId, keyword_text: k.text, match_type: k.matchType, state: k.state, level: k.level, import_id: imp.id })), "keyword_id");
   await upsert("ads_product_targets", b.targets.filter((t) => t.targetId).map((t) => ({ target_id: t.targetId, campaign: camp(t.campaignId), ad_group_id: t.adGroupId, expression: t.expression, bid: t.bid, state: t.state, ...perfRow(t, from, to, imp.id) })), "target_id");
   const terms = new Map<string, Record<string, unknown>>();
@@ -233,7 +234,7 @@ export async function importReports(files: { name: string; text: string }[]): Pr
 async function dropSupersededImports(keep: string[]) {
   const d = db();
   const owned = new Set<string>();
-  for (const t of ["ads_campaign_ranges", "ads_campaign_daily", "ads_search_terms", "ads_placements", "ads_ad_groups", "ads_product_ads", "ads_keywords", "ads_negative_keywords", "ads_product_targets"]) {
+  for (const t of ["ads_campaign_ranges", "ads_campaign_daily", "ads_search_terms", "ads_placements", "ads_ad_groups", "ads_product_ads", "ads_keywords", "ads_negative_keywords", "ads_product_targets", "ads_keyword_ranges"]) {
     const rows = must(await d.from(t).select("import_id"), t) as { import_id: string | null }[];
     for (const r of rows) if (r.import_id) owned.add(r.import_id);
   }
@@ -257,7 +258,7 @@ export async function deleteImport(id: string) {
 const n = (v: unknown) => (v == null ? null : Number(v));
 const toTotals = (r: Record<string, unknown>): Totals => ({ impressions: n(r.impressions), clicks: Number(r.clicks), cost: Number(r.cost), orders: Number(r.orders), sales: Number(r.sales), units: n(r.units) });
 
-async function loadAll() {
+export async function loadAll() {
   const d = db();
   const [camps, ranges, daily, terms] = await Promise.all([
     d.from("ads_campaigns").select(CAMPAIGN_COLS),

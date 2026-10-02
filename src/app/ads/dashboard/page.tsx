@@ -366,7 +366,7 @@ function TermTable({ rows, campaigns }: { rows: TermRow[]; campaigns: CampaignRo
           ))}</tbody>
         </table>
       </div>
-      <p className="text-xs text-muted-foreground">Converting: orders at or under the target ACoS. Over target: orders above it. Watch: no order yet, under 15 clicks. Waste: no order after 15 clicks, or after spending half the product&apos;s price. Phase 2&apos;s proposals will use the same thresholds.</p>
+      <p className="text-xs text-muted-foreground">Converting: orders at or under the target ACoS. Over target: orders above it. Watch: no order yet, under 15 clicks. Waste: no order after 15 clicks, or after spending half the product&apos;s price. The Negative rule on <Link className="underline" href="/ads/rules">Rules</Link> uses the same thresholds by default.</p>
     </section>
   );
 }

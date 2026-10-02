@@ -104,3 +104,20 @@ describe("writeBulk (Phase 2's upload)", () => {
     expect(writeBulk([]).SheetNames).toHaveLength(3);
   });
 });
+
+describe("writeBulk: new campaigns and product targeting", () => {
+  it("creates a campaign, ad group, product ad and keywords linked by temporary IDs (their names)", () => {
+    const wb = writeBulk([
+      { kind: "create_campaign", name: "B0H9ZKYYHZ Exact", dailyBudget: 5, biddingStrategy: "Dynamic bids - down only", startDate: "2026-10-03", adGroupName: "Exact", defaultBid: 0.5, sku: "7P-8CUC-BXQ5", keywords: [{ text: "pill box", matchType: "Exact", bid: 0.67 }] },
+      { kind: "target_bid", campaignId: "275256283859083", adGroupId: "9", targetId: "8", bid: 0.2 },
+    ]);
+    const rows = XLSX.utils.sheet_to_json<Record<string, string>>(wb.Sheets[BULK_CAMPAIGNS_SHEET], { defval: "", raw: false });
+    expect(rows.map((r) => `${r.Entity}/${r.Operation}/${r["Campaign ID"]}/${r["Ad group ID"]}`)).toEqual([
+      "Campaign/Create/B0H9ZKYYHZ Exact/", "Ad group/Create/B0H9ZKYYHZ Exact/Exact", "Product ad/Create/B0H9ZKYYHZ Exact/Exact", "Keyword/Create/B0H9ZKYYHZ Exact/Exact",
+      "Product targeting/Update/275256283859083/9",
+    ]);
+    expect(rows[0]).toMatchObject({ "Start date": "20261003", "Targeting type": "Manual", "Daily budget": "5.00" });
+    expect(rows[3]).toMatchObject({ "Keyword text": "pill box", "Match type": "Exact", Bid: "0.67" });
+    expect(rows[4]).toMatchObject({ "Product Targeting ID": "8", Bid: "0.20" });
+  });
+});

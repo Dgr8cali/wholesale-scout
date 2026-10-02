@@ -166,12 +166,36 @@ export type BulkChange =
   | { kind: "campaign_state"; campaignId: string; state: "enabled" | "paused" | "archived" }
   | { kind: "placement"; campaignId: string; biddingStrategy: string; placement: string; percentage: number }
   | { kind: "create_keyword"; campaignId: string; adGroupId: string; text: string; matchType: "Exact" | "Phrase" | "Broad"; bid: number }
-  | { kind: "create_negative"; campaignId: string; adGroupId: string | null; text: string; matchType: "Negative exact" | "Negative phrase" };
+  | { kind: "create_negative"; campaignId: string; adGroupId: string | null; text: string; matchType: "Negative exact" | "Negative phrase" }
+  | { kind: "target_bid"; campaignId: string; adGroupId: string; targetId: string; bid: number }
+  | { kind: "target_state"; campaignId: string; adGroupId: string; targetId: string; state: "enabled" | "paused" | "archived" }
+  /**
+   * A new manual campaign with one ad group, its product ad and keywords. New entities have no ID
+   * yet: the campaign's and ad group's names stand in as temporary IDs, which is how Amazon links
+   * rows created in the same upload.
+   */
+  | { kind: "create_campaign"; name: string; dailyBudget: number; biddingStrategy: string; startDate: string; adGroupName: string; defaultBid: number; sku: string;
+      keywords: { text: string; matchType: "Exact" | "Phrase" | "Broad"; bid: number }[] };
 
 const money = (n: number) => n.toFixed(2);
 
-/** A change as a row of BULK_COLUMNS: only the columns Amazon reads for it; informational columns blank. */
-export function bulkRow(c: BulkChange): Partial<Record<BulkColumn, string>> {
+type BulkRow = Partial<Record<BulkColumn, string>>;
+
+/** A change as rows of BULK_COLUMNS: only the columns Amazon reads for it; informational columns blank. */
+export function bulkRows(c: BulkChange): BulkRow[] {
+  if (c.kind === "create_campaign") {
+    const p = { Product: "Sponsored Products", Operation: "Create", "Campaign ID": c.name };
+    return [
+      { ...p, Entity: "Campaign", "Campaign name": c.name, "Start date": c.startDate.replace(/-/g, ""), "Targeting type": "Manual", State: "enabled", "Daily budget": money(c.dailyBudget), "Bidding strategy": c.biddingStrategy },
+      { ...p, Entity: "Ad group", "Ad group ID": c.adGroupName, "Ad group name": c.adGroupName, State: "enabled", "Ad Group Default Bid": money(c.defaultBid) },
+      { ...p, Entity: "Product ad", "Ad group ID": c.adGroupName, SKU: c.sku, State: "enabled" },
+      ...c.keywords.map((k) => ({ ...p, Entity: "Keyword", "Ad group ID": c.adGroupName, "Keyword text": k.text, "Match type": k.matchType, Bid: money(k.bid), State: "enabled" })),
+    ];
+  }
+  return [bulkRow(c)];
+}
+
+function bulkRow(c: Exclude<BulkChange, { kind: "create_campaign" }>): BulkRow {
   const base = { Product: "Sponsored Products", "Campaign ID": c.campaignId };
   switch (c.kind) {
     case "keyword_bid":
@@ -192,6 +216,10 @@ export function bulkRow(c: BulkChange): Partial<Record<BulkColumn, string>> {
       return c.adGroupId
         ? { ...base, Entity: "Negative keyword", Operation: "Create", "Ad group ID": c.adGroupId, "Keyword text": c.text, "Match type": c.matchType, State: "enabled" }
         : { ...base, Entity: "Campaign negative keyword", Operation: "Create", "Keyword text": c.text, "Match type": c.matchType, State: "enabled" };
+    case "target_bid":
+      return { ...base, Entity: "Product targeting", Operation: "Update", "Ad group ID": c.adGroupId, "Product Targeting ID": c.targetId, Bid: money(c.bid) };
+    case "target_state":
+      return { ...base, Entity: "Product targeting", Operation: "Update", "Ad group ID": c.adGroupId, "Product Targeting ID": c.targetId, State: c.state };
   }
 }
 
@@ -202,7 +230,7 @@ export function bulkRow(c: BulkChange): Partial<Record<BulkColumn, string>> {
 export function writeBulk(changes: BulkChange[]): XLSX.WorkBook {
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([PORTFOLIO_COLUMNS]), BULK_PORTFOLIOS_SHEET);
-  const rows = changes.map((c) => { const r = bulkRow(c); return BULK_COLUMNS.map((k) => r[k] ?? ""); });
+  const rows = changes.flatMap(bulkRows).map((r) => BULK_COLUMNS.map((k) => r[k] ?? ""));
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([[...BULK_COLUMNS], ...rows]), BULK_CAMPAIGNS_SHEET);
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Version", "Version (1.0)"]]), BULK_VERSION_SHEET);
   return wb;
