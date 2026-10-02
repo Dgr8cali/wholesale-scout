@@ -16,7 +16,7 @@ Each product's **target ACoS** is its own (launch or steady, on the dashboard), 
 3. **Bid down.** A keyword or target with 10+ clicks and ACoS over 1.2 × the target gets the bid that would hit the target: target ACoS × price × its conversion rate, at least £0.10.
 4. **Bid up.** A keyword under 0.7 × the target with 2+ orders, in a campaign under 50% impression share or out of budget, gets +15%, up to £1.50.
 5. **Pause.** A keyword with 25+ clicks and no order is paused.
-6. **Placement.** A placement whose ACoS is 25%+ better than its campaign's gets +20 points of bid adjustment (up to 100%); 25%+ worse, −20 (down to 0).
+6. **Placement.** A placement with 10+ clicks whose ACoS is 25%+ better than its campaign's, and itself no more than 1.2 × the target, gets +20 points of bid adjustment (up to 100%); one 25%+ worse than its campaign gets −20 (down to 0), whatever the target.
 7. **Budget.** A campaign out of budget on 3 of the last 7 days at or under the target gets +20% budget; over 1.5 × the target for 14 days, −25%.
 8. **Revive.** An exact keyword with 3+ lifetime orders and no impressions in the last 14 days gets +10% bid.
 

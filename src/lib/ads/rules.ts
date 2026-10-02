@@ -64,9 +64,10 @@ export const RULES: RuleMeta[] = [
   },
   {
     id: "placement", label: "Placement",
-    summary: "A placement whose ACoS is clearly better than the campaign's gets a higher bid adjustment; clearly worse, a lower one.",
+    summary: "A placement whose ACoS is clearly better than the campaign's, and itself near the target, gets a higher bid adjustment; clearly worse, a lower one.",
     thresholds: [
       { key: "margin", label: "Better or worse than the campaign by", unit: "pct", default: 25 },
+      { key: "raiseMaxOverTarget", label: "Raise only if its ACoS at most target ×", unit: "times", default: 1.2 },
       { key: "step", label: "Change the adjustment by", unit: "points", default: 20 },
       { key: "max", label: "Highest adjustment", unit: "pct", default: 100 },
       { key: "minClicks", label: "Placement clicks at least", unit: "count", default: 10 },
@@ -450,6 +451,12 @@ export function runRules(input: RulesInput, config: RulesConfig = DEFAULT_RULES)
         if (pa == null) continue;
         const cur = pl.percentage ?? 0;
         const better = pa <= ca * (1 - t.margin / 100), worse = pa >= ca * (1 + t.margin / 100);
+        // Raise only a placement that is itself near the target: better than a bad campaign isn't good enough.
+        const target = product(c)?.targetAcos ?? null;
+        if (better && (target == null || pa > target * t.raiseMaxOverTarget)) {
+          if (cur < t.max) note("placement", `${pl.placement[0].toUpperCase() + pl.placement.slice(1)} in ${c.name}: ${pct(pa)} ACoS beats the campaign's ${pct(ca)}, but ${target == null ? "the campaign has no ASIN, so no target" : `is over ${t.raiseMaxOverTarget} × the ${pct(target, 0)} target`}: not raised`);
+          continue;
+        }
         const next = better ? Math.min(t.max, cur + t.step) : worse ? Math.max(0, cur - t.step) : cur;
         if (next === cur) continue;
         const diff = Number.isFinite(pa) ? Math.round(Math.abs(1 - pa / ca) * 100) : null;
@@ -458,7 +465,7 @@ export function runRules(input: RulesInput, config: RulesConfig = DEFAULT_RULES)
           ...base("placement", c), key: `pl:${c.id}:${pl.placement.toLowerCase()}`,
           entity: { type: "placement", label: name, campaignId: c.campaignId, adGroupId: null, keywordId: null, targetId: null },
           current: `+${cur}%`, proposed: `+${next}%`,
-          reason: `${name}: ${perfTxt(pl)}: ${acosTxt(pa)} against the campaign's ${pct(ca)}${diff != null ? `: ${diff}% ${better ? "better" : "worse"}` : ""}${rangeTxt}.`,
+          reason: `${name}: ${perfTxt(pl)}: ${acosTxt(pa)} against the campaign's ${pct(ca)}${diff != null ? `: ${diff}% ${better ? "better" : "worse"}` : ""}${rangeTxt}.${better ? ` Within ${t.raiseMaxOverTarget} × the ${pct(product(c)!.targetAcos, 0)} target.` : ""}`,
           confidence: confidence(pl.clicks, pl.orders),
           effect: better ? `More of ${c.name}'s clicks from its best-converting placement` : `Fewer clicks from a placement converting worse than the rest`,
           changes: [{ kind: "placement", campaignId: c.campaignId, biddingStrategy: c.biddingStrategy ?? "Dynamic bids - down only", placement: pl.placement, percentage: next }],

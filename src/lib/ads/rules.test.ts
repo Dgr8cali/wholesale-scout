@@ -51,11 +51,13 @@ describe("runRules on the pill box account (target 30%, price £8.99)", () => {
     expect(p.changes[0]).toMatchObject({ kind: "keyword_bid", campaignId: EXACT_HERO, bid: 0.19 });
   });
 
-  it("placement: AD_READY's rest of search (59.6% ACoS) against the campaign's 80.8%", () => {
-    const p = find("placement", "Rest of search", AD_READY)!;
-    expect(p).toMatchObject({ current: "+0%", proposed: "+20%", confidence: "high" });
-    expect(p.changes[0]).toMatchObject({ kind: "placement", placement: "rest of search", percentage: 20 });
-    expect(find("placement", "Product page", AD_READY)).toBeUndefined(); // 81.6%: within 25% of the campaign
+  it("placement: no raise for a placement better than its campaign but itself over 1.2 × target", () => {
+    // AD_READY rest of search 59.6% (campaign 80.8%) and EXACT HERO top 64.6% (campaign 103.3%): both over 36%.
+    expect(pill.proposals.filter((p) => p.rule === "placement")).toEqual([]);
+    expect(pill.notes.placement?.some((n) => /Rest of search in AD_READY.*59\.6% ACoS.*over 1\.2 × the 30% target/.test(n))).toBe(true);
+    // At a 50% target, 59.6% is within 1.2 × (60%): raised.
+    const p = runRules(fromBulk(bulk, 8.99, 0.5)).proposals.find((x) => x.rule === "placement" && x.campaign === AD_READY)!;
+    expect(p).toMatchObject({ entity: { label: "Rest of search" }, current: "+0%", proposed: "+20%", confidence: "high" });
   });
 
   it("harvest: pill box from AD_READY (broad, 2 orders, 27.6% ACoS); EXACT HERO already has it, so only the negative", () => {
@@ -134,6 +136,12 @@ describe("rules on made-up data", () => {
     const r = runRules(input({ campaigns: [camp({ daily })], keywords: [kw({ clicks: 40, cost: 8, orders: 4, sales: 80 })] }));
     expect(r.proposals.find((p) => p.rule === "budget")).toMatchObject({ current: "£10.00/day", proposed: "£12.00/day" });
     expect(r.proposals.find((p) => p.rule === "bid_up")).toMatchObject({ current: "£0.50", proposed: "£0.58" });
+  });
+
+  it("placement: lowering needs no target guard", () => {
+    const placements = [{ campaign: "c1", placement: "product page", percentage: 40, impressions: null, clicks: 30, cost: 30, orders: 1, sales: 20 }];
+    const r = runRules(input({ placements }));
+    expect(r.proposals.find((p) => p.rule === "placement")).toMatchObject({ current: "+40%", proposed: "+20%" });
   });
 
   it("revive an exact keyword gone quiet", () => {
