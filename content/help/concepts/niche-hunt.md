@@ -14,43 +14,60 @@ A hunt runs in the background, like a screening run: it carries on with the page
 2. **Stage 1: size the leaves.** One Product Finder call per leaf with your filters and no product detail: about 11 tokens a leaf. It records how many products match, and keeps the leaf's 50 best sellers for stage 2. A leaf's count is reused for 7 days under the same finder filters. A leaf with fewer than **Skip leaves under … matches** (5) isn't detailed. **Show leaves sized** lists every leaf with its matches, what sizing it cost (0 when reused) and what happened in stage 2.
 3. **Stage 2: detail the promising leaves.** The **N** leaves with the most matches (**Leaves to detail**, 15). For each, the detail of up to **ASINs per leaf** (12) best sellers: about 2 tokens each, free for any product fetched in the last 7 days. Each product is then qualified, and the leaf becomes a niche.
 
-## The filters
+## The filters: hunt wide, qualify strict
 
-The defaults come from Gate 0 and Gate 1. All can be changed and saved as named presets (**Save as preset**, **Load a preset…**, **Delete preset**). **Reset to defaults** puts them back. Two presets come ready: **Home & Kitchen — first pass** (60 leaves, 15 detailed) and **Garden + Pet + Sports**.
+Gatekeeper's pass thresholds used as hard finder filters compound: the first real hunt (60 leaves, 148 products detailed) found 7 that qualified. So the filters come in two groups. The defaults can be changed and saved as named presets (**Save as preset**, **Load a preset…**, **Delete preset**); **Reset to defaults** puts them back. Two presets come ready: **Home & Kitchen — first pass** and **Garden + Pet + Sports**.
 
-| Filter | Default | Checked by |
-|---|---|---|
-| Price | £18–35 (the Gate 0 band; change it for a deliberate higher-ticket test) | the finder: current Buy Box price |
-| Rating | 3.8–4.3 | the finder |
-| Max 90-day rank | 75,000 | the finder. A pre-filter only: the finder has no rank-drops filter, and without a rank ceiling it returns listings that barely sell |
-| No Amazon offer, now or in the last 90 days | on | the finder (no Amazon offer now, Amazon held no Buy Box in 90 days), then each product's Amazon price history |
-| Package weight | 500 g or less | the finder |
-| Small parcel (35 × 25 × 12 cm) | on, when Keepa has the size | the finder (no side over 35 cm), then the exact fit with the sides sorted |
-| Listed at least | 6 months | the finder (Keepa tracking since) |
-| Leave out Amazon's own brands | on | the finder, then the brand on each product |
-| Categories | Home & Kitchen, Garden, Sports & Outdoors, Pet Supplies, Stationery & Office Supplies, Baby Products, DIY & Tools | the roots whose leaves are hunted; the finder asks for products listed directly in each leaf. Gate 0's avoid categories (Beauty, Health & Personal Care, Grocery, Electronics & Photo, Computers & Accessories, Toys & Games, Fashion) are shown dashed and can be ticked on |
-| Min rank drops, 90 days | 300 (about 100 sales a month) | each product's detail: sales by the app's rule (rank drops ÷ 3, or Amazon's bought-past-month for a fast seller). A fast seller (90-day average rank under 5,000) with no bought-past-month figure passes on its rank, because rank drops undercount it |
-| Max reviews (qualifying) | 500 | each product's detail (see below) |
-| Leaves to size | 60 (1–200) | stage 1 |
-| Skip leaves under … matches | 5 | stage 1 |
-| Leaves to detail (N) | 15 (1–50) | stage 2 |
-| ASINs per leaf | 12 (1–50) | stage 2 |
-| Min qualifying ASINs a niche | 3 | grouping |
+**Finder filters (wide — what Keepa searches)**, asked of the Product Finder for each leaf:
 
-**Reviews decide whether a product qualifies, not whether it's fetched.** A product over the review cap that passes everything else is kept in its niche as an **incumbent**. Incumbents don't count towards the niche's size or medians, but they set its shape and its **max reviews**. Filtering big sellers out at the finder would make every niche look open.
+| Filter | Default |
+|---|---|
+| Price | £14–45 (Buy Box) |
+| Rating | 3.5–4.7 |
+| Max 90-day rank | 100,000 |
+| No Amazon offer now | on |
+| Listed at least | 6 months |
+| Leave out Amazon's own brands | on |
+
+There's no weight or size filter in the finder: Keepa often lacks them, and the finder drops a product it can't measure.
+
+**Qualifying thresholds (strict — what counts as page-one material)**, Gatekeeper's pass band, checked on each product's detail:
+
+| Check | Default |
+|---|---|
+| Price | £18–35 |
+| Rating | 3.8–4.3 |
+| Demand | 300 rank drops in 90 days (100 sales a month) by the app's sales rule: rank drops ÷ 3, or Amazon's bought-past-month for a fast seller. A fast seller (90-day average rank under 5,000) without bought-past-month passes on its rank, because rank drops undercount it |
+| No Amazon in the last 90 days | on |
+| Not an Amazon brand | on |
+| Package weight | 500 g or less |
+| Small parcel (35 × 25 × 12 cm) | on, when Keepa has the size |
+| Max reviews | 500 |
+
+Each detailed product is then one of:
+
+- **Qualifies**: passes everything.
+- **Near miss**: fails only Gatekeeper's warn band (price £15–40, rating 3.6–4.5, weight up to 700 g), or is missing its weight or size. Demand, Amazon and brand are never near misses.
+- **Incumbent**: no hard fail, but over the review cap. Incumbents are the competition: they count for the niche's shape and max reviews, not its size.
+- **Fails**: anything else, with the reason.
+
+The other settings: **Leaves to size** (120, the largest first; see Tokens), **Skip leaves under … matches** (5), **Leaves to detail** (N, 15), **ASINs per leaf** (12), **Min ASINs a niche** (3), and **Categories** (the roots whose leaves are hunted: Home & Kitchen, Garden, Sports & Outdoors, Pet Supplies, Stationery & Office Supplies, Baby Products, DIY & Tools; Gate 0's avoid categories are shown dashed and can be ticked on).
 
 ## Niches
 
 Each detailed leaf is a niche, named after the leaf in lower case. Correct the name on the candidate if you want. Each row shows:
 
 - the niche and its category;
-- **ASINs**: qualifying, with "+N" for its incumbents;
-- **median price**, **median reviews** and **median rating** of the qualifying ASINs;
-- **Sales / mo**: the qualifying ASINs' monthly sales summed. "≥" means some are fast sellers without Amazon's bought-past-month figure, so the sum is a floor;
-- **Max reviews**: the most reviews on any of its products, the incumbent to beat;
+- **Q · near · inc**: qualifying products, near misses, incumbents;
+- **median price**, **median reviews**, **median rating** and **Sales / mo** (summed) over the qualifying products and near misses. "≥" means some are fast sellers without bought-past-month, so the sum is a floor;
+- **Max reviews**: the most reviews among them and the incumbents, the incumbent to beat;
 - **Shape**: **Open** (no product over 1,000 reviews), **Contested** (one), **Dominated** (two or more, or one over 5,000).
 
-Niches with at least **Min qualifying ASINs a niche** (3) qualifying products are shown. **At least … qualifying ASINs** above the list changes that on the spot. Filter by shape, and sort by sales (the default), ASIN count or price. Click a niche to see its products: image, title, price, reviews, rating, rank, sales a month, and whether each qualifies or is an incumbent.
+**At least … ASINs** counts qualifying products plus near misses; turn on **Strict** to count qualifying ones only. Filter by shape, and sort by sales (the default), count or price. Click a niche to see every detailed product: image, title, price, reviews, rating, rank, sales a month, and **Qualifies**, **Near miss**, **Incumbent** or **Fails** with the reasons.
+
+**Re-qualify this hunt** applies the qualifying thresholds as they are now set on the page to the hunt's products again: 0 tokens, no Keepa call. The finder filters and the leaves can't change without a new hunt.
+
+**Why so few?** under the results follows every detailed product through the qualifying checks in order and says how many each removed, and how many it let through as near misses, then how many are incumbents. For example: "148 detailed → price £18–35: −0 (2 near misses let through) → 100+ sales a month: −125 → 500 g or less: −0 (14 near misses let through) → small parcel: −1 (16 near misses let through) → over 500 reviews: 15 incumbents = 0 qualifying + 7 near misses". The check that removes the most is the one biting. It also says how many leaves were sized, their finder matches, and how many had none.
 
 ## Actions
 
@@ -63,9 +80,9 @@ Niches with at least **Min qualifying ASINs a niche** (3) qualifying products ar
 The estimate is shown before you run, line by line, against your balance:
 
 - **Category tree**: up to 40 tokens a root not listed in the last week (1 token per 10 categories).
-- **Stage 1**: the leaves to size × 11 tokens. A leaf counted in the last 7 days under the same filters is free.
+- **Stage 1**: the leaves to size × 11 tokens. A leaf counted in the last 7 days under the same finder filters is free (the qualifying thresholds don't affect counts). Stage 1's spend is **capped by the balance**: the largest leaves are sized first, as many as the balance allows after the reserve, the tree and stage 2. Leaves that don't fit show "not sized (balance)".
 - **Stage 2**: N leaves × ASINs per leaf × about 2 tokens, less products fetched in the last 7 days.
 
-A hunt won't start if its estimate would leave fewer than **100 tokens** in the balance. The page then offers to detail fewer leaves (**Detail K leaves instead**), or you can size fewer leaves or wait for the refill (21 tokens a minute). If Keepa runs out part-way, the hunt waits ("Waiting for Keepa tokens") and carries on after the refill. Each hunt's spend is recorded on the hunt and counted in Home's Keepa spend. Hunts are kept: pick an earlier one from the list above the niches.
+A hunt keeps **100 tokens** in the balance. If not even N leaves can be sized, it won't start, and the page offers to detail fewer (**Detail K leaves instead**); or wait for the refill (21 tokens a minute). **Only one hunt runs at a time**: a second is refused while one is running, since two at once can't reuse each other's counts. If Keepa runs out part-way, the hunt waits ("Waiting for Keepa tokens") and carries on after the refill. Each hunt's spend is recorded on the hunt and counted in Home's Keepa spend. Hunts are kept: pick an earlier one from the list above the niches.
 
-For example, one leaf sized and detailed (Shaving Mirrors, 9 ASINs) cost 20 tokens. The **Home & Kitchen — first pass** preset estimates up to 1,060: 40 for the tree, 660 to size 60 leaves, 360 to detail 15.
+For example, one leaf sized and detailed (Shaving Mirrors, 9 products) cost 20 tokens; the first real Home & Kitchen hunt (60 leaves, 15 detailed) cost 769.

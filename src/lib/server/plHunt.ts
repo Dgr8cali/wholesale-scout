@@ -3,7 +3,7 @@ import { referralCategoryFor } from "../fees/engine";
 import { addDailyTokens, type TokensByDay } from "../keepaLedger";
 import { getKeepa, hasFinder, type KeepaCategory, type KeepaClient, type KeepaFinder, type KeepaProduct, type OnKeepaResponse } from "../keepa/client";
 import {
-  defaultFilters, filtersKey, finderSelection, fittingDetailLeaves, groupNiches, huntEstimate, TOKEN_RESERVE, TREE_MAX_CATEGORIES,
+  defaultFilters, filtersKey, finderSelection, fittingDetailLeaves, funnel, groupNiches, huntEstimate, SIZING_TOKENS, TOKEN_RESERVE, TREE_MAX_CATEGORIES,
   type HuntAsin, type HuntEstimate, type Niche, type NicheHuntFilters,
 } from "../pl/hunt";
 import { activeRateCard, chunks, db, must } from "./db";
@@ -28,6 +28,8 @@ export interface HuntLeaf {
   id: number; name: string; products: number | null;
   /** Stage 1: finder matches under the filters, its best-selling ASINs, what sizing cost (0 when cached). */
   matches?: number; asins?: string[]; finderTokens?: number; cached?: boolean;
+  /** Not sized: stage 1's spend is capped by the balance and this leaf didn't fit. */
+  skipped?: boolean;
   /** Stage 2: picked for detail, and done (with how many fetched and reused). */
   detail?: boolean; detailed?: boolean; fetched?: number; reused?: number;
 }
@@ -38,11 +40,12 @@ export interface HuntRow {
   id: string; name: string; filters: NicheHuntFilters; asins: string[]; finder_total: number | null; fetched: number; reused: number;
   finder_tokens: number; detail_tokens: number; token_cost: number; created_at: string;
   status: HuntStatus; leaves: HuntLeaf[] | null; note: string | null; finished_at: string | null;
+  progress: { sizingBudget?: number; leavesWanted?: number } | null;
 }
 export interface Preset { id: string; name: string; filters: NicheHuntFilters }
 export interface Dismissal { key: string; name: string | null; reason: string | null; created_at: string }
 
-const HUNT_COLS = "id, name, filters, asins, finder_total, fetched, reused, finder_tokens, detail_tokens, token_cost, created_at, status, leaves, note, finished_at";
+const HUNT_COLS = "id, name, filters, asins, finder_total, fetched, reused, finder_tokens, detail_tokens, token_cost, created_at, status, leaves, note, finished_at, progress";
 const ASIN_COLS = "asin, title, brand, image, root_category, leaf_category_id, leaf_category, price, rating, review_count, rank, avg_rank_90d, rank_drops_90d, bought_past_month, offer_count, buybox_price, amazon_ever_seller, amazon_last_seen_days, amazon_brand, dimensions, weight, first_seen, history, snapshot_at";
 
 const num = (v: unknown) => (v == null ? null : Number(v));
@@ -100,7 +103,9 @@ async function freshHuntAsins(asins: string[]): Promise<Map<string, HuntAsin>> {
 }
 
 export interface HuntResult {
-  hunt: HuntRow; niches: Niche[]; qualifying: number; incumbents: number; exhausted: boolean;
+  hunt: HuntRow; niches: Niche[]; qualifying: number; near: number; incumbents: number; exhausted: boolean;
+  /** "Why so few?": the qualifying checks in order over the detailed products. */
+  funnel: ReturnType<typeof funnel>;
 }
 
 type Finder = KeepaClient & KeepaFinder;
@@ -182,7 +187,11 @@ async function plannedLeaves(f: NicheHuntFilters): Promise<{ leaves: HuntLeaf[] 
   return { leaves: unique.sort((a, b) => (b.products ?? 0) - (a.products ?? 0)).slice(0, f.leavesCap), rootsWithoutTree: 0 };
 }
 
-export interface HuntPlan { estimate: HuntEstimate; balance: number | null; fits: boolean; fittingDetailLeaves: number | null; leavesKnown: boolean }
+export interface HuntPlan {
+  estimate: HuntEstimate; balance: number | null; fits: boolean; fittingDetailLeaves: number | null; leavesKnown: boolean;
+  /** Leaves that would need sizing, and how many the balance allows (stage 1's spend is capped by it). */
+  leavesWanted: number; sizingCapped: boolean;
+}
 
 /**
  * The cost before running: listing trees not stored (an upper bound), sizing leaves not counted in
@@ -201,11 +210,22 @@ export async function planHunt(f: NicheHuntFilters): Promise<HuntPlan> {
     const top = [...counts.values()].sort((a, b) => b.matches - a.matches).slice(0, f.detailLeaves).flatMap((c) => c.asins.slice(0, f.perLeaf));
     cachedAsins = (await freshHuntAsins(top)).size;
   }
-  const estimate = huntEstimate({ rootsWithoutTree, leavesToSize, detailLeaves: Math.min(f.detailLeaves, f.leafIds?.length ?? f.detailLeaves), perLeaf: f.perLeaf, cachedAsins });
+  const detailLeaves = Math.min(f.detailLeaves, f.leafIds?.length ?? f.detailLeaves);
+  const full = huntEstimate({ rootsWithoutTree, leavesToSize, detailLeaves, perLeaf: f.perLeaf, cachedAsins });
   const status = keepa.available ? await keepa.tokenStatus().catch(() => null) : null;
   const balance = status?.tokensLeft ?? null;
-  const fits = balance != null && estimate.total <= balance - TOKEN_RESERVE;
-  return { estimate, balance, fits, fittingDetailLeaves: balance == null ? null : fittingDetailLeaves(estimate, f.perLeaf, balance), leavesKnown: !!leaves };
+  // Stage 1's spend is capped by the balance (less the reserve, the tree and stage 2): the largest
+  // leaves are sized first, as many as fit.
+  const room = balance == null ? 0 : balance - TOKEN_RESERVE - full.tree - full.detail;
+  const sizable = Math.max(0, Math.min(leavesToSize, Math.floor(room / SIZING_TOKENS)));
+  const estimate = huntEstimate({ rootsWithoutTree, leavesToSize: sizable, detailLeaves, perLeaf: f.perLeaf, cachedAsins });
+  // Worth running when at least N leaves (or every leaf asked for) can be sized, counting cached ones.
+  const cachedLeaves = (f.leafIds?.length ?? f.leavesCap) - leavesToSize;
+  const fits = balance != null && room > 0 && sizable + cachedLeaves >= Math.min(detailLeaves, leavesToSize + cachedLeaves);
+  return {
+    estimate, balance, fits, leavesKnown: !!leaves, leavesWanted: leavesToSize, sizingCapped: sizable < leavesToSize,
+    fittingDetailLeaves: balance == null ? null : fittingDetailLeaves({ ...full, sizing: Math.min(full.sizing, detailLeaves * SIZING_TOKENS) }, f.perLeaf, balance),
+  };
 }
 
 export class HuntRefused extends Error {
@@ -215,11 +235,15 @@ export class HuntRefused extends Error {
 /** Start a hunt: refused when its estimate eats into the 100-token reserve. The chain does the rest. */
 export async function startNicheHunt(f: NicheHuntFilters, name?: string | null): Promise<{ id: string; plan: HuntPlan }> {
   finderOrThrow();
+  // One hunt at a time: two at once can't reuse each other's leaf counts (two started 6 s apart
+  // spent 873 + 769 tokens on the same leaves).
+  const runningNow = must(await db().from("pl_hunts").select("id, name").in("status", ["listing", "sizing", "detailing"]).limit(1), "running hunts") as { id: string; name: string }[];
+  if (runningNow.length) throw new Error(`A hunt is already running (${runningNow[0].name}): wait for it, or cancel it`);
   const plan = await planHunt(f);
   if (plan.balance == null) throw new Error("Couldn't read Keepa's token balance");
   if (!plan.fits) {
     throw new HuntRefused(
-      `This hunt could use ${plan.estimate.total} tokens; the balance is ${plan.balance} and ${TOKEN_RESERVE} stay in reserve. ` +
+      `This hunt needs more than the balance allows: ${plan.balance} tokens, ${TOKEN_RESERVE} kept in reserve. ` +
       (plan.fittingDetailLeaves ? `Detailing ${plan.fittingDetailLeaves} leaves instead of ${f.detailLeaves} fits.` : "Even sizing the leaves doesn't fit: size fewer leaves or wait for the refill."),
       plan,
     );
@@ -230,7 +254,7 @@ export async function startNicheHunt(f: NicheHuntFilters, name?: string | null):
   const row = must(await db().from("pl_hunts").insert({
     name: (name?.trim() || `Niche Hunt · ${label} · ${f.leafIds?.length ?? f.leavesCap} leaves → ${f.detailLeaves} × ${f.perLeaf}`).slice(0, 200),
     filters: f, asins: [], status: leaves ? "sizing" : "listing", leaves, last_progress_at: new Date().toISOString(),
-    progress: { leaves: leaves?.length ?? null, sized: 0, detail: null, detailed: 0, estimate: plan.estimate },
+    progress: { leaves: leaves?.length ?? null, sized: 0, detail: null, detailed: 0, estimate: plan.estimate, sizingBudget: plan.estimate.sizing, leavesWanted: plan.leavesWanted },
   }).select("id").single(), "start hunt") as { id: string };
   return { id: row.id, plan };
 }
@@ -313,21 +337,26 @@ export async function processHunt(id: string, budgetMs = 40_000): Promise<HuntPr
     if (h.status === "sizing") {
       const key = filtersKey(f);
       const leaves = [...h.leaves!];
-      const cached = await cachedCounts(leaves.filter((l) => l.matches == null).map((l) => l.id), key);
+      const cached = await cachedCounts(leaves.filter((l) => l.matches == null && !l.skipped).map((l) => l.id), key);
+      // Stage 1's spend so far, against its budget (the balance at the start, less reserve, tree and detail).
+      const budget = h.progress?.sizingBudget ?? Infinity;
+      let spentSizing = leaves.reduce((a, l) => a + (l.cached ? 0 : l.finderTokens ?? 0), 0);
       for (const l of leaves) {
-        if (l.matches != null) continue;
+        if (l.matches != null || l.skipped) continue;
         const c = cached.get(l.id);
         if (c) Object.assign(l, { matches: c.matches, asins: c.asins, finderTokens: 0, cached: true });
+        else if (spentSizing + SIZING_TOKENS > budget) l.skipped = true;
         else {
           if (!time()) break;
           const r = await keepa.productFinder(finderSelection(f, l.id));
           await addTokens(id, r.tokensUsed, "finder");
           Object.assign(l, { matches: r.total, asins: r.asins.map((a) => a.toUpperCase()), finderTokens: r.tokensUsed, cached: false });
+          spentSizing += r.tokensUsed;
           must(await d.from("pl_leaf_counts").upsert({ leaf_id: l.id, filters_key: key, matches: r.total, asins: l.asins, finder_tokens: r.tokensUsed, counted_at: new Date().toISOString() }, { onConflict: "leaf_id,filters_key" }), "save leaf count");
         }
         await save({ leaves });
       }
-      if (leaves.every((l) => l.matches != null)) {
+      if (leaves.every((l) => l.matches != null || l.skipped)) {
         // The most promising leaves: most matches first, at least minLeafMatches.
         const picked = new Set(leaves.filter((l) => (l.matches ?? 0) >= f.minLeafMatches).sort((a, b) => (b.matches ?? 0) - (a.matches ?? 0)).slice(0, f.detailLeaves).map((l) => l.id));
         for (const l of leaves) l.detail = picked.has(l.id);
@@ -403,7 +432,7 @@ export async function cancelHunt(id: string) {
  * hunt: each detailed leaf is a niche of its best sellers. An older single-page hunt: grouped by
  * each product's own leaf category.
  */
-export async function loadHunt(id: string, exhausted = false, override?: Partial<NicheHuntFilters>): Promise<HuntResult> {
+export async function loadHunt(id: string, exhausted = false, override?: Partial<NicheHuntFilters>, opts: { strict?: boolean } = {}): Promise<HuntResult> {
   const d = db();
   const hunt = must(await d.from("pl_hunts").select(HUNT_COLS).eq("id", id).single(), "hunt") as HuntRow;
   const filters = { ...validFiltersOrStored(hunt.filters), ...(override ?? {}) };
@@ -418,15 +447,33 @@ export async function loadHunt(id: string, exhausted = false, override?: Partial
     snaps = hunt.leaves.filter((l) => l.detailed).flatMap((l) => (l.asins ?? []).slice(0, filters.perLeaf)
       .map((a) => bySnap.get(a)).filter((x): x is HuntAsin => !!x).map((s) => ({ ...s, leaf_category: l.name, leaf_category_id: l.id })));
   } else snaps = [...bySnap.values()];
-  const niches = groupNiches(snaps, filters, dismissed);
-  const all = groupNiches(snaps, { ...filters, minAsins: 1 }, dismissed);
+  const niches = groupNiches(snaps, filters, dismissed, opts);
+  // Every niche with anything in it, for the totals; the funnel over every detailed product.
+  const all = groupNiches(snaps, { ...filters, minAsins: 0 }, dismissed);
   return {
     hunt: { ...hunt, filters },
     niches,
     qualifying: all.reduce((a, n) => a + n.count, 0),
-    incumbents: all.reduce((a, n) => a + n.asins.filter((x) => x.incumbent).length, 0),
+    near: all.reduce((a, n) => a + n.nearCount, 0),
+    incumbents: all.reduce((a, n) => a + n.incumbentCount, 0),
+    funnel: funnel([...new Map(snaps.map((x) => [x.asin, x])).values()], filters),
     exhausted,
   };
+}
+
+/** The qualifying thresholds (not the finder's), which a re-qualify may change. */
+const QUALIFYING_KEYS = ["priceMin", "priceMax", "ratingMin", "ratingMax", "maxReviews", "minRankDrops90", "maxWeightG", "smallParcel", "noAmazon", "excludeAmazonBrands", "minAsins"] as const;
+
+/**
+ * Re-run qualification on a hunt's cached detail with new thresholds: 0 tokens. The finder filters
+ * and the leaves are unchanged (they'd need a new hunt); the new thresholds are kept on the hunt.
+ */
+export async function requalifyHunt(id: string, thresholds: Partial<NicheHuntFilters>, opts: { strict?: boolean } = {}): Promise<HuntResult> {
+  const hunt = must(await db().from("pl_hunts").select("filters").eq("id", id).single(), "hunt") as { filters: NicheHuntFilters };
+  const next: Record<string, unknown> = { ...validFiltersOrStored(hunt.filters) };
+  for (const k of QUALIFYING_KEYS) if (thresholds[k] !== undefined) next[k] = thresholds[k];
+  must(await db().from("pl_hunts").update({ filters: next }).eq("id", id), "requalify");
+  return loadHunt(id, false, undefined, opts);
 }
 
 export async function listHunts(): Promise<Omit<HuntRow, "asins" | "filters" | "leaves">[]> {
@@ -473,7 +520,10 @@ export async function candidateFromNiche(huntId: string, key: string) {
   const niche = niches.find((n) => n.key === key);
   if (!niche) throw new Error("That niche isn't in this hunt (dismissed, or the hunt changed)");
   const card = await activeRateCard();
-  const picked = [...niche.asins].sort((a, b) => (b.sales ?? 0) - (a.sales ?? 0)).slice(0, 10);
+  // Highest sales first; the reference is the best-selling qualifying (or near-miss) one.
+  const bySales = (a: { sales: number | null }, b: { sales: number | null }) => (b.sales ?? 0) - (a.sales ?? 0);
+  const page = niche.asins.filter((a) => a.qualifies || a.near).sort(bySales);
+  const picked = [...page.slice(0, 1), ...niche.asins.filter((a) => a !== page[0]).sort(bySales)].slice(0, 10);
   const candidate = await createCandidate({ name: niche.name, niche_keyword: niche.name, category: referralFor(niche.rootCategory, card), asins: picked.map((a) => a.asin) });
   const d = db();
   for (const a of picked) {

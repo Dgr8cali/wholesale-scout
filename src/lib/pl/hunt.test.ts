@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defaultFilters, disqualify, filtersKey, finderSelection, fittingDetailLeaves, groupNiches, huntEstimate, nicheOfAsin, nicheOfTitle, shapeOf, validFilters, type HuntAsin } from "./hunt";
+import { defaultFilters, disqualify, filtersKey, finderSelection, fittingDetailLeaves, funnel, groupNiches, huntEstimate, nicheOfAsin, nicheOfTitle, qualify, shapeOf, validFilters, type HuntAsin } from "./hunt";
 
 const CATS = [{ id: 11052681, name: "Home & Kitchen" }, { id: 117332031, name: "Beauty" }, { id: 79903031, name: "DIY & Tools" }];
 const F = defaultFilters(CATS);
@@ -13,22 +13,25 @@ const snap = (asin: string, title: string, over: Partial<HuntAsin> = {}): HuntAs
 
 describe("Niche Hunt", () => {
   it("defaults to Gate 0's categories and Gatekeeper's thresholds", () => {
-    expect(F).toMatchObject({ priceMin: 18, priceMax: 35, maxReviews: 500, ratingMin: 3.8, ratingMax: 4.3, minRankDrops90: 300, maxWeightG: 500, minAsins: 3, leavesCap: 60, detailLeaves: 15, perLeaf: 12, minLeafMatches: 5 });
+    // Wide finder, strict qualifying.
+    expect(F).toMatchObject({ finderPriceMin: 14, finderPriceMax: 45, finderRatingMin: 3.5, finderRatingMax: 4.7, maxRank90: 100000, noAmazon: true, minListedMonths: 6, excludeAmazonBrands: true });
+    expect(F).toMatchObject({ priceMin: 18, priceMax: 35, maxReviews: 500, ratingMin: 3.8, ratingMax: 4.3, minRankDrops90: 300, maxWeightG: 500, smallParcel: true, minAsins: 3 });
+    expect(F).toMatchObject({ leavesCap: 120, detailLeaves: 15, perLeaf: 12, minLeafMatches: 5 });
     expect(F.categories).toEqual([11052681, 79903031]); // Beauty is an avoid category
     expect(validFilters({ ...F, leavesCap: 300 })).toMatch(/1–200/);
     expect(validFilters({ ...F, leafIds: [3313566031] })).toMatchObject({ leafIds: [3313566031] });
     expect(validFilters({ ...F, categories: [] })).toMatch(/category/);
   });
 
-  it("sizes one leaf with the finder: only what it can check, Keepa's smallest page", () => {
+  it("sizes one leaf with the wide finder filters: no weight, size or review filter", () => {
     const s = finderSelection(F, 3313566031, Date.UTC(2026, 9, 2));
     expect(s).toMatchObject({
-      categories_include: [3313566031], current_BUY_BOX_SHIPPING_gte: 1800, current_BUY_BOX_SHIPPING_lte: 3500,
-      current_RATING_gte: 38, current_RATING_lte: 43, avg90_SALES_gte: 1, avg90_SALES_lte: 75000, availabilityAmazon: [-1], buyBoxStatsAmazon90_lte: 0,
-      packageWeight_lte: 500, packageLength_lte: 350, productType: [0], singleVariation: true, perPage: 50, sort: [["avg90_SALES", "asc"]],
+      categories_include: [3313566031], current_BUY_BOX_SHIPPING_gte: 1400, current_BUY_BOX_SHIPPING_lte: 4500,
+      current_RATING_gte: 35, current_RATING_lte: 47, avg90_SALES_gte: 1, avg90_SALES_lte: 100000, availabilityAmazon: [-1],
+      productType: [0], singleVariation: true, perPage: 50, sort: [["avg90_SALES", "asc"]],
     });
     expect((s.brand as string[])[0]).toBe("✜Amazon Basics");
-    expect(s).not.toHaveProperty("current_COUNT_REVIEWS_lte"); // reviews qualify after the fetch (incumbents stay)
+    for (const k of ["packageWeight_lte", "packageLength_lte", "current_COUNT_REVIEWS_lte", "buyBoxStatsAmazon90_lte"]) expect(s).not.toHaveProperty(k);
   });
 
   it("estimates both stages, and how many leaves to detail fit the balance less the 100 reserve", () => {
@@ -42,9 +45,9 @@ describe("Niche Hunt", () => {
     expect(huntEstimate({ rootsWithoutTree: 0, leavesToSize: 1, detailLeaves: 1, perLeaf: 9 }).total).toBe(29);
   });
 
-  it("reuses a leaf's count only under the same finder filters", () => {
-    expect(filtersKey(F)).toBe(filtersKey({ ...F, detailLeaves: 3, perLeaf: 5, minAsins: 2, maxReviews: 900 }));
-    expect(filtersKey(F)).not.toBe(filtersKey({ ...F, priceMax: 40 }));
+  it("reuses a leaf's count only under the same finder filters (the qualifying ones don't matter)", () => {
+    expect(filtersKey(F)).toBe(filtersKey({ ...F, detailLeaves: 3, perLeaf: 5, minAsins: 2, maxReviews: 900, priceMax: 40, maxWeightG: 700 }));
+    expect(filtersKey(F)).not.toBe(filtersKey({ ...F, finderPriceMax: 50 }));
   });
 
   it("names niches from titles: brand, sizes, colours and marketing words out", () => {
@@ -80,7 +83,8 @@ describe("Niche Hunt", () => {
     const n = groupNiches(rows, F);
     expect(n).toHaveLength(1);
     expect(n[0]).toMatchObject({ key: "cutlery tray", count: 3, medianPrice: 22, medianReviews: 120, maxReviews: 2400, shape: "contested", salesSum: 650, rootCategory: "Home & Kitchen" });
-    expect(n[0].asins.map((a) => [a.asin, a.qualifies, a.incumbent])).toEqual([["A1", true, false], ["A2", true, false], ["A3", true, false], ["A4", false, true]]);
+    expect(n[0].asins.map((a) => [a.asin, a.qualifies, a.incumbent])).toEqual([["A1", true, false], ["A2", true, false], ["A3", true, false], ["A4", false, true], ["A5", false, false]]);
+    expect(n[0]).toMatchObject({ nearCount: 0, incumbentCount: 1 });
     expect(groupNiches(rows, F, new Set(["cutlery tray"]))).toEqual([]);
     expect(groupNiches(rows, { ...F, minAsins: 2 }).map((x) => x.key)).toEqual(["cutlery tray", "box organiser"]);
   });
@@ -94,5 +98,49 @@ describe("Niche Hunt", () => {
 
   it("shapes: open, contested, dominated", () => {
     expect([shapeOf([100, 900]), shapeOf([1200, 300]), shapeOf([1200, 1500]), shapeOf([6000])]).toEqual(["open", "contested", "dominated", "dominated"]);
+  });
+});
+
+describe("Niche Hunt qualifying: strict, near misses, the funnel", () => {
+  it("near misses fail only Gatekeeper's warn band, or miss data; hard fails are fails", () => {
+    expect(qualify(snap("A", "x"), F).status).toBe("qualifies");
+    expect(qualify(snap("A", "x", { price: 38 }), F)).toMatchObject({ status: "near", near: ["price £38.00"] });
+    expect(qualify(snap("A", "x", { price: 44 }), F)).toMatchObject({ status: "fails", fails: ["price £44.00"] });
+    expect(qualify(snap("A", "x", { rating: 4.5 }), F).status).toBe("near");
+    expect(qualify(snap("A", "x", { rating: 4.6 }), F).status).toBe("fails");
+    expect(qualify(snap("A", "x", { weight: 650 }), F).status).toBe("near");
+    expect(qualify(snap("A", "x", { weight: 800 }), F).status).toBe("fails");
+    expect(qualify(snap("A", "x", { weight: null, dimensions: null }), F)).toMatchObject({ status: "near", near: ["no weight", "no size"] });
+    expect(qualify(snap("A", "x", { rank_drops_90d: 60 }), F).status).toBe("fails");
+    expect(qualify(snap("A", "x", { review_count: 1200, price: 38 }), F).status).toBe("incumbent");
+    expect(disqualify(snap("A", "x", { price: 38, weight: 2000 }), F)).toEqual(["2000 g", "price £38.00"]);
+  });
+
+  it("counts near misses towards a niche unless strict, and shows every product's status", () => {
+    const rows = [
+      snap("A1", "x", { leaf_category: "Bath Mats", leaf_category_id: 1 }),
+      snap("A2", "x", { leaf_category: "Bath Mats", leaf_category_id: 1, price: 39 }),
+      snap("A3", "x", { leaf_category: "Bath Mats", leaf_category_id: 1, weight: null }),
+      snap("A4", "x", { leaf_category: "Bath Mats", leaf_category_id: 1, rank_drops_90d: 30 }),
+    ];
+    const [n] = groupNiches(rows, F);
+    expect(n).toMatchObject({ count: 1, nearCount: 2, incumbentCount: 0, maxReviews: 200 });
+    expect(n.asins.map((a) => [a.asin, a.status])).toEqual([["A1", "qualifies"], ["A2", "near"], ["A3", "near"], ["A4", "fails"]]);
+    expect(groupNiches(rows, F, new Set(), { strict: true })).toEqual([]);
+  });
+
+  it("says which check removed how many, in order", () => {
+    const rows = [
+      snap("A1", "x"), snap("A2", "x", { price: 50 }), snap("A3", "x", { price: 38 }), snap("A4", "x", { rating: 4.8 }),
+      snap("A5", "x", { rank_drops_90d: 30 }), snap("A6", "x", { amazon_last_seen_days: 10 }), snap("A7", "x", { weight: 900 }),
+      snap("A8", "x", { review_count: 3000 }),
+    ];
+    const r = funnel(rows, F);
+    expect(r.start).toBe(8);
+    expect(r.steps.map((x) => [x.label, x.removed, x.near])).toEqual([
+      ["price £18–35", 1, 1], ["rating 3.8–4.3", 1, 0], ["100+ sales a month", 1, 0], ["no Amazon in 90 days", 1, 0],
+      ["not an Amazon brand", 0, 0], ["500 g or less", 1, 0], ["small parcel", 0, 0],
+    ]);
+    expect(r).toMatchObject({ incumbents: 1, near: 1, qualifying: 1 });
   });
 });

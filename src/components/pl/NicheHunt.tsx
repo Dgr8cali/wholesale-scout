@@ -28,9 +28,9 @@ interface Start {
   keepa: boolean;
   hunts: { id: string; name: string; finder_total: number | null; fetched: number; reused: number; token_cost: number; created_at: string }[];
 }
-interface HuntLeaf { id: number; name: string; products: number | null; matches?: number; finderTokens?: number; cached?: boolean; detail?: boolean; detailed?: boolean; fetched?: number; reused?: number }
+interface HuntLeaf { id: number; name: string; products: number | null; matches?: number; finderTokens?: number; cached?: boolean; skipped?: boolean; detail?: boolean; detailed?: boolean; fetched?: number; reused?: number }
 type HuntStatus = "listing" | "sizing" | "detailing" | "done" | "error" | "cancelled";
-interface Plan { estimate: HuntEstimate; balance: number | null; fits: boolean; fittingDetailLeaves: number | null; leavesKnown: boolean }
+interface Plan { estimate: HuntEstimate; balance: number | null; fits: boolean; fittingDetailLeaves: number | null; leavesKnown: boolean; leavesWanted: number; sizingCapped: boolean }
 interface HuntResult {
   hunt: {
     id: string; name: string; filters: NicheHuntFilters; asins: string[]; finder_total: number | null; fetched: number; reused: number; finder_tokens: number; detail_tokens: number;
@@ -38,7 +38,9 @@ interface HuntResult {
   };
   niches: Niche[];
   qualifying: number;
+  near: number;
   incumbents: number;
+  funnel: { start: number; steps: { label: string; removed: number; near: number }[]; incumbents: number; near: number; qualifying: number };
 }
 
 const n0 = (v: number | null | undefined) => (v == null ? "—" : Math.round(v).toLocaleString("en-GB"));
@@ -49,7 +51,7 @@ const OE_URL = "https://sellercentral.amazon.co.uk/opportunity-explorer";
 function progressLine(h: HuntResult["hunt"]): string {
   if (h.status === "listing") return "Listing the leaf categories…";
   const leaves = h.leaves ?? [];
-  const sized = leaves.filter((l) => l.matches != null).length, picked = leaves.filter((l) => l.detail).length, detailed = leaves.filter((l) => l.detailed).length;
+  const sized = leaves.filter((l) => l.matches != null || l.skipped).length, picked = leaves.filter((l) => l.detail).length, detailed = leaves.filter((l) => l.detailed).length;
   const size = `Sizing leaves ${sized}/${leaves.length}`;
   if (h.status === "sizing") return `${size} → Detailing`;
   return `${size} → Detailing ${detailed}/${picked}`;
@@ -176,26 +178,46 @@ export function NicheHunt({ onCandidate }: { onCandidate: (id: string) => void }
             <Button variant="ghost" size="sm" onClick={() => setF(start.defaults)}>Reset to defaults</Button>
           </div>
         </div>
-        <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
-          <Num label="Min price (£)" value={f.priceMin} onChange={(v) => set({ priceMin: v })} step={0.5} />
-          <Num label="Max price (£)" value={f.priceMax} onChange={(v) => set({ priceMax: v })} step={0.5} />
-          <Num label="Max reviews (qualifying)" value={f.maxReviews} onChange={(v) => set({ maxReviews: v })} step={50} />
-          <Num label="Min rating" value={f.ratingMin} onChange={(v) => set({ ratingMin: v })} step={0.1} />
-          <Num label="Max rating" value={f.ratingMax} onChange={(v) => set({ ratingMax: v })} step={0.1} />
-          <Num label="Min rank drops, 90 days" value={f.minRankDrops90} onChange={(v) => set({ minRankDrops90: v })} step={10} hint="≈ sales a month × 3" />
-          <Num label="Max 90-day rank" value={f.maxRank90} onChange={(v) => set({ maxRank90: v })} step={5000} hint="The finder's pre-filter" />
-          <Num label="Max package weight (g)" value={f.maxWeightG} onChange={(v) => set({ maxWeightG: v })} step={50} />
-          <Num label="Listed at least (months)" value={f.minListedMonths} onChange={(v) => set({ minListedMonths: v })} />
-          <Num label="Min qualifying ASINs a niche" value={f.minAsins} onChange={(v) => set({ minAsins: v })} />
-          <Num label={`Leaves to size (1–${LIMITS.leavesCap})`} value={f.leavesCap} onChange={(v) => set({ leavesCap: v })} step={5} hint="Stage 1: the largest leaves, ~11 tokens each" />
+        <div className="grid gap-4 lg:grid-cols-2">
+          <fieldset className="space-y-3 rounded-lg border p-3">
+            <legend className="px-1 text-sm font-semibold">Finder filters <span className="font-normal text-muted-foreground">(wide — what Keepa searches)</span></legend>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <Num label="Min price (£)" value={f.finderPriceMin} onChange={(v) => set({ finderPriceMin: v })} step={0.5} />
+              <Num label="Max price (£)" value={f.finderPriceMax} onChange={(v) => set({ finderPriceMax: v })} step={0.5} />
+              <Num label="Max 90-day rank" value={f.maxRank90} onChange={(v) => set({ maxRank90: v })} step={5000} />
+              <Num label="Min rating" value={f.finderRatingMin} onChange={(v) => set({ finderRatingMin: v })} step={0.1} />
+              <Num label="Max rating" value={f.finderRatingMax} onChange={(v) => set({ finderRatingMax: v })} step={0.1} />
+              <Num label="Listed at least (months)" value={f.minListedMonths} onChange={(v) => set({ minListedMonths: v })} />
+            </div>
+            <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+              <Toggle label="No Amazon offer (now; 90 days when qualifying)" checked={f.noAmazon} onChange={(v) => set({ noAmazon: v })} />
+              <Toggle label="Leave out Amazon's own brands" checked={f.excludeAmazonBrands} onChange={(v) => set({ excludeAmazonBrands: v })} />
+            </div>
+            <p className="text-xs text-muted-foreground">No weight or size filter here: Keepa often lacks them, and the finder would drop those products. They&apos;re checked when qualifying.</p>
+          </fieldset>
+          <fieldset className="space-y-3 rounded-lg border p-3">
+            <legend className="px-1 text-sm font-semibold">Qualifying thresholds <span className="font-normal text-muted-foreground">(strict — what counts as page-one material)</span></legend>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <Num label="Min price (£)" value={f.priceMin} onChange={(v) => set({ priceMin: v })} step={0.5} />
+              <Num label="Max price (£)" value={f.priceMax} onChange={(v) => set({ priceMax: v })} step={0.5} />
+              <Num label="Max reviews" value={f.maxReviews} onChange={(v) => set({ maxReviews: v })} step={50} hint="Over it: an incumbent" />
+              <Num label="Min rating" value={f.ratingMin} onChange={(v) => set({ ratingMin: v })} step={0.1} />
+              <Num label="Max rating" value={f.ratingMax} onChange={(v) => set({ ratingMax: v })} step={0.1} />
+              <Num label="Min rank drops, 90 days" value={f.minRankDrops90} onChange={(v) => set({ minRankDrops90: v })} step={10} hint="÷ 3 = sales a month; fast sellers by bought-past-month" />
+              <Num label="Max package weight (g)" value={f.maxWeightG} onChange={(v) => set({ maxWeightG: v })} step={50} />
+              <Num label="Min ASINs a niche" value={f.minAsins} onChange={(v) => set({ minAsins: v })} />
+            </div>
+            <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+              <Toggle label="Small parcel (35 × 25 × 12 cm) when Keepa has the size" checked={f.smallParcel} onChange={(v) => set({ smallParcel: v })} />
+            </div>
+            <p className="text-xs text-muted-foreground">A <b>near miss</b> fails only Gatekeeper&apos;s warn band (£15–40, rating 3.6–4.5, 700 g) or is missing its weight or size.</p>
+          </fieldset>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-4">
+          <Num label={`Leaves to size (1–${LIMITS.leavesCap})`} value={f.leavesCap} onChange={(v) => set({ leavesCap: v })} step={10} hint="Stage 1: the largest first, ~11 tokens each, capped by the balance" />
           <Num label="Skip leaves under … matches" value={f.minLeafMatches} onChange={(v) => set({ minLeafMatches: v })} />
           <Num label={`Leaves to detail, N (1–${LIMITS.detailLeaves})`} value={f.detailLeaves} onChange={(v) => set({ detailLeaves: v })} hint="Stage 2: most matches first" />
           <Num label={`ASINs per leaf (1–${LIMITS.perLeaf})`} value={f.perLeaf} onChange={(v) => set({ perLeaf: v })} hint="Best-selling first, ~2 tokens each" />
-        </div>
-        <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
-          <Toggle label="No Amazon offer, now or in the last 90 days" checked={f.noAmazon} onChange={(v) => set({ noAmazon: v })} />
-          <Toggle label="Small parcel (35 × 25 × 12 cm) when Keepa has the size" checked={f.smallParcel} onChange={(v) => set({ smallParcel: v })} />
-          <Toggle label="Leave out Amazon's own brands" checked={f.excludeAmazonBrands} onChange={(v) => set({ excludeAmazonBrands: v })} />
         </div>
         <div className="space-y-1.5">
           <span className="field-label">Categories (the category a product ranks in)</span>
@@ -221,7 +243,7 @@ export function NicheHunt({ onCandidate }: { onCandidate: (id: string) => void }
           {plan ? (
             <div className="space-y-0.5 text-sm text-muted-foreground">
               {plan.estimate.tree > 0 && <div>Category tree: up to <span className="num">{plan.estimate.tree}</span> tokens (listed once, kept a week)</div>}
-              <div>Stage 1, size leaves: <span className="num">{plan.estimate.leavesToSize}</span>{plan.leavesKnown ? "" : " (up to)"} × 11 = <span className="num">{plan.estimate.sizing}</span> tokens{plan.leavesKnown && plan.estimate.leavesToSize < (f.leafIds?.length ?? f.leavesCap) ? " (the rest counted in the last 7 days)" : ""}</div>
+              <div>Stage 1, size leaves: <span className="num">{plan.estimate.leavesToSize}</span>{plan.sizingCapped ? ` of ${plan.leavesWanted} (capped by the balance; the largest first)` : plan.leavesKnown ? "" : " (up to)"} × 11 = <span className="num">{plan.estimate.sizing}</span> tokens{plan.leavesKnown && plan.leavesWanted < (f.leafIds?.length ?? f.leavesCap) ? " (the rest counted in the last 7 days)" : ""}</div>
               <div>Stage 2, detail: <span className="num">{Math.min(f.detailLeaves, f.leafIds?.length ?? f.detailLeaves)}</span> leaves × {f.perLeaf} ASINs × ~2 = <span className="num">{plan.estimate.detail}</span> tokens (less any fetched in the last 7 days)</div>
               <div className="text-foreground">Total up to <b className="num">{plan.estimate.total}</b> · balance <span className="num">{plan.balance?.toLocaleString("en-GB") ?? "—"}</span>, {TOKEN_RESERVE} kept in reserve</div>
               {!plan.fits && (
@@ -237,6 +259,16 @@ export function NicheHunt({ onCandidate }: { onCandidate: (id: string) => void }
       </section>
 
       {result ? <Results result={result} start={start} onReload={() => loadHunt(result.hunt.id)} onPick={loadHunt} onCandidate={onCandidate}
+        onRequalify={async () => {
+          try {
+            const q = { priceMin: f.priceMin, priceMax: f.priceMax, ratingMin: f.ratingMin, ratingMax: f.ratingMax, maxReviews: f.maxReviews, minRankDrops90: f.minRankDrops90, maxWeightG: f.maxWeightG, smallParcel: f.smallParcel, noAmazon: f.noAmazon, excludeAmazonBrands: f.excludeAmazonBrands, minAsins: f.minAsins };
+            const r = await api<HuntResult>(`/api/pl/hunt/${result.hunt.id}/requalify`, { method: "POST", json: { thresholds: q } });
+            setResult(await api<HuntResult>(`/api/pl/hunt/${r.hunt.id}?minAsins=1`));
+            toast.success(`Re-qualified with the thresholds above: ${r.qualifying} qualifying, ${r.near} near misses, ${r.incumbents} incumbents. 0 tokens.`);
+          } catch (e) {
+            toast.error((e as Error).message);
+          }
+        }}
         onStart={async () => setStart(await api<Start>("/api/pl/hunt"))} /> : (
         <EmptyState icon={<CrosshairIcon />} title="No hunt yet">Set the filters and click Hunt niches. Niches with enough qualifying products appear here, best-selling first.</EmptyState>
       )}
@@ -258,10 +290,12 @@ function Toggle({ label, checked, onChange }: { label: string; checked: boolean;
   return <label className="flex items-center gap-2"><Switch checked={checked} onCheckedChange={onChange} /> {label}</label>;
 }
 
-function Results({ result, start, onReload, onPick, onCandidate, onStart }: {
+function Results({ result, start, onReload, onPick, onCandidate, onStart, onRequalify }: {
   result: HuntResult; start: Start; onReload: () => void; onPick: (id: string) => void; onCandidate: (id: string) => void; onStart: () => void;
+  onRequalify: () => Promise<void>;
 }) {
   const [shape, setShape] = useState<"" | Shape>("");
+  const [strict, setStrict] = useState(false);
   const [minCount, setMinCount] = useState(result.hunt.filters.minAsins ?? 3);
   const [sort, setSort] = useState<"sales" | "count" | "price">("sales");
   const [open, setOpen] = useState<Set<string>>(new Set());
@@ -272,9 +306,9 @@ function Results({ result, start, onReload, onPick, onCandidate, onStart }: {
   const [showLeaves, setShowLeaves] = useState(false);
 
   const rows = useMemo(() => result.niches
-    .filter((n) => n.count >= minCount && (!shape || n.shape === shape))
-    .sort((a, b) => (sort === "count" ? b.count - a.count : sort === "price" ? (a.medianPrice ?? 0) - (b.medianPrice ?? 0) : b.salesSum - a.salesSum)), [result, minCount, shape, sort]);
-  const smaller = result.niches.filter((n) => n.count < minCount).length;
+    .filter((n) => n.count + (strict ? 0 : n.nearCount) >= minCount && (!shape || n.shape === shape))
+    .sort((a, b) => (sort === "count" ? b.count - a.count : sort === "price" ? (a.medianPrice ?? 0) - (b.medianPrice ?? 0) : b.salesSum - a.salesSum)), [result, minCount, shape, sort, strict]);
+  const smaller = result.niches.filter((n) => n.count + (strict ? 0 : n.nearCount) < minCount && n.count + n.nearCount > 0).length;
 
   const create = async (n: Niche) => {
     setBusy(n.key);
@@ -312,7 +346,7 @@ function Results({ result, start, onReload, onPick, onCandidate, onStart }: {
         <div className="space-y-1">
           <h2 className="section-label">Niches</h2>
           <p className="text-sm text-muted-foreground">
-            {h.name} · {ago(h.created_at)} · {h.leaves ? `${h.leaves.length} leaves` : `${h.finder_total?.toLocaleString("en-GB") ?? "?"} found`}, {h.asins.length} ASINs detailed ({h.fetched} fetched, {h.reused} reused) · <b className="text-foreground">{h.token_cost} tokens</b> · {result.qualifying} qualifying ASINs, {result.incumbents} incumbents
+            {h.name} · {ago(h.created_at)} · {h.leaves ? `${h.leaves.length} leaves` : `${h.finder_total?.toLocaleString("en-GB") ?? "?"} found`}, {h.asins.length} ASINs detailed ({h.fetched} fetched, {h.reused} reused) · <b className="text-foreground">{h.token_cost} tokens</b> · {result.qualifying} qualifying, {result.near} near misses, {result.incumbents} incumbents
           </p>
           {h.leaves && (
             <p className={cn("flex items-center gap-2 text-sm font-medium", running(h.status) ? "text-brand" : h.status === "error" ? "text-fail" : "text-muted-foreground")}>
@@ -334,8 +368,13 @@ function Results({ result, start, onReload, onPick, onCandidate, onStart }: {
           <NativeSelect value={shape} onChange={(e) => setShape(e.target.value as "" | Shape)}>
             <NativeSelectOption value="">Any</NativeSelectOption><NativeSelectOption value="open">Open</NativeSelectOption><NativeSelectOption value="contested">Contested</NativeSelectOption><NativeSelectOption value="dominated">Dominated</NativeSelectOption>
           </NativeSelect></label>
-        <label className="space-y-1"><span className="field-label">At least … qualifying ASINs</span>
+        <label className="space-y-1"><span className="field-label">At least … {strict ? "qualifying" : "qualifying + near-miss"} ASINs</span>
           <Input className="num w-28" type="number" min={1} value={minCount} onChange={(e) => setMinCount(Math.max(1, Number(e.target.value) || 1))} /></label>
+        <label className="flex items-center gap-2 pb-2 text-sm"><Switch checked={strict} onCheckedChange={setStrict} /> Strict (qualifying only)</label>
+        <Button variant="outline" size="sm" className="mb-0.5" disabled={!!busy || running(h.status)} onClick={async () => { setBusy("requalify"); try { await onRequalify(); } finally { setBusy(null); } }}
+          title="Qualify this hunt's fetched products again with the thresholds above: 0 tokens">
+          {busy === "requalify" ? <LoaderIcon className="animate-spin" /> : null} Re-qualify this hunt
+        </Button>
         <label className="space-y-1"><span className="field-label">Sort</span>
           <NativeSelect value={sort} onChange={(e) => setSort(e.target.value as typeof sort)}>
             <NativeSelectOption value="sales">Sales a month, most first</NativeSelectOption><NativeSelectOption value="count">Qualifying ASINs</NativeSelectOption><NativeSelectOption value="price">Median price</NativeSelectOption>
@@ -350,7 +389,7 @@ function Results({ result, start, onReload, onPick, onCandidate, onStart }: {
         <div className="overflow-x-auto rounded-lg border">
           <table className="w-full text-sm">
             <thead><tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase">
-              <th className="px-2 py-1.5">Niche</th><th className="px-2 py-1.5 text-right">ASINs</th><th className="px-2 py-1.5 text-right">Median price</th><th className="px-2 py-1.5 text-right">Median reviews</th>
+              <th className="px-2 py-1.5">Niche</th><th className="px-2 py-1.5 text-right" title="Qualifying · near misses · incumbents">Q · near · inc</th><th className="px-2 py-1.5 text-right">Median price</th><th className="px-2 py-1.5 text-right">Median reviews</th>
               <th className="px-2 py-1.5 text-right">Median rating</th><th className="px-2 py-1.5 text-right">Sales / mo</th><th className="px-2 py-1.5 text-right">Max reviews</th><th className="px-2 py-1.5">Shape</th><th />
             </tr></thead>
             <tbody>
@@ -363,7 +402,7 @@ function Results({ result, start, onReload, onPick, onCandidate, onStart }: {
                       </button>
                       <span className="pl-6 text-xs text-muted-foreground">{n.rootCategory ?? ""}</span>
                     </td>
-                    <td className="num px-2 py-2 text-right">{n.count}{n.asins.length > n.count ? <span className="text-muted-foreground"> +{n.asins.length - n.count}</span> : null}</td>
+                    <td className="num px-2 py-2 text-right whitespace-nowrap"><b>{n.count}</b> · <span className="text-warn">{n.nearCount}</span> · <span className="text-muted-foreground">{n.incumbentCount}</span></td>
                     <td className="num px-2 py-2 text-right">{money(n.medianPrice)}</td>
                     <td className="num px-2 py-2 text-right">{n0(n.medianReviews)}</td>
                     <td className="num px-2 py-2 text-right">{n.medianRating?.toFixed(1) ?? "—"}</td>
@@ -398,7 +437,10 @@ function Results({ result, start, onReload, onPick, onCandidate, onStart }: {
                             <td className="num px-2 py-1.5 text-right">{a.snap.rating?.toFixed(1) ?? "—"}</td>
                             <td className="num px-2 py-1.5 text-right">{n0(a.snap.avg_rank_90d)}</td>
                             <td className="num px-2 py-1.5 text-right">{a.salesFloor ? "≥ " : ""}{n0(a.sales)}</td>
-                            <td className="px-2 py-1.5">{a.qualifies ? <span className="text-pass">qualifies</span> : a.incumbent ? <span className="text-warn">incumbent (over the review cap)</span> : <span className="text-muted-foreground">{a.reasons.join(", ")}</span>}</td>
+                            <td className="px-2 py-1.5">{a.qualifies ? <span className="font-medium text-pass">Qualifies</span>
+                              : a.near ? <span><span className="font-medium text-warn">Near miss</span> <span className="text-muted-foreground">({a.reasons.join(", ")})</span></span>
+                              : a.incumbent ? <span><span className="font-medium text-ink-2">Incumbent</span> <span className="text-muted-foreground">(over the review cap{a.reasons.length ? `; ${a.reasons.join(", ")}` : ""})</span></span>
+                              : <span><span className="font-medium text-fail">Fails</span> <span className="text-muted-foreground">({a.reasons.join(", ")})</span></span>}</td>
                           </tr>
                         ))}</tbody>
                       </table>
@@ -409,6 +451,16 @@ function Results({ result, start, onReload, onPick, onCandidate, onStart }: {
             </tbody>
           </table>
         </div>
+      )}
+
+      {result.funnel.start > 0 && (
+        <p className="rounded-lg bg-surface-2 px-3 py-2 text-xs text-muted-foreground">
+          <b className="text-foreground">Why so few?</b> All {result.funnel.start} detailed (dismissed niches included)
+          {result.funnel.steps.filter((x) => x.removed || x.near).map((x) => ` → ${x.label}: −${x.removed}${x.near ? ` (${x.near} near miss${x.near === 1 ? "" : "es"} let through)` : ""}`).join("")}
+          {` → over ${h.filters.maxReviews} reviews: ${result.funnel.incumbents} incumbent${result.funnel.incumbents === 1 ? "" : "s"}`}
+          {` = ${result.funnel.qualifying} qualifying + ${result.funnel.near} near miss${result.funnel.near === 1 ? "" : "es"}.`}
+          {" "}Leaves: {h.leaves ? `${h.leaves.filter((l) => l.matches != null).length} sized, ${h.leaves.reduce((a, l) => a + (l.matches ?? 0), 0).toLocaleString("en-GB")} finder matches, ${h.leaves.filter((l) => l.matches === 0).length} with none` : "—"}.
+        </p>
       )}
 
       {h.leaves && h.leaves.length > 0 && (
@@ -423,7 +475,7 @@ function Results({ result, start, onReload, onPick, onCandidate, onStart }: {
                     <td className="px-2 py-1.5">{l.name} <span className="num text-muted-foreground">{l.id}</span></td>
                     <td className="num px-2 py-1.5 text-right">{l.matches == null ? "…" : l.matches.toLocaleString("en-GB")}</td>
                     <td className="num px-2 py-1.5 text-right">{l.matches == null ? "" : l.cached ? "0 (counted in the last 7 days)" : l.finderTokens}</td>
-                    <td className="px-2 py-1.5 text-muted-foreground">{l.detailed ? `detailed: ${l.fetched ?? 0} fetched, ${l.reused ?? 0} reused` : l.detail ? "to detail" : l.matches != null && l.matches < h.filters.minLeafMatches ? `skipped (under ${h.filters.minLeafMatches})` : l.matches != null ? "not in the top N" : ""}</td>
+                    <td className="px-2 py-1.5 text-muted-foreground">{l.skipped ? "not sized (balance)" : l.detailed ? `detailed: ${l.fetched ?? 0} fetched, ${l.reused ?? 0} reused` : l.detail ? "to detail" : l.matches != null && l.matches < h.filters.minLeafMatches ? `skipped (under ${h.filters.minLeafMatches})` : l.matches != null ? "not in the top N" : ""}</td>
                   </tr>
                 ))}</tbody>
               </table>
