@@ -36,7 +36,7 @@ The CSV reports still work, for a quick look or a range you haven't bulk-exporte
 | **Campaign report** | Measurement & reporting → Sponsored Products → Campaign | Each campaign's totals over the report's date range |
 | **Campaign Manager export** | Campaign Manager → the grid → Export | Each campaign's settings (state, type, targeting, start date, budget) and totals |
 
-Placement, targeting (keyword) and daily campaign reports are recognised too. Daily rows are kept as days. A report with a date range is kept as that range. A range is never split into made-up days.
+The **daily Campaign report** (time unit Daily: one row per campaign per day) and the **Placement report** (daily or for a range) are read and kept: the Bid up, Budget and Revive rules need the daily one (see [Ads: rules and proposals](/help/howto/ads-rules-and-proposals)). Targeting (keyword) reports are recognised too. Daily rows are kept as days. A report with a date range is kept as that range. A range is never split into made-up days.
 
 ## Importing
 
@@ -58,6 +58,8 @@ Placement, targeting (keyword) and daily campaign reports are recognised too. Da
 A bulk export links each campaign to the ASIN its product ads advertise. That wins over an ASIN in the campaign's name, but never over a different ASIN you set yourself. A campaign whose product ads advertise several ASINs isn't linked: the import says so, and you pick one. Without a bulk export, a campaign named with an ASIN ("AD_READY: B0H9ZKYYHZ") is linked to it. For any other campaign, set the ASIN in the **ASIN** column of the dashboard's campaign table. A campaign without one is listed under **Campaigns without a product** and doesn't count towards any product.
 
 ## The dashboard
+
+The dashboard is product by product: each product is a section (click its arrow to fold it) with its title, ASIN and image (from Keepa for 1 token if the app doesn't have them), its stock and launch plan, its figures and "Price, costs and target", then its campaigns (each opens to its placements), keywords and search terms. With more than one product, **Product** at the top picks one (remembered; Proposals and N-grams use the same choice). **Campaigns without a product** at the bottom lets you find the product for each one (by ASIN or words of the title, across the app's products, Niche Hunt and Keepa's cache, free; or look the ASIN up on Keepa for 1 token), see its title and image, and assign it; or **Archive** a campaign you don't care about (old tests): it leaves the dashboard and the rules, and **Archived campaigns** lists it to bring back.
 
 **Products**: one tile per ASIN, over all its campaigns. Spend, sales (orders and units), **ACoS**, **break-even ACoS**, profit after ads, cost per order, CPC, conversion (orders ÷ clicks), CTR (clicks ÷ impressions) and fees per unit. ACoS is green at or under the target, amber up to break-even, red past it.
 

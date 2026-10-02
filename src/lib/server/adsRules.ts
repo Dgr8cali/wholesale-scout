@@ -39,7 +39,7 @@ async function rulesInput(): Promise<RulesInput> {
     adsDashboard(), loadAll(),
     d.from("ads_imports").select("date_from, date_to").eq("report_type", "bulk").order("imported_at", { ascending: false }).limit(1),
     d.from("ads_campaign_ranges").select("campaign, date_from, date_to, impressions, clicks, cost, orders, sales").eq("source", "bulk"),
-    d.from("ads_campaign_daily").select("campaign, date, clicks, cost, orders, sales"),
+    d.from("ads_campaign_daily").select("campaign, date, impressions, clicks, cost, orders, sales"),
     d.from("ads_ad_groups").select("ad_group_id, campaign, default_bid, state"),
     d.from("ads_keywords").select("keyword_id, campaign, ad_group_id, keyword_text, match_type, bid, state, impressions, clicks, cost, orders, sales"),
     d.from("ads_keyword_ranges").select("keyword_id, date_from, date_to, impressions, orders"),
@@ -95,7 +95,7 @@ async function rulesInput(): Promise<RulesInput> {
       const t = b ? perf(b) : c.totals ? { impressions: c.totals.impressions, clicks: c.totals.clicks, cost: c.totals.cost, orders: c.totals.orders, sales: c.totals.sales } : { impressions: null, clicks: 0, cost: 0, orders: 0, sales: 0 };
       return {
         id: c.id, campaignId: c.campaign_id, name: c.name, asin: c.asin, targeting: c.targeting, state: c.state, budget: n(c.budget), biddingStrategy: c.bidding_strategy, ...t,
-        daily: dailyRows.filter((r) => r.campaign === c.id).map((r) => ({ date: r.date as string, clicks: Number(r.clicks), cost: Number(r.cost), orders: Number(r.orders), sales: Number(r.sales) })),
+        daily: dailyRows.filter((r) => r.campaign === c.id).map((r) => ({ date: r.date as string, impressions: n(r.impressions), clicks: Number(r.clicks), cost: Number(r.cost), orders: Number(r.orders), sales: Number(r.sales) })),
       };
     }),
     adGroups: (must(groups, "ad groups") as Record<string, unknown>[]).map((g) => ({ adGroupId: g.ad_group_id as string, campaign: g.campaign as string, defaultBid: n(g.default_bid), state: g.state as string | null })),

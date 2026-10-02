@@ -5,8 +5,8 @@ import { db, must } from "@/lib/server/db";
 
 /** Per ASIN, per campaign and per search term, with break-even ACoS and the status chips; plus stock, launch plans and each keyword's rank checks. */
 export const GET = handle(async () => {
-  const dash = await adsDashboard();
   const plans = await launchPlans();
+  const dash = await adsDashboard(plans.map((p) => p.asin));
   const adsUnits = new Map(dash.asins.map((a) => {
     const days = a.from && a.to ? (Date.parse(a.to) - Date.parse(a.from)) / 86_400_000 + 1 : null;
     return [a.asin, days ? (a.totals.units ?? a.totals.orders) / days : null] as const;

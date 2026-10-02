@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RULE_IDS, RULE_LABEL, type Confidence, type RuleId } from "@/lib/ads/rules";
+import { ProductPicker, useAdsProduct } from "@/components/ads/ProductPicker";
 import { api } from "@/lib/ui/client";
 import type { NgramData } from "../ngrams/page";
 import { cn } from "@/lib/utils";
@@ -33,12 +34,14 @@ export default function AdsProposalsPage() {
   const [conf, setConf] = useState<"" | Confidence>("");
   const [campaign, setCampaign] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
+  const productIds = useMemo(() => [...new Set((data?.proposals ?? []).map((p) => p.asin).filter((a): a is string => !!a))].sort(), [data]);
+  const [pick, setPick] = useAdsProduct(productIds);
 
   const [grams, setGrams] = useState<NgramData | null>(null);
   const load = useCallback(() => api<Data>("/api/ads/proposals").then(setData).catch((e: Error) => setError(e.message)), []);
   useEffect(() => { load(); api<NgramData>("/api/ads/ngrams").then(setGrams).catch(() => {}); }, [load]);
 
-  const shown = useMemo(() => (data?.proposals ?? []).filter((p) => (!rule || p.rule === rule) && (!conf || p.confidence === conf) && (!campaign || p.campaign === campaign)), [data, rule, conf, campaign]);
+  const shown = useMemo(() => (data?.proposals ?? []).filter((p) => (!pick || p.asin === pick) && (!rule || p.rule === rule) && (!conf || p.confidence === conf) && (!campaign || p.campaign === campaign)), [data, pick, rule, conf, campaign]);
   const groups = useMemo(() => {
     const byAsin = new Map<string, Map<string, Row[]>>();
     for (const p of shown) {
@@ -103,6 +106,7 @@ export default function AdsProposalsPage() {
       </div>
 
       <div className="flex flex-wrap items-end gap-3">
+        {productIds.length > 1 && <ProductPicker products={productIds.map((asin) => ({ asin }))} value={pick} onChange={setPick} />}
         <label className="space-y-1"><span className="field-label">Rule</span>
           <NativeSelect value={rule} onChange={(e) => setRule(e.target.value as "" | RuleId)}>
             <NativeSelectOption value="">All rules</NativeSelectOption>

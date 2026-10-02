@@ -108,7 +108,7 @@ export default function AdsImportsPage() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="page-title">Imports</h1>
-          <p className="text-sm text-muted-foreground">The bulk export from Amazon Ads (Campaign manager → Bulk operations, with the search term data) gives everything in one file: campaigns, placements, ad groups, keywords with their IDs and bids, negatives, product ads (which map campaigns to ASINs) and search terms with the keyword that matched. CSV reports (Search term, Campaign, the Campaign Manager grid) still work. Importing the same data again doesn&apos;t double it.</p>
+          <p className="text-sm text-muted-foreground">The bulk export from Amazon Ads (Campaign manager → Bulk operations, with the search term data) gives everything in one file: campaigns, placements, ad groups, keywords with their IDs and bids, negatives, product ads (which map campaigns to ASINs) and search terms with the keyword that matched. CSV reports still work: Search term, Campaign, the Campaign Manager grid, and the <b>daily</b> Campaign and Placement reports (time unit Daily), which the Bid up, Budget and Revive rules need. Importing the same data again doesn&apos;t double it.</p>
         </div>
         <Button asChild variant="outline"><Link href="/ads/dashboard">Dashboard</Link></Button>
       </div>

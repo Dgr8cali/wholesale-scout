@@ -1,5 +1,5 @@
 -- Wholesale Scout schema, dumped by scripts/schema-backup.mjs. No data.
--- Dumped 2026-10-02T14:16:44.453Z. Safe to re-run. Restore: npm run schema:restore
+-- Dumped 2026-10-02T14:48:07.440Z. Safe to re-run. Restore: npm run schema:restore
 
 -- @section extensions
 create extension if not exists "pg_cron";
@@ -108,7 +108,8 @@ create table if not exists "ads_campaigns" (
   "first_seen" timestamp with time zone default now() not null,
   "last_seen" timestamp with time zone default now() not null,
   "bidding_strategy" text,
-  "portfolio_id" text
+  "portfolio_id" text,
+  "archived" boolean default false not null
 );
 alter table "ads_campaigns" add column if not exists "id" uuid default gen_random_uuid();
 alter table "ads_campaigns" add column if not exists "campaign_id" text;
@@ -126,6 +127,7 @@ alter table "ads_campaigns" add column if not exists "first_seen" timestamp with
 alter table "ads_campaigns" add column if not exists "last_seen" timestamp with time zone default now();
 alter table "ads_campaigns" add column if not exists "bidding_strategy" text;
 alter table "ads_campaigns" add column if not exists "portfolio_id" text;
+alter table "ads_campaigns" add column if not exists "archived" boolean default false;
 alter table "ads_campaigns" enable row level security;
 
 create table if not exists "ads_export_batches" (
@@ -270,6 +272,32 @@ alter table "ads_negative_keywords" add column if not exists "level" text defaul
 alter table "ads_negative_keywords" add column if not exists "import_id" uuid;
 alter table "ads_negative_keywords" enable row level security;
 
+create table if not exists "ads_placement_daily" (
+  "campaign" uuid not null,
+  "placement" text not null,
+  "date_from" date not null,
+  "date_to" date not null,
+  "impressions" integer,
+  "clicks" integer default 0 not null,
+  "cost" numeric default 0 not null,
+  "orders" integer default 0 not null,
+  "sales" numeric default 0 not null,
+  "units" integer,
+  "import_id" uuid
+);
+alter table "ads_placement_daily" add column if not exists "campaign" uuid;
+alter table "ads_placement_daily" add column if not exists "placement" text;
+alter table "ads_placement_daily" add column if not exists "date_from" date;
+alter table "ads_placement_daily" add column if not exists "date_to" date;
+alter table "ads_placement_daily" add column if not exists "impressions" integer;
+alter table "ads_placement_daily" add column if not exists "clicks" integer default 0;
+alter table "ads_placement_daily" add column if not exists "cost" numeric default 0;
+alter table "ads_placement_daily" add column if not exists "orders" integer default 0;
+alter table "ads_placement_daily" add column if not exists "sales" numeric default 0;
+alter table "ads_placement_daily" add column if not exists "units" integer;
+alter table "ads_placement_daily" add column if not exists "import_id" uuid;
+alter table "ads_placement_daily" enable row level security;
+
 create table if not exists "ads_placements" (
   "campaign" uuid not null,
   "placement" text not null,
@@ -380,7 +408,8 @@ create table if not exists "ads_products" (
   "dims" jsonb,
   "fba_fee" numeric,
   "phase" text default 'launch'::text not null,
-  "updated_at" timestamp with time zone default now() not null
+  "updated_at" timestamp with time zone default now() not null,
+  "image" text
 );
 alter table "ads_products" add column if not exists "asin" text;
 alter table "ads_products" add column if not exists "title" text;
@@ -392,6 +421,7 @@ alter table "ads_products" add column if not exists "dims" jsonb;
 alter table "ads_products" add column if not exists "fba_fee" numeric;
 alter table "ads_products" add column if not exists "phase" text default 'launch'::text;
 alter table "ads_products" add column if not exists "updated_at" timestamp with time zone default now();
+alter table "ads_products" add column if not exists "image" text;
 alter table "ads_products" enable row level security;
 
 create table if not exists "ads_proposals" (
@@ -1742,6 +1772,11 @@ do $$ begin
   end if;
 end $$;
 do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'ads_placement_daily_pkey' and conrelid = '"ads_placement_daily"'::regclass) then
+    alter table "ads_placement_daily" add constraint "ads_placement_daily_pkey" PRIMARY KEY (campaign, placement, date_from, date_to);
+  end if;
+end $$;
+do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'ads_placements_pkey' and conrelid = '"ads_placements"'::regclass) then
     alter table "ads_placements" add constraint "ads_placements_pkey" PRIMARY KEY (campaign, placement);
   end if;
@@ -2342,6 +2377,16 @@ do $$ begin
   end if;
 end $$;
 do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'ads_placement_daily_campaign_fkey' and conrelid = '"ads_placement_daily"'::regclass) then
+    alter table "ads_placement_daily" add constraint "ads_placement_daily_campaign_fkey" FOREIGN KEY (campaign) REFERENCES ads_campaigns(id) ON DELETE CASCADE;
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'ads_placement_daily_import_id_fkey' and conrelid = '"ads_placement_daily"'::regclass) then
+    alter table "ads_placement_daily" add constraint "ads_placement_daily_import_id_fkey" FOREIGN KEY (import_id) REFERENCES ads_imports(id) ON DELETE CASCADE;
+  end if;
+end $$;
+do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'ads_placements_campaign_fkey' and conrelid = '"ads_placements"'::regclass) then
     alter table "ads_placements" add constraint "ads_placements_campaign_fkey" FOREIGN KEY (campaign) REFERENCES ads_campaigns(id) ON DELETE CASCADE;
   end if;
@@ -2774,3 +2819,4 @@ insert into schema_migrations (name) values ('20261002000800_ads_bulk.sql') on c
 insert into schema_migrations (name) values ('20261002000900_ads_rules_proposals.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261002001000_ads_phase25.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261002001100_niche_hunt_direct.sql') on conflict do nothing;
+insert into schema_migrations (name) values ('20261002001200_ads_daily_products.sql') on conflict do nothing;

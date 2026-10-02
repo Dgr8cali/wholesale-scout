@@ -67,6 +67,7 @@ export default function AdsRulesPage() {
         </div>
         <Button variant="outline" onClick={() => run(draft)} disabled={running}>{running ? <LoaderIcon className="animate-spin" /> : <PlayIcon />} Dry run with these settings</Button>
       </div>
+      {dry && <DryRunByProduct dry={dry} />}
       <div className="grid gap-3 lg:grid-cols-2">
         {RULES.map((r) => <RuleCard key={r.id} meta={r} cfg={draft[r.id]} changed={changed(r.id)} dry={dry} running={running} onEdit={(p) => edit(r.id, p)} onSave={() => save(r.id)} onReset={() => setDraft((d) => d && { ...d, [r.id]: saved[r.id] })} />)}
       </div>
@@ -111,6 +112,32 @@ function RuleCard({ meta, cfg, changed, dry, running, onEdit, onSave, onReset }:
           </>
         )}
         {notes.map((n) => <p key={n} className="text-xs text-warn">{n}</p>)}
+      </div>
+    </section>
+  );
+}
+
+/** The dry run per product: what each rule would propose for it now. */
+function DryRunByProduct({ dry }: { dry: DryRun }) {
+  const asins = [...new Set(Object.values(dry.counts).flatMap((c) => Object.keys(c.byAsin)))].sort();
+  const firing = RULES.filter((r) => dry.counts[r.id]?.total);
+  if (!asins.length) return <p className="panel p-3 text-sm text-muted-foreground">Dry run: no rule would propose anything on the data imported now.</p>;
+  return (
+    <section className="panel space-y-2 p-3">
+      <h2 className="text-sm font-semibold">Dry run by product <span className="font-normal text-muted-foreground">(the proposals each rule would make now, with the settings on screen)</span></h2>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead><tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase">
+            <th className="px-2 py-1">Product</th>{firing.map((r) => <th key={r.id} className="px-2 py-1 text-right">{r.label}</th>)}<th className="px-2 py-1 text-right">All</th>
+          </tr></thead>
+          <tbody>{asins.map((a) => (
+            <tr key={a} className="border-b last:border-b-0">
+              <td className="num px-2 py-1">{a}</td>
+              {firing.map((r) => <td key={r.id} className="num px-2 py-1 text-right">{dry.counts[r.id].byAsin[a] ?? "—"}</td>)}
+              <td className="num px-2 py-1 text-right font-medium">{firing.reduce((x, r) => x + (dry.counts[r.id].byAsin[a] ?? 0), 0)}</td>
+            </tr>
+          ))}</tbody>
+        </table>
       </div>
     </section>
   );

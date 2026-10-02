@@ -114,6 +114,8 @@ interface RawKeepaProduct {
   trackingSince?: number | null;
   /** Comma-separated image file names on Amazon's CDN; the first is the main image. */
   imagesCSV?: string | null;
+  /** Keepa's newer image list (imagesCSV is no longer filled for every product): file names by size. */
+  images?: { l?: string | null; m?: string | null }[] | null;
   /** Keepa's FBA fee estimate; pickAndPackFee in pence. */
   fbaFees?: { pickAndPackFee?: number } | null;
   referralFeePercent?: number | null;
@@ -166,7 +168,7 @@ export function parseKeepaProduct(p: RawKeepaProduct, now = Date.now(), buyBoxFe
     weightG,
     parentAsin: p.parentAsin ?? null,
     variationCount,
-    imageUrl: p.imagesCSV?.split(",")[0]?.trim() ? `https://m.media-amazon.com/images/I/${p.imagesCSV.split(",")[0].trim()}` : null,
+    imageUrl: imageUrlOf(p),
     series,
     buyBoxSellers,
     ratingNow: ratingNow == null ? null : ratingNow / 10,
@@ -408,4 +410,10 @@ export function getKeepa(env: NodeJS.ProcessEnv = process.env): KeepaClient {
   const key = env.KEEPA_API_KEY?.trim();
   if (env.KEEPA_MODE === "stub" || !key || !/^[a-z0-9]{64}$/i.test(key)) return new StubKeepaClient();
   return new HttpKeepaClient(key);
+}
+
+/** The main image: the first of imagesCSV, else of Keepa's images list (large, else medium). */
+export function imageUrlOf(p: { imagesCSV?: string | null; images?: { l?: string | null; m?: string | null }[] | null }): string | null {
+  const name = p.imagesCSV?.split(",")[0]?.trim() || p.images?.[0]?.l || p.images?.[0]?.m || null;
+  return name ? `https://m.media-amazon.com/images/I/${name}` : null;
 }

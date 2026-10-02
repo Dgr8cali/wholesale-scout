@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Sparkline } from "@/components/results/Sparkline";
+import { ProductPicker, useAdsProduct } from "@/components/ads/ProductPicker";
+import { ProductThumb } from "@/components/ProductThumb";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TERM_STATUS_LABEL, type Ratios, type TermStatus, type Totals } from "@/lib/ads/metrics";
 import { api } from "@/lib/ui/client";
@@ -31,7 +33,8 @@ interface TermRow { campaign: string; campaignName: string; term: string; asin: 
 interface Stock { fulfillable: number; inbound: number; unitsPerDay: number | null; daysOfCover: number | null; source: string; updatedAt: string | null }
 interface Plan { asin: string; start_date: string; input: { price: number; headTerms: string[] }; plan: { from: string; to: string | null; title: string; detail: string }[]; batch_id: string | null }
 interface KeywordRow { keywordId: string; campaign: string; campaignName: string; asin: string | null; text: string; matchType: string; bid: number | null; state: string | null; clicks: number; cost: number; orders: number; sales: number; ranks: { position: number | null; page: number | null; checkedAt: string }[] }
-interface Dash { settings: { targetAcos: number; cpc: number; cpcAuto: boolean }; asins: AsinRow[]; campaigns: CampaignRow[]; terms: TermRow[]; imports: number; stock: Record<string, Stock>; plans: Plan[]; keywords: KeywordRow[] }
+interface Dash { settings: { targetAcos: number; cpc: number; cpcAuto: boolean }; asins: AsinRow[]; campaigns: CampaignRow[]; terms: TermRow[]; imports: number; stock: Record<string, Stock>; plans: Plan[]; keywords: KeywordRow[];
+  looks: Record<string, { title: string | null; image: string | null }>; archived: { id: string; name: string; campaign_id: string | null; state: string | null }[] }
 
 const gbp = (v: number | null | undefined) => (v == null ? "—" : `${v < 0 ? "−" : ""}£${Math.abs(v).toFixed(2)}`);
 const pct = (v: number | null | undefined, dp = 1) => (v == null ? "—" : `${(v * 100).toFixed(dp)}%`);
@@ -74,50 +77,201 @@ export default function AdsDashboardPage() {
       </div>
     );
   }
-  const unmapped = d.campaigns.filter((c) => !c.asin && c.totals);
+  return <Dashboard d={d} load={load} />;
+}
+
+/** One section per product (picked, or all), then the campaigns no product owns, then the archived ones. */
+function Dashboard({ d, load }: { d: Dash; load: () => void }) {
+  const unmapped = d.campaigns.filter((c) => !c.asin);
   const launchOnly = d.plans.filter((p) => !d.asins.some((a) => a.asin === p.asin));
+  const products = [...d.asins.map((a) => ({ asin: a.asin, title: d.looks?.[a.asin]?.title ?? a.title })), ...launchOnly.map((p) => ({ asin: p.asin, title: d.looks?.[p.asin]?.title ?? null }))];
+  const [pick, setPick] = useAdsProduct(products.map((p) => p.asin));
+  const shown = (asin: string) => !pick || pick === asin;
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="page-title">Dashboard</h1>
           <p className="text-sm text-muted-foreground">
-            Sponsored Products from {d.imports} import{d.imports === 1 ? "" : "s"}. Default target ACoS {d.settings.targetAcos}% (Settings → Ads, or per product below).
+            Sponsored Products from {d.imports} import{d.imports === 1 ? "" : "s"}, product by product. Default target ACoS {d.settings.targetAcos}% (Settings → Ads, or per product).
             ACoS is green at or under the target, amber up to break-even, red past it.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-end gap-2">
+          {products.length > 1 && <ProductPicker products={products} value={pick} onChange={setPick} />}
           <FetchStock onDone={load} />
           <Button asChild variant="outline"><Link href="/ads/imports"><FileUpIcon /> Import reports</Link></Button>
         </div>
       </div>
 
-      {unmapped.length > 0 && (
-        <section className="panel space-y-2 p-4">
-          <h2 className="section-label">Campaigns without a product</h2>
-          <p className="text-sm text-muted-foreground">A campaign whose name has no ASIN needs one to count towards a product. Set it in the campaign table below (the ASIN column).</p>
-          <p className="text-sm">{unmapped.map((c) => c.name).join(" · ")}</p>
-        </section>
+      {!products.length && <p className="panel p-4 text-sm text-muted-foreground">No campaign is linked to a product yet: assign one below.</p>}
+      {d.asins.filter((a) => shown(a.asin)).map((a) => (
+        <ProductSection key={a.asin} asin={a.asin} look={d.looks?.[a.asin]} stock={d.stock[a.asin]} plan={d.plans.find((p) => p.asin === a.asin)} onSaved={load}
+          sub={`${a.campaigns} campaign${a.campaigns === 1 ? "" : "s"} · ${day(a.from)} – ${day(a.to)} · ${a.phase} · target ACoS ${pct(a.targetAcos, 0)}`}>
+          <AsinTile a={a} onSaved={load} />
+          <CampaignTable rows={d.campaigns.filter((c) => c.asin === a.asin)} onSaved={load} />
+          <KeywordTable rows={d.keywords.filter((k) => k.asin === a.asin)} />
+          <TermTable rows={d.terms.filter((t) => t.asin === a.asin)} campaigns={d.campaigns.filter((c) => c.asin === a.asin)} />
+        </ProductSection>
+      ))}
+      {launchOnly.filter((p) => shown(p.asin)).map((p) => (
+        <ProductSection key={p.asin} asin={p.asin} look={d.looks?.[p.asin]} stock={d.stock[p.asin]} plan={p} onSaved={load} sub={`launching at ${gbp(p.input.price)} · no campaign data imported yet`} />
+      ))}
+
+      <UnassignedSection campaigns={unmapped} onSaved={load} />
+      {d.archived.length > 0 && (
+        <details className="panel px-4 py-3 text-sm">
+          <summary className="cursor-pointer font-medium">Archived campaigns ({d.archived.length})</summary>
+          <p className="mt-1 text-xs text-muted-foreground">Left out of the dashboard and the rules. Their data stays.</p>
+          <ul className="mt-2 space-y-1">{d.archived.map((c) => (
+            <li key={c.id} className="flex items-center gap-2">{c.name} <span className="text-xs text-muted-foreground">{c.state}</span>
+              <Button size="xs" variant="ghost" onClick={async () => { await api(`/api/ads/campaigns/${c.id}`, { method: "PATCH", json: { archived: false } }); load(); }}>Unarchive</Button></li>
+          ))}</ul>
+        </details>
       )}
+    </div>
+  );
+}
 
-      <section className="space-y-3">
-        <h2 className="section-label">Products</h2>
-        {d.asins.length ? d.asins.map((a) => <AsinTile key={a.asin} a={a} stock={d.stock[a.asin]} plan={d.plans.find((p) => p.asin === a.asin)} onSaved={load} />) : <p className="text-sm text-muted-foreground">No campaign is linked to an ASIN yet.</p>}
-        {launchOnly.map((p) => (
-          <div key={p.asin} className="panel space-y-2 p-4">
-            <div className="flex flex-wrap items-baseline gap-2">
-              <span className="font-heading text-base font-bold">{p.asin}</span>
-              <span className="text-xs text-muted-foreground">launching at {gbp(p.input.price)} · no campaign data imported yet</span>
-              <StockChip s={d.stock[p.asin]} />
-            </div>
-            <PlanLine plan={p} />
+/** A product: title, ASIN and image, stock, launch plan; open, its figures, campaigns, keywords and search terms. */
+function ProductSection({ asin, look, sub, stock, plan, onSaved, children }: { asin: string; look?: { title: string | null; image: string | null }; sub: string; stock: Stock | undefined; plan: Plan | undefined; onSaved: () => void; children?: React.ReactNode }) {
+  const [open, setOpen] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const fetchLook = async () => {
+    setBusy(true);
+    try {
+      const r = await api<{ tokensUsed: number; found: boolean }>(`/api/ads/products/${asin}/keepa`, { method: "POST" });
+      toast[r.found ? "success" : "error"](r.found ? `Title and image from Keepa (${r.tokensUsed} token${r.tokensUsed === 1 ? "" : "s"})` : "Keepa doesn't have this ASIN");
+      onSaved();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section className="panel space-y-4 p-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-label={open ? "Collapse" : "Expand"}>
+          <ChevronRightIcon className={cn("size-4 text-muted-foreground transition-transform", open && "rotate-90")} />
+        </button>
+        <ProductThumb url={look?.image} asin={asin} title={look?.title ?? null} brand={null} size={44} />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-baseline gap-2">
+            <span className="font-heading text-base font-bold">{look?.title ?? asin}</span>
+            <a className="num text-xs text-brand hover:underline" href={`https://www.amazon.co.uk/dp/${asin}`} target="_blank" rel="noreferrer">{asin}</a>
+            <StockChip s={stock} />
           </div>
-        ))}
-      </section>
+          <div className="text-xs text-muted-foreground">{sub}</div>
+        </div>
+        {(!look?.image || !look?.title) && <Button size="xs" variant="outline" disabled={busy} onClick={fetchLook} title="Keepa: title, image, size and weight">{busy ? <LoaderIcon className="animate-spin" /> : null} Title and image (1 token)</Button>}
+      </div>
+      {open && (
+        <>
+          {plan && <PlanLine plan={plan} />}
+          {children}
+        </>
+      )}
+    </section>
+  );
+}
 
-      <CampaignTable rows={d.campaigns} onSaved={load} />
-      <KeywordTable rows={d.keywords} />
-      <TermTable rows={d.terms} campaigns={d.campaigns} />
+interface Match { asin: string; title: string | null; image: string | null; source: string }
+
+/** Campaigns no product owns: find the product by ASIN or name (free), check it, assign; or archive. */
+function UnassignedSection({ campaigns, onSaved }: { campaigns: CampaignRow[]; onSaved: () => void }) {
+  if (!campaigns.length) return null;
+  return (
+    <section className="panel space-y-3 p-4">
+      <div>
+        <h2 className="section-label">Campaigns without a product</h2>
+        <p className="text-sm text-muted-foreground">They don&apos;t count towards any product until you assign one. Search by ASIN or by words of the title (Ads products, your wholesale products, Niche Hunt and Keepa&apos;s cache: free). Archive the ones you don&apos;t care about: they leave the dashboard and the rules.</p>
+      </div>
+      <div className="divide-y rounded-lg border">
+        {campaigns.map((c) => <UnassignedRow key={c.id} c={c} onSaved={onSaved} />)}
+      </div>
+    </section>
+  );
+}
+
+function UnassignedRow({ c, onSaved }: { c: CampaignRow; onSaved: () => void }) {
+  const [q, setQ] = useState("");
+  const [matches, setMatches] = useState<Match[] | null>(null);
+  const [chosen, setChosen] = useState<Match | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (q.trim().length < 2) return;
+    const t = setTimeout(() => api<{ matches: Match[] }>(`/api/ads/products/search?q=${encodeURIComponent(q.trim())}`).then((r) => setMatches(r.matches)).catch(() => setMatches([])), 250);
+    return () => clearTimeout(t);
+  }, [q]);
+  const searching = q.trim().length >= 2;
+  const isAsin = /^[A-Z0-9]{10}$/i.test(q.trim());
+  const keepa = async () => {
+    setBusy(true);
+    try {
+      const asin = q.trim().toUpperCase();
+      const r = await api<{ found: boolean; tokensUsed: number }>(`/api/ads/products/${asin}/keepa`, { method: "POST" });
+      if (!r.found) { toast.error("Keepa doesn't have that ASIN"); return; }
+      const s = await api<{ matches: Match[] }>(`/api/ads/products/search?q=${asin}`);
+      setMatches(s.matches);
+      setChosen(s.matches.find((m) => m.asin === asin) ?? null);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const assign = async () => {
+    if (!chosen) return;
+    try {
+      await api(`/api/ads/campaigns/${c.id}`, { method: "PATCH", json: { asin: chosen.asin } });
+      toast.success(`"${c.name}" now counts towards ${chosen.title ?? chosen.asin}`);
+      onSaved();
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
+  const archive = async () => {
+    await api(`/api/ads/campaigns/${c.id}`, { method: "PATCH", json: { archived: true } });
+    toast.success(`"${c.name}" archived`);
+    onSaved();
+  };
+  return (
+    <div className="space-y-2 p-3">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="font-medium">{c.name}</div>
+          <div className="text-xs text-muted-foreground">{[c.state, c.targeting, c.totals ? `${n0(c.totals.clicks)} clicks, ${gbp(c.totals.cost)} spent, ${n0(c.totals.orders)} orders` : "no figures", c.advertised.length ? `product ads: ${c.advertised.join(", ")}` : null].filter(Boolean).join(" · ")}</div>
+        </div>
+        <Input className="h-8 w-64" placeholder="ASIN or product name" value={q} onChange={(e) => { setQ(e.target.value); setChosen(null); }} aria-label={`Find the product for ${c.name}`} />
+        <Button size="xs" variant="ghost" onClick={archive}>Archive</Button>
+      </div>
+      {c.advertised.length > 1 && !q && (
+        <div className="flex flex-wrap gap-1 text-xs"><span className="text-muted-foreground">Its product ads:</span>{c.advertised.map((a) => <button key={a} type="button" className="rounded border px-1.5 hover:bg-surface-2" onClick={() => setQ(a)}>{a}</button>)}</div>
+      )}
+      {searching && matches && !chosen && (
+        <div className="space-y-1">
+          {matches.map((m) => (
+            <button key={m.asin} type="button" onClick={() => setChosen(m)} className="flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-sm hover:bg-surface-2">
+              <ProductThumb url={m.image} asin={m.asin} title={m.title} brand={null} size={28} />
+              <span className="min-w-0 flex-1 truncate">{m.title ?? <span className="text-muted-foreground">no title yet</span>}</span>
+              <span className="num text-xs">{m.asin}</span><span className="text-xs text-muted-foreground">{m.source}</span>
+            </button>
+          ))}
+          {!matches.length && <p className="px-2 text-xs text-muted-foreground">Nothing in the app matches.{isAsin ? "" : " Try the ASIN."}</p>}
+          {isAsin && !matches.some((m) => m.asin === q.trim().toUpperCase() && m.title) && (
+            <Button size="xs" variant="outline" disabled={busy} onClick={keepa}>{busy ? <LoaderIcon className="animate-spin" /> : null} Look up {q.trim().toUpperCase()} on Keepa (1 token)</Button>
+          )}
+        </div>
+      )}
+      {chosen && (
+        <div className="flex flex-wrap items-center gap-3 rounded-md bg-surface-2 p-2 text-sm">
+          <ProductThumb url={chosen.image} asin={chosen.asin} title={chosen.title} brand={null} size={44} />
+          <div className="min-w-0 flex-1"><div className="font-medium">{chosen.title ?? "No title yet"}</div><div className="num text-xs text-muted-foreground">{chosen.asin} · {chosen.source}</div></div>
+          <Button size="xs" onClick={assign}>Assign to this product</Button>
+          <Button size="xs" variant="ghost" onClick={() => setChosen(null)}>Back</Button>
+        </div>
+      )}
     </div>
   );
 }
@@ -178,19 +332,13 @@ function PlanLine({ plan }: { plan: Plan }) {
   );
 }
 
-function AsinTile({ a, stock, plan, onSaved }: { a: AsinRow; stock: Stock | undefined; plan: Plan | undefined; onSaved: () => void }) {
+/** The product's figures and its "Price, costs and target" panel. */
+function AsinTile({ a, onSaved }: { a: AsinRow; onSaved: () => void }) {
   const [open, setOpen] = useState(false);
   const e = a.economics;
   const t = a.totals, r = a.ratios;
   return (
-    <div className="panel space-y-3 p-4">
-      <div className="flex flex-wrap items-baseline gap-2">
-        <span className="font-heading text-base font-bold">{a.title ?? a.asin}</span>
-        <a className="num text-xs text-brand hover:underline" href={`https://www.amazon.co.uk/dp/${a.asin}`} target="_blank" rel="noreferrer">{a.asin}</a>
-        <span className="text-xs text-muted-foreground">· {a.campaigns} campaign{a.campaigns === 1 ? "" : "s"} · {day(a.from)} – {day(a.to)} · {a.phase} · target ACoS {pct(a.targetAcos, 0)}</span>
-        <StockChip s={stock} />
-      </div>
-      {plan && <PlanLine plan={plan} />}
+    <div className="space-y-3">
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
         <Metric label="Spend" value={gbp(t.cost)} />
         <Metric label="Sales" value={gbp(t.sales)} sub={`${n0(t.orders)} orders${t.units != null ? `, ${n0(t.units)} units` : ""}`} />
@@ -452,20 +600,13 @@ function RankCell({ ranks }: { ranks: KeywordRow["ranks"] }) {
 }
 
 function KeywordTable({ rows }: { rows: KeywordRow[] }) {
-  const [asin, setAsin] = useState("");
   const [all, setAll] = useState(false);
-  const asins = [...new Set(rows.map((r) => r.asin).filter((a): a is string => !!a))];
-  const shown = rows.filter((r) => (!asin || r.asin === asin) && (all || r.clicks > 0 || r.ranks.length > 0));
+  const shown = rows.filter((r) => all || r.clicks > 0 || r.ranks.length > 0);
   if (!rows.length) return null;
   return (
     <section className="space-y-2">
       <div className="flex flex-wrap items-end gap-3">
         <h2 className="section-label mr-auto">Keywords</h2>
-        <label className="space-y-1"><span className="field-label">Product</span>
-          <NativeSelect value={asin} onChange={(e) => setAsin(e.target.value)}>
-            <NativeSelectOption value="">All products</NativeSelectOption>
-            {asins.map((a) => <NativeSelectOption key={a} value={a}>{a}</NativeSelectOption>)}
-          </NativeSelect></label>
         <label className="flex items-center gap-2 pb-2 text-sm"><input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} /> Include keywords with no clicks</label>
       </div>
       <div className="overflow-x-auto rounded-lg border">

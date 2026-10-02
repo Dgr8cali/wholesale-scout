@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { usePageCrumbs } from "@/components/Crumbs";
 import { EmptyState, ErrorState } from "@/components/States";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { ProductPicker, useAdsProduct } from "@/components/ads/ProductPicker";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
@@ -25,10 +26,11 @@ export default function AdsNgramsPage() {
   usePageCrumbs([{ label: "Ads", href: "/ads/dashboard" }, { label: "N-grams" }]);
   const [d, setD] = useState<NgramData | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [asin, setAsin] = useState("");
+  const [stored, setAsin] = useAdsProduct(d?.products.map((p) => p.asin) ?? []);
+  const asin = stored || d?.products[0]?.asin || "";
   const [size, setSize] = useState<"" | "1" | "2">("");
   const [sort, setSort] = useState<Sort>("cost");
-  useEffect(() => { api<NgramData>("/api/ads/ngrams").then((r) => { setD(r); setAsin(r.products[0]?.asin ?? ""); }).catch((e: Error) => setError(e.message)); }, []);
+  useEffect(() => { api<NgramData>("/api/ads/ngrams").then(setD).catch((e: Error) => setError(e.message)); }, []);
   const rows = useMemo(() => (d?.rows ?? []).filter((r) => (!asin || r.asin === asin) && (!size || String(r.size) === size)).sort((a, b) => (b[sort] as number) - (a[sort] as number)), [d, asin, size, sort]);
   if (error) return <ErrorState title="Couldn't load the n-grams" message={error} />;
   if (!d) return <Skeleton className="h-96 rounded-lg" />;
@@ -46,10 +48,7 @@ export default function AdsNgramsPage() {
         </p>
       </div>
       <div className="flex flex-wrap items-end gap-3">
-        <label className="space-y-1"><span className="field-label">Product</span>
-          <NativeSelect value={asin} onChange={(e) => setAsin(e.target.value)}>
-            {d.products.map((x) => <NativeSelectOption key={x.asin} value={x.asin}>{x.asin}</NativeSelectOption>)}
-          </NativeSelect></label>
+        <ProductPicker products={d.products} value={asin} onChange={setAsin} all={false} />
         <label className="space-y-1"><span className="field-label">Grams</span>
           <NativeSelect value={size} onChange={(e) => setSize(e.target.value as "" | "1" | "2")}>
             <NativeSelectOption value="">Words and pairs</NativeSelectOption><NativeSelectOption value="1">Words</NativeSelectOption><NativeSelectOption value="2">Word pairs</NativeSelectOption>

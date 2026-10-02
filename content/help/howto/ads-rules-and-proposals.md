@@ -14,11 +14,11 @@ Each product's **target ACoS** is its own (launch or steady, on the dashboard), 
 1. **Harvest.** A search term with 2+ orders at or under the target ACoS, found by an auto, broad or phrase target, becomes an exact keyword in the product's Exact campaign (bid = the term's CPC × 1.1, capped at target ACoS × price × conversion), plus a negative exact where it was found. With no Exact campaign, it proposes creating one.
 2. **Negative.** A search term with 15+ clicks and no order, or no order after spending half the price, becomes a negative exact in its campaign. (Words that waste money across several terms are Rule 9's.)
 3. **Bid down.** A keyword or target with 10+ clicks and ACoS over 1.2 × the target gets the bid that would hit the target: target ACoS × price × its conversion rate, at least £0.10.
-4. **Bid up.** A keyword under 0.7 × the target with 2+ orders, in a campaign under 50% impression share or out of budget, gets +15%, up to £1.50.
+4. **Bid up.** A keyword under 0.7 × the target with 2+ orders, in a campaign out of budget on 3 of the last 7 days or with impressions down 10%+ week on week (daily Campaign report), gets +15%, up to £1.50.
 5. **Pause.** A keyword with 25+ clicks and no order is paused.
 6. **Placement.** A placement with 10+ clicks whose ACoS is 25%+ better than its campaign's, and itself no more than 1.2 × the target, gets +20 points of bid adjustment (up to 100%); one 25%+ worse than its campaign gets −20 (down to 0), whatever the target.
 7. **Budget.** A campaign out of budget on 3 of the last 7 days at or under the target gets +20% budget; over 1.5 × the target for 14 days, −25%.
-8. **Revive.** An exact keyword with 3+ lifetime orders and no impressions in the last 14 days gets +10% bid.
+8. **Revive.** An exact keyword with 3+ lifetime orders whose running campaign had no impressions in the last 14 days (daily Campaign report), or which had none in a short bulk export, gets +10% bid.
 9. **N-gram negative.** A word or word pair with 20+ clicks (or the product's price spent) and no order, in 3+ distinct search terms and in none with an order, becomes a negative phrase in every ad group where it has served for that product. See [N-grams](#n-grams).
 10. **N-gram winner.** A word or word pair with 5+ orders at or under the target across 3+ terms puts its top 5 terms forward for harvest (as Rule 1 would), even when each term alone is under the harvest threshold.
 11. **Stock guard.** Under 10 days of FBA cover, the product's campaigns get budget −50% and bids −30%; under 3 days they're paused; back over 21 days, the values from before the guard are restored. See [Stock guard](#stock-guard).
@@ -27,7 +27,19 @@ Each product's **target ACoS** is its own (launch or steady, on the dashboard), 
 
 When two rules want to change the same keyword's bid, one wins: pause, then bid down, ranked, slipping, bid up, revive. A campaign under the stock guard gets only the guard's changes (and negatives and harvests) until stock recovers. During a product's [launch](/help/howto/ads-launching-a-product) weeks 1–2, only harvests and negatives are proposed.
 
-**What the bulk export can't tell.** It has totals for one range: no impression share and no days. **Bid up** and **Budget** need a daily campaign report imported as well, and **Revive** needs a bulk export of just the last 14 days beside a longer one. Proposals lists what each rule couldn't check under **What the rules couldn't check**. Negative and Pause use the latest bulk export's range as the "last 60 days"; export about 60 days for them.
+**What the bulk export can't tell.** It has totals for one range: nothing day by day. **Bid up**, **Budget** and **Revive** read the **daily Campaign report** as well. Negative and Pause use the latest bulk export's range as the "last 60 days"; export about 60 days for them.
+
+### The daily reports (for Bid up, Budget and Revive)
+
+In Amazon Ads: **Measurement & reporting → Sponsored ads reports → Create report**, Sponsored Products, report type **Campaign**, time unit **Daily**, the last 30 days (at least 14), download the CSV and drop it on **Ads → Imports** with the bulk export. Each row is one campaign on one day. The **Placement** report with time unit **Daily** is read and kept too.
+
+From the daily rows the rules work out:
+
+- **Days out of budget**: days in the last 7 when the spend reached 95% of the campaign's daily budget.
+- **7- and 14-day windows**: spend, sales and ACoS over the last week and the last two weeks.
+- **The impressions trend**: impressions over the last 7 days against the 7 before.
+
+Then **Bid up** fires for a keyword under 0.7 × the target when its campaign was out of budget on 3+ of the last 7 days, or its impressions fell 10%+ week on week (impression share itself needs the Amazon Ads API, so these stand in). **Budget** raises a campaign out of budget on 3+ days at or under target, and cuts one over 1.5 × target for 14 days. **Revive** raises an exact keyword with 3+ lifetime orders when its running campaign had no impressions in the last 14 days (a keyword gone quiet inside a busy campaign needs keyword-level daily data, which needs the API). Daily data whose last day is more than 10 days old isn't acted on: the rule says so. With daily data in, **What the rules couldn't check** lists only what needs the Amazon Ads API (impression share, hourly data, keyword-level days).
 
 On **Ads → Rules**, each rule has its thresholds, an on/off switch and a mode. **Propose** (the default) waits for your approval. **Auto** applies automatically once the Amazon Ads API is connected; until then it proposes like Propose. **Dry run** shows how many proposals each rule would make now, per product, with the settings on screen, before you save.
 

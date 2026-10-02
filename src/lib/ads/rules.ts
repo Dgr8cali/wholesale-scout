@@ -6,6 +6,7 @@
  * pill box account's bulk export.
  */
 import type { BulkChange } from "./bulk";
+import { dailySignals, windowOf, type DailyRow, type DailySignals } from "./daily";
 import { chooseRanges } from "./metrics";
 import { ngramTable, termHasGram, type GramTerm } from "./ngrams";
 
@@ -46,11 +47,11 @@ export const RULES: RuleMeta[] = [
   },
   {
     id: "bid_up", label: "Bid up",
-    summary: "A keyword converting well under the target, in a campaign held back by impression share or budget, gets a higher bid.",
+    summary: "A keyword converting well under the target, in a campaign held back (out of budget on several days, or its impressions falling week on week), gets a higher bid. Needs the daily Campaign report.",
     thresholds: [
       { key: "underTarget", label: "ACoS under target ×", unit: "times", default: 0.7 },
       { key: "minOrders", label: "Orders at least", unit: "count", default: 2 },
-      { key: "impressionShare", label: "Impression share under", unit: "pct", default: 50 },
+      { key: "impressionsFall", label: "Or impressions down week on week by", unit: "pct", default: 10 },
       { key: "step", label: "Raise by", unit: "pct", default: 15 },
       { key: "cap", label: "Highest bid", unit: "gbp", default: 1.5 },
     ],
@@ -76,7 +77,7 @@ export const RULES: RuleMeta[] = [
   },
   {
     id: "budget", label: "Budget",
-    summary: "A campaign that keeps running out of budget at or under the target ACoS gets more budget; one far over the target for two weeks gets less.",
+    summary: "A campaign that keeps running out of budget at or under the target ACoS gets more budget; one far over the target for two weeks gets less. Needs the daily Campaign report.",
     thresholds: [
       { key: "hitDays", label: "Days out of budget at least", unit: "count", default: 3 },
       { key: "windowDays", label: "Of the last", unit: "days", default: 7 },
@@ -88,7 +89,7 @@ export const RULES: RuleMeta[] = [
   },
   {
     id: "revive", label: "Revive",
-    summary: "An exact keyword that has sold before but had no impressions lately gets a higher bid.",
+    summary: "An exact keyword that has sold before but had no impressions lately gets a higher bid: its campaign had none in the daily Campaign report, or it had none in a recent short bulk export.",
     thresholds: [
       { key: "minOrders", label: "Lifetime orders at least", unit: "count", default: 3 },
       { key: "quietDays", label: "No impressions for", unit: "days", default: 14 },
@@ -182,7 +183,7 @@ export interface RuleCampaign extends Perf {
   id: string; campaignId: string | null; name: string; asin: string | null; targeting: string | null; state: string | null;
   budget: number | null; biddingStrategy: string | null;
   /** Daily rows (from a daily campaign report), for the budget rules; usually empty. */
-  daily: { date: string; clicks: number; cost: number; orders: number; sales: number }[];
+  daily: DailyRow[];
 }
 export interface RuleAdGroup { adGroupId: string; campaign: string; defaultBid: number | null; state: string | null }
 export interface RuleKeyword extends Perf {
@@ -494,36 +495,47 @@ export function runRules(input: RulesInput, config: RulesConfig = DEFAULT_RULES)
     }
   }
 
-  /* ---- Budget-limited days (Budget and Bid up) ---- */
+  /* ---- Daily data (Bid up, Budget, Revive): the daily Campaign report ---- */
   const bt = th("budget");
-  const lastDays = (c: RuleCampaign, n: number) => {
-    if (!c.daily.length) return [];
-    const last = c.daily.map((d) => d.date).sort().at(-1)!;
-    const from = new Date(Date.parse(last) - (n - 1) * DAY).toISOString().slice(0, 10);
-    return c.daily.filter((d) => d.date >= from);
-  };
-  const hitDays = (c: RuleCampaign) => (c.budget ? lastDays(c, bt.windowDays).filter((d) => d.cost >= c.budget! * 0.95).length : 0);
+  const signals = new Map<string, DailySignals | null>(input.campaigns.map((c) => [c.id, dailySignals(c.daily, c.budget, input.today, bt.windowDays)]));
   const anyDaily = input.campaigns.some((c) => c.daily.length);
+  const DAILY_HOW = "Import the daily Campaign report (Sponsored Products, Campaign, time unit Daily) on Ads → Imports";
+  /** A campaign's daily signals when recent enough; otherwise a note says why not. */
+  const signalsFor = (r: RuleId, c: RuleCampaign) => {
+    const sg = signals.get(c.id);
+    if (!sg) return null;
+    if (!sg.fresh) { note(r, `"${c.name}": its daily data ends ${dayTxt(sg.last)}, too old to act on. ${DAILY_HOW}`); return null; }
+    return sg;
+  };
+  const pctChange = (x: number) => `${x > 0 ? "+" : ""}${Math.round(x * 100)}%`;
 
   /* ---- Bid up ---- */
   if (on("bid_up")) {
     const t = th("bid_up");
-    if (!anyDaily) note("bid_up", "Needs impression share or days out of budget: neither is in the bulk export. Import a daily campaign report to use the budget signal");
+    if (!anyDaily) note("bid_up", `Needs days out of budget or the impressions trend: neither is in the bulk export. ${DAILY_HOW}`);
+    else note("bid_up", "Impression share itself needs the Amazon Ads API: days out of budget and impressions falling week on week stand in for it");
     for (const k of input.keywords) {
       const c = campaign.get(k.campaign);
       if (!c || !live(k.state) || k.orders < t.minOrders || k.bid == null) continue;
       const p = needsPrice("bid_up", c);
       const a = acosOf(k);
       if (!p || a == null || a >= p.targetAcos * t.underTarget) continue;
-      const hits = hitDays(c);
-      if (hits < bt.hitDays || unexportable("bid_up", c)) continue;
+      const sg = signalsFor("bid_up", c);
+      if (!sg) continue;
+      const limited = sg.budgetLimitedDays >= bt.hitDays;
+      const falling = sg.impressionsChange != null && sg.impressionsChange <= -t.impressionsFall / 100;
+      if ((!limited && !falling) || unexportable("bid_up", c)) continue;
       const bid = Math.min(t.cap, round2(k.bid * (1 + t.step / 100)));
       if (bid <= k.bid) continue;
+      const why = [
+        limited ? `${c.name} ran out of budget on ${sg.budgetLimitedDays} of the last ${bt.windowDays} days (to ${dayTxt(sg.last)})` : null,
+        falling ? `its impressions fell ${pctChange(sg.impressionsChange!)} week on week (${sg.week.impressions.toLocaleString("en-GB")} against ${sg.prevWeek.impressions.toLocaleString("en-GB")})` : null,
+      ].filter(Boolean).join(", and ");
       out.push({
         ...base("bid_up", c), key: `kw:${k.keywordId}`,
         entity: { type: "keyword", label: `${k.text} (${k.matchType.toLowerCase()})`, campaignId: c.campaignId, adGroupId: k.adGroupId, keywordId: k.keywordId, targetId: null },
         current: gbp(k.bid), proposed: gbp(bid),
-        reason: `${perfTxt(k)} = ${pct(a)} ACoS, under ${t.underTarget} × the ${pct(p.targetAcos, 0)} target${rangeTxt}, and ${c.name} ran out of budget on ${hits} of the last ${bt.windowDays} days.`,
+        reason: `${perfTxt(k)} = ${pct(a)} ACoS, under ${t.underTarget} × the ${pct(p.targetAcos, 0)} target${rangeTxt}, and ${why}.`,
         confidence: confidence(k.clicks, k.orders), effect: `Up to ${t.step}% more per click on a keyword selling at ${pct(a)} ACoS`,
         changes: [{ kind: "keyword_bid", campaignId: c.campaignId!, adGroupId: k.adGroupId, keywordId: k.keywordId, bid }],
         clicks: k.clicks, orders: k.orders,
@@ -568,17 +580,20 @@ export function runRules(input: RulesInput, config: RulesConfig = DEFAULT_RULES)
 
   /* ---- Budget ---- */
   if (on("budget")) {
-    if (!anyDaily) note("budget", "Needs daily figures: the bulk export has totals only. Import a daily campaign report");
+    if (!anyDaily) note("budget", `Needs days out of budget: the bulk export has totals only. ${DAILY_HOW}`);
+    else note("budget", "When in the day a budget runs out needs hourly data: the Amazon Ads API");
     for (const c of input.campaigns) {
-      if (!c.daily.length || !c.budget || !c.campaignId) continue;
+      if (!c.daily.length || !c.budget || !c.campaignId || !live(c.state)) continue;
       const p = product(c);
       if (!p) { note("budget", `"${c.name}" has no ASIN, so no target ACoS`); continue; }
-      const week = lastDays(c, bt.windowDays);
-      const wk = week.reduce((a, d) => ({ clicks: a.clicks + d.clicks, cost: a.cost + d.cost, orders: a.orders + d.orders, sales: a.sales + d.sales, impressions: null }), { clicks: 0, cost: 0, orders: 0, sales: 0, impressions: null } as Perf);
-      const hits = hitDays(c);
+      const sg = signalsFor("budget", c);
+      if (!sg) continue;
+      const wk: Perf = sg.week;
+      const hits = sg.budgetLimitedDays;
       const wa = acosOf(wk);
-      const span = lastDays(c, bt.overDays);
-      const sp = span.reduce((a, d) => ({ clicks: a.clicks + d.clicks, cost: a.cost + d.cost, orders: a.orders + d.orders, sales: a.sales + d.sales, impressions: null }), { clicks: 0, cost: 0, orders: 0, sales: 0, impressions: null } as Perf);
+      const spanW = windowOf(c.daily, sg.last, bt.overDays);
+      const span = { length: spanW.days };
+      const sp: Perf = spanW;
       const sa = acosOf(sp);
       let next: number | null = null, reason = "", conf: Perf = wk;
       if (hits >= bt.hitDays && wa != null && wa <= p.targetAcos) {
@@ -606,27 +621,37 @@ export function runRules(input: RulesInput, config: RulesConfig = DEFAULT_RULES)
     const t = th("revive");
     const latest = input.keywords.flatMap((k) => k.history.map((h) => h.to)).sort().at(-1) ?? null;
     const recentOf = (k: RuleKeyword) => k.history.find((h) => latest && h.to >= new Date(Date.parse(latest) - DAY).toISOString().slice(0, 10) && (Date.parse(h.to) - Date.parse(h.from)) / DAY + 1 <= t.quietDays + 1);
-    let candidates = 0;
+    let candidates = 0, seen = 0;
     for (const k of input.keywords) {
       const c = campaign.get(k.campaign);
       if (!c || !isExact(k.matchType) || !notArchived(k.state) || k.bid == null) continue;
       const lifetime = chooseRanges(k.history.map((h) => ({ ...h, rank: 0 }))).reduce((a, h) => a + h.orders, 0);
       if (lifetime < t.minOrders) continue;
       candidates++;
+      // Quiet: its campaign (running) had no impressions over the last N days of the daily report,
+      // or the keyword had none in a short bulk export.
+      const sg = signals.get(c.id);
+      const daily = sg && sg.fresh && live(c.state) && live(k.state) ? windowOf(c.daily, sg.last, t.quietDays) : null;
       const recent = recentOf(k);
-      if (!recent || (recent.impressions ?? 0) > 0 || unexportable("revive", c)) continue;
+      if (daily && daily.days >= t.quietDays - 1) seen++;
+      else if (recent) seen++;
+      const quiet = daily && daily.days >= t.quietDays - 1 && daily.impressions === 0
+        ? { from: daily.from!, to: daily.to!, by: `${c.name} had no impressions` }
+        : recent && (recent.impressions ?? 0) === 0 ? { from: recent.from, to: recent.to, by: "no impressions" } : null;
+      if (!quiet || unexportable("revive", c)) continue;
       const bid = round2(k.bid * (1 + t.step / 100));
       out.push({
         ...base("revive", c), key: `kw:${k.keywordId}`,
         entity: { type: "keyword", label: `${k.text} (exact)`, campaignId: c.campaignId, adGroupId: k.adGroupId, keywordId: k.keywordId, targetId: null },
         current: gbp(k.bid), proposed: gbp(bid),
-        reason: `${plural(lifetime, "order")} imported in all, but no impressions ${dayTxt(recent.from)} – ${dayTxt(recent.to)}.`,
+        reason: `${plural(lifetime, "order")} imported in all, but ${quiet.by} ${dayTxt(quiet.from)} – ${dayTxt(quiet.to)}.`,
         confidence: confidence(0, lifetime), effect: "Back into the auction for a keyword that has sold",
         changes: [{ kind: "keyword_bid", campaignId: c.campaignId!, adGroupId: k.adGroupId, keywordId: k.keywordId, bid }],
         clicks: k.clicks, orders: lifetime,
       });
     }
-    if (candidates && !input.keywords.some((k) => recentOf(k))) note("revive", `Needs a bulk export of just the last ${t.quietDays} days (as well as a longer one) to see which keywords have gone quiet`);
+    if (candidates && !seen) note("revive", `Needs the last ${t.quietDays} days: ${DAILY_HOW} (or a bulk export of just the last ${t.quietDays} days)`);
+    else if (candidates) note("revive", "A keyword gone quiet inside a busy campaign needs keyword-level daily data: the Amazon Ads API");
   }
 
   /* ---- Stock guard (Rule 11) ---- */

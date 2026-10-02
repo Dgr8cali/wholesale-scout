@@ -254,6 +254,20 @@ export function parseReport(text: string, fileName = ""): ParsedReport {
   };
 }
 
+/**
+ * A placement as the bulk file names it: the Placement report says "Top of Search on-Amazon",
+ * "Detail Page on-Amazon", "Other on-Amazon" or "Rest of search"; the bulk file "top", "product
+ * page", "rest of search", "Amazon Business".
+ */
+export function placementName(v: string | null | undefined): string {
+  const s = (v ?? "").trim();
+  if (/top/i.test(s)) return "top";
+  if (/business/i.test(s)) return "Amazon Business";
+  if (/detail|product/i.test(s)) return "product page";
+  if (/rest|other/i.test(s)) return "rest of search";
+  return s.toLowerCase();
+}
+
 /** An ASIN in a campaign's name ("AD_READY: B0H9ZKYYHZ"), when there's exactly one. */
 export function asinFromName(name: string | null | undefined): string | null {
   const m = [...new Set((name ?? "").toUpperCase().match(/\bB0[A-Z0-9]{8}\b/g) ?? [])];

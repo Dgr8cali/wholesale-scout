@@ -79,8 +79,8 @@ describe("runRules on the pill box account (target 30%, price £8.99)", () => {
   });
 
   it("says what the bulk export can't tell", () => {
-    expect(pill.notes.bid_up?.[0]).toMatch(/impression share/);
-    expect(pill.notes.budget?.[0]).toMatch(/daily/);
+    expect(pill.notes.bid_up?.[0]).toMatch(/daily Campaign report/);
+    expect(pill.notes.budget?.[0]).toMatch(/daily Campaign report/);
     expect(pill.proposals.filter((p) => ["bid_up", "budget", "revive", "pause"].includes(p.rule))).toEqual([]);
   });
 
@@ -186,11 +186,54 @@ describe("rules on made-up data", () => {
     expect(p.changes[1]).toMatchObject({ kind: "create_negative", text: "blue box", matchType: "Negative exact" });
   });
 
-  it("budget and bid up from daily rows", () => {
-    const daily = Array.from({ length: 7 }, (_, i) => ({ date: `2026-09-${24 + i}`, clicks: 20, cost: i < 4 ? 10 : 5, orders: 2, sales: 40 }));
+  /** Daily rows ending 30 Sept (input's today is 1 Oct). */
+  const days = (n: number, f: (i: number) => Partial<{ impressions: number; clicks: number; cost: number; orders: number; sales: number }>) =>
+    Array.from({ length: n }, (_, i) => ({ date: new Date(Date.UTC(2026, 8, 30) - (n - 1 - i) * 86_400_000).toISOString().slice(0, 10), impressions: 500, clicks: 20, cost: 5, orders: 2, sales: 40, ...f(i) }));
+
+  it("budget and bid up from daily rows: out of budget 4 of the last 7 days", () => {
+    const daily = days(7, (i) => ({ cost: i < 4 ? 10 : 5 }));
     const r = runRules(input({ campaigns: [camp({ daily })], keywords: [kw({ clicks: 40, cost: 8, orders: 4, sales: 80 })] }));
     expect(r.proposals.find((p) => p.rule === "budget")).toMatchObject({ current: "£10.00/day", proposed: "£12.00/day" });
-    expect(r.proposals.find((p) => p.rule === "bid_up")).toMatchObject({ current: "£0.50", proposed: "£0.58" });
+    const up = r.proposals.find((p) => p.rule === "bid_up")!;
+    expect(up).toMatchObject({ current: "£0.50", proposed: "£0.58" });
+    expect(up.reason).toMatch(/ran out of budget on 4 of the last 7 days/);
+    // With daily data, the notes are only what needs the API.
+    expect(r.notes.bid_up).toEqual([expect.stringMatching(/Amazon Ads API/)]);
+    expect(r.notes.budget).toEqual([expect.stringMatching(/hourly data: the Amazon Ads API/)]);
+  });
+
+  it("bid up on impressions falling week on week, under budget", () => {
+    const daily = days(14, (i) => ({ impressions: i < 7 ? 1000 : 700, cost: 4 }));
+    const up = runRules(input({ campaigns: [camp({ daily })], keywords: [kw({ clicks: 40, cost: 8, orders: 4, sales: 80 })] })).proposals.find((p) => p.rule === "bid_up")!;
+    expect(up.reason).toMatch(/impressions fell -30% week on week \(4,900 against 7,000\)/);
+  });
+
+  it("budget cut: 14 days far over target", () => {
+    const daily = days(14, () => ({ cost: 6, sales: 10 })); // 60% ACoS > 1.5 × 30%
+    expect(runRules(input({ campaigns: [camp({ daily })] })).proposals.find((p) => p.rule === "budget")).toMatchObject({ proposed: "£7.50/day" });
+  });
+
+  it("old daily data isn't acted on, and says so", () => {
+    const daily = days(7, () => ({ cost: 10 })).map((d) => ({ ...d, date: d.date.replace("2026-09", "2026-08") }));
+    const r = runRules(input({ campaigns: [camp({ daily })], keywords: [kw({ clicks: 40, cost: 8, orders: 4, sales: 80 })] }));
+    expect(r.proposals.filter((p) => p.rule === "budget" || p.rule === "bid_up")).toEqual([]);
+    expect(r.notes.budget?.some((n) => /too old to act on/.test(n))).toBe(true);
+  });
+
+  it("revive: an exact keyword whose running campaign had no impressions for 14 days", () => {
+    const daily = days(14, () => ({ impressions: 0, clicks: 0, cost: 0, orders: 0, sales: 0 }));
+    const history = [{ from: "2026-06-01", to: "2026-08-31", impressions: 900, orders: 5 }];
+    const r = runRules(input({ campaigns: [camp({ daily })], keywords: [kw({ matchType: "Exact", history })] }));
+    expect(r.proposals.find((p) => p.rule === "revive")).toMatchObject({ current: "£0.50", proposed: "£0.55" });
+    expect(r.proposals.find((p) => p.rule === "revive")!.reason).toMatch(/C had no impressions 17 Sept – 30 Sept/);
+    // A paused campaign is quiet because it's paused: not revived.
+    expect(runRules(input({ campaigns: [camp({ daily, state: "paused" })], keywords: [kw({ matchType: "Exact", history })] })).proposals.filter((p) => p.rule === "revive")).toEqual([]);
+  });
+
+  it("without daily data: says which report to import", () => {
+    const r = runRules(input({ keywords: [kw({ clicks: 40, cost: 8, orders: 4, sales: 80 })] }));
+    expect(r.notes.bid_up?.[0]).toMatch(/daily Campaign report/);
+    expect(r.notes.budget?.[0]).toMatch(/daily Campaign report/);
   });
 
   it("placement: lowering needs no target guard", () => {

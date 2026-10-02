@@ -1,5 +1,5 @@
 import "server-only";
-import { asinFromName, dateFromFileName, parseReport, REPORT_LABEL, type AdsRow, type ParsedReport, type ReportType } from "../ads/parse";
+import { asinFromName, dateFromFileName, parseReport, placementName, REPORT_LABEL, type AdsRow, type ParsedReport, type ReportType } from "../ads/parse";
 import { parseBulk, type ParsedBulk, type Perf } from "../ads/bulk";
 import { add, breakEvenAcos, campaignTotals, chooseRanges, marginBeforeAds, profitAfterAds, ratios, termStatus, ZERO, type Range, type Totals, type UnitEconomics } from "../ads/metrics";
 import { computeFees, DEFAULT_FEE_ASSUMPTIONS, referralCategoryFor } from "../fees/engine";
@@ -45,9 +45,9 @@ export async function saveAdsSettings(input: Partial<AdsSettings>): Promise<AdsS
 interface CampaignRow {
   id: string; campaign_id: string | null; console_id: string | null; name: string; type: string | null; targeting: string | null;
   state: string | null; budget: number | null; start_date: string | null; end_date: string | null; asin: string | null; asin_source: string | null;
-  bidding_strategy: string | null;
+  bidding_strategy: string | null; archived: boolean;
 }
-const CAMPAIGN_COLS = "id, campaign_id, console_id, name, type, targeting, state, budget, start_date, end_date, asin, asin_source, bidding_strategy";
+const CAMPAIGN_COLS = "id, campaign_id, console_id, name, type, targeting, state, budget, start_date, end_date, asin, asin_source, bidding_strategy, archived";
 
 /** Reports give a numeric ID; the Campaign Manager export a console ID ("A0…"). */
 const isConsoleId = (id: string) => /[A-Za-z]/.test(id);
@@ -122,7 +122,16 @@ async function storeReport(p: ParsedReport, fileName: string): Promise<ImportSum
       campaign: camps.get(r)!, source: grid ? "grid" : "campaign", date_from: grid ? null : r.dateFrom, date_to: grid ? exported : r.dateTo, ...metrics(r), import_id: imp.id,
     })), "campaign,source,date_from,date_to");
   }
-  // Keyword and placement reports: read and their campaigns recorded; their tables come with Phase 2.
+  else if (p.type === "placement") {
+    // Daily (a Date column) or one range per row; a re-import replaces the same rows.
+    const byKey = new Map<string, Record<string, unknown>>();
+    for (const r of p.rows) {
+      const row = { campaign: camps.get(r)!, placement: placementName(r.placement), date_from: r.dateFrom, date_to: r.dateTo, ...metrics(r), import_id: imp.id };
+      byKey.set(`${row.campaign}|${row.placement}|${row.date_from}|${row.date_to}`, row);
+    }
+    await upsert("ads_placement_daily", [...byKey.values()], "campaign,placement,date_from,date_to");
+  }
+  // Keyword (targeting) reports: read and their campaigns recorded; the bulk export carries keywords.
   return { file: fileName, type: p.type, label: REPORT_LABEL[p.type], rows: p.rows.length, dateFrom: p.dateFrom, dateTo: p.dateTo, warnings: p.warnings, importId: imp.id };
 }
 
@@ -234,12 +243,12 @@ export async function importReports(files: { name: string; text: string }[]): Pr
 async function dropSupersededImports(keep: string[]) {
   const d = db();
   const owned = new Set<string>();
-  for (const t of ["ads_campaign_ranges", "ads_campaign_daily", "ads_search_terms", "ads_placements", "ads_ad_groups", "ads_product_ads", "ads_keywords", "ads_negative_keywords", "ads_product_targets", "ads_keyword_ranges"]) {
+  for (const t of ["ads_campaign_ranges", "ads_campaign_daily", "ads_search_terms", "ads_placements", "ads_ad_groups", "ads_product_ads", "ads_keywords", "ads_negative_keywords", "ads_product_targets", "ads_keyword_ranges", "ads_placement_daily"]) {
     const rows = must(await d.from(t).select("import_id"), t) as { import_id: string | null }[];
     for (const r of rows) if (r.import_id) owned.add(r.import_id);
   }
   const all = must(await d.from("ads_imports").select("id, report_type"), "imports") as { id: string; report_type: string }[];
-  const orphans = all.filter((i) => !owned.has(i.id) && !keep.includes(i.id) && !["keyword", "placement"].includes(i.report_type)).map((i) => i.id);
+  const orphans = all.filter((i) => !owned.has(i.id) && !keep.includes(i.id) && !["keyword"].includes(i.report_type)).map((i) => i.id);
   for (const c of chunks(orphans)) must(await d.from("ads_imports").delete().in("id", c), "drop superseded imports");
 }
 
@@ -266,11 +275,15 @@ export async function loadAll() {
     d.from("ads_campaign_daily").select("campaign, date, impressions, clicks, cost, orders, sales, units"),
     d.from("ads_search_terms").select("campaign, ad_group_id, ad_group_name, keyword_id, keyword_text, match_type, term, date_from, date_to, impressions, clicks, cost, orders, sales, units"),
   ]);
+  // Archived campaigns (old tests you don't care about) are left out of everything that reads this.
+  const active = (must(camps, "campaigns") as CampaignRow[]).filter((c) => !c.archived);
+  const ids = new Set(active.map((c) => c.id));
+  const mine = (rows: Record<string, unknown>[]) => rows.filter((r) => ids.has(r.campaign as string));
   return {
-    campaigns: must(camps, "campaigns") as CampaignRow[],
-    ranges: must(ranges, "ranges") as Record<string, unknown>[],
-    daily: must(daily, "daily") as Record<string, unknown>[],
-    terms: countedTerms(must(terms, "search terms") as Record<string, unknown>[]),
+    campaigns: active,
+    ranges: mine(must(ranges, "ranges") as Record<string, unknown>[]),
+    daily: mine(must(daily, "daily") as Record<string, unknown>[]),
+    terms: countedTerms(mine(must(terms, "search terms") as Record<string, unknown>[])),
   };
 }
 
@@ -330,6 +343,7 @@ export async function trailingCpc(): Promise<number | null> {
 export interface AdsProduct {
   asin: string; title: string | null; price: number | null; landed_cost: number | null; referral_category: string | null;
   weight_g: number | null; dims: { l: number; w: number; h: number } | null; fba_fee: number | null; phase: "launch" | "steady";
+  image?: string | null;
 }
 
 export interface AsinEconomics extends UnitEconomics {
@@ -375,12 +389,13 @@ async function economics(p: AdsProduct | undefined, asin: string, adsAvgPrice: n
 
 /* ===================== the dashboard ===================== */
 
-export async function adsDashboard() {
+/** `lookAsins`: more products to find a title and image for (launches with no campaigns yet). */
+export async function adsDashboard(lookAsins: string[] = []) {
   const all = await loadAll();
   const settings = await adsSettings();
   const figs = campaignFigures(all);
   const [products, targets, placementsRes, adsRes, kwRes, negRes] = await Promise.all([
-    db().from("ads_products").select("asin, title, price, landed_cost, referral_category, weight_g, dims, fba_fee, phase"),
+    db().from("ads_products").select("asin, title, image, price, landed_cost, referral_category, weight_g, dims, fba_fee, phase"),
     db().from("ads_targets").select("asin, target_acos_launch, target_acos_steady"),
     db().from("ads_placements").select("campaign, placement, percentage, date_from, date_to, impressions, clicks, cost, orders, sales, units"),
     db().from("ads_product_ads").select("campaign, sku, asin, state"),
@@ -458,7 +473,22 @@ export async function adsDashboard() {
     return { ...x, campaignName: c.name, asin: c.asin, ratios: ratios(x.totals), status: s.status, why: s.why, breakEvenAcos: e?.breakEvenAcos ?? null, targetAcos: target };
   }).sort((a, b) => b.totals.cost - a.totals.cost);
 
-  return { settings, asins: asinRows, campaigns, terms, imports: (await listImports()).length };
+  // Each product's title and image: the Ads product, else the app's other records (free).
+  const lookFor = [...new Set([...asins, ...lookAsins])];
+  const [extraProds, wholesale, hunted, archived] = await Promise.all([
+    db().from("ads_products").select("asin, title, image").in("asin", lookFor.length ? lookFor : [""]),
+    db().from("products").select("asin, title, image_url").in("asin", lookFor.length ? lookFor : [""]),
+    db().from("pl_hunt_asins").select("asin, title, image").in("asin", lookFor.length ? lookFor : [""]),
+    db().from("ads_campaigns").select("id, name, campaign_id, state").eq("archived", true).order("name"),
+  ]);
+  const looks: Record<string, { title: string | null; image: string | null }> = {};
+  for (const asin of lookFor) {
+    const p = (prod.get(asin) ?? (extraProds.data as { asin: string; title: string | null; image: string | null }[] | null)?.find((x) => x.asin === asin)) as { title: string | null; image?: string | null } | undefined;
+    const w = (wholesale.data as { asin: string; title: string | null; image_url: string | null }[] | null)?.find((x) => x.asin === asin);
+    const h = (hunted.data as { asin: string; title: string | null; image: string | null }[] | null)?.find((x) => x.asin === asin);
+    looks[asin] = { title: p?.title ?? w?.title ?? h?.title ?? null, image: p?.image ?? w?.image_url ?? h?.image ?? null };
+  }
+  return { settings, asins: asinRows, campaigns, terms, imports: (await listImports()).length, looks, archived: (archived.data ?? []) as { id: string; name: string; campaign_id: string | null; state: string | null }[] };
 }
 
 /* ===================== edits ===================== */
@@ -471,10 +501,50 @@ export async function setCampaignAsin(id: string, asin: string | null) {
   must(await db().from("ads_campaigns").update({ asin, asin_source: asin ? "manual" : null }).eq("id", id), "set campaign ASIN");
 }
 
+/** Archive a campaign you don't care about (hidden from the dashboard and the rules), or bring it back. */
+export async function setCampaignArchived(id: string, archived: boolean) {
+  must(await db().from("ads_campaigns").update({ archived }).eq("id", id), "archive campaign");
+}
+
+export interface ProductMatch { asin: string; title: string | null; image: string | null; source: string }
+
+/**
+ * Products to assign a campaign to: by ASIN, or by words in the title, across the Ads products,
+ * the app's wholesale products, private-label hunt snapshots and Keepa snapshots. Free: no Keepa call.
+ */
+export async function searchProducts(q: string): Promise<ProductMatch[]> {
+  const term = q.trim();
+  if (term.length < 2) return [];
+  const d = db();
+  const asin = /^[A-Z0-9]{10}$/i.test(term) ? term.toUpperCase() : null;
+  // Words that start with what was typed ("pill" finds "Pill Box", not "Capillary").
+  const w = term.replace(/[%_,()]/g, "");
+  const words = `title.ilike.${w}%,title.ilike.% ${w}%`;
+  const [ads, wholesale, hunted, snaps] = await Promise.all([
+    asin ? d.from("ads_products").select("asin, title, image").eq("asin", asin) : d.from("ads_products").select("asin, title, image").or(words).not("asin", "is", null).limit(10),
+    asin ? d.from("products").select("asin, title, image_url").eq("asin", asin) : d.from("products").select("asin, title, image_url").or(words).not("asin", "is", null).limit(10),
+    asin ? d.from("pl_hunt_asins").select("asin, title, image").eq("asin", asin) : d.from("pl_hunt_asins").select("asin, title, image").or(words).not("asin", "is", null).limit(10),
+    asin ? d.from("keepa_snapshots").select("asin").eq("asin", asin).limit(1) : Promise.resolve({ data: [] as { asin: string }[], error: null }),
+  ]);
+  const out = new Map<string, ProductMatch>();
+  const add = (rows: unknown, src: string, img: string) => {
+    for (const r of (rows ?? []) as Record<string, string | null>[]) {
+      if (!r.asin) continue;
+      const cur = out.get(r.asin!);
+      out.set(r.asin!, { asin: r.asin!, title: cur?.title ?? r.title ?? null, image: cur?.image ?? r[img] ?? null, source: cur?.source ?? src });
+    }
+  };
+  add(ads.data, "Ads products", "image");
+  add(wholesale.data, "Wholesale products", "image_url");
+  add(hunted.data, "Niche Hunt", "image");
+  for (const r of (snaps.data ?? []) as { asin: string }[]) if (!out.has(r.asin)) out.set(r.asin, { asin: r.asin, title: null, image: null, source: "Keepa cache" });
+  return [...out.values()].slice(0, 12);
+}
+
 export async function saveAdsProduct(asin: string, patch: Partial<Omit<AdsProduct, "asin">>) {
   if (!isAsin(asin)) throw new Error("An ASIN is 10 letters and digits");
   const row: Record<string, unknown> = { asin, updated_at: new Date().toISOString() };
-  for (const k of ["title", "price", "landed_cost", "referral_category", "weight_g", "dims", "fba_fee", "phase"] as const) if (patch[k] !== undefined) row[k] = patch[k];
+  for (const k of ["title", "image", "price", "landed_cost", "referral_category", "weight_g", "dims", "fba_fee", "phase"] as const) if (patch[k] !== undefined) row[k] = patch[k];
   must(await db().from("ads_products").upsert(row, { onConflict: "asin" }), "save product");
 }
 
@@ -493,9 +563,10 @@ export async function fetchAdsProductFromKeepa(asin: string): Promise<{ tokensUs
   const k = r.byAsin.get(asin);
   if (!k) return { tokensUsed: r.tokensUsed, found: false };
   await saveSnapshot(k).catch(() => {});
-  const cur = (must(await db().from("ads_products").select("title, weight_g, dims").eq("asin", asin), "product") as { title: string | null; weight_g: number | null; dims: unknown }[])[0];
+  const cur = (must(await db().from("ads_products").select("title, image, weight_g, dims").eq("asin", asin), "product") as { title: string | null; image: string | null; weight_g: number | null; dims: unknown }[])[0];
   await saveAdsProduct(asin, {
     ...(cur?.title ? {} : { title: k.title }),
+    ...(cur?.image ? {} : { image: k.imageUrl }),
     ...(cur?.weight_g != null ? {} : { weight_g: k.weightG }),
     ...(cur?.dims ? {} : { dims: k.dimsCm }),
   });
