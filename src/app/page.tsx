@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangleIcon, ArrowRightIcon, BellIcon, BoxesIcon, BuildingIcon, CoinsIcon, MegaphoneIcon, PackageXIcon, ShoppingCartIcon, RefreshCwIcon, SparklesIcon, StarIcon, TagIcon, TelescopeIcon, UploadIcon } from "lucide-react";
+import { AlertTriangleIcon, ArrowRightIcon, BellIcon, BookOpenIcon, BoxesIcon, BuildingIcon, CoinsIcon, MegaphoneIcon, PackageXIcon, ShoppingCartIcon, RefreshCwIcon, SparklesIcon, StarIcon, TagIcon, TelescopeIcon, UploadIcon } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 import { VerdictBar } from "@/components/VerdictBar";
@@ -183,6 +183,7 @@ export default function HomePage() {
               hint={`ACoS ${t.sales ? Math.round((t.cost / t.sales) * 100) : "—"}% on £${t.sales.toFixed(2)} sales · ${waste} search term${waste === 1 ? "" : "s"} wasting spend`} />;
           }}
         </Section>
+        <Stat icon={<BookOpenIcon />} label="Ads: the playbook" href="/help/ads-playbook" value="Start to finish" hint="Set a product up, launch, the weekly loop, the 60-day arc, and what to do when something looks wrong" />
         <Section load={aiReview} skeleton={<StatSkeleton />}>
           {(r) => {
             const month = new Date(`${r.lastMonth}-01`).toLocaleDateString("en-GB", { month: "long", year: "numeric" });

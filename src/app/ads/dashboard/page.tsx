@@ -80,8 +80,8 @@ export default function AdsDashboardPage() {
     return (
       <div className="space-y-4">
         <h1 className="page-title">Dashboard</h1>
-        <EmptyState icon={<FileUpIcon />} title="No ad data yet — import a report" action={<Button asChild><Link href="/ads/imports">Import reports</Link></Button>}>
-          Export a Search term report, a Campaign report or the Campaign Manager grid from Amazon Ads, and import it. Connect Amazon Ads once API access is approved.
+        <EmptyState icon={<FileUpIcon />} title="No ad data yet — import a report" action={<div className="flex flex-wrap justify-center gap-2"><Button asChild><Link href="/ads/imports">Import reports</Link></Button><Button asChild variant="outline"><Link href="/help/ads-playbook">Read the playbook</Link></Button></div>}>
+          Export the bulk export (or a Search term report, a Campaign report or the Campaign Manager grid) from Amazon Ads, and import it. New to running ads here? <Link className="text-brand underline" href="/help/ads-playbook">Ads: the playbook</Link> goes from setting a product up to the weekly loop.
         </EmptyState>
       </div>
     );
@@ -113,7 +113,7 @@ function Dashboard({ d, load }: { d: Dash; load: () => void }) {
         </div>
       </div>
 
-      {!products.length && <p className="panel p-4 text-sm text-muted-foreground">No campaign is linked to a product yet: assign one below.</p>}
+      {!products.length && <p className="panel p-4 text-sm text-muted-foreground">No campaign is linked to a product yet: assign one below. Then see <Link className="text-brand underline" href="/help/ads-playbook">Ads: the playbook</Link> for the weekly loop.</p>}
       {d.asins.filter((a) => shown(a.asin)).map((a) => (
         <ProductSection key={a.asin} asin={a.asin} look={d.looks?.[a.asin]} stock={d.stock[a.asin]} plan={d.plans.find((p) => p.asin === a.asin)} onSaved={load}
           sub={`${a.campaigns} campaign${a.campaigns === 1 ? "" : "s"} · ${day(a.from)} – ${day(a.to)} · ${a.phase} · target ACoS ${pct(a.targetAcos, 0)}`}>

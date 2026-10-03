@@ -1,8 +1,7 @@
 # Wholesale Scout: status
 
 Read this first in a new session. Keep it current: every commit that changes a feature updates
-it (what's built, the backlog, the rough edges). Last updated: 3 Oct 2026 (Ads Phase 5: smoothed conversion, keyword
-lists, per-rule windows, TACoS mode, listing health, keyword bank).
+it (what's built, the backlog, the rough edges). Last updated: 3 Oct 2026 (Help: "Ads: the playbook").
 
 Wholesale Scout is a single-user Amazon UK seller's workbench: Next.js 16 (App Router, `proxy.ts`
 password gate), Supabase (Postgres, RLS on, service-role access from the server only), Vercel
@@ -60,7 +59,9 @@ campaigns and proposed for broad/auto ones); TACoS mode per product (target TACo
 allows, Ranked −25%, organic share on the tile, a switch suggestion); listing health (ad CTR/CVR vs
 the niche; holds Bid up back when poor); the keyword bank (Ads → Keywords and per product: POE,
 harvested, n-gram winners, rank-tracked and manual terms; Add as exact / negative queue approved
-proposals; feeds the launcher's head terms). The AI research layer (Claude, on your click only): Explain this product (a cited
+proposals; feeds the launcher's head terms). Help's first Ads article is "Ads: the playbook" (set up → launch → weekly
+loop → 60-day arc → monthly → troubleshooting → the API), linked from the dashboard's empty state
+and Home's Ads row. The AI research layer (Claude, on your click only): Explain this product (a cited
 narrative per product), Recommend targets (launch and steady ACoS, Apply writes them) and the
 monthly review on Ads → Review (per product, account-wide, did applied batches work, three ranked
 recommendations mapped to rules; optional schedule on the 1st, off by default). Every call is
