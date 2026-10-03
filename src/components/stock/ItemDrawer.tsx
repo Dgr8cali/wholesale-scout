@@ -16,6 +16,8 @@ import { cn } from "@/lib/utils";
 import { ReceiveDialog } from "@/components/tracker/StockPurchase";
 import { ACTION_LABEL, ActionDialog, type Listing, type StockAction } from "./actions";
 import { OrderLink, SupplierPicker } from "./orderBits";
+import { itemActions } from "./corrections";
+import { useDialogs } from "@/components/Dialogs";
 import { trackingText } from "@/lib/stock/orders";
 
 interface MovementRow { id: string; bucket: Bucket; quantity: number; kind: MovementKind; date: string; reason: string | null; note: string | null; order_id: string | null; order_url: string | null }
@@ -30,6 +32,7 @@ export function ItemDrawer({ row, onClose, onChanged }: { row: ItemLevels | null
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [receiving, setReceiving] = useState<OrderRow | null>(null);
   const [action, setAction] = useState<StockAction | null>(null);
+  const { confirm } = useDialogs();
   const [d, setD] = useState<Record<string, string>>({});
   const [newL, setNewL] = useState({ marketplace: "", marketplace_sku: "", price: "", fee_pct: "", default_bucket: "home", url: "" });
   const id = row?.item.id;
@@ -80,10 +83,27 @@ export function ItemDrawer({ row, onClose, onChanged }: { row: ItemLevels | null
     }
   };
   const removeListing = async (l: Listing) => {
-    await api(`/api/stock/items/${it.id}/listings?listing=${l.id}`, { method: "DELETE" });
-    load();
-    onChanged();
+    if (!(await confirm({ title: `Delete the ${l.marketplace} listing?`, description: `${l.marketplace_sku ?? ""}${l.price != null ? ` at ${gbp(l.price)}` : ""}. Sales already recorded keep their cost; new sales can't pick it. The audit log keeps a copy.`, confirmLabel: "Delete listing", destructive: true }))) return;
+    try {
+      await api(`/api/stock/items/${it.id}/listings?listing=${l.id}`, { method: "DELETE" });
+      load();
+      onChanged();
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
   };
+  /** An order not yet received: delete it (one that's been received needs its receipt deleted first). */
+  const removeOrder = async (o: OrderRow) => {
+    if (!(await confirm({ title: "Delete this order?", description: `${o.units} units${o.order_id ? `, order ${o.order_id}` : ""}, ordered ${o.ordered_on}. It leaves the Tracker. The audit log keeps a copy.`, confirmLabel: "Delete order", destructive: true }))) return;
+    try {
+      await api(`/api/purchases/${o.id}`, { method: "DELETE" });
+      toast.success("Order deleted");
+      load();
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
+  const acts = itemActions(confirm, onChanged);
   const field = (k: string, label: string, props: React.InputHTMLAttributes<HTMLInputElement> = {}) => (
     <label className="block space-y-0.5"><span className="field-label">{label}</span><Input className="h-8" value={d[k] ?? ""} onChange={(e) => setD({ ...d, [k]: e.target.value })} {...props} /></label>
   );
@@ -135,6 +155,7 @@ export function ItemDrawer({ row, onClose, onChanged }: { row: ItemLevels | null
               <div className="flex items-center gap-3">
                 <Button size="sm" variant="outline" onClick={saveDetails}>Save details</Button>
                 {it.supplier_id && <Link href={`/suppliers/${it.supplier_id}`} className="text-xs text-brand hover:underline">Supplier →</Link>}
+                <Button size="sm" variant="ghost" className="ml-auto text-fail hover:text-fail" onClick={async () => { if (await acts.archive(it)) onClose(); }}><Trash2Icon /> Delete item</Button>
               </div>
             </section>
 
@@ -148,7 +169,7 @@ export function ItemDrawer({ row, onClose, onChanged }: { row: ItemLevels | null
                     <td className="pr-2"><OrderLink id={o.order_id} url={o.order_url} /> <span className="text-muted-foreground">{o.supplier_name ?? ""}</span>
                       {(o.expected_date || o.tracking_number) && <div className="text-muted-foreground">{o.expected_date && o.status === "ordered" ? `expected ${o.expected_date}` : ""}{o.expected_date && o.tracking_number && o.status === "ordered" ? " · " : ""}{trackingText(o.tracking_carrier, o.tracking_number) ?? ""}</div>}</td>
                     <td className="text-right whitespace-nowrap">{o.status === "ordered"
-                      ? <Button size="xs" variant="outline" onClick={() => setReceiving(o)}>Receive</Button>
+                      ? <><Button size="xs" variant="outline" onClick={() => setReceiving(o)}>Receive</Button><button type="button" className="ml-1.5 align-middle" aria-label="Delete order" title="Delete order" onClick={() => removeOrder(o)}><Trash2Icon className="size-3.5 text-muted-foreground hover:text-fail" /></button></>
                       : <span className="text-muted-foreground">{o.status}{o.received_bucket ? ` · ${BUCKET_LABEL[o.received_bucket as Bucket]}` : ""}</span>}</td>
                   </tr>
                 ))}</tbody></table>
@@ -183,7 +204,7 @@ export function ItemDrawer({ row, onClose, onChanged }: { row: ItemLevels | null
             </section>
 
             <section className="space-y-2">
-              <div className="flex items-center"><h3 className="text-sm font-semibold">Movements</h3><Link href={`/stock/movements?item=${it.id}`} className="ml-auto text-xs text-brand hover:underline">All →</Link></div>
+              <div className="flex items-center"><h3 className="text-sm font-semibold">Movements</h3><Link href={`/stock/movements?item=${it.id}`} className="ml-auto text-xs text-brand hover:underline">All, to edit or delete →</Link></div>
               {!moves.length ? <p className="text-xs text-muted-foreground">None yet.</p> : (
                 <table className="w-full text-xs"><tbody>{moves.slice(0, 30).map((m) => (
                   <tr key={m.id} className="border-t">

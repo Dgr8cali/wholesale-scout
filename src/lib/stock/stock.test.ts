@@ -69,3 +69,19 @@ describe("items CSV", () => {
     expect(unknownColumns).toEqual(["colour"]);
   });
 });
+
+describe("corrections", () => {
+  it("an edited quantity keeps its kind's sign; an adjustment keeps yours", async () => {
+    const { signedQuantity } = await import("./levels");
+    expect([signedQuantity("sale", 5), signedQuantity("sale", -5), signedQuantity("receipt", -7), signedQuantity("transfer_out", 3), signedQuantity("adjustment", -3)]).toEqual([-5, -5, 7, -3, -3]);
+    expect(() => signedQuantity("adjustment", 0)).toThrow(/can't be 0/);
+  });
+  it("negative: the movements after which their bucket stands below 0, in date order", async () => {
+    const { negativeAfter } = await import("./levels");
+    const m = (id: string, bucket: "home" | "tiktok_fbt" | "fba", quantity: number, date: string) => ({ id, item_id: "a", bucket, quantity, kind: "adjustment" as const, date });
+    // A receipt of 10 deleted: the sale of 4 leaves Self-ship at −4 until something is corrected.
+    expect([...negativeAfter([m("s1", "home", -4, "2026-09-02"), m("r2", "home", 6, "2026-09-05"), m("s2", "home", -1, "2026-09-06")])]).toEqual(["s1"]);
+    expect([...negativeAfter([m("r1", "home", 10, "2026-09-01"), m("s1", "home", -4, "2026-09-02"), m("f1", "fba", -9, "2026-09-03")])]).toEqual([]);
+    expect([...negativeAfter([m("t1", "tiktok_fbt", -2, "2026-09-01"), m("t2", "tiktok_fbt", -1, "2026-09-02")])]).toEqual(["t1", "t2"]);
+  });
+});

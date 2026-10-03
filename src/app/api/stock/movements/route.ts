@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { handle } from "@/lib/server/http";
 import { listMovements } from "@/lib/server/stock";
+import { deleteMovements } from "@/lib/server/stockEdit";
 
 const csvCell = (v: unknown) => { const s = v == null ? "" : String(v); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
 
@@ -12,4 +13,15 @@ export const GET = handle(async (req: NextRequest) => {
   const head = ["date", "sku", "name", "bucket", "kind", "quantity", "reason", "unit_cost", "note", "order_id", "order_url", "supplier"];
   const lines = rows.map((r) => { const it = r.item as { sku: string; name: string } | null; return [r.date, it?.sku, it?.name, r.bucket, r.kind, r.quantity, r.reason, r.unit_cost, r.note, r.order_id, r.order_url, (r.supplier as { name: string } | null)?.name].map(csvCell).join(","); });
   return new Response([head.join(","), ...lines].join("\n"), { headers: { "content-type": "text/csv; charset=utf-8", "content-disposition": `attachment; filename="stock-movements-${new Date().toISOString().slice(0, 10)}.csv"` } });
+});
+
+/** { deleteIds }: Movements → Delete selected (each with what goes with it). */
+export const POST = handle(async (req: NextRequest) => {
+  const b = (await req.json().catch(() => ({}))) as { deleteIds?: string[] };
+  if (!Array.isArray(b.deleteIds) || !b.deleteIds.length) return Response.json({ error: "{ deleteIds }" }, { status: 400 });
+  try {
+    return Response.json(await deleteMovements(b.deleteIds));
+  } catch (e) {
+    return Response.json({ error: (e as Error).message }, { status: 400 });
+  }
 });

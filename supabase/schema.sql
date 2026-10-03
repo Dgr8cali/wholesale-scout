@@ -1,5 +1,5 @@
 -- Wholesale Scout schema, dumped by scripts/schema-backup.mjs. No data.
--- Dumped 2026-10-03T10:37:06.208Z. Safe to re-run. Restore: npm run schema:restore
+-- Dumped 2026-10-03T12:17:24.457Z. Safe to re-run. Restore: npm run schema:restore
 
 -- @section extensions
 create extension if not exists "pg_cron";
@@ -1774,6 +1774,28 @@ alter table "schema_migrations" add column if not exists "name" text;
 alter table "schema_migrations" add column if not exists "applied_at" timestamp with time zone default now();
 alter table "schema_migrations" enable row level security;
 
+create table if not exists "stock_audit" (
+  "id" uuid default gen_random_uuid() not null,
+  "entity" text not null,
+  "entity_id" uuid,
+  "action" text not null,
+  "summary" text not null,
+  "actor" text default 'you'::text not null,
+  "before" jsonb,
+  "after" jsonb,
+  "created_at" timestamp with time zone default now() not null
+);
+alter table "stock_audit" add column if not exists "id" uuid default gen_random_uuid();
+alter table "stock_audit" add column if not exists "entity" text;
+alter table "stock_audit" add column if not exists "entity_id" uuid;
+alter table "stock_audit" add column if not exists "action" text;
+alter table "stock_audit" add column if not exists "summary" text;
+alter table "stock_audit" add column if not exists "actor" text default 'you'::text;
+alter table "stock_audit" add column if not exists "before" jsonb;
+alter table "stock_audit" add column if not exists "after" jsonb;
+alter table "stock_audit" add column if not exists "created_at" timestamp with time zone default now();
+alter table "stock_audit" enable row level security;
+
 create table if not exists "stock_items" (
   "id" uuid default gen_random_uuid() not null,
   "sku" text not null,
@@ -1792,7 +1814,8 @@ create table if not exists "stock_items" (
   "notes" text,
   "source_ref" text,
   "created_at" timestamp with time zone default now() not null,
-  "updated_at" timestamp with time zone default now() not null
+  "updated_at" timestamp with time zone default now() not null,
+  "archived_at" timestamp with time zone
 );
 alter table "stock_items" add column if not exists "id" uuid default gen_random_uuid();
 alter table "stock_items" add column if not exists "sku" text;
@@ -1812,6 +1835,7 @@ alter table "stock_items" add column if not exists "notes" text;
 alter table "stock_items" add column if not exists "source_ref" text;
 alter table "stock_items" add column if not exists "created_at" timestamp with time zone default now();
 alter table "stock_items" add column if not exists "updated_at" timestamp with time zone default now();
+alter table "stock_items" add column if not exists "archived_at" timestamp with time zone;
 alter table "stock_items" enable row level security;
 
 create table if not exists "stock_listings" (
@@ -1864,7 +1888,8 @@ create table if not exists "stock_movements" (
   "tracking_number" text,
   "currency" character(3),
   "fx_rate" numeric,
-  "unit_cost_ccy" numeric
+  "unit_cost_ccy" numeric,
+  "transfer_id" uuid
 );
 alter table "stock_movements" add column if not exists "id" uuid default gen_random_uuid();
 alter table "stock_movements" add column if not exists "item_id" uuid;
@@ -1888,6 +1913,7 @@ alter table "stock_movements" add column if not exists "tracking_number" text;
 alter table "stock_movements" add column if not exists "currency" character(3);
 alter table "stock_movements" add column if not exists "fx_rate" numeric;
 alter table "stock_movements" add column if not exists "unit_cost_ccy" numeric;
+alter table "stock_movements" add column if not exists "transfer_id" uuid;
 alter table "stock_movements" enable row level security;
 
 create table if not exists "stock_sales" (
@@ -2386,6 +2412,11 @@ end $$;
 do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'schema_migrations_pkey' and conrelid = '"schema_migrations"'::regclass) then
     alter table "schema_migrations" add constraint "schema_migrations_pkey" PRIMARY KEY (name);
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'stock_audit_pkey' and conrelid = '"stock_audit"'::regclass) then
+    alter table "stock_audit" add constraint "stock_audit_pkey" PRIMARY KEY (id);
   end if;
 end $$;
 do $$ begin
@@ -3167,9 +3198,11 @@ CREATE INDEX IF NOT EXISTS results_run_score ON results USING btree (run_id, sco
 CREATE INDEX IF NOT EXISTS results_run_updated ON results USING btree (run_id, updated_at);
 CREATE INDEX IF NOT EXISTS results_run_verdict_score ON results USING btree (run_id, verdict, score DESC NULLS LAST);
 CREATE INDEX IF NOT EXISTS results_updated ON results USING btree (updated_at) WHERE (status = 'done'::text);
+CREATE INDEX IF NOT EXISTS stock_audit_created ON stock_audit USING btree (created_at DESC);
 CREATE INDEX IF NOT EXISTS stock_items_asin ON stock_items USING btree (asin);
 CREATE INDEX IF NOT EXISTS stock_movements_item ON stock_movements USING btree (item_id, date);
 CREATE INDEX IF NOT EXISTS stock_movements_supplier ON stock_movements USING btree (supplier_id);
+CREATE INDEX IF NOT EXISTS stock_movements_transfer ON stock_movements USING btree (transfer_id);
 CREATE INDEX IF NOT EXISTS supplier_mappings_fingerprint_idx ON supplier_mappings USING btree (header_fingerprint);
 CREATE INDEX IF NOT EXISTS watch_alerts_open_idx ON watch_alerts USING btree (created_at DESC) WHERE (dismissed_at IS NULL);
 CREATE INDEX IF NOT EXISTS watchlist_product_idx ON watchlist USING btree (product_id);
@@ -3403,3 +3436,4 @@ insert into schema_migrations (name) values ('20261002001400_stock.sql') on conf
 insert into schema_migrations (name) values ('20261002001500_ads_ai.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261002001600_pl_review_dumps.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261003000100_stock_orders.sql') on conflict do nothing;
+insert into schema_migrations (name) values ('20261003000200_stock_corrections.sql') on conflict do nothing;

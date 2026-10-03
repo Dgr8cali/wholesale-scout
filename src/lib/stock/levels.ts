@@ -104,3 +104,34 @@ export function canTake(levels: Levels, bucket: Bucket, quantity: number): strin
   if (!(quantity > 0)) return "Quantity must be at least 1";
   return levels[bucket] >= quantity ? null : `Only ${levels[bucket]} in ${BUCKET_LABEL[bucket]}`;
 }
+
+/* ===================== corrections ===================== */
+
+/** Into the bucket (+) or out of it (−) by kind; an adjustment keeps the sign you give it. */
+export const KIND_SIGN: Record<MovementKind, 1 | -1 | 0> = { receipt: 1, return: 1, transfer_in: 1, sale: -1, transfer_out: -1, adjustment: 0 };
+
+/** An edited quantity with its kind's sign: 5 on a sale is −5; an adjustment keeps yours (not 0). */
+export function signedQuantity(kind: MovementKind, quantity: number): number {
+  const q = Math.round(Number(quantity));
+  if (!Number.isFinite(q) || q === 0) throw new Error("The quantity can't be 0");
+  const s = KIND_SIGN[kind];
+  return s === 0 ? q : s * Math.abs(q);
+}
+
+/**
+ * The movements after which their bucket stands below 0 (a deletion or edit left it negative):
+ * the running balance per item and bucket, in date order (then the order they were entered).
+ * FBA follows SP-API, so it's never checked here.
+ */
+export function negativeAfter(moves: (Movement & { id: string; created_at?: string | null })[]): Set<string> {
+  const sorted = [...moves].filter((m) => m.bucket !== "fba").sort((a, b) => a.date.localeCompare(b.date) || String(a.created_at ?? "").localeCompare(String(b.created_at ?? "")));
+  const bal = new Map<string, number>();
+  const out = new Set<string>();
+  for (const m of sorted) {
+    const k = `${m.item_id}|${m.bucket}`;
+    const v = (bal.get(k) ?? 0) + Number(m.quantity);
+    bal.set(k, v);
+    if (v < 0) out.add(m.id);
+  }
+  return out;
+}

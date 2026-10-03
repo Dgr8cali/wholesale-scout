@@ -1,7 +1,7 @@
 import "server-only";
 import { orderCols, type OrderInput } from "../stock/orders";
 import {
-  BUCKETS, canTake, costSnapshot, dailyDemand, daysOfCover, levelStatus, levelsByItem, reorderFor, totalOf, ZERO_LEVELS,
+  BUCKETS, canTake, costSnapshot, dailyDemand, daysOfCover, levelStatus, levelsByItem, negativeAfter, reorderFor, totalOf, ZERO_LEVELS,
   type Bucket, type Levels, type Movement, type MovementKind,
 } from "../stock/levels";
 import { planItemsCsv, planStockPilotRaw, type AsinBySku, type ImportPlan } from "../stock/stockpilot";
@@ -44,8 +44,10 @@ export interface StockItem {
   id: string; sku: string; name: string; asin: string | null; barcode: string | null; category: string | null; status: "active" | "discontinued";
   parent_sku: string | null; unit_cost: number | null; packaging_cost: number | null; reorder_level: number | null; supplier_id: string | null;
   lead_time_days: number | null; image_url: string | null; notes: string | null; source_ref: string | null; created_at: string;
+  /** Archived (soft-deleted): hidden from Levels, Reorder and Home until restored. */
+  archived_at?: string | null;
 }
-const ITEM_COLS = "id, sku, name, asin, barcode, category, status, parent_sku, unit_cost, packaging_cost, reorder_level, supplier_id, lead_time_days, image_url, notes, source_ref, created_at";
+const ITEM_COLS = "id, sku, name, asin, barcode, category, status, parent_sku, unit_cost, packaging_cost, reorder_level, supplier_id, lead_time_days, image_url, notes, source_ref, created_at, archived_at";
 const toItem = (r: Record<string, unknown>): StockItem => ({ ...(r as unknown as StockItem), unit_cost: n(r.unit_cost), packaging_cost: n(r.packaging_cost), reorder_level: n(r.reorder_level), lead_time_days: n(r.lead_time_days) });
 
 export interface ItemLevels {
@@ -89,8 +91,11 @@ async function loadAll() {
 }
 
 /** Every item with its levels, value, demand, days of cover, status and reorder suggestion. */
-export async function stockLevels(): Promise<{ items: ItemLevels[]; settings: StockSettings; fbaSynced: string | null }> {
-  const [all, settings] = await Promise.all([loadAll(), stockSettings()]);
+export async function stockLevels(opts: { archived?: boolean } = {}): Promise<{ items: ItemLevels[]; settings: StockSettings; fbaSynced: string | null; archivedCount: number }> {
+  const [loaded, settings] = await Promise.all([loadAll(), stockSettings()]);
+  // Archived items are left out (Levels → Show archived lists them on their own).
+  const archivedCount = loaded.items.filter((i) => i.archived_at).length;
+  const all = { ...loaded, items: loaded.items.filter((i) => (opts.archived ? !!i.archived_at : !i.archived_at)) };
   const fbaSynced = all.inv.map((r) => r.updated_at).sort().at(-1) ?? null;
   // FBA per item: SP-API's fulfillable, matched by ASIN (summed over its SKUs), else by SKU.
   const fba = new Map<string, number>();
@@ -123,7 +128,7 @@ export async function stockLevels(): Promise<{ items: ItemLevels[]; settings: St
       spark, fba: { synced: fbaSynced, matched: matched.has(it.id) }, listings: all.listings.filter((x) => x.item_id === it.id).length,
     };
   });
-  return { items, settings, fbaSynced };
+  return { items, settings, fbaSynced, archivedCount };
 }
 
 /** Stock by ASIN across every bucket, for Ads' days of cover and its stock guard. */
@@ -208,7 +213,7 @@ const manualBucket = (b: unknown, what: string): Bucket => {
   if (b === "fba") throw new Error("Amazon FBA levels come from SP-API: they aren't entered here");
   return b;
 };
-type ReceiptOrder = { supplier_id?: string | null; order_id?: string | null; order_url?: string | null; ordered_date?: string | null; tracking_carrier?: string | null; tracking_number?: string | null; currency?: string | null; fx_rate?: number | null; unit_cost_ccy?: number | null };
+type ReceiptOrder = { transfer_id?: string | null; supplier_id?: string | null; order_id?: string | null; order_url?: string | null; ordered_date?: string | null; tracking_carrier?: string | null; tracking_number?: string | null; currency?: string | null; fx_rate?: number | null; unit_cost_ccy?: number | null };
 async function addMovement(row: { item_id: string; bucket: Bucket; quantity: number; kind: MovementKind; date: string; reason?: string | null; unit_cost?: number | null; sale_id?: string | null; purchase_id?: string | null; note?: string | null } & ReceiptOrder) {
   return must(await db().from("stock_movements").insert({ reason: null, unit_cost: null, sale_id: null, purchase_id: null, note: null, ...row }).select("*").single(), "movement");
 }
@@ -247,8 +252,10 @@ export async function transfer(x: { itemId: string; from: Bucket; to: Bucket; qu
   const err = canTake(await levelsOf(x.itemId), from, q);
   if (err) throw new Error(err);
   const date = isDate(x.date) ? x.date : today();
-  await addMovement({ item_id: x.itemId, bucket: from, quantity: -q, kind: "transfer_out", date, note: x.note ?? null });
-  return addMovement({ item_id: x.itemId, bucket: to, quantity: q, kind: "transfer_in", date, note: x.note ?? null });
+  // The two halves share a transfer_id: deleting or editing one does the other.
+  const transfer_id = crypto.randomUUID();
+  await addMovement({ item_id: x.itemId, bucket: from, quantity: -q, kind: "transfer_out", date, note: x.note ?? null, transfer_id });
+  return addMovement({ item_id: x.itemId, bucket: to, quantity: q, kind: "transfer_in", date, note: x.note ?? null, transfer_id });
 }
 
 /* ===================== sales ===================== */
@@ -282,13 +289,26 @@ export async function returnSale(x: { saleId: string; quantity: number; bucket: 
   const d = db();
   const sale = must(await d.from("stock_sales").select("id, item_id, quantity, returned_quantity").eq("id", x.saleId).single(), "sale") as { id: string; item_id: string; quantity: number; returned_quantity: number };
   const q = Math.round(Number(x.quantity));
-  if (!(q > 0) || sale.returned_quantity + q > sale.quantity) throw new Error(`At most ${sale.quantity - sale.returned_quantity} can come back`);
-  must(await d.from("stock_sales").update({ returned_quantity: sale.returned_quantity + q }).eq("id", sale.id), "return");
+  const back = Number(sale.returned_quantity ?? 0);
+  if (!(q > 0) || back + q > sale.quantity) throw new Error(`At most ${sale.quantity - back} can come back`);
+  must(await d.from("stock_sales").update({ returned_quantity: back + q }).eq("id", sale.id), "return");
   return addMovement({ item_id: sale.item_id, bucket: manualBucket(x.bucket, "Return into"), quantity: q, kind: "return", date: isDate(x.date) ? x.date : today(), reason: x.reason ?? null, sale_id: sale.id });
 }
 
+/**
+ * The ledger, filtered. `negative`: after this movement its bucket stood below 0 (counted over all
+ * of the item's movements, in date order), shown until it's corrected.
+ */
 export async function listMovements(f: { itemId?: string | null; bucket?: string | null; kind?: string | null; from?: string | null; to?: string | null }) {
-  let q = db().from("stock_movements").select("id, item_id, bucket, quantity, kind, date, reason, unit_cost, sale_id, purchase_id, note, created_at, order_id, order_url, tracking_carrier, tracking_number, currency, unit_cost_ccy, item:stock_items(sku, name), supplier:suppliers(id, name)").order("date", { ascending: false }).order("created_at", { ascending: false }).limit(2000);
+  const rows = await listMovementRows(f);
+  const ids = [...new Set(rows.map((r) => r.item_id as string))];
+  const all = ids.length ? must(await db().from("stock_movements").select("id, item_id, bucket, quantity, kind, date, created_at").in("item_id", ids), "balances") as (Movement & { id: string; created_at: string })[] : [];
+  const neg = negativeAfter(all);
+  return rows.map((r): Record<string, unknown> => ({ ...r, negative: neg.has(r.id as string) }));
+}
+
+async function listMovementRows(f: { itemId?: string | null; bucket?: string | null; kind?: string | null; from?: string | null; to?: string | null }) {
+  let q = db().from("stock_movements").select("id, item_id, bucket, quantity, kind, date, reason, unit_cost, sale_id, purchase_id, transfer_id, note, created_at, order_id, order_url, tracking_carrier, tracking_number, currency, unit_cost_ccy, item:stock_items(sku, name), supplier:suppliers(id, name)").order("date", { ascending: false }).order("created_at", { ascending: false }).limit(2000);
   if (f.itemId) q = q.eq("item_id", f.itemId);
   if (f.bucket && bucketOk(f.bucket)) q = q.eq("bucket", f.bucket);
   if (f.kind) q = q.eq("kind", f.kind);
@@ -422,7 +442,16 @@ export async function applyImport(src: { kind: "stockpilot"; raw: unknown } | { 
     const saved = must(await d.from("stock_sales").upsert(row, { onConflict: "source_ref" }).select("id").single(), "sale") as { id: string };
     saleId.set(s.ref, saved.id);
   }
-  const moves = plan.movements.map((m) => ({ item_id: itemId.get(m.item_ref)!, bucket: m.bucket, quantity: m.quantity, kind: m.kind, date: m.date, reason: m.reason, unit_cost: m.unit_cost, sale_id: m.sale_ref ? saleId.get(m.sale_ref) ?? null : null, note: m.note, source_ref: m.ref }));
+  // A transfer's halves ("<id>:out", "<id>:in") share a transfer_id: kept from an earlier import, else new.
+  const known = new Map((must(await d.from("stock_movements").select("source_ref, transfer_id").not("transfer_id", "is", null), "transfer ids") as { source_ref: string | null; transfer_id: string }[])
+    .filter((r) => r.source_ref).map((r) => [r.source_ref!.replace(/:(in|out)$/, ""), r.transfer_id]));
+  const transferOf = (ref: string, kind: string) => {
+    if (kind !== "transfer_in" && kind !== "transfer_out") return null;
+    const base = ref.replace(/:(in|out)$/, "");
+    if (!known.has(base)) known.set(base, crypto.randomUUID());
+    return known.get(base)!;
+  };
+  const moves = plan.movements.map((m) => ({ item_id: itemId.get(m.item_ref)!, bucket: m.bucket, quantity: m.quantity, kind: m.kind, date: m.date, reason: m.reason, unit_cost: m.unit_cost, sale_id: m.sale_ref ? saleId.get(m.sale_ref) ?? null : null, note: m.note, source_ref: m.ref, transfer_id: transferOf(m.ref, m.kind) }));
   for (const c of chunks(moves, 200)) if (c.length) must(await d.from("stock_movements").upsert(c, { onConflict: "source_ref" }), "movements");
   return { items: plan.items.length, listings: plan.listings.length, sales: plan.sales.length, movements: moves.length, newMovements: pre.movementsNew, notes: plan.notes };
 }

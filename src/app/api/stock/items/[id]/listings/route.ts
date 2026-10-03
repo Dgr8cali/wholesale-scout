@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { handle } from "@/lib/server/http";
+import { deleteListing } from "@/lib/server/stockEdit";
 import { db, must } from "@/lib/server/db";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -19,6 +20,10 @@ export const POST = handle(async (req: NextRequest, ctx: Ctx) => {
 
 /** ?listing=<id>: remove a listing. */
 export const DELETE = handle(async (req: NextRequest, ctx: Ctx) => {
-  must(await db().from("stock_listings").delete().eq("id", req.nextUrl.searchParams.get("listing") ?? "").eq("item_id", (await ctx.params).id), "delete listing");
-  return Response.json({ ok: true });
+  try {
+    await deleteListing((await ctx.params).id, req.nextUrl.searchParams.get("listing") ?? "");
+    return Response.json({ ok: true });
+  } catch (e) {
+    return Response.json({ error: (e as Error).message }, { status: 400 });
+  }
 });

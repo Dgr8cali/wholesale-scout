@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { handle } from "@/lib/server/http";
-import { deletePurchase, updatePurchase } from "@/lib/server/purchases";
+import { updatePurchase } from "@/lib/server/purchases";
+import { deleteOpenPurchase } from "@/lib/server/stockEdit";
 import { receivePurchase } from "@/lib/server/stock";
 import type { PurchaseStatus } from "@/lib/tracker";
 
@@ -22,7 +23,12 @@ export const PATCH = handle(async (req: NextRequest, ctx: Ctx) => {
   }
 });
 
+/** Delete a purchase not yet received into Stock (a receipt must be deleted first). */
 export const DELETE = handle(async (_req: NextRequest, ctx: Ctx) => {
-  await deletePurchase((await ctx.params).id);
-  return Response.json({ ok: true });
+  try {
+    await deleteOpenPurchase((await ctx.params).id);
+    return Response.json({ ok: true });
+  } catch (e) {
+    return Response.json({ error: (e as Error).message }, { status: 400 });
+  }
 });

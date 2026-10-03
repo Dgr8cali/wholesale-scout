@@ -1,7 +1,7 @@
 ---
 title: Stock
 summary: The Stock workspace tracks what you hold, item by item, in three buckets (self-ship, Amazon FBA, TikTok FBT), with sales, movements, reorder suggestions and imports from StockPilot.
-synonyms: [stock, inventory, record a new order, order id, order link, tracking, expected date, new supplier, alibaba, 1688, levels, stock levels, movements, ledger, reorder, reorder point, days of cover, self-ship, fba stock, tiktok fbt, stockpilot, goods in, transfers]
+synonyms: [stock, inventory, delete, edit, undo, mistake, correct, archive, restore, audit log, negative, record a new order, order id, order link, tracking, expected date, new supplier, alibaba, 1688, levels, stock levels, movements, ledger, reorder, reorder point, days of cover, self-ship, fba stock, tiktok fbt, stockpilot, goods in, transfers]
 route: /stock
 order: 25
 workspace: stock
@@ -20,8 +20,8 @@ Amazon's own sales come from the orders sync, so they're never typed in either. 
 
 | Page | What it does |
 |---|---|
-| **Levels** | Every item: units per bucket and in all, value at cost, days of cover (per bucket and in all, at the last 30 days' sales), and a status: **ok**, **low** (at or under its low-stock level) or **out**. Click an item for its drawer: details (editable, with **+ New supplier**), its orders (with **Receive** on the open ones), listings, its level over the last 30 days, its movements, and **Record sale**, **Receive**, **Adjust**, **Transfer** and **Return**. **New item** adds one; **Record a new order** records an order (below) |
-| **Movements** | The ledger: every receipt, sale, return, adjustment and transfer, filtered by item, bucket, kind and dates, with each receipt's order (a link when its page is known) and supplier, and **Export CSV** |
+| **Levels** | Every item: units per bucket and in all, value at cost, days of cover (per bucket and in all, at the last 30 days' sales), and a status: **ok**, **low** (at or under its low-stock level) or **out**. Click an item for its drawer: details (editable, with **+ New supplier**), its orders (with **Receive** on the open ones), listings, its level over the last 30 days, its movements, and **Record sale**, **Receive**, **Adjust**, **Transfer** and **Return**. **New item** adds one; **Record a new order** records an order (below). Tick items to **Archive selected**; **Show archived** lists archived items to Restore or delete permanently |
+| **Movements** | The ledger: every receipt, sale, return, adjustment and transfer, filtered by item, bucket, kind and dates, with each receipt's order (a link when its page is known) and supplier, and **Export CSV**. Each row can be edited or deleted; **Audit log** lists every edit and delete |
 | **Sales** | Sales outside Amazon (eBay, TikTok Shop, your website, in person), each with its cost and profit at the moment it was recorded, filtered by channel |
 | **Reorder** | When each item needs ordering again and how many: the reorder point, the suggested quantity, and **due** / **soon** / **ok**. **Create purchase** opens the order form ready filled |
 | **Import** | From StockPilot (its raw table export) or a CSV of items, previewed before anything is written: [Stock: importing from StockPilot](/help/howto/stock-importing-from-stockpilot) |
@@ -46,3 +46,27 @@ An order's details can be filled in or changed later: **Order** on its Tracker r
 ## A new supplier from Stock
 
 **+ New supplier** sits beside the supplier choice on the new item form, the item drawer, Receive and the order form. Give the **Name**, the **Type** (manufacturer, wholesaler, marketplace seller, or retailer), the **Marketplace** for a marketplace seller (Alibaba, 1688, eBay, Amazon…), **Website**, **Contact**, **Lead time (days)** and **Notes**. It's created and selected at once. A name that's already a supplier (in any case) selects that one instead of making a second. It appears on [Suppliers](/help/pages/suppliers) with no price lists: **Stock only** there lists these.
+
+## Correcting mistakes
+
+Every level is the sum of its movements, so a mistake is corrected by editing or deleting the movement: the levels follow, and nothing else needs adjusting. Every edit and delete is kept in **Stock → Movements → Audit log** (the last 500: what changed, when, and the record before and after; **before / after** shows them).
+
+**Edit a movement** (the pencil on its row on Movements): quantity, date, bucket (Self-ship or TikTok FBT; Amazon FBA follows SP-API), reason, note and unit cost. The quantity keeps its kind's direction whatever sign you type (a sale of 3 takes 3 off); an adjustment keeps the sign you give it. Editing a sale changes its sale's quantity and date too; editing one half of a transfer changes the other half's quantity and date.
+
+**Delete a movement** (the bin on its row, after a confirm). What goes with it:
+
+| Deleting | Also |
+|---|---|
+| A sale | Its sale on Stock → Sales, and any returns of it |
+| A transfer (either half) | The other half: the units are back where they came from |
+| A receipt from an order | Nothing else is deleted, but the order goes back to **Ordered** in the Tracker (the confirm and the message say so); Receive it again when it's right |
+| A return | Its sale can take that return again |
+
+Tick several rows and **Delete selected** to delete them together (each with what goes with it).
+
+**Delete a sale** on Stock → Sales: its movement (and returns) go too. **Delete an order** in an item's drawer (the bin beside Receive) while it hasn't been received; one that's been received needs its receipt deleted first. **Delete a listing** in the drawer: sales already recorded keep their cost.
+
+**Delete an item** (Delete item in its drawer, or the bin on its Levels row) archives it: the confirm shows how many movements, sales, listings and orders it has, and all of them are kept. Archived items are hidden from Levels, Reorder and Home. **Show archived** on Levels lists them with **Restore**, and **Delete permanently**, which removes the item with its movements, sales, listings and orders (in the Tracker too). Only an archived item can be deleted permanently. Tick several items for **Archive selected**, or, among archived ones, **Restore selected** and **Delete permanently**.
+
+**Negative.** Deleting or editing can leave a bucket below 0 (a receipt deleted under a sale, say). That's allowed, so you can correct things in any order, but the movement after which the bucket went below 0 shows a red **negative** chip on Movements, and the bucket's figure on Levels shows one too, until it's put right: receive the missing stock, adjust, or edit the movement.
+

@@ -1,6 +1,8 @@
 "use client";
 
-import { PlusIcon } from "lucide-react";
+import { PlusIcon, Trash2Icon } from "lucide-react";
+import { toast } from "sonner";
+import { useDialogs } from "@/components/Dialogs";
 import { useCallback, useEffect, useState } from "react";
 import { usePageCrumbs } from "@/components/Crumbs";
 import { SortTh, useSortable } from "@/components/SortableTable";
@@ -27,6 +29,7 @@ export default function StockSalesPage() {
   const [items, setItems] = useState<ItemLevels[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [recording, setRecording] = useState(false);
+  const { confirm } = useDialogs();
   const load = useCallback(() => {
     api<{ sales: Row[] }>(`/api/stock/sales${channel ? `?channel=${encodeURIComponent(channel)}` : ""}`).then((r) => setRows(r.sales)).catch((e: Error) => setError(e.message));
     api<{ items: ItemLevels[] }>("/api/stock/levels").then((r) => setItems(r.items)).catch(() => {});
@@ -37,6 +40,16 @@ export default function StockSalesPage() {
     order: { value: (r) => r.order_id }, quantity: { value: (r) => r.quantity, kind: "number" }, price: { value: (r) => r.price_each, kind: "number" },
     cost: { value: (r) => r.cost_snapshot?.cost_each ?? null, kind: "number" }, profit: { value: (r) => r.cost_snapshot?.profit_each ?? null, kind: "number" }, returned: { value: (r) => r.returned_quantity, kind: "number" },
   }, { key: "date", dir: "desc" });
+  const remove = async (r: Row) => {
+    if (!(await confirm({ title: `Delete this sale?`, description: `${r.quantity} × ${r.item?.sku ?? "item"} on ${r.channel}, ${r.date}. Its stock movement${r.returned_quantity ? " and its returns" : ""} go with it, so the units are back in the bucket. The audit log keeps a copy.`, confirmLabel: "Delete sale", destructive: true }))) return;
+    try {
+      await api(`/api/stock/sales/${r.id}`, { method: "DELETE" });
+      toast.success("Sale deleted, with its movement");
+      load();
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
   if (error) return <ErrorState title="Couldn't load the sales" message={error} />;
   const total = (rows ?? []).reduce((a, r) => ({ units: a.units + r.quantity - r.returned_quantity, revenue: a.revenue + r.price_each * (r.quantity - r.returned_quantity), profit: a.profit + (r.cost_snapshot?.profit_each ?? 0) * (r.quantity - r.returned_quantity) }), { units: 0, revenue: 0, profit: 0 });
   return (
@@ -70,6 +83,7 @@ export default function StockSalesPage() {
               <SortTh {...s.th("cost")} numeric className="px-2 py-1.5 text-right">Cost each</SortTh>
               <SortTh {...s.th("profit")} numeric className="px-2 py-1.5 text-right">Profit each</SortTh>
               <SortTh {...s.th("returned")} numeric className="px-2 py-1.5 text-right">Returned</SortTh>
+              <th className="px-2 py-1.5" />
             </tr></thead>
             <tbody>{s.rows.map((r) => (
               <tr key={r.id} className="border-b last:border-b-0">
@@ -83,6 +97,7 @@ export default function StockSalesPage() {
                 <td className="num px-2 py-1.5 text-right">{gbp(r.cost_snapshot?.cost_each)}</td>
                 <td className="num px-2 py-1.5 text-right">{gbp(r.cost_snapshot?.profit_each)}</td>
                 <td className="num px-2 py-1.5 text-right">{r.returned_quantity || "—"}</td>
+                <td className="px-2 py-1.5 text-right"><button type="button" aria-label="Delete sale" title="Delete sale" onClick={() => remove(r)}><Trash2Icon className="size-3.5 text-muted-foreground hover:text-fail" /></button></td>
               </tr>
             ))}</tbody>
           </table>

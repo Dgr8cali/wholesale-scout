@@ -1,8 +1,7 @@
 # Wholesale Scout: status
 
 Read this first in a new session. Keep it current: every commit that changes a feature updates
-it (what's built, the backlog, the rough edges). Last updated: 3 Oct 2026 (Stock: orders, suppliers from
-Stock).
+it (what's built, the backlog, the rough edges). Last updated: 3 Oct 2026 (Stock: editing and deleting).
 
 Wholesale Scout is a single-user Amazon UK seller's workbench: Next.js 16 (App Router, `proxy.ts`
 password gate), Supabase (Postgres, RLS on, service-role access from the server only), Vercel
@@ -68,7 +67,11 @@ table export or an items CSV, previewed, idempotent). Record a new order (Levels
 supplier picked or added inline, quantity, unit cost in any currency at a rate, the supplier's
 order id and link, ordered/expected dates, tracking; it sits in the Tracker as Ordered and
 Receive (the item drawer or the Tracker) puts it into a bucket as a receipt carrying the order.
-+ New supplier on the item form, drawer, Receive and the order form. The pill box account's
++ New supplier on the item form, drawer, Receive and the order form. Correcting mistakes: edit or delete
+any movement (a sale takes its sale, a transfer both halves, a receipt puts its order back to
+Ordered), delete sales, open orders and listings, archive / restore / delete permanently items, bulk
+delete and archive, red "negative" chips where a bucket goes below 0, and an audit log
+(`stock_audit`, Movements → Audit log). The pill box account's
 StockPilot data is imported (3 items). Ads days of cover and the stock guard count every bucket.
 
 ## External dependencies
@@ -107,6 +110,7 @@ StockPilot data is imported (3 items). Ads days of cover and the stock guard cou
 - **AI prices are assumed defaults** ($3/$15 per M tokens for Sonnet 5.5, $1/$5 Haiku 4.5, $5/$25 Opus 5.5, £0.79 per $): check them against Anthropic's pricing and edit in Settings → Ads.
 - **The monthly review** needs the daily Campaign report for per-month figures and batch before/after verdicts; with range data only it says so. No batch has been uploaded yet, so no verdict has been tested on real data.
 - **The review miner** has no part-of-speech tagger: phrases are content-word pairs and triples after stop words, so a few odd ones ("too easily") show; Ignore hides them. Tested on a fixture of 40 fake reviews; the first real Amazon paste confirms the splitting.
+- **Stock audit** records "you" as the actor: the app has one user behind the password gate, so it doesn't tell people apart.
 - **Order currency** is for reference once recorded: the landed cost per unit stays in £ (worked out at the rate when the order is recorded); editing the rate later doesn't change it.
 - **SP-API roles** (Brand Analytics, Finance): see above.
 
