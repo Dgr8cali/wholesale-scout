@@ -1,8 +1,8 @@
 # Wholesale Scout: status
 
 Read this first in a new session. Keep it current: every commit that changes a feature updates
-it (what's built, the backlog, the rough edges). Last updated: 2 Oct 2026 (Private label: Gate 4 reviews
-helper).
+it (what's built, the backlog, the rough edges). Last updated: 3 Oct 2026 (Stock: orders, suppliers from
+Stock).
 
 Wholesale Scout is a single-user Amazon UK seller's workbench: Next.js 16 (App Router, `proxy.ts`
 password gate), Supabase (Postgres, RLS on, service-role access from the server only), Vercel
@@ -17,7 +17,9 @@ remembered per supplier, Qogita pulled nightly) are screened against Keepa and S
 background runs: gates (compliance, gating, Amazon, sellers, demand, price), a score and a verdict,
 with the fee engine on the active rate card, hurdle prices and first-order quantities. Pages: Runs
 (results table, filters, drawer), Upload, Check ASINs, Qogita, Sellers (storefront scans), Brands,
-Suppliers (a ledger with terms, VAT basis, MOV, ratings), Favourites, Watchlist (weekly re-checks,
+Suppliers (a ledger with terms, VAT basis, MOV, ratings, a type: manufacturer / wholesaler /
+marketplace seller / retailer, filters by type and Stock only, and each supplier's stock items,
+orders and receipts), Favourites, Watchlist (weekly re-checks,
 email alerts), Plan (an order plan per supplier from offers), Hunt (Keepa Product Finder for
 wholesale), Products, and Tracker (purchases with the app's prediction frozen at purchase,
 compared with Amazon's orders, FBA stock and fee estimates from the nightly SP-API sync; stock-item
@@ -61,9 +63,13 @@ FBT are ledgers of movements (received, sale, return, adjustment, transfer); Ama
 fulfillable count and Amazon sales come from the orders sync, never typed. Pages: Levels (items ×
 buckets, value at cost, days of cover, status, an item drawer with actions), Movements (filters,
 CSV export), Sales (non-Amazon channels, stock-checked, cost snapshot at sale), Reorder ((lead time
-+ buffer) × daily demand, 30 days' quantity, Create purchase → Tracker), Import (StockPilot's raw
-table export or an items CSV, previewed, idempotent). The pill box account's StockPilot data is
-imported (3 items). Ads days of cover and the stock guard count every bucket.
++ buffer) × daily demand, 30 days' quantity, Create purchase → the order form), Import (StockPilot's raw
+table export or an items CSV, previewed, idempotent). Record a new order (Levels, and the Tracker): item and
+supplier picked or added inline, quantity, unit cost in any currency at a rate, the supplier's
+order id and link, ordered/expected dates, tracking; it sits in the Tracker as Ordered and
+Receive (the item drawer or the Tracker) puts it into a bucket as a receipt carrying the order.
++ New supplier on the item form, drawer, Receive and the order form. The pill box account's
+StockPilot data is imported (3 items). Ads days of cover and the stock guard count every bucket.
 
 ## External dependencies
 
@@ -101,6 +107,7 @@ imported (3 items). Ads days of cover and the stock guard count every bucket.
 - **AI prices are assumed defaults** ($3/$15 per M tokens for Sonnet 5.5, $1/$5 Haiku 4.5, $5/$25 Opus 5.5, £0.79 per $): check them against Anthropic's pricing and edit in Settings → Ads.
 - **The monthly review** needs the daily Campaign report for per-month figures and batch before/after verdicts; with range data only it says so. No batch has been uploaded yet, so no verdict has been tested on real data.
 - **The review miner** has no part-of-speech tagger: phrases are content-word pairs and triples after stop words, so a few odd ones ("too easily") show; Ignore hides them. Tested on a fixture of 40 fake reviews; the first real Amazon paste confirms the splitting.
+- **Order currency** is for reference once recorded: the landed cost per unit stays in £ (worked out at the rate when the order is recorded); editing the rate later doesn't change it.
 - **SP-API roles** (Brand Analytics, Finance): see above.
 
 ## Conventions for every session

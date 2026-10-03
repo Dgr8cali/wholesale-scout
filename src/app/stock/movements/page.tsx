@@ -10,10 +10,16 @@ import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BUCKET_LABEL, BUCKETS, KIND_LABEL, MOVEMENT_KINDS, type Bucket, type MovementKind } from "@/lib/stock/levels";
+import { OrderLink } from "@/components/stock/orderBits";
+import { trackingText } from "@/lib/stock/orders";
 import { api } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
 
-interface Row { id: string; item_id: string; bucket: Bucket; quantity: number; kind: MovementKind; date: string; reason: string | null; unit_cost: number | null; note: string | null; created_at: string; item: { sku: string; name: string } | null }
+interface Row {
+  id: string; item_id: string; bucket: Bucket; quantity: number; kind: MovementKind; date: string; reason: string | null; unit_cost: number | null; note: string | null; created_at: string;
+  order_id: string | null; order_url: string | null; tracking_carrier: string | null; tracking_number: string | null; currency: string | null; unit_cost_ccy: number | null;
+  item: { sku: string; name: string } | null; supplier: { id: string; name: string } | null;
+}
 
 /** Stock → Movements: the ledger every level is the sum of, filtered and exported as CSV. */
 export default function StockMovementsPage() {
@@ -27,7 +33,7 @@ export default function StockMovementsPage() {
   useEffect(() => { api<{ movements: Row[] }>(`/api/stock/movements?${query}`).then((r) => setRows(r.movements)).catch((e: Error) => setError(e.message)); }, [query]);
   const s = useSortable("stock.movements", rows ?? [], {
     date: { value: (r) => r.date, kind: "date" }, item: { value: (r) => r.item?.sku ?? "" }, bucket: { value: (r) => BUCKET_LABEL[r.bucket] }, kind: { value: (r) => KIND_LABEL[r.kind] },
-    quantity: { value: (r) => r.quantity, kind: "number" }, reason: { value: (r) => r.reason }, unitCost: { value: (r) => r.unit_cost, kind: "number" }, note: { value: (r) => r.note },
+    quantity: { value: (r) => r.quantity, kind: "number" }, reason: { value: (r) => r.reason }, order: { value: (r) => r.order_id ?? (r.order_url ? "order" : null) }, supplier: { value: (r) => r.supplier?.name ?? null }, unitCost: { value: (r) => r.unit_cost, kind: "number" }, note: { value: (r) => r.note },
   }, { key: "date", dir: "desc" });
   if (error) return <ErrorState title="Couldn't load the movements" message={error} />;
   const set = (p: Partial<typeof f>) => setF((x) => ({ ...x, ...p }));
@@ -68,6 +74,8 @@ export default function StockMovementsPage() {
               <SortTh {...s.th("quantity")} numeric className="px-2 py-1.5 text-right">Quantity</SortTh>
               <SortTh {...s.th("reason")} className="px-2 py-1.5">Reason</SortTh>
               <SortTh {...s.th("unitCost")} numeric className="px-2 py-1.5 text-right">Unit cost</SortTh>
+              <SortTh {...s.th("order")} className="px-2 py-1.5">Order</SortTh>
+              <SortTh {...s.th("supplier")} className="px-2 py-1.5">Supplier</SortTh>
               <SortTh {...s.th("note")} className="px-2 py-1.5">Note</SortTh>
             </tr></thead>
             <tbody>{s.rows.map((r) => (
@@ -78,7 +86,9 @@ export default function StockMovementsPage() {
                 <td className="px-2 py-1.5">{KIND_LABEL[r.kind]}</td>
                 <td className={cn("num px-2 py-1.5 text-right font-medium", r.quantity > 0 ? "text-pass" : "text-fail")}>{r.quantity > 0 ? `+${r.quantity}` : r.quantity}</td>
                 <td className="px-2 py-1.5 text-xs">{r.reason ?? "—"}</td>
-                <td className="num px-2 py-1.5 text-right">{r.unit_cost != null ? `£${Number(r.unit_cost).toFixed(2)}` : "—"}</td>
+                <td className="num px-2 py-1.5 text-right">{r.unit_cost != null ? `£${Number(r.unit_cost).toFixed(2)}` : "—"}{r.currency && r.unit_cost_ccy != null && <span className="block text-2xs text-muted-foreground">{r.currency} {Number(r.unit_cost_ccy).toFixed(2)}</span>}</td>
+                <td className="px-2 py-1.5 text-xs"><OrderLink id={r.order_id} url={r.order_url} />{trackingText(r.tracking_carrier, r.tracking_number) && <span className="block text-2xs text-muted-foreground">{trackingText(r.tracking_carrier, r.tracking_number)}</span>}</td>
+                <td className="px-2 py-1.5 text-xs">{r.supplier ? <a className="hover:underline" href={`/suppliers/${r.supplier.id}`}>{r.supplier.name}</a> : ""}</td>
                 <td className="px-2 py-1.5 text-xs text-muted-foreground">{r.note ?? ""}</td>
               </tr>
             ))}</tbody>

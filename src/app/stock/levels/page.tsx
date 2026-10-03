@@ -1,12 +1,13 @@
 "use client";
 
-import { PlusIcon } from "lucide-react";
+import { PlusIcon, TruckIcon } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { usePageCrumbs } from "@/components/Crumbs";
 import { SortTh, useSortable } from "@/components/SortableTable";
 import { EmptyState, ErrorState } from "@/components/States";
 import { NewItemDialog } from "@/components/stock/actions";
 import { ItemDrawer } from "@/components/stock/ItemDrawer";
+import { StockPurchaseDialog } from "@/components/tracker/StockPurchase";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { ItemLevels, StockSettings } from "@/lib/server/stock";
@@ -35,6 +36,7 @@ export default function StockLevelsPage() {
   // ?item=<id> opens that item (the Tracker and Reorder link here).
   const [open, setOpen] = useState<string | null>(() => (typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("item")));
   const [adding, setAdding] = useState(false);
+  const [ordering, setOrdering] = useState(false);
   const load = useCallback(() => api<Data>("/api/stock/levels").then(setD).catch((e: Error) => setError(e.message)), []);
   useEffect(() => { load(); }, [load]);
   const s = useSortable("stock.levels", d?.items ?? [], {
@@ -57,7 +59,10 @@ export default function StockLevelsPage() {
             What you hold, per item and bucket. Self-ship and TikTok FBT are the sum of their movements (receipts, sales, returns, adjustments, transfers); Amazon FBA is SP-API&apos;s fulfillable count{synced ? `, synced ${synced}` : ""}, never typed. Days of cover use the last 30 days&apos; sales: Amazon&apos;s orders and the sales recorded here. Low at or under the item&apos;s low-stock level (default {d.settings.lowStockDefault}).
           </p>
         </div>
-        <Button onClick={() => setAdding(true)}><PlusIcon /> New item</Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setOrdering(true)}><TruckIcon /> Record a new order</Button>
+          <Button onClick={() => setAdding(true)}><PlusIcon /> New item</Button>
+        </div>
       </div>
       {!d.items.length ? (
         <EmptyState title="No stock items yet">Import from StockPilot or a CSV (Import), or add an item.</EmptyState>
@@ -105,6 +110,7 @@ export default function StockLevelsPage() {
       )}
       <p className="text-xs text-muted-foreground">Days of cover: the total, then per bucket ({BUCKETS.map((b) => BUCKET_LABEL[b]).join(" · ")}). &quot;—&quot; when nothing sold in 30 days.</p>
       {row && <ItemDrawer row={row} onClose={() => setOpen(null)} onChanged={load} />}
+      {ordering && <StockPurchaseDialog open onOpenChange={(o) => { if (!o) setOrdering(false); }} onSaved={load} />}
       <NewItemDialog open={adding} onClose={() => setAdding(false)} onDone={(id) => { load().then(() => setOpen(id)); }} />
     </div>
   );

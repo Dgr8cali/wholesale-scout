@@ -1,5 +1,6 @@
 import "server-only";
 import { predictionFor, PURCHASE_STATUSES, type Prediction, type PurchaseStatus } from "../tracker";
+import { hasOrderInput, orderCols, type OrderInput } from "../stock/orders";
 import { db, must } from "./db";
 import { productView } from "./productPage";
 
@@ -12,9 +13,12 @@ export interface Purchase {
   /** A purchase of a stock item (Stock → Reorder), and the bucket it was received into. */
   stock_item_id?: string | null; received_bucket?: string | null;
   stock?: { sku: string; name: string; image_url: string | null } | null;
+  /** The supplier's side: order number and page, expected date, tracking, currency. */
+  order_id?: string | null; order_url?: string | null; expected_date?: string | null;
+  tracking_carrier?: string | null; tracking_number?: string | null; currency?: string; fx_rate?: number | null; unit_cost_ccy?: number | null;
 }
 
-export interface NewPurchase {
+export interface NewPurchase extends OrderInput {
   asin: string; units: number; landedGbp: number; unitCostGbp?: number | null;
   supplierId?: string | null; supplierName?: string | null; orderedOn?: string | null; note?: string | null;
 }
@@ -47,7 +51,9 @@ export async function recordPurchase(input: NewPurchase): Promise<Purchase> {
   }, landed, units);
   const product = (r?.product as { id: string; ean: string } | null) ?? (view.products[0] as { id: string; ean: string });
   const orderedOn = isDate(input.orderedOn) ? input.orderedOn : ukToday();
+  const order = orderCols(input).cols;
   const row = must(await db().from("purchases").insert({
+    ...order,
     asin, ean: product?.ean ?? null, product_id: product?.id ?? null,
     supplier_id: input.supplierId || null, supplier_name: input.supplierName?.trim().slice(0, 120) || null,
     units, unit_cost_gbp: input.unitCostGbp != null && Number.isFinite(Number(input.unitCostGbp)) ? Number(input.unitCostGbp) : null,
@@ -65,7 +71,7 @@ export async function listPurchases(asin?: string | null): Promise<Purchase[]> {
 }
 
 /** Move a purchase along (its date is recorded), or correct units, cost, date or note. */
-export async function updatePurchase(id: string, p: { status?: PurchaseStatus; units?: number; landedGbp?: number; orderedOn?: string; note?: string | null; on?: string }): Promise<Purchase> {
+export async function updatePurchase(id: string, p: { status?: PurchaseStatus; units?: number; landedGbp?: number; orderedOn?: string; note?: string | null; on?: string } & OrderInput): Promise<Purchase> {
   const d = db();
   const cur = must(await d.from("purchases").select("status_dates").eq("id", id).maybeSingle(), "purchase") as { status_dates: Record<string, string> } | null;
   if (!cur) throw new Error("No such purchase");
@@ -79,6 +85,8 @@ export async function updatePurchase(id: string, p: { status?: PurchaseStatus; u
   if (p.landedGbp != null) { const l = Number(p.landedGbp); if (!(l >= 0)) throw new Error("Landed cost must be a number"); patch.landed_gbp = Math.round(l * 100) / 100; }
   if (p.orderedOn != null) { if (!isDate(p.orderedOn)) throw new Error("Date must be YYYY-MM-DD"); patch.ordered_on = p.orderedOn; }
   if (p.note !== undefined) patch.note = p.note?.trim().slice(0, 1000) || null;
+  // The order's fields, all together when any is sent (the form sends the whole set).
+  if (hasOrderInput(p as Record<string, unknown>)) Object.assign(patch, orderCols(p).cols);
   return numbers(must(await d.from("purchases").update(patch).eq("id", id).select(COLS).single(), "update purchase") as Record<string, unknown>);
 }
 

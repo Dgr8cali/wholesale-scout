@@ -1,21 +1,23 @@
 ---
 title: Suppliers
 summary: One record per supplier, with their terms and paperwork, how their products screen, and the MOV used by the budget gate.
-synonyms: [supplier ledger, wholesaler, distributor, mov, minimum order value, vendor, terms]
+synonyms: [supplier ledger, wholesaler, distributor, mov, minimum order value, vendor, terms, manufacturer, marketplace, alibaba, 1688, ebay, stock only, new supplier, orders]
 route: /suppliers
 order: 8
 ---
 The Suppliers page keeps one record for each supplier: their terms, your paperwork notes, and how their products screen on your default profile. A supplier's **MOV** (minimum order value) also feeds the [budget gate](/help/gates/budgetFit) and the [order planner](/help/pages/plan).
 
-Suppliers are created for you. A new one appears the first time you upload a price list under a new supplier name, or pull from [Qogita](/help/pages/qogita). [Check ASINs](/help/pages/check) and [seller scans](/help/pages/sellers) go under a supplier called "Manual".
+Suppliers are created for you. A new one appears the first time you upload a price list under a new supplier name, or pull from [Qogita](/help/pages/qogita). [Check ASINs](/help/pages/check) and [seller scans](/help/pages/sellers) go under a supplier called "Manual". You can also add one from [Stock](/help/pages/stock#a-new-supplier-from-stock) with **+ New supplier** on an item, an order or a receipt: those have no price lists.
 
 ## The list
 
-**Find a supplier or brand** filters by supplier name, or by a brand the supplier carries. The most-used suppliers (by products seen) come first.
+**Find a supplier or brand** filters by supplier name, marketplace, or a brand the supplier carries. **All types** filters by the supplier's type (manufacturer, wholesaler, marketplace seller, retailer, or not set). **Stock only** shows the suppliers without price lists (never in an upload, a Qogita pull or a run), such as the ones added from Stock. The most-used suppliers (by products seen) come first.
 
 | Column | What it shows |
 |---|---|
-| **Supplier** | The name, which links to the supplier's page, plus a website link if you've added one. Underneath is the source (Upload, Qogita or Manual) and when their last offer was seen. The **Manual** supplier holds your [cost overrides](/help/howto/override-a-cost). |
+| **Supplier** | The name, which links to the supplier's page, plus a website link if you've added one. Underneath is the source (Upload, Qogita, Manual or From Stock) and when their last offer was seen. The **Manual** supplier holds your [cost overrides](/help/howto/override-a-cost). |
+| **Type** | Manufacturer, wholesaler, marketplace seller (with its marketplace, e.g. "Marketplace seller · 1688") or retailer. |
+| **Stock** | Stock items naming them · purchases (orders) from them. |
 | **Runs** | How many runs included their offers. |
 | **Products** | Distinct products they've offered. |
 | **Pass / warn** | Their products that pass or warn on your default profile. Only products with a price are counted. |
@@ -34,6 +36,8 @@ Every field saves on its own. Text and number boxes save when you click away, an
 
 | Field | What it's for |
 |---|---|
+| **Type** | Manufacturer, wholesaler, marketplace seller or retailer. |
+| **Marketplace** | For a marketplace seller: Alibaba, 1688, eBay, Amazon… |
 | **Website** | Their site. "https://" is added if you leave it off. |
 | **Contact** | Name, email, phone. |
 | **Payment terms** | For example "pro forma, 30 days". |
@@ -57,6 +61,10 @@ The MOV only matters for price-list lines that have **no MOQ of their own**. For
 - If the MOV is more than your whole budget, the gate fails with "Supplier minimum order £1,500.00 is over the £1,000.00 budget".
 
 A line with its own MOQ uses that MOQ, not the MOV. A change to the MOV applies the next time the products are screened, so re-screen the run to see its effect. Qogita lines use the MOV of the Qogita seller chosen for each product, not this record. In the [order planner](/help/pages/plan), a supplier is only ordered from if its lines add up to its MOV on goods ex VAT.
+
+### Stock
+
+What [Stock](/help/pages/stock) holds from this supplier: the **items** that name them (each opens on Stock → Levels), their **orders** (every purchase from them, newest first: date, item, order number as a link when its page is known, with tracking, units, landed cost (and the price in its currency), status and, while ordered, the expected date), and any **receipts** typed on Receive without an order in the Tracker. Every table sorts by its columns.
 
 ### Best products
 

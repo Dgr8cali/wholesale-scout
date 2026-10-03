@@ -22,6 +22,8 @@ The prediction is frozen then, from the product's latest screening: sell price, 
 
 Each purchase has a status: **Ordered** → **Received** → **Sent to Amazon** → **Live** → **Closed** (sold out or written off). Change it on the product's page; the date each status was reached is kept.
 
+**Order** on a purchase (on the Tracker and on the product's page) holds the supplier's side: the **order id** and **order link** (shown as a link on the row), the order and **expected** dates, the **carrier** and **tracking number**, and the **currency** with its rate and unit price when not GBP, plus notes. Receiving a stock purchase carries the order number onto the Stock receipt. **Record a stock order** records an order of a stock item: see [Stock: orders](/help/pages/stock#orders-from-ordered-to-received).
+
 ## The Tracker page
 
 - **Money in stock**: units × landed for everything not closed.

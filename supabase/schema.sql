@@ -1,5 +1,5 @@
 -- Wholesale Scout schema, dumped by scripts/schema-backup.mjs. No data.
--- Dumped 2026-10-02T22:07:56.926Z. Safe to re-run. Restore: npm run schema:restore
+-- Dumped 2026-10-03T10:37:06.208Z. Safe to re-run. Restore: npm run schema:restore
 
 -- @section extensions
 create extension if not exists "pg_cron";
@@ -1572,7 +1572,15 @@ create table if not exists "purchases" (
   "created_at" timestamp with time zone default now() not null,
   "updated_at" timestamp with time zone default now() not null,
   "stock_item_id" uuid,
-  "received_bucket" text
+  "received_bucket" text,
+  "order_id" text,
+  "order_url" text,
+  "expected_date" date,
+  "tracking_carrier" text,
+  "tracking_number" text,
+  "currency" character(3) default 'GBP'::bpchar not null,
+  "fx_rate" numeric,
+  "unit_cost_ccy" numeric
 );
 alter table "purchases" add column if not exists "id" uuid default gen_random_uuid();
 alter table "purchases" add column if not exists "asin" text;
@@ -1592,6 +1600,14 @@ alter table "purchases" add column if not exists "created_at" timestamp with tim
 alter table "purchases" add column if not exists "updated_at" timestamp with time zone default now();
 alter table "purchases" add column if not exists "stock_item_id" uuid;
 alter table "purchases" add column if not exists "received_bucket" text;
+alter table "purchases" add column if not exists "order_id" text;
+alter table "purchases" add column if not exists "order_url" text;
+alter table "purchases" add column if not exists "expected_date" date;
+alter table "purchases" add column if not exists "tracking_carrier" text;
+alter table "purchases" add column if not exists "tracking_number" text;
+alter table "purchases" add column if not exists "currency" character(3) default 'GBP'::bpchar;
+alter table "purchases" add column if not exists "fx_rate" numeric;
+alter table "purchases" add column if not exists "unit_cost_ccy" numeric;
 alter table "purchases" enable row level security;
 
 create table if not exists "qogita_presets" (
@@ -1839,7 +1855,16 @@ create table if not exists "stock_movements" (
   "purchase_id" uuid,
   "note" text,
   "source_ref" text,
-  "created_at" timestamp with time zone default now() not null
+  "created_at" timestamp with time zone default now() not null,
+  "supplier_id" uuid,
+  "order_id" text,
+  "order_url" text,
+  "ordered_date" date,
+  "tracking_carrier" text,
+  "tracking_number" text,
+  "currency" character(3),
+  "fx_rate" numeric,
+  "unit_cost_ccy" numeric
 );
 alter table "stock_movements" add column if not exists "id" uuid default gen_random_uuid();
 alter table "stock_movements" add column if not exists "item_id" uuid;
@@ -1854,6 +1879,15 @@ alter table "stock_movements" add column if not exists "purchase_id" uuid;
 alter table "stock_movements" add column if not exists "note" text;
 alter table "stock_movements" add column if not exists "source_ref" text;
 alter table "stock_movements" add column if not exists "created_at" timestamp with time zone default now();
+alter table "stock_movements" add column if not exists "supplier_id" uuid;
+alter table "stock_movements" add column if not exists "order_id" text;
+alter table "stock_movements" add column if not exists "order_url" text;
+alter table "stock_movements" add column if not exists "ordered_date" date;
+alter table "stock_movements" add column if not exists "tracking_carrier" text;
+alter table "stock_movements" add column if not exists "tracking_number" text;
+alter table "stock_movements" add column if not exists "currency" character(3);
+alter table "stock_movements" add column if not exists "fx_rate" numeric;
+alter table "stock_movements" add column if not exists "unit_cost_ccy" numeric;
 alter table "stock_movements" enable row level security;
 
 create table if not exists "stock_sales" (
@@ -1935,7 +1969,9 @@ create table if not exists "suppliers" (
   "contact" text,
   "payment_terms" text,
   "invoice_name_matches" boolean,
-  "invoice_accepted_for_approval" boolean
+  "invoice_accepted_for_approval" boolean,
+  "kind" text,
+  "marketplace" text
 );
 alter table "suppliers" add column if not exists "id" uuid default gen_random_uuid();
 alter table "suppliers" add column if not exists "name" text;
@@ -1958,6 +1994,8 @@ alter table "suppliers" add column if not exists "contact" text;
 alter table "suppliers" add column if not exists "payment_terms" text;
 alter table "suppliers" add column if not exists "invoice_name_matches" boolean;
 alter table "suppliers" add column if not exists "invoice_accepted_for_approval" boolean;
+alter table "suppliers" add column if not exists "kind" text;
+alter table "suppliers" add column if not exists "marketplace" text;
 alter table "suppliers" enable row level security;
 
 create table if not exists "watch_alerts" (
@@ -2646,6 +2684,11 @@ do $$ begin
   end if;
 end $$;
 do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'purchases_fx_rate_check' and conrelid = '"purchases"'::regclass) then
+    alter table "purchases" add constraint "purchases_fx_rate_check" CHECK ((fx_rate > (0)::numeric));
+  end if;
+end $$;
+do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'purchases_landed_gbp_check' and conrelid = '"purchases"'::regclass) then
     alter table "purchases" add constraint "purchases_landed_gbp_check" CHECK ((landed_gbp >= (0)::numeric));
   end if;
@@ -2711,6 +2754,11 @@ do $$ begin
   end if;
 end $$;
 do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'stock_movements_fx_rate_check' and conrelid = '"stock_movements"'::regclass) then
+    alter table "stock_movements" add constraint "stock_movements_fx_rate_check" CHECK ((fx_rate > (0)::numeric));
+  end if;
+end $$;
+do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'stock_movements_kind_check' and conrelid = '"stock_movements"'::regclass) then
     alter table "stock_movements" add constraint "stock_movements_kind_check" CHECK ((kind = ANY (ARRAY['receipt'::text, 'sale'::text, 'return'::text, 'adjustment'::text, 'transfer_in'::text, 'transfer_out'::text])));
   end if;
@@ -2726,6 +2774,11 @@ do $$ begin
   end if;
 end $$;
 do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'suppliers_kind_check' and conrelid = '"suppliers"'::regclass) then
+    alter table "suppliers" add constraint "suppliers_kind_check" CHECK ((kind = ANY (ARRAY['manufacturer'::text, 'wholesaler'::text, 'marketplace'::text, 'retailer'::text])));
+  end if;
+end $$;
+do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'suppliers_labelling_check' and conrelid = '"suppliers"'::regclass) then
     alter table "suppliers" add constraint "suppliers_labelling_check" CHECK ((labelling = ANY (ARRAY['UK'::text, 'EU'::text, 'mixed'::text])));
   end if;
@@ -2737,7 +2790,7 @@ do $$ begin
 end $$;
 do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'suppliers_source_type_check' and conrelid = '"suppliers"'::regclass) then
-    alter table "suppliers" add constraint "suppliers_source_type_check" CHECK ((source_type = ANY (ARRAY['upload'::text, 'qogita'::text, 'manual'::text])));
+    alter table "suppliers" add constraint "suppliers_source_type_check" CHECK ((source_type = ANY (ARRAY['upload'::text, 'qogita'::text, 'manual'::text, 'stock'::text])));
   end if;
 end $$;
 do $$ begin
@@ -3031,6 +3084,11 @@ do $$ begin
   end if;
 end $$;
 do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'stock_movements_supplier_id_fkey' and conrelid = '"stock_movements"'::regclass) then
+    alter table "stock_movements" add constraint "stock_movements_supplier_id_fkey" FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE SET NULL;
+  end if;
+end $$;
+do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'stock_sales_item_id_fkey' and conrelid = '"stock_sales"'::regclass) then
     alter table "stock_sales" add constraint "stock_sales_item_id_fkey" FOREIGN KEY (item_id) REFERENCES stock_items(id) ON DELETE CASCADE;
   end if;
@@ -3098,6 +3156,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS products_ean_asin_key ON products USING btree 
 CREATE UNIQUE INDEX IF NOT EXISTS profiles_one_default ON profiles USING btree (is_default) WHERE is_default;
 CREATE INDEX IF NOT EXISTS purchases_asin ON purchases USING btree (asin);
 CREATE INDEX IF NOT EXISTS purchases_status ON purchases USING btree (status);
+CREATE INDEX IF NOT EXISTS purchases_supplier ON purchases USING btree (supplier_id);
 CREATE INDEX IF NOT EXISTS qogita_pulls_preset_idx ON qogita_pulls USING btree (preset_id, started_at DESC);
 CREATE UNIQUE INDEX IF NOT EXISTS rate_cards_one_active ON rate_cards USING btree (is_active) WHERE is_active;
 CREATE INDEX IF NOT EXISTS results_offer ON results USING btree (offer_id);
@@ -3110,6 +3169,7 @@ CREATE INDEX IF NOT EXISTS results_run_verdict_score ON results USING btree (run
 CREATE INDEX IF NOT EXISTS results_updated ON results USING btree (updated_at) WHERE (status = 'done'::text);
 CREATE INDEX IF NOT EXISTS stock_items_asin ON stock_items USING btree (asin);
 CREATE INDEX IF NOT EXISTS stock_movements_item ON stock_movements USING btree (item_id, date);
+CREATE INDEX IF NOT EXISTS stock_movements_supplier ON stock_movements USING btree (supplier_id);
 CREATE INDEX IF NOT EXISTS supplier_mappings_fingerprint_idx ON supplier_mappings USING btree (header_fingerprint);
 CREATE INDEX IF NOT EXISTS watch_alerts_open_idx ON watch_alerts USING btree (created_at DESC) WHERE (dismissed_at IS NULL);
 CREATE INDEX IF NOT EXISTS watchlist_product_idx ON watchlist USING btree (product_id);
@@ -3342,3 +3402,4 @@ insert into schema_migrations (name) values ('20261002001300_pl_quotes_launch.sq
 insert into schema_migrations (name) values ('20261002001400_stock.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261002001500_ads_ai.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261002001600_pl_review_dumps.sql') on conflict do nothing;
+insert into schema_migrations (name) values ('20261003000100_stock_orders.sql') on conflict do nothing;

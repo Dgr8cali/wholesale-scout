@@ -1,12 +1,16 @@
 import "server-only";
 import { landedCost } from "../fees/engine";
+import { SUPPLIER_KINDS, supplierRow, webUrl, type NewSupplier, type SupplierKind } from "../stock/orders";
 import { chunks, db, loadProfile, must } from "./db";
 
 /** One supplier's ledger record. */
 export interface SupplierRecord {
   id: string;
   name: string;
-  source_type: "upload" | "qogita" | "manual";
+  source_type: "upload" | "qogita" | "manual" | "stock";
+  /** Manufacturer, wholesaler, marketplace seller (on `marketplace`) or retailer. */
+  kind: SupplierKind | null;
+  marketplace: string | null;
   website: string | null;
   contact: string | null;
   vat_basis: "ex_vat" | "inc_vat";
@@ -53,7 +57,7 @@ export interface BestProduct {
 }
 
 const EDITABLE = [
-  "website", "contact", "vat_basis", "vat_rate", "currency", "mov", "delivery_days", "importer_of_record", "labelling",
+  "kind", "marketplace", "website", "contact", "vat_basis", "vat_rate", "currency", "mov", "delivery_days", "importer_of_record", "labelling",
   "invoice_notes", "invoice_name_matches", "invoice_accepted_for_approval", "payment_terms", "rating", "notes",
 ] as const;
 
@@ -119,17 +123,32 @@ async function statsFromSql(): Promise<Map<string, SupplierStats> | null> {
     .map((r) => [r.supplier_id, { runs: r.runs, products: r.products, pass: r.pass, warn: r.warn, brands: r.brands ?? [], lastSeen: r.last_seen }]));
 }
 
-/** Every supplier with its figures, most used first. */
-export async function supplierLedger(): Promise<(SupplierRecord & { stats: SupplierStats })[]> {
+/** What Stock holds from each supplier: its items and purchases. */
+async function stockCounts(): Promise<Map<string, { items: number; purchases: number }>> {
+  const d = db();
+  const [items, purchases] = await Promise.all([
+    d.from("stock_items").select("supplier_id").not("supplier_id", "is", null),
+    d.from("purchases").select("supplier_id").not("supplier_id", "is", null),
+  ]);
+  const out = new Map<string, { items: number; purchases: number }>();
+  const bump = (id: string, k: "items" | "purchases") => { const c = out.get(id) ?? { items: 0, purchases: 0 }; c[k]++; out.set(id, c); };
+  for (const r of must(items, "stock items") as { supplier_id: string }[]) bump(r.supplier_id, "items");
+  for (const r of must(purchases, "purchases") as { supplier_id: string }[]) bump(r.supplier_id, "purchases");
+  return out;
+}
+
+/** Every supplier with its figures, most used first. `stock`: its stock items and purchases. */
+export async function supplierLedger(): Promise<(SupplierRecord & { stats: SupplierStats; stock: { items: number; purchases: number } })[]> {
   await prefillQogita();
-  const [suppliers, sql] = await Promise.all([
+  const [suppliers, sql, stock] = await Promise.all([
     db().from("suppliers").select("*").order("name").then((r) => must(r, "suppliers") as SupplierRecord[]),
     statsFromSql(),
+    stockCounts(),
   ]);
   const data = sql ? null : await ledgerData();
   const none: SupplierStats = { runs: 0, products: 0, pass: 0, warn: 0, brands: [], lastSeen: null };
   return suppliers
-    .map((s) => ({ ...s, stats: sql ? sql.get(s.id) ?? none : statsFor(s.id, data!) }))
+    .map((s) => ({ ...s, stats: sql ? sql.get(s.id) ?? none : statsFor(s.id, data!), stock: stock.get(s.id) ?? { items: 0, purchases: 0 } }))
     .sort((a, b) => b.stats.products - a.stats.products || a.name.localeCompare(b.name));
 }
 
@@ -165,7 +184,42 @@ export async function supplierDetail(id: string) {
   const runs: { id: string; name: string | null; source: string; started_at: string; row_count: number }[] = [];
   for (const c of chunks(runIds, 200)) runs.push(...(must(await d.from("runs").select("id, name, source, started_at, row_count").in("id", c), "runs") as typeof runs));
   runs.sort((a, b) => b.started_at.localeCompare(a.started_at));
-  return { supplier: s, stats, best: best.slice(0, 10), runs: runs.slice(0, 20) };
+  return { supplier: s, stats, best: best.slice(0, 10), runs: runs.slice(0, 20), ...(await supplierStock(id)) };
+}
+
+export interface SupplierOrder {
+  id: string; status: string; units: number; landed_gbp: number; ordered_on: string; expected_date: string | null;
+  order_id: string | null; order_url: string | null; tracking_carrier: string | null; tracking_number: string | null;
+  currency: string; unit_cost_ccy: number | null; asin: string | null; stock_item_id: string | null;
+  item: { sku: string; name: string } | null; product: { title: string | null } | null;
+}
+
+/** A supplier's stock items, purchases (newest first) and receipts typed on Receive. */
+async function supplierStock(id: string) {
+  const d = db();
+  const [items, purchases, receipts] = await Promise.all([
+    d.from("stock_items").select("id, sku, name, asin, status, unit_cost").eq("supplier_id", id).order("name"),
+    d.from("purchases").select("id, status, units, landed_gbp, ordered_on, expected_date, order_id, order_url, tracking_carrier, tracking_number, currency, unit_cost_ccy, asin, stock_item_id, item:stock_items(sku, name), product:products(title)")
+      .eq("supplier_id", id).order("ordered_on", { ascending: false }).limit(200),
+    d.from("stock_movements").select("id, date, quantity, bucket, unit_cost, order_id, order_url, item_id, item:stock_items(sku, name)").eq("supplier_id", id).eq("kind", "receipt").is("purchase_id", null).order("date", { ascending: false }).limit(200),
+  ]);
+  return {
+    stockItems: must(items, "supplier items") as { id: string; sku: string; name: string; asin: string | null; status: string; unit_cost: number | null }[],
+    purchases: (must(purchases, "supplier purchases") as unknown as SupplierOrder[]).map((p) => ({ ...p, landed_gbp: Number(p.landed_gbp) })),
+    receipts: must(receipts, "supplier receipts") as unknown as { id: string; date: string; quantity: number; bucket: string; unit_cost: number | null; order_id: string | null; order_url: string | null; item_id: string; item: { sku: string; name: string } | null }[],
+  };
+}
+
+/**
+ * A supplier added from Stock (an item, an order, a receipt). A name already in the ledger (any
+ * case) returns that supplier instead of a second one.
+ */
+export async function createSupplier(x: NewSupplier): Promise<{ supplier: SupplierRecord; existed: boolean }> {
+  const row = supplierRow(x);
+  const d = db();
+  const same = (must(await d.from("suppliers").select("*"), "suppliers") as SupplierRecord[]).find((r) => r.name.trim().toLowerCase() === row.name.toLowerCase());
+  if (same) return { supplier: same, existed: true };
+  return { supplier: must(await d.from("suppliers").insert(row).select("*").single(), "add supplier") as SupplierRecord, existed: false };
 }
 
 /** Save ledger fields. Unknown fields are ignored; values are checked. */
@@ -185,7 +239,8 @@ export async function updateSupplier(id: string, patch: Record<string, unknown>)
   if (row.vat_basis != null && !["ex_vat", "inc_vat"].includes(String(row.vat_basis))) throw new Error("VAT basis must be ex_vat or inc_vat");
   if (row.labelling != null && !["UK", "EU", "mixed"].includes(String(row.labelling))) throw new Error("labelling must be UK, EU or mixed");
   if (row.currency != null && !/^[A-Z]{3}$/.test(String(row.currency))) throw new Error("currency must be a 3-letter code");
-  if (row.website != null && !/^https?:\/\//i.test(String(row.website))) row.website = `https://${String(row.website).trim()}`;
+  if (row.website != null) row.website = webUrl(row.website, "Website");
+  if (row.kind != null && !SUPPLIER_KINDS.includes(row.kind as SupplierKind)) throw new Error(`Type must be one of ${SUPPLIER_KINDS.join(", ")}`);
   for (const k of ["importer_of_record", "invoice_name_matches", "invoice_accepted_for_approval"]) {
     if (row[k] != null && typeof row[k] !== "boolean") throw new Error(`${k.replace(/_/g, " ")} must be yes, no or unknown`);
   }

@@ -20,8 +20,10 @@ import { SyncStatus } from "@/components/product/SyncStatus";
 import { CalibrationPanel } from "@/components/product/CalibrationPanel";
 import { RecordPurchaseDialog } from "@/components/product/RecordPurchaseDialog";
 import { ReceiveDialog, StockPurchaseDialog } from "@/components/tracker/StockPurchase";
+import { OrderDetailsButton, OrderLine } from "@/components/tracker/OrderDetails";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
 
 type Row = Purchase & { actuals?: Actuals | null };
 const label = (s: PurchaseStatus) => PURCHASE_STATUSES.find((x) => x.id === s)?.label ?? s;
@@ -104,10 +106,11 @@ export default function TrackerPage() {
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <SyncStatus onSynced={() => setNonce((n) => n + 1)} />
+          <Button variant="outline" onClick={() => setStockNew({ item: "", qty: null, supplier: null })}>Record a stock order</Button>
           <RecordPurchaseDialog />
         </div>
       </div>
-      {stockNew && <StockPurchaseDialog open itemId={stockNew.item} qty={stockNew.qty} supplierId={stockNew.supplier} onOpenChange={(o) => { if (!o) { setStockNew(null); window.history.replaceState(null, "", "/tracker"); } }} onSaved={() => setNonce((n) => n + 1)} />}
+      {stockNew && <StockPurchaseDialog open itemId={stockNew.item || null} qty={stockNew.qty} supplierId={stockNew.supplier} onOpenChange={(o) => { if (!o) { setStockNew(null); window.history.replaceState(null, "", "/tracker"); } }} onSaved={() => setNonce((n) => n + 1)} />}
       {receiving && <ReceiveDialog open units={receiving.units} onOpenChange={(o) => { if (!o) setReceiving(null); }} onReceive={(bucket) => { const p = receiving; setReceiving(null); setStatus(p, "received", bucket); }} />}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -157,6 +160,7 @@ export default function TrackerPage() {
                               ? <Link className="line-clamp-2 text-sm hover:text-brand hover:underline" href={`/products/${p.asin}`}>{p.product?.title ?? p.asin}</Link>
                               : <Link className="line-clamp-2 text-sm hover:text-brand hover:underline" href={`/stock/levels?item=${p.stock_item_id}`}>{p.stock.name}</Link>}
                             <p className="num text-2xs text-muted-foreground">{p.asin ?? p.stock?.sku ?? "—"} · {p.supplier_name ?? "—"} · {p.ordered_on}{p.received_bucket ? ` · in Stock (${p.received_bucket === "home" ? "self-ship" : "TikTok FBT"})` : ""}</p>
+                            <div className="flex flex-wrap items-center gap-1"><OrderLine p={p} /><OrderDetailsButton p={p} onSaved={() => setNonce((n) => n + 1)} /></div>
                           </div>
                         </div>
                       </TableCell>

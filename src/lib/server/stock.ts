@@ -1,4 +1,5 @@
 import "server-only";
+import { orderCols, type OrderInput } from "../stock/orders";
 import {
   BUCKETS, canTake, costSnapshot, dailyDemand, daysOfCover, levelStatus, levelsByItem, reorderFor, totalOf, ZERO_LEVELS,
   type Bucket, type Levels, type Movement, type MovementKind,
@@ -145,15 +146,17 @@ export async function stockByAsinAllBuckets(asins: string[]): Promise<Map<string
 
 export async function getItem(id: string) {
   const d = db();
-  const [item, listings, moves, sales] = await Promise.all([
+  const [item, listings, moves, sales, purchases] = await Promise.all([
     d.from("stock_items").select(ITEM_COLS).eq("id", id).maybeSingle(),
     d.from("stock_listings").select("*").eq("item_id", id).order("marketplace"),
     d.from("stock_movements").select("*").eq("item_id", id).order("date", { ascending: false }).order("created_at", { ascending: false }).limit(200),
     d.from("stock_sales").select("*").eq("item_id", id).order("date", { ascending: false }).limit(100),
+    // Its purchases (the Tracker's), newest first: the open ones are "on order".
+    d.from("purchases").select("id, status, units, landed_gbp, ordered_on, expected_date, order_id, order_url, tracking_carrier, tracking_number, supplier_name, received_bucket").eq("stock_item_id", id).order("ordered_on", { ascending: false }).limit(50),
   ]);
   const it = must(item, "item") as Record<string, unknown> | null;
   if (!it) return null;
-  return { item: toItem(it), listings: must(listings, "listings"), movements: must(moves, "movements"), sales: must(sales, "sales") };
+  return { item: toItem(it), listings: must(listings, "listings"), movements: must(moves, "movements"), sales: must(sales, "sales"), purchases: must(purchases, "purchases") };
 }
 
 /** Item fields as sent by a page, checked. */
@@ -205,15 +208,26 @@ const manualBucket = (b: unknown, what: string): Bucket => {
   if (b === "fba") throw new Error("Amazon FBA levels come from SP-API: they aren't entered here");
   return b;
 };
-async function addMovement(row: { item_id: string; bucket: Bucket; quantity: number; kind: MovementKind; date: string; reason?: string | null; unit_cost?: number | null; sale_id?: string | null; purchase_id?: string | null; note?: string | null }) {
+type ReceiptOrder = { supplier_id?: string | null; order_id?: string | null; order_url?: string | null; ordered_date?: string | null; tracking_carrier?: string | null; tracking_number?: string | null; currency?: string | null; fx_rate?: number | null; unit_cost_ccy?: number | null };
+async function addMovement(row: { item_id: string; bucket: Bucket; quantity: number; kind: MovementKind; date: string; reason?: string | null; unit_cost?: number | null; sale_id?: string | null; purchase_id?: string | null; note?: string | null } & ReceiptOrder) {
   return must(await db().from("stock_movements").insert({ reason: null, unit_cost: null, sale_id: null, purchase_id: null, note: null, ...row }).select("*").single(), "movement");
 }
 
-/** Goods in: a receipt into a bucket (from a purchase when given). */
-export async function receive(x: { itemId: string; bucket: Bucket; quantity: number; date?: string; unitCost?: number | null; note?: string | null; purchaseId?: string | null }) {
+/**
+ * Goods in: a receipt into a bucket (from a purchase when given), with its supplier and order
+ * (order number and link, dates, tracking, currency) when typed. A unit cost in another currency
+ * is kept as typed and turned into £ at the rate.
+ */
+export async function receive(x: { itemId: string; bucket: Bucket; quantity: number; date?: string; unitCost?: number | null; note?: string | null; purchaseId?: string | null; supplierId?: string | null } & OrderInput) {
   const q = Math.round(Number(x.quantity));
   if (!(q > 0)) throw new Error("Quantity must be at least 1");
-  return addMovement({ item_id: x.itemId, bucket: manualBucket(x.bucket, "Receive into"), quantity: q, kind: "receipt", date: isDate(x.date) ? x.date : today(), unit_cost: n(x.unitCost), note: x.note ?? null, purchase_id: x.purchaseId ?? null });
+  const o = orderCols({ ...x, unitCostCcy: x.unitCostCcy ?? (x.currency && x.currency !== "GBP" ? x.unitCost : null) });
+  return addMovement({
+    item_id: x.itemId, bucket: manualBucket(x.bucket, "Receive into"), quantity: q, kind: "receipt", date: isDate(x.date) ? x.date : today(),
+    unit_cost: o.unitCostGbp ?? n(x.unitCost), note: x.note ?? null, purchase_id: x.purchaseId ?? null, supplier_id: x.supplierId || null,
+    order_id: o.cols.order_id, order_url: o.cols.order_url, ordered_date: o.orderedDate, tracking_carrier: o.cols.tracking_carrier, tracking_number: o.cols.tracking_number,
+    currency: o.cols.currency === "GBP" ? null : o.cols.currency, fx_rate: o.cols.fx_rate, unit_cost_ccy: o.cols.unit_cost_ccy,
+  });
 }
 
 /** A signed correction with a reason (a count, damage, loss, a sample). Can't take a bucket below 0. */
@@ -274,7 +288,7 @@ export async function returnSale(x: { saleId: string; quantity: number; bucket: 
 }
 
 export async function listMovements(f: { itemId?: string | null; bucket?: string | null; kind?: string | null; from?: string | null; to?: string | null }) {
-  let q = db().from("stock_movements").select("id, item_id, bucket, quantity, kind, date, reason, unit_cost, sale_id, purchase_id, note, created_at, item:stock_items(sku, name)").order("date", { ascending: false }).order("created_at", { ascending: false }).limit(2000);
+  let q = db().from("stock_movements").select("id, item_id, bucket, quantity, kind, date, reason, unit_cost, sale_id, purchase_id, note, created_at, order_id, order_url, tracking_carrier, tracking_number, currency, unit_cost_ccy, item:stock_items(sku, name), supplier:suppliers(id, name)").order("date", { ascending: false }).order("created_at", { ascending: false }).limit(2000);
   if (f.itemId) q = q.eq("item_id", f.itemId);
   if (f.bucket && bucketOk(f.bucket)) q = q.eq("bucket", f.bucket);
   if (f.kind) q = q.eq("kind", f.kind);
@@ -416,22 +430,25 @@ export async function applyImport(src: { kind: "stockpilot"; raw: unknown } | { 
 /* ===================== purchases (the Tracker) ===================== */
 
 /**
- * A purchase of a stock item: recorded in the Tracker like any other, without a screening to
- * freeze when the item isn't a catalogue product (an own-brand SKU, a padlock).
+ * A purchase of a stock item, in Ordered status: recorded in the Tracker like any other, without a
+ * screening to freeze when the item isn't a catalogue product (an own-brand SKU, a padlock). With
+ * the supplier's order number and link, the expected date, tracking and currency. A cost in another
+ * currency (`unitCostCcy` at `fxRate`) is the landed cost per unit in £ unless `landedGbp` is given.
  */
-export async function recordStockPurchase(x: { itemId: string; units: number; landedGbp: number; supplierId?: string | null; supplierName?: string | null; orderedOn?: string | null; note?: string | null }) {
+export async function recordStockPurchase(x: { itemId: string; units: number; landedGbp?: number | string | null; supplierId?: string | null; supplierName?: string | null; orderedOn?: string | null; note?: string | null } & OrderInput) {
   const d = db();
   const item = toItem(must(await d.from("stock_items").select(ITEM_COLS).eq("id", x.itemId).single(), "item") as Record<string, unknown>);
   const units = Math.round(Number(x.units));
   if (!(units > 0)) throw new Error("Units must be at least 1");
-  const landed = Number(x.landedGbp);
-  if (!(landed >= 0)) throw new Error("Landed cost per unit must be a number of pounds");
-  const orderedOn = isDate(x.orderedOn) ? x.orderedOn : today();
+  const o = orderCols(x);
+  const landed = x.landedGbp === "" || x.landedGbp == null ? o.unitCostGbp : Number(x.landedGbp);
+  if (landed == null || !(landed >= 0)) throw new Error("Landed cost per unit must be a number of pounds");
+  const orderedOn = isDate(o.orderedDate) ? o.orderedDate : isDate(x.orderedOn) ? x.orderedOn : today();
   const sup = x.supplierId ? (must(await d.from("suppliers").select("name").eq("id", x.supplierId).maybeSingle(), "supplier") as { name: string } | null) : null;
   return must(await d.from("purchases").insert({
     asin: item.asin, stock_item_id: item.id, supplier_id: x.supplierId || null, supplier_name: sup?.name ?? x.supplierName?.trim() ?? null,
-    units, unit_cost_gbp: item.unit_cost, landed_gbp: Math.round(landed * 100) / 100, ordered_on: orderedOn, status: "ordered", status_dates: { ordered: orderedOn },
-    note: x.note?.trim() || `Stock: ${item.sku}`, prediction: {},
+    units, unit_cost_gbp: o.unitCostGbp ?? item.unit_cost, landed_gbp: Math.round(landed * 100) / 100, ordered_on: orderedOn, status: "ordered", status_dates: { ordered: orderedOn },
+    note: x.note?.trim() || `Stock: ${item.sku}`, prediction: {}, ...o.cols,
   }).select("*").single(), "save purchase");
 }
 
@@ -441,7 +458,7 @@ export async function recordStockPurchase(x: { itemId: string; units: number; la
  */
 export async function receivePurchase(purchaseId: string, bucket: Bucket, date?: string) {
   const d = db();
-  const p = must(await d.from("purchases").select("id, asin, units, landed_gbp, stock_item_id, product:products(title)").eq("id", purchaseId).single(), "purchase") as { id: string; asin: string | null; units: number; landed_gbp: number; stock_item_id: string | null; product: { title: string | null } | null };
+  const p = must(await d.from("purchases").select("id, asin, units, landed_gbp, stock_item_id, supplier_id, ordered_on, order_id, order_url, tracking_carrier, tracking_number, currency, fx_rate, unit_cost_ccy, product:products(title)").eq("id", purchaseId).single(), "purchase") as { id: string; asin: string | null; units: number; landed_gbp: number; stock_item_id: string | null; product: { title: string | null } | null } & Required<Omit<ReceiptOrder, "ordered_date">> & { ordered_on: string };
   const b = manualBucket(bucket, "Receive into");
   const already = must(await d.from("stock_movements").select("id").eq("purchase_id", p.id).eq("kind", "receipt"), "receipt") as unknown[];
   let item = p.stock_item_id;
@@ -452,7 +469,12 @@ export async function receivePurchase(purchaseId: string, bucket: Bucket, date?:
   }
   must(await d.from("purchases").update({ received_bucket: b }).eq("id", p.id), "received bucket");
   if (already.length) return { created: false, itemId: item };
-  await addMovement({ item_id: item, bucket: b, quantity: p.units, kind: "receipt", date: isDate(date) ? date : today(), unit_cost: Number(p.landed_gbp), purchase_id: p.id, note: "From the Tracker" });
+  // The receipt carries the purchase's order: number and link, supplier, dates, tracking, currency.
+  await addMovement({
+    item_id: item, bucket: b, quantity: p.units, kind: "receipt", date: isDate(date) ? date : today(), unit_cost: Number(p.landed_gbp), purchase_id: p.id, note: "From the Tracker",
+    supplier_id: p.supplier_id, order_id: p.order_id, order_url: p.order_url, ordered_date: p.ordered_on, tracking_carrier: p.tracking_carrier, tracking_number: p.tracking_number,
+    currency: p.currency && p.currency !== "GBP" ? p.currency : null, fx_rate: p.fx_rate == null ? null : Number(p.fx_rate), unit_cost_ccy: p.unit_cost_ccy == null ? null : Number(p.unit_cost_ccy),
+  });
   return { created: true, itemId: item };
 }
 

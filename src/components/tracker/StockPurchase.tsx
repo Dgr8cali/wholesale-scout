@@ -1,38 +1,61 @@
 "use client";
 
+import { PlusIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { emptyOrder, OrderFields, orderJson, SupplierPicker, type OrderDraft } from "@/components/stock/orderBits";
 import { api } from "@/lib/ui/client";
 
-interface Supplier { id: string; name: string; delivery_days: number | null }
 interface Item { id: string; sku: string; name: string; asin: string | null; unit_cost: number | null; supplier_id: string | null }
 const today = () => new Date().toLocaleDateString("en-CA", { timeZone: "Europe/London" });
 
-/** A purchase of a stock item (from Stock → Reorder): prefilled with the item, its supplier and the suggested quantity. */
+/**
+ * Record a new order of a stock item, in Ordered status: the item (picked, or added here), the
+ * supplier (picked, or added here), quantity, unit cost (in any currency, with its rate), the
+ * supplier's order number and link, and the expected date. When it arrives, Receive puts it into a
+ * bucket. From Stock → Reorder it comes prefilled with the item, its supplier and the quantity.
+ */
 export function StockPurchaseDialog({ itemId, qty, supplierId, open, onOpenChange, onSaved }: {
-  itemId: string; qty: number | null; supplierId: string | null; open: boolean; onOpenChange: (o: boolean) => void; onSaved: () => void;
+  itemId?: string | null; qty?: number | null; supplierId?: string | null; open: boolean; onOpenChange: (o: boolean) => void; onSaved: () => void;
 }) {
-  const [item, setItem] = useState<Item | null>(null);
-  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [f, setF] = useState({ units: qty ? String(qty) : "", landed: "", supplier: supplierId ?? "", date: today(), note: "" });
+  const [items, setItems] = useState<Item[]>([]);
+  const [pick, setPick] = useState(itemId ?? "");
+  const [newItem, setNewItem] = useState<{ sku: string; name: string; asin: string } | null>(null);
+  const [supplier, setSupplier] = useState(supplierId ?? "");
+  const [f, setF] = useState({ units: qty ? String(qty) : "", cost: "", note: "" });
+  const [order, setOrder] = useState<OrderDraft>(() => emptyOrder(today()));
   const [busy, setBusy] = useState(false);
+  const item = items.find((i) => i.id === pick) ?? null;
   useEffect(() => {
     if (!open) return;
-    api<{ item: Item }>(`/api/stock/items/${itemId}`).then((r) => {
-      setItem(r.item);
-      setF((x) => ({ ...x, landed: x.landed || (r.item.unit_cost != null ? r.item.unit_cost.toFixed(2) : ""), supplier: x.supplier || r.item.supplier_id || "" }));
-    }).catch((e: Error) => toast.error(e.message));
-    api<{ suppliers: Supplier[] }>("/api/suppliers").then((r) => setSuppliers(r.suppliers)).catch(() => {});
-  }, [open, itemId]);
+    api<{ items: { item: Item }[] }>("/api/stock/levels").then((r) => setItems(r.items.map((x) => x.item))).catch((e: Error) => toast.error(e.message));
+  }, [open]);
+  // The item's own cost and supplier fill in once it's picked (never over what you typed).
+  const [filledFor, setFilledFor] = useState<string | null>(null);
+  if (item && filledFor !== item.id) {
+    setFilledFor(item.id);
+    setF((x) => ({ ...x, cost: x.cost || (item.unit_cost != null ? item.unit_cost.toFixed(2) : "") }));
+    if (!supplier && item.supplier_id) setSupplier(item.supplier_id);
+  }
+  const gbpCost = order.currency === "GBP";
   const save = async () => {
     setBusy(true);
     try {
-      await api("/api/stock/purchases", { method: "POST", json: { itemId, units: Number(f.units), landedGbp: Number(f.landed.replace(",", ".")), supplierId: f.supplier || null, orderedOn: f.date, note: f.note || null } });
-      toast.success(`Purchase recorded: ${f.units} × ${item?.sku ?? "item"}. Mark it Received here when it arrives, and it goes into Stock.`);
+      let id = pick;
+      if (newItem) {
+        const r = await api<{ item: { id: string } }>("/api/stock/items", { method: "POST", json: { sku: newItem.sku, name: newItem.name, asin: newItem.asin, supplier_id: supplier || null, unit_cost: gbpCost && f.cost ? f.cost : "" } });
+        id = r.item.id;
+      }
+      const cost = Number(f.cost.replace(",", "."));
+      await api("/api/stock/purchases", { method: "POST", json: {
+        itemId: id, units: Number(f.units), supplierId: supplier || null, note: f.note || null, ...orderJson(order),
+        ...(gbpCost ? { landedGbp: cost } : { unitCostCcy: cost }),
+      } });
+      toast.success(`Order recorded: ${f.units} × ${newItem?.sku.toUpperCase() ?? item?.sku ?? "item"}, Ordered. When it arrives, Receive it (Tracker, or the item on Stock → Levels).`);
       onOpenChange(false);
       onSaved();
     } catch (e) {
@@ -41,25 +64,44 @@ export function StockPurchaseDialog({ itemId, qty, supplierId, open, onOpenChang
       setBusy(false);
     }
   };
+  const ready = (newItem ? newItem.sku.trim() && newItem.name.trim() : pick) && Number(f.units) > 0 && f.cost !== "" && (gbpCost || Number(order.fxRate) > 0);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>Record a purchase{item ? `: ${item.name}` : ""}</DialogTitle>
-          <DialogDescription>{item ? `${item.sku}${item.asin ? ` · ${item.asin}` : ""}. ` : ""}When it arrives, set it to Received and choose the bucket: its units go into Stock.</DialogDescription>
+          <DialogTitle>Record a new order{item && !newItem ? `: ${item.name}` : ""}</DialogTitle>
+          <DialogDescription>It goes in the Tracker as Ordered. When it arrives, Receive it and choose the bucket: its units go into Stock with this order&apos;s number on the receipt.</DialogDescription>
         </DialogHeader>
         <div className="grid grid-cols-2 gap-3">
-          <label className="space-y-1"><span className="field-label">Units</span><Input className="num" type="number" min={1} value={f.units} onChange={(e) => setF({ ...f, units: e.target.value })} autoFocus /></label>
-          <label className="space-y-1"><span className="field-label">Landed cost per unit (£)</span><Input className="num" type="number" step="0.01" min={0} value={f.landed} onChange={(e) => setF({ ...f, landed: e.target.value })} /></label>
-          <label className="space-y-1"><span className="field-label">Supplier</span>
-            <NativeSelect className="w-full" value={f.supplier} onChange={(e) => setF({ ...f, supplier: e.target.value })}>
-              <NativeSelectOption value="">—</NativeSelectOption>
-              {suppliers.map((s) => <NativeSelectOption key={s.id} value={s.id}>{s.name}{s.delivery_days ? ` · ${s.delivery_days} days` : ""}</NativeSelectOption>)}
-            </NativeSelect></label>
-          <label className="space-y-1"><span className="field-label">Ordered on</span><Input type="date" value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })} /></label>
-          <label className="col-span-2 space-y-1"><span className="field-label">Note</span><Input value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} /></label>
+          <div className="col-span-2 space-y-1.5">
+            <span className="field-label">Item</span>
+            {newItem ? (
+              <div className="grid grid-cols-3 gap-2 rounded-lg border border-dashed p-2.5">
+                <Input className="h-8" placeholder="SKU" value={newItem.sku} onChange={(e) => setNewItem({ ...newItem, sku: e.target.value })} autoFocus />
+                <Input className="col-span-2 h-8" placeholder="Name" value={newItem.name} onChange={(e) => setNewItem({ ...newItem, name: e.target.value })} />
+                <Input className="num h-8 uppercase" placeholder="ASIN (optional)" value={newItem.asin} onChange={(e) => setNewItem({ ...newItem, asin: e.target.value })} />
+                <span className="col-span-2 self-center text-2xs text-muted-foreground">Added to Stock when you save the order.</span>
+                <Button type="button" size="xs" variant="ghost" className="col-span-3 justify-self-end" onClick={() => setNewItem(null)}>Pick an existing item instead</Button>
+              </div>
+            ) : (
+              <div className="flex gap-1.5">
+                <NativeSelect className="w-full min-w-0" value={pick} onChange={(e) => setPick(e.target.value)} aria-label="Item">
+                  <NativeSelectOption value="">Pick an item…</NativeSelectOption>
+                  {items.map((i) => <NativeSelectOption key={i.id} value={i.id}>{i.sku} · {i.name.slice(0, 50)}</NativeSelectOption>)}
+                </NativeSelect>
+                <Button type="button" size="sm" variant="outline" className="flex-none" onClick={() => setNewItem({ sku: "", name: "", asin: "" })}><PlusIcon /> New item</Button>
+              </div>
+            )}
+          </div>
+          <div className="col-span-2 space-y-1"><span className="field-label">Supplier</span><SupplierPicker value={supplier} onChange={(v) => setSupplier(v)} /></div>
+          <label className="space-y-1"><span className="field-label">Quantity</span><Input className="num" type="number" min={1} value={f.units} onChange={(e) => setF({ ...f, units: e.target.value })} /></label>
+          <label className="space-y-1"><span className="field-label">{gbpCost ? "Landed cost per unit (£)" : `Unit cost (${order.currency})`}</span><Input className="num" type="number" step="0.01" min={0} value={f.cost} onChange={(e) => setF({ ...f, cost: e.target.value })} />
+            {!gbpCost && Number(order.fxRate) > 0 && Number(f.cost) >= 0 && f.cost !== "" && <span className="block text-2xs text-muted-foreground">£{(Number(f.cost) * Number(order.fxRate)).toFixed(2)} a unit at the rate</span>}
+          </label>
+          <OrderFields value={order} onChange={setOrder} />
+          <label className="col-span-2 space-y-1"><span className="field-label">Notes</span><Input value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} /></label>
         </div>
-        <DialogFooter><Button disabled={busy || !(Number(f.units) > 0) || f.landed === ""} onClick={save}>Save purchase</Button></DialogFooter>
+        <DialogFooter><Button disabled={busy || !ready} onClick={save}>Record order</Button></DialogFooter>
       </DialogContent>
     </Dialog>
   );

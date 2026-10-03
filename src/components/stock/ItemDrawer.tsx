@@ -13,9 +13,13 @@ import type { ItemLevels } from "@/lib/server/stock";
 import { BUCKET_LABEL, BUCKETS, KIND_LABEL, type Bucket, type MovementKind } from "@/lib/stock/levels";
 import { api } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
-import { ACTION_LABEL, ActionDialog, type Listing, type StockAction, type SupplierChoice } from "./actions";
+import { ReceiveDialog } from "@/components/tracker/StockPurchase";
+import { ACTION_LABEL, ActionDialog, type Listing, type StockAction } from "./actions";
+import { OrderLink, SupplierPicker } from "./orderBits";
+import { trackingText } from "@/lib/stock/orders";
 
-interface MovementRow { id: string; bucket: Bucket; quantity: number; kind: MovementKind; date: string; reason: string | null; note: string | null }
+interface MovementRow { id: string; bucket: Bucket; quantity: number; kind: MovementKind; date: string; reason: string | null; note: string | null; order_id: string | null; order_url: string | null }
+interface OrderRow { id: string; status: string; units: number; landed_gbp: number; ordered_on: string; expected_date: string | null; order_id: string | null; order_url: string | null; tracking_carrier: string | null; tracking_number: string | null; supplier_name: string | null; received_bucket: string | null }
 
 const gbp = (v: number | null | undefined) => (v == null ? "—" : `£${Number(v).toFixed(2)}`);
 
@@ -23,7 +27,8 @@ const gbp = (v: number | null | undefined) => (v == null ? "—" : `£${Number(v
 export function ItemDrawer({ row, onClose, onChanged }: { row: ItemLevels | null; onClose: () => void; onChanged: () => void }) {
   const [listings, setListings] = useState<Listing[]>([]);
   const [moves, setMoves] = useState<MovementRow[]>([]);
-  const [suppliers, setSuppliers] = useState<SupplierChoice[]>([]);
+  const [orders, setOrders] = useState<OrderRow[]>([]);
+  const [receiving, setReceiving] = useState<OrderRow | null>(null);
   const [action, setAction] = useState<StockAction | null>(null);
   const [d, setD] = useState<Record<string, string>>({});
   const [newL, setNewL] = useState({ marketplace: "", marketplace_sku: "", price: "", fee_pct: "", default_bucket: "home", url: "" });
@@ -31,10 +36,9 @@ export function ItemDrawer({ row, onClose, onChanged }: { row: ItemLevels | null
 
   const load = useCallback(() => {
     if (!id) return;
-    api<{ listings: Listing[]; movements: MovementRow[] }>(`/api/stock/items/${id}`).then((r) => { setListings(r.listings); setMoves(r.movements); }).catch((e: Error) => toast.error(e.message));
+    api<{ listings: Listing[]; movements: MovementRow[]; purchases: OrderRow[] }>(`/api/stock/items/${id}`).then((r) => { setListings(r.listings); setMoves(r.movements); setOrders(r.purchases); }).catch((e: Error) => toast.error(e.message));
   }, [id]);
   useEffect(() => { load(); }, [load]);
-  useEffect(() => { api<{ suppliers: SupplierChoice[] }>("/api/suppliers").then((r) => setSuppliers(r.suppliers)).catch(() => {}); }, []);
   // The editable details follow the item shown.
   const [shownId, setShownId] = useState<string | null>(null);
   if (row && shownId !== row.item.id) {
@@ -58,6 +62,17 @@ export function ItemDrawer({ row, onClose, onChanged }: { row: ItemLevels | null
     try {
       await api(`/api/stock/items/${it.id}/listings`, { method: "POST", json: newL });
       setNewL({ marketplace: "", marketplace_sku: "", price: "", fee_pct: "", default_bucket: "home", url: "" });
+      load();
+      onChanged();
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
+  /** An order arrived: Received, into a bucket (its units become a receipt carrying the order). */
+  const receiveOrder = async (o: OrderRow, bucket: "home" | "tiktok_fbt" | null) => {
+    try {
+      const r = await api<{ stock: { created: boolean } | null }>(`/api/purchases/${o.id}`, { method: "PATCH", json: { status: "received", ...(bucket ? { bucket } : {}) } });
+      toast.success(r.stock?.created ? `${o.units} received into ${BUCKET_LABEL[bucket!]}` : "Marked received");
       load();
       onChanged();
     } catch (e) {
@@ -109,11 +124,8 @@ export function ItemDrawer({ row, onClose, onChanged }: { row: ItemLevels | null
                 {field("barcode", "Barcode")}{field("category", "Category")}
                 {field("unit_cost", "Unit cost (£)", { type: "number", step: "0.01" })}{field("packaging_cost", "Packaging (£)", { type: "number", step: "0.01" })}
                 {field("reorder_level", "Low-stock level", { type: "number" })}{field("lead_time_days", "Lead time (days)", { type: "number" })}
-                <label className="block space-y-0.5"><span className="field-label">Supplier</span>
-                  <NativeSelect className="h-8 w-full" value={d.supplier_id ?? ""} onChange={(e) => setD({ ...d, supplier_id: e.target.value })}>
-                    <NativeSelectOption value="">None</NativeSelectOption>
-                    {suppliers.map((s) => <NativeSelectOption key={s.id} value={s.id}>{s.name}</NativeSelectOption>)}
-                  </NativeSelect></label>
+                <div className="col-span-2 space-y-0.5"><span className="field-label">Supplier</span>
+                  <SupplierPicker value={d.supplier_id ?? ""} onChange={(v) => setD({ ...d, supplier_id: v })} /></div>
                 <label className="block space-y-0.5"><span className="field-label">Status</span>
                   <NativeSelect className="h-8 w-full" value={d.status ?? "active"} onChange={(e) => setD({ ...d, status: e.target.value })}>
                     <NativeSelectOption value="active">Active</NativeSelectOption><NativeSelectOption value="discontinued">Discontinued</NativeSelectOption>
@@ -125,6 +137,23 @@ export function ItemDrawer({ row, onClose, onChanged }: { row: ItemLevels | null
                 {it.supplier_id && <Link href={`/suppliers/${it.supplier_id}`} className="text-xs text-brand hover:underline">Supplier →</Link>}
               </div>
             </section>
+
+            {orders.length > 0 && (
+              <section className="space-y-2">
+                <div className="flex items-center"><h3 className="text-sm font-semibold">Orders</h3><Link href="/tracker" className="ml-auto text-xs text-brand hover:underline">Tracker →</Link></div>
+                <table className="w-full text-xs"><tbody>{orders.slice(0, 10).map((o) => (
+                  <tr key={o.id} className="border-t align-top">
+                    <td className="py-1 pr-2 whitespace-nowrap">{o.ordered_on}</td>
+                    <td className="num pr-2 text-right">{o.units}</td>
+                    <td className="pr-2"><OrderLink id={o.order_id} url={o.order_url} /> <span className="text-muted-foreground">{o.supplier_name ?? ""}</span>
+                      {(o.expected_date || o.tracking_number) && <div className="text-muted-foreground">{o.expected_date && o.status === "ordered" ? `expected ${o.expected_date}` : ""}{o.expected_date && o.tracking_number && o.status === "ordered" ? " · " : ""}{trackingText(o.tracking_carrier, o.tracking_number) ?? ""}</div>}</td>
+                    <td className="text-right whitespace-nowrap">{o.status === "ordered"
+                      ? <Button size="xs" variant="outline" onClick={() => setReceiving(o)}>Receive</Button>
+                      : <span className="text-muted-foreground">{o.status}{o.received_bucket ? ` · ${BUCKET_LABEL[o.received_bucket as Bucket]}` : ""}</span>}</td>
+                  </tr>
+                ))}</tbody></table>
+              </section>
+            )}
 
             <section className="space-y-2">
               <h3 className="text-sm font-semibold">Listings</h3>
@@ -162,7 +191,7 @@ export function ItemDrawer({ row, onClose, onChanged }: { row: ItemLevels | null
                     <td className="pr-2">{KIND_LABEL[m.kind]}</td>
                     <td className="pr-2 text-muted-foreground">{BUCKET_LABEL[m.bucket]}</td>
                     <td className={cn("num pr-2 text-right font-medium", m.quantity > 0 ? "text-pass" : "text-fail")}>{m.quantity > 0 ? `+${m.quantity}` : m.quantity}</td>
-                    <td className="text-muted-foreground">{[m.reason, m.note].filter(Boolean).join(" · ")}</td>
+                    <td className="text-muted-foreground">{m.order_id || m.order_url ? <><OrderLink id={m.order_id} url={m.order_url} />{m.reason || m.note ? " · " : ""}</> : null}{[m.reason, m.note].filter(Boolean).join(" · ")}</td>
                   </tr>
                 ))}</tbody></table>
               )}
@@ -170,6 +199,7 @@ export function ItemDrawer({ row, onClose, onChanged }: { row: ItemLevels | null
           </div>
         </SheetContent>
       </Sheet>
+      {receiving && <ReceiveDialog open units={receiving.units} onOpenChange={(o) => { if (!o) setReceiving(null); }} onReceive={(bucket) => { const o = receiving; setReceiving(null); receiveOrder(o, bucket); }} />}
       {action && <ActionDialog action={action} item={row} onClose={() => setAction(null)} onDone={() => { load(); onChanged(); }} />}
     </>
   );

@@ -1,5 +1,6 @@
 "use client";
 
+import { OrderDetailsButton, OrderLine } from "@/components/tracker/OrderDetails";
 import { PlusIcon, Trash2Icon } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -124,6 +125,7 @@ export function Tracker({ asin, suppliers, defaultLanded, openForm = false }: { 
                 {p.status_dates[p.status] && <span className="num text-xs text-muted-foreground">since {p.status_dates[p.status]}</span>}
                 <Button variant="ghost" size="icon-sm" className="ml-auto" aria-label="Delete purchase" onClick={() => remove(p)}><Trash2Icon /></Button>
               </div>
+              <div className="mt-1 flex flex-wrap items-center gap-1"><OrderLine p={p} /><OrderDetailsButton p={p} onSaved={load} /></div>
               {p.note && <p className="mt-1 text-xs text-muted-foreground">{p.note}</p>}
               <PurchaseOutcome p={p} actuals={p.actuals ?? null} />
             </li>

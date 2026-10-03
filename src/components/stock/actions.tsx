@@ -9,6 +9,7 @@ import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import type { ItemLevels } from "@/lib/server/stock";
 import { ADJUST_REASONS, BUCKET_LABEL, MANUAL_BUCKETS, SALE_CHANNELS, type Bucket } from "@/lib/stock/levels";
 import { api } from "@/lib/ui/client";
+import { emptyOrder, OrderFields, orderJson, SupplierPicker, type OrderDraft } from "./orderBits";
 
 export type StockAction = "sale" | "receive" | "adjust" | "transfer" | "return";
 export const ACTION_LABEL: Record<StockAction, string> = { sale: "Record sale", receive: "Receive", adjust: "Adjust", transfer: "Transfer", return: "Return" };
@@ -48,6 +49,9 @@ export function ActionDialog({ action, item, items, onClose, onDone }: {
   const [f, setF] = useState({ bucket: "home" as Bucket, to: "tiktok_fbt" as Bucket, quantity: "", date: today(), price: "", channel: "eBay", listing: "", order: "", reason: "Stock count", sign: "-", unitCost: "", note: "", sale: "" });
   const [busy, setBusy] = useState(false);
   const set = (p: Partial<typeof f>) => setF((x) => ({ ...x, ...p }));
+  // Receive: the supplier (the item's by default) and its order.
+  const [supplier, setSupplier] = useState(item?.item.supplier_id ?? "");
+  const [order, setOrder] = useState<OrderDraft>(() => emptyOrder());
 
   useEffect(() => {
     if (!action || !cur || (action !== "sale" && action !== "return")) return;
@@ -67,7 +71,7 @@ export function ActionDialog({ action, item, items, onClose, onDone }: {
         const r = await api<{ snapshot: { cost_each: number; profit_each: number } }>("/api/stock/sales", { method: "POST", json: { itemId: id, listingId: f.listing || null, bucket: f.bucket, channel: f.channel, orderId: f.order || null, date: f.date, quantity: q, priceEach: Number(f.price), note: f.note || null } });
         toast.success(`Sale recorded: cost ${gbp(r.snapshot.cost_each)} each, profit ${gbp(r.snapshot.profit_each)} each`);
       } else if (action === "receive") {
-        await api(`/api/stock/items/${id}/receive`, { method: "POST", json: { bucket: f.bucket, quantity: q, date: f.date, unitCost: f.unitCost === "" ? null : Number(f.unitCost), note: f.note || null } });
+        await api(`/api/stock/items/${id}/receive`, { method: "POST", json: { bucket: f.bucket, quantity: q, date: f.date, unitCost: f.unitCost === "" ? null : Number(f.unitCost), note: f.note || null, supplierId: supplier || null, ...orderJson(order) } });
         toast.success(`${q} received into ${BUCKET_LABEL[f.bucket]}`);
       } else if (action === "adjust") {
         await api(`/api/stock/items/${id}/adjust`, { method: "POST", json: { bucket: f.bucket, quantity: f.sign === "-" ? -q : q, reason: f.reason, date: f.date, note: f.note || null } });
@@ -149,7 +153,16 @@ export function ActionDialog({ action, item, items, onClose, onDone }: {
               <Field label="Order id"><Input value={f.order} onChange={(e) => set({ order: e.target.value })} /></Field>
             </>
           )}
-          {action === "receive" && <Field label="Unit cost (£)" hint="Optional: what these cost each"><Input className="num" type="number" min={0} step="0.01" value={f.unitCost} onChange={(e) => set({ unitCost: e.target.value })} /></Field>}
+          {action === "receive" && (
+            <>
+              <Field label={`Unit cost (${order.currency === "GBP" ? "£" : order.currency})`} hint={order.currency === "GBP" ? "Optional: what these cost each" : `Turned into £ at the rate below`}><Input className="num" type="number" min={0} step="0.01" value={f.unitCost} onChange={(e) => set({ unitCost: e.target.value })} /></Field>
+              <div className="col-span-2"><Field label="Supplier"><SupplierPicker value={supplier} onChange={(v) => setSupplier(v)} /></Field></div>
+              <details className="col-span-2 text-sm">
+                <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">The order: number and link, tracking, currency</summary>
+                <div className="mt-2 grid grid-cols-2 gap-3"><OrderFields value={order} onChange={setOrder} expected={false} /></div>
+              </details>
+            </>
+          )}
           {(action === "adjust" || action === "return") && (
             <Field label="Reason">
               {action === "adjust" ? (
@@ -175,9 +188,7 @@ export interface SupplierChoice { id: string; name: string; delivery_days: numbe
 /** A new stock item. */
 export function NewItemDialog({ open, onClose, onDone }: { open: boolean; onClose: () => void; onDone: (id: string) => void }) {
   const [f, setF] = useState({ sku: "", name: "", asin: "", unit_cost: "", packaging_cost: "", reorder_level: "", lead_time_days: "", supplier_id: "" });
-  const [suppliers, setSuppliers] = useState<SupplierChoice[]>([]);
   const [busy, setBusy] = useState(false);
-  useEffect(() => { if (open) api<{ suppliers: SupplierChoice[] }>("/api/suppliers").then((r) => setSuppliers(r.suppliers)).catch(() => {}); }, [open]);
   const set = (p: Partial<typeof f>) => setF((x) => ({ ...x, ...p }));
   const save = async () => {
     setBusy(true);
@@ -207,11 +218,7 @@ export function NewItemDialog({ open, onClose, onDone }: { open: boolean; onClos
           <Field label="Packaging (£)"><Input className="num" type="number" min={0} step="0.01" value={f.packaging_cost} onChange={(e) => set({ packaging_cost: e.target.value })} /></Field>
           <Field label="Low-stock level" hint="Blank: Settings → Stock's default"><Input className="num" type="number" min={0} value={f.reorder_level} onChange={(e) => set({ reorder_level: e.target.value })} /></Field>
           <Field label="Lead time (days)" hint="Blank: the supplier's delivery days"><Input className="num" type="number" min={0} value={f.lead_time_days} onChange={(e) => set({ lead_time_days: e.target.value })} /></Field>
-          <div className="col-span-2"><Field label="Supplier">
-            <NativeSelect className="w-full" value={f.supplier_id} onChange={(e) => set({ supplier_id: e.target.value })}>
-              <NativeSelectOption value="">None</NativeSelectOption>
-              {suppliers.map((s) => <NativeSelectOption key={s.id} value={s.id}>{s.name}</NativeSelectOption>)}
-            </NativeSelect></Field></div>
+          <div className="col-span-2"><Field label="Supplier"><SupplierPicker value={f.supplier_id} onChange={(v) => set({ supplier_id: v })} /></Field></div>
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
