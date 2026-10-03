@@ -305,23 +305,22 @@ export async function launchDefaults(opts: { asin?: string | null; candidateId?:
       if (bank?.headTerms.length) { headTerms = bank.headTerms; notes.push(`Head terms from the keyword bank (${bank.rows.length} terms): Opportunity Explorer's biggest, then what sells, then yours`); }
     }
   }
-  // Starting bid: the target ACoS × price × the smoothed conversion. A new launch has no clicks, so
-  // that's the prior: the product's conversion, else the account's, else 7%.
-  let startingBid = Math.round(settings.cpc * 0.8 * 100) / 100;
+  // Starting bid: the higher of the target ACoS × price × the smoothed conversion (a new launch has
+  // no clicks, so that's the prior: the product's conversion, else the account's, else 7%) and the
+  // account's CPC × 0.8, so a launch at a low conversion still gets impressions.
+  const cpcBid = Math.round(settings.cpc * 0.8 * 100) / 100;
   const dash = await adsDashboard();
   const mine = asin ? dash.asins.find((x) => x.asin === asin) : null;
   // No price typed: the dashboard's (Keepa's Buy Box, else the ads' average sale price).
   if (price == null && mine?.economics.priceSource) price = mine.economics.price;
-  if (price) {
-    const acct = dash.asins.reduce((s, x) => ({ clicks: s.clicks + x.totals.clicks, orders: s.orders + x.totals.orders }), { clicks: 0, orders: 0 });
-    const prior = priorConversion(mine ? { clicks: mine.totals.clicks, orders: mine.totals.orders } : null, acct, settings.smoothingK);
-    const bid = Math.max(0.1, Math.round(targetAcos * price * prior.value * 100) / 100);
-    notes.push(`Starting bid £${bid.toFixed(2)} = ${Math.round(targetAcos * 100)}% target × £${price.toFixed(2)} × ${(prior.value * 100).toFixed(1)}% conversion (${prior.source === "product" ? "the product's" : prior.source === "account" ? "the account's" : "the 7% default: no clicks yet"}, which smoothing starts every keyword from). Settings → Ads CPC × 0.8 would be £${startingBid.toFixed(2)}`);
-    startingBid = bid;
-  }
+  const acct = dash.asins.reduce((s, x) => ({ clicks: s.clicks + x.totals.clicks, orders: s.orders + x.totals.orders }), { clicks: 0, orders: 0 });
+  const prior = priorConversion(mine ? { clicks: mine.totals.clicks, orders: mine.totals.orders } : null, acct, settings.smoothingK);
+  const smoothedBid = price ? Math.max(0.1, Math.round(targetAcos * price * prior.value * 100) / 100) : null;
   return {
     asin, title, sku, price, headTerms, competitorAsins, dailyBudget: dailyBudget ?? 10, targetAcos, steadyTargetAcos: steady,
-    startingBid, startDate: start, notes, negatives,
+    startingBid: Math.max(cpcBid, smoothedBid ?? 0), startDate: start, notes, negatives,
+    /** What the starting bid is the higher of, for the form to show (and re-work as the price and target change). */
+    bidBasis: { conversion: prior.value, conversionSource: prior.source, cpc: settings.cpc },
   };
 }
 

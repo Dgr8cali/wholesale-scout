@@ -19,7 +19,7 @@ Start from an **Ads product** or a **private-label candidate**:
 | Competitor ASINs | A candidate's page-one list |
 | Daily budget, all four | A candidate's Gate 7 launch advertising ÷ 60 (else £10) |
 | Launch target ACoS | The product's launch target, else Settings → Ads |
-| Starting bid | Settings → Ads CPC × 0.8 |
+| Starting bid | The higher of the launch target ACoS × price × the smoothed conversion (the product's conversion, else the account's, else 7%) and the account's CPC × 0.8 (Settings → Ads). Both figures show under the field, with the one used marked, and follow the price and target as you change them |
 
 ## The campaigns
 

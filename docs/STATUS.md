@@ -54,7 +54,7 @@ approved export as a bulk sheet in Amazon's own column order, as batches that ca
 with snapshots to restore. Also: n-grams, the launcher (Auto/Broad/Exact/PT Create sheet and a
 60-day plan), extension rank checks. Phase 5: bids use a smoothed conversion ((orders + k × product's) ÷ (clicks
 + k), k = 20 in Settings → Ads), shown raw and smoothed in every reason (Bid down, Bid up's ceiling,
-Harvest's cap, the launcher's starting bid); each rule has its own lookback window (7/14/30/60 days);
+Harvest's cap, the launcher's starting bid: the higher of that and the account CPC × 0.8, both shown); each rule has its own lookback window (7/14/30/60 days);
 whitelist and blacklist (account and per product: never negatived/paused; negative phrases in new
 campaigns and proposed for broad/auto ones); TACoS mode per product (target TACoS → the ACoS it
 allows, Ranked −25%, organic share on the tile, a switch suggestion); listing health (ad CTR/CVR vs
@@ -127,7 +127,6 @@ StockPilot data is imported (3 items). Ads days of cover and the stock guard cou
 - **Order currency**: the landed cost per unit is kept in £; editing an order's price in another currency or its rate re-works the £ (and its receipt's unit cost).
 - **Ordered stock shows as "out" on Levels** until it's received (e.g. the Biotene and Lifeproof items made from their product-page purchases).
 - **Rule windows on range data**: search terms and keywords come in import ranges, not days, so a window shorter than an import counts that import in full (the rule says so). Exact windows need imports of about the window's length, or the Ads API.
-- **The launcher's smoothed starting bid** (target × price × the product's conversion: £0.18 for the pill box) is well under its £0.55 CPC; new campaigns may get few impressions at first. Raise it on the launch form if so.
 - **The pill box's keyword bank is thin** (1 harvested term): it has no linked private-label candidate (no Opportunity Explorer terms) and no rank checks yet.
 - **SP-API roles** (Brand Analytics, Finance): see above.
 

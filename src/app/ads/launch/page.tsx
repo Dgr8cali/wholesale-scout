@@ -14,7 +14,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import type { LaunchCampaign, PlanStep } from "@/lib/ads/launch";
 import { api } from "@/lib/ui/client";
 
-interface Defaults { asin: string | null; title: string | null; sku: string; price: number | null; headTerms: string[]; competitorAsins: string[]; dailyBudget: number; targetAcos: number; steadyTargetAcos: number | null; startingBid: number; startDate: string; notes: string[]; negatives?: string[] }
+interface Defaults { asin: string | null; title: string | null; sku: string; price: number | null; headTerms: string[]; competitorAsins: string[]; dailyBudget: number; targetAcos: number; steadyTargetAcos: number | null; startingBid: number; startDate: string; notes: string[]; negatives?: string[];
+  bidBasis?: { conversion: number; conversionSource: "product" | "account" | "default"; cpc: number } }
 interface Picker { defaults: Defaults; products: { asin: string; title: string | null }[]; candidates: { id: string; name: string }[] }
 interface Preview { campaigns: LaunchCampaign[]; plan: PlanStep[]; warnings: string[]; describe: string[]; rows: number }
 
@@ -29,6 +30,21 @@ const toInput = (f: Form) => ({
   dailyBudget: Number(f.dailyBudget), targetAcos: Number(f.targetAcos) / 100, steadyTargetAcos: f.steadyTargetAcos ? Number(f.steadyTargetAcos) / 100 : null,
   startingBid: Number(f.startingBid), startDate: f.startDate, negatives: f.negatives.split(/\n|,/),
 });
+/**
+ * The starting bid is the higher of the launch target ACoS × price × smoothed conversion and the
+ * account's CPC × 0.8: both figures, and which one won, from the form's current price and target.
+ */
+function bidHint(f: Form, b: Defaults["bidBasis"]): string | undefined {
+  if (!b) return undefined;
+  const price = Number(f.price), target = Number(f.targetAcos) / 100;
+  const conv = `${(b.conversion * 100).toFixed(1)}% ${b.conversionSource === "product" ? "product" : b.conversionSource === "account" ? "account" : "default"} conversion`;
+  const smoothed = price > 0 && target > 0 ? Math.max(0.1, Math.round(target * price * b.conversion * 100) / 100) : null;
+  const cpc = Math.round(b.cpc * 0.8 * 100) / 100;
+  const won = smoothed != null && smoothed > cpc ? "smoothed" : "cpc";
+  const a = smoothed != null ? `£${smoothed.toFixed(2)} = ${Math.round(target * 100)}% × £${price.toFixed(2)} × ${conv}` : "target × price × conversion: needs the price";
+  const c = `£${cpc.toFixed(2)} = £${b.cpc.toFixed(2)} account CPC × 0.8`;
+  return `Higher of ${a}${won === "smoothed" ? " (used)" : ""} and ${c}${won === "cpc" ? " (used)" : ""}`;
+}
 const day = (d: string) => new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 
 /** Ads → Launch: a product's four launch campaigns as a bulk Create sheet, with the 60-day plan. */
@@ -106,7 +122,7 @@ export default function AdsLaunchPage() {
             {field("dailyBudget", "Daily budget, all four (£)", "From a candidate: Gate 7 launch ads ÷ 60", { type: "number", step: "0.5" })}
             {field("targetAcos", "Launch target ACoS (%)", undefined, { type: "number" })}
             {field("steadyTargetAcos", "Steady target ACoS (%)", "For week 8 (optional)", { type: "number" })}
-            {field("startingBid", "Starting bid (£)", "Target × price × smoothed conversion (see the notes)", { type: "number", step: "0.01" })}
+            {field("startingBid", "Starting bid (£)", bidHint(form, pick.defaults.bidBasis), { type: "number", step: "0.01" })}
             {field("startDate", "Start date", undefined, { type: "date" })}
           </div>
           <label className="block space-y-1"><span className="field-label">Head terms, one a line</span>
