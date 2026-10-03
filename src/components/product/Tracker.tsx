@@ -1,10 +1,11 @@
 "use client";
 
-import { OrderDetailsButton, OrderLine } from "@/components/tracker/OrderDetails";
-import { PlusIcon, Trash2Icon } from "lucide-react";
+import { OrderDeleteButton, OrderEditButton, OrderLine } from "@/components/tracker/OrderDetails";
+import { ProductThumb } from "@/components/ProductThumb";
+import Link from "next/link";
+import { PlusIcon } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { useDialogs } from "@/components/Dialogs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
@@ -24,7 +25,6 @@ const today = () => new Date().toLocaleDateString("en-CA", { timeZone: "Europe/L
  * from ordered to live, and see how it's going against what was predicted.
  */
 export function Tracker({ asin, suppliers, defaultLanded, openForm = false }: { asin: string; suppliers: SupplierChoice[]; defaultLanded: number | null; openForm?: boolean }) {
-  const { confirm } = useDialogs();
   const [rows, setRows] = useState<(Purchase & { actuals?: Actuals | null })[] | null>(null);
   const [adding, setAdding] = useState(openForm);
   const [form, setForm] = useState({ units: "", landed: defaultLanded != null ? defaultLanded.toFixed(2) : "", supplier: suppliers[0]?.id ?? "", other: "", date: today(), note: "" });
@@ -66,10 +66,6 @@ export function Tracker({ asin, suppliers, defaultLanded, openForm = false }: { 
       await api(`/api/purchases/${p.id}`, { method: "PATCH", json: { status } });
       load();
     } catch (e) { toast.error((e as Error).message); }
-  }
-  async function remove(p: Purchase) {
-    if (!(await confirm({ title: "Delete this purchase?", description: `${p.units} units on ${p.ordered_on}. Its frozen prediction goes with it.`, confirmLabel: "Delete", destructive: true }))) return;
-    try { await api(`/api/purchases/${p.id}`, { method: "DELETE" }); load(); } catch (e) { toast.error((e as Error).message); }
   }
 
   return (
@@ -114,6 +110,12 @@ export function Tracker({ asin, suppliers, defaultLanded, openForm = false }: { 
           {rows.map((p) => (
             <li key={p.id} className="rounded-lg border p-3">
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+                {(p.stock || p.product) && (
+                  <span className="flex min-w-0 items-center gap-2">
+                    <ProductThumb url={p.stock?.image_url || p.product?.image_url || null} asin={p.asin} title={p.stock?.name ?? p.product?.title ?? p.asin} brand={p.stock?.brand ?? p.product?.brand ?? null} size={28} />
+                    {p.stock_item_id ? <Link className="num text-xs text-brand hover:underline" href={`/stock/levels?item=${p.stock_item_id}`} title={p.stock?.name ?? ""}>{p.stock?.sku ?? "Stock item"}</Link> : null}
+                  </span>
+                )}
                 <span className="num font-medium">{p.units} units × {gbp(p.landed_gbp)}</span>
                 <span className="num text-muted-foreground">= {gbp(p.units * p.landed_gbp)}</span>
                 <span>{p.supplier_name ?? "—"}</span>
@@ -123,9 +125,8 @@ export function Tracker({ asin, suppliers, defaultLanded, openForm = false }: { 
                   {PURCHASE_STATUSES.map((s) => <NativeSelectOption key={s.id} value={s.id}>{s.label}</NativeSelectOption>)}
                 </NativeSelect>
                 {p.status_dates[p.status] && <span className="num text-xs text-muted-foreground">since {p.status_dates[p.status]}</span>}
-                <Button variant="ghost" size="icon-sm" className="ml-auto" aria-label="Delete purchase" onClick={() => remove(p)}><Trash2Icon /></Button>
               </div>
-              <div className="mt-1 flex flex-wrap items-center gap-1"><OrderLine p={p} /><OrderDetailsButton p={p} onSaved={load} /></div>
+              <div className="mt-1 flex flex-wrap items-center gap-1"><OrderLine p={p} /><OrderEditButton p={p} onSaved={load} /><OrderDeleteButton p={p} onDeleted={load} /></div>
               {p.note && <p className="mt-1 text-xs text-muted-foreground">{p.note}</p>}
               <PurchaseOutcome p={p} actuals={p.actuals ?? null} />
             </li>

@@ -30,7 +30,7 @@ describe("workspaces", () => {
       ["ads", "Ads", "Run and tune Sponsored Products"],
       ["stock", "Stock", "Track what you hold"],
     ]);
-    expect(workspace("stock").nav.map((n) => n.href)).toEqual(["/stock/levels", "/stock/movements", "/stock/sales", "/stock/reorder", "/stock/import"]);
+    expect(workspace("stock").nav.map((n) => n.href)).toEqual(["/stock/levels", "/stock/movements", "/stock/sales", "/stock/orders", "/stock/reorder", "/stock/import"]);
     expect(workspace("pl").nav.map((n) => [n.href, n.soon ?? false])).toEqual([["/pl/candidates", false], ["/pl/niche-hunt", false], ["/pl/quotes", false], ["/pl/launch", false]]);
     expect(workspace("ads").nav.map((n) => n.href)).toEqual(["/ads/dashboard", "/ads/imports", "/ads/rules", "/ads/proposals", "/ads/ngrams", "/ads/launch", "/ads/review"]);
     expect(workspace("ads").nav.some((n) => n.soon)).toBe(false);

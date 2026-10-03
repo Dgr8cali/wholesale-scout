@@ -65,6 +65,7 @@ export const WORKSPACES: Workspace[] = [
       { href: "/stock/levels", label: "Levels" },
       { href: "/stock/movements", label: "Movements" },
       { href: "/stock/sales", label: "Sales" },
+      { href: "/stock/orders", label: "Orders" },
       { href: "/stock/reorder", label: "Reorder" },
       { href: "/stock/import", label: "Import" },
     ],

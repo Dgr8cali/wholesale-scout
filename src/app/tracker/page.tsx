@@ -20,12 +20,15 @@ import { SyncStatus } from "@/components/product/SyncStatus";
 import { CalibrationPanel } from "@/components/product/CalibrationPanel";
 import { RecordPurchaseDialog } from "@/components/product/RecordPurchaseDialog";
 import { ReceiveDialog, StockPurchaseDialog } from "@/components/tracker/StockPurchase";
-import { OrderDetailsButton, OrderLine } from "@/components/tracker/OrderDetails";
+import { OrderDeleteButton, OrderEditButton, OrderLine } from "@/components/tracker/OrderDetails";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 
 type Row = Purchase & { actuals?: Actuals | null };
+/** A purchase's title and image: its stock item's, else (older rows) the catalogue product's. */
+const purchaseTitle = (p: Purchase) => p.stock?.name ?? p.product?.title ?? p.asin ?? "—";
+const purchaseImage = (p: Purchase) => p.stock?.image_url || p.product?.image_url || null;
 const label = (s: PurchaseStatus) => PURCHASE_STATUSES.find((x) => x.id === s)?.label ?? s;
 
 function Tile({ label, value, hint }: { label: string; value: React.ReactNode; hint?: React.ReactNode }) {
@@ -154,13 +157,13 @@ export default function TrackerPage() {
                     <TableRow key={p.id} data-verdict={a?.profitPerUnit != null ? (a.profitPerUnit > 0 ? "pass" : "fail") : "empty"}>
                       <TableCell className="max-w-80 pl-4 whitespace-normal">
                         <div className="flex gap-2.5">
-                          <ProductThumb url={p.product?.image_url ?? p.stock?.image_url ?? null} asin={p.asin} title={p.product?.title ?? p.stock?.name ?? p.asin} brand={p.product?.brand ?? null} size={36} />
+                          <ProductThumb url={purchaseImage(p)} asin={p.asin} title={purchaseTitle(p)} brand={p.stock?.brand ?? p.product?.brand ?? null} size={36} />
                           <div className="min-w-0">
-                            {p.product || !p.stock
-                              ? <Link className="line-clamp-2 text-sm hover:text-brand hover:underline" href={`/products/${p.asin}`}>{p.product?.title ?? p.asin}</Link>
-                              : <Link className="line-clamp-2 text-sm hover:text-brand hover:underline" href={`/stock/levels?item=${p.stock_item_id}`}>{p.stock.name}</Link>}
+                            {p.asin && p.product
+                              ? <Link className="line-clamp-2 text-sm hover:text-brand hover:underline" href={`/products/${p.asin}`}>{purchaseTitle(p)}</Link>
+                              : <Link className="line-clamp-2 text-sm hover:text-brand hover:underline" href={p.stock_item_id ? `/stock/levels?item=${p.stock_item_id}` : `/products/${p.asin}`}>{purchaseTitle(p)}</Link>}
                             <p className="num text-2xs text-muted-foreground">{p.asin ?? p.stock?.sku ?? "—"} · {p.supplier_name ?? "—"} · {p.ordered_on}{p.received_bucket ? ` · in Stock (${p.received_bucket === "home" ? "self-ship" : "TikTok FBT"})` : ""}</p>
-                            <div className="flex flex-wrap items-center gap-1"><OrderLine p={p} /><OrderDetailsButton p={p} onSaved={() => setNonce((n) => n + 1)} /></div>
+                            <div className="flex flex-wrap items-center gap-1"><OrderLine p={p} /><OrderEditButton p={p} onSaved={() => setNonce((n) => n + 1)} /><OrderDeleteButton p={p} onDeleted={() => setNonce((n) => n + 1)} />{p.stock_item_id && <Link className="text-2xs text-brand hover:underline" href={`/stock/levels?item=${p.stock_item_id}`}>Stock →</Link>}</div>
                           </div>
                         </div>
                       </TableCell>

@@ -1,7 +1,7 @@
 ---
 title: Stock
 summary: The Stock workspace tracks what you hold, item by item, in three buckets (self-ship, Amazon FBA, TikTok FBT), with sales, movements, reorder suggestions and imports from StockPilot.
-synonyms: [stock, inventory, delete, edit, undo, mistake, correct, archive, restore, audit log, negative, record a new order, order id, order link, tracking, expected date, new supplier, alibaba, 1688, levels, stock levels, movements, ledger, reorder, reorder point, days of cover, self-ship, fba stock, tiktok fbt, stockpilot, goods in, transfers]
+synonyms: [stock, inventory, orders, purchases, on order, edit order, delete, edit, undo, mistake, correct, archive, restore, audit log, negative, record a new order, order id, order link, tracking, expected date, new supplier, alibaba, 1688, levels, stock levels, movements, ledger, reorder, reorder point, days of cover, self-ship, fba stock, tiktok fbt, stockpilot, goods in, transfers]
 route: /stock
 order: 25
 workspace: stock
@@ -23,6 +23,7 @@ Amazon's own sales come from the orders sync, so they're never typed in either. 
 | **Levels** | Every item: units per bucket and in all, value at cost, days of cover (per bucket and in all, at the last 30 days' sales), and a status: **ok**, **low** (at or under its low-stock level) or **out**. Click an item for its drawer: details (editable, with **+ New supplier**), its orders (with **Receive** on the open ones), listings, its level over the last 30 days, its movements, and **Record sale**, **Receive**, **Adjust**, **Transfer** and **Return**. **New item** adds one; **Record a new order** records an order (below). Tick items to **Archive selected**; **Show archived** lists archived items to Restore or delete permanently |
 | **Movements** | The ledger: every receipt, sale, return, adjustment and transfer, filtered by item, bucket, kind and dates, with each receipt's order (a link when its page is known) and supplier, and **Export CSV**. Each row can be edited or deleted; **Audit log** lists every edit and delete |
 | **Sales** | Sales outside Amazon (eBay, TikTok Shop, your website, in person), each with its cost and profit at the moment it was recorded, filtered by channel |
+| **Orders** | Every purchase of a stock item, however it was recorded (here, the Tracker, a product page): image, item, supplier, status, quantity, unit cost (and the price in its currency), total, order number (a link when its page is known) with tracking, ordered and expected dates. **Open** shows what's on order (with its landed total), **All** everything. Each row has **Receive** (open orders), **Edit** and **Delete** (open orders only). **Record a new order** adds one |
 | **Reorder** | When each item needs ordering again and how many: the reorder point, the suggested quantity, and **due** / **soon** / **ok**. **Create purchase** opens the order form ready filled |
 | **Import** | From StockPilot (its raw table export) or a CSV of items, previewed before anything is written: [Stock: importing from StockPilot](/help/howto/stock-importing-from-stockpilot) |
 
@@ -41,7 +42,11 @@ It goes in the Tracker as **Ordered**, and shows under **Orders** in the item's 
 
 **Receive** on an item without an order in the Tracker (a delivery you didn't record, an opening count) takes the supplier and, under **The order**, the same order fields; a unit cost in another currency is turned into £ at the rate.
 
-An order's details can be filled in or changed later: **Order** on its Tracker row.
+An order is one record wherever it shows: Stock → Orders, the item's drawer, the Tracker and the product page. **Edit** (on any of them) changes the item, supplier, quantity, unit cost (£ landed, or the price in another currency at its rate, which sets the £), order number and link, dates, tracking and notes. Once it's been received, its receipt in Stock follows the edit (quantity, unit cost, item, supplier, order details). **Delete** is there while it's still Ordered; one that's been received needs its receipt deleted first (Movements), which sets it back to Ordered.
+
+### Every purchase belongs to a stock item
+
+A purchase recorded on a product page (**Your purchases → Record a purchase**) finds the stock item with that ASIN, or makes one, before it's saved: the title, image, brand, package size and weight and the catalogue product come from the catalogue, and the purchase's supplier and cost fill the item's if they're empty (an archived item with that ASIN is restored). So it's the same record as one recorded here, and shows on Stock → Orders. An item's picture comes from the catalogue product or the Ads product, then Amazon's catalogue through SP-API (all free), and only then Keepa (1 token); an item nothing has a picture of isn't looked up again.
 
 ## A new supplier from Stock
 

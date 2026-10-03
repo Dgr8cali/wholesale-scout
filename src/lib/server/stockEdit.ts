@@ -1,5 +1,6 @@
 import "server-only";
 import { BUCKET_LABEL, MANUAL_BUCKETS, signedQuantity, type Bucket, type MovementKind } from "../stock/levels";
+import { hasOrderInput, orderCols, type OrderInput } from "../stock/orders";
 import { db, must } from "./db";
 
 /**
@@ -254,4 +255,67 @@ export async function bulkItems(ids: string[], action: "archive" | "restore" | "
 
 export async function auditLog(limit = 500) {
   return must(await db().from("stock_audit").select("*").order("created_at", { ascending: false }).limit(Math.min(500, limit)), "audit log") as { id: string; entity: AuditEntity; entity_id: string | null; action: AuditAction; summary: string; actor: string; before: unknown; after: unknown; created_at: string }[];
+}
+
+/* ===================== orders: one edit for every page ===================== */
+
+export interface OrderEdit extends OrderInput {
+  stockItemId?: string | null; supplierId?: string | null; units?: number | string; landedGbp?: number | string | null;
+  orderedOn?: string | null; note?: string | null;
+}
+
+/**
+ * Edit an order (a purchase), the same from Stock → Orders, the item drawer, the Tracker and the
+ * product page: item, supplier, quantity, unit cost (£ landed, or a price in another currency at its
+ * rate, which sets the £), the order's number, link, dates and tracking, and notes. Once received,
+ * its receipt follows: quantity, unit cost, item, supplier and order details.
+ */
+export async function editOrder(id: string, x: OrderEdit) {
+  const d = db();
+  const before = must(await d.from("purchases").select("*").eq("id", id).maybeSingle(), "order") as Record<string, unknown> | null;
+  if (!before) throw new Error("No such order");
+  const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (x.units !== undefined && x.units !== "") { const u = Math.round(Number(x.units)); if (!(u > 0)) throw new Error("Quantity must be at least 1"); patch.units = u; }
+  if (x.stockItemId !== undefined) {
+    if (!x.stockItemId) throw new Error("An order needs an item");
+    const it = must(await d.from("stock_items").select("id, asin").eq("id", x.stockItemId).maybeSingle(), "item") as { id: string; asin: string | null } | null;
+    if (!it) throw new Error("No such item");
+    patch.stock_item_id = it.id;
+    // Amazon's figures follow the item's ASIN.
+    if (it.asin && it.asin !== before.asin) patch.asin = it.asin;
+  }
+  if (x.supplierId !== undefined) {
+    const sup = x.supplierId ? must(await d.from("suppliers").select("name").eq("id", x.supplierId).maybeSingle(), "supplier") as { name: string } | null : null;
+    patch.supplier_id = x.supplierId || null;
+    patch.supplier_name = sup?.name ?? null;
+  }
+  if (x.orderedOn) { if (!/^\d{4}-\d{2}-\d{2}$/.test(x.orderedOn)) throw new Error("Ordered date must be YYYY-MM-DD"); patch.ordered_on = x.orderedOn; }
+  if (x.note !== undefined) patch.note = x.note?.trim().slice(0, 1000) || null;
+  if (hasOrderInput(x as Record<string, unknown>)) {
+    const o = orderCols(x);
+    Object.assign(patch, o.cols);
+    if (o.unitCostGbp != null) patch.landed_gbp = o.unitCostGbp;
+  }
+  if (patch.landed_gbp === undefined && x.landedGbp !== undefined && x.landedGbp !== "" && x.landedGbp != null) {
+    const l = Number(x.landedGbp);
+    if (!(l >= 0)) throw new Error("Landed cost per unit must be a number of pounds");
+    patch.landed_gbp = Math.round(l * 100) / 100;
+  }
+  const after = must(await d.from("purchases").update(patch).eq("id", id).select("*").single(), "edit order") as Record<string, unknown>;
+  // Received already: its receipt says the same.
+  const receipts = must(await d.from("stock_movements").select("id").eq("purchase_id", id).eq("kind", "receipt"), "receipt") as { id: string }[];
+  if (receipts.length) {
+    const m: Record<string, unknown> = {};
+    if (patch.units !== undefined) m.quantity = patch.units;
+    if (patch.landed_gbp !== undefined) m.unit_cost = patch.landed_gbp;
+    if (patch.stock_item_id !== undefined) m.item_id = patch.stock_item_id;
+    if (patch.supplier_id !== undefined) m.supplier_id = patch.supplier_id;
+    if (patch.ordered_on !== undefined) m.ordered_date = patch.ordered_on;
+    for (const k of ["order_id", "order_url", "tracking_carrier", "tracking_number", "fx_rate", "unit_cost_ccy"]) if (patch[k] !== undefined) m[k] = patch[k];
+    if (patch.currency !== undefined) m.currency = patch.currency === "GBP" ? null : patch.currency;
+    if (Object.keys(m).length) must(await d.from("stock_movements").update(m).eq("purchase_id", id).eq("kind", "receipt"), "receipt follows");
+  }
+  const changed = Object.keys(patch).filter((k) => k !== "updated_at" && JSON.stringify(before[k]) !== JSON.stringify(after[k]));
+  if (changed.length) await audit("purchase", id, "edit", `Edited order${after.order_id ? ` ${after.order_id}` : ""} (${changed.join(", ")})${receipts.length ? "; its receipt follows" : ""}`, before, after);
+  return { purchase: after, receiptUpdated: receipts.length > 0 };
 }

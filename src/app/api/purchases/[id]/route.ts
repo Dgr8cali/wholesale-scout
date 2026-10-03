@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { handle } from "@/lib/server/http";
 import { updatePurchase } from "@/lib/server/purchases";
-import { deleteOpenPurchase } from "@/lib/server/stockEdit";
+import { deleteOpenPurchase, editOrder } from "@/lib/server/stockEdit";
 import { receivePurchase } from "@/lib/server/stock";
 import type { PurchaseStatus } from "@/lib/tracker";
 
@@ -15,6 +15,8 @@ export const PATCH = handle(async (req: NextRequest, ctx: Ctx) => {
   const b = (await req.json().catch(() => ({}))) as { status?: PurchaseStatus; units?: number; landedGbp?: number; orderedOn?: string; note?: string | null; on?: string; bucket?: "home" | "tiktok_fbt" };
   try {
     const id = (await ctx.params).id;
+    // Without a status it's an edit of the order (item, supplier, quantity, cost, order details): the same everywhere.
+    if (!b.status) return Response.json({ ...(await editOrder(id, b as never)), stock: null });
     const purchase = await updatePurchase(id, b);
     const stock = b.status === "received" && b.bucket ? await receivePurchase(id, b.bucket, b.on) : null;
     return Response.json({ purchase, stock });

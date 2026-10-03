@@ -14,6 +14,7 @@ import { BUCKET_LABEL, BUCKETS, KIND_LABEL, type Bucket, type MovementKind } fro
 import { api } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
 import { ReceiveDialog } from "@/components/tracker/StockPurchase";
+import { OrderDeleteButton, OrderEditButton, type OrderLike } from "@/components/tracker/OrderDetails";
 import { ACTION_LABEL, ActionDialog, type Listing, type StockAction } from "./actions";
 import { OrderLink, SupplierPicker } from "./orderBits";
 import { itemActions } from "./corrections";
@@ -21,7 +22,7 @@ import { useDialogs } from "@/components/Dialogs";
 import { trackingText } from "@/lib/stock/orders";
 
 interface MovementRow { id: string; bucket: Bucket; quantity: number; kind: MovementKind; date: string; reason: string | null; note: string | null; order_id: string | null; order_url: string | null }
-interface OrderRow { id: string; status: string; units: number; landed_gbp: number; ordered_on: string; expected_date: string | null; order_id: string | null; order_url: string | null; tracking_carrier: string | null; tracking_number: string | null; supplier_name: string | null; received_bucket: string | null }
+type OrderRow = OrderLike & { received_bucket: string | null };
 
 const gbp = (v: number | null | undefined) => (v == null ? "—" : `£${Number(v).toFixed(2)}`);
 
@@ -92,17 +93,6 @@ export function ItemDrawer({ row, onClose, onChanged }: { row: ItemLevels | null
       toast.error((e as Error).message);
     }
   };
-  /** An order not yet received: delete it (one that's been received needs its receipt deleted first). */
-  const removeOrder = async (o: OrderRow) => {
-    if (!(await confirm({ title: "Delete this order?", description: `${o.units} units${o.order_id ? `, order ${o.order_id}` : ""}, ordered ${o.ordered_on}. It leaves the Tracker. The audit log keeps a copy.`, confirmLabel: "Delete order", destructive: true }))) return;
-    try {
-      await api(`/api/purchases/${o.id}`, { method: "DELETE" });
-      toast.success("Order deleted");
-      load();
-    } catch (e) {
-      toast.error((e as Error).message);
-    }
-  };
   const acts = itemActions(confirm, onChanged);
   const field = (k: string, label: string, props: React.InputHTMLAttributes<HTMLInputElement> = {}) => (
     <label className="block space-y-0.5"><span className="field-label">{label}</span><Input className="h-8" value={d[k] ?? ""} onChange={(e) => setD({ ...d, [k]: e.target.value })} {...props} /></label>
@@ -169,8 +159,9 @@ export function ItemDrawer({ row, onClose, onChanged }: { row: ItemLevels | null
                     <td className="pr-2"><OrderLink id={o.order_id} url={o.order_url} /> <span className="text-muted-foreground">{o.supplier_name ?? ""}</span>
                       {(o.expected_date || o.tracking_number) && <div className="text-muted-foreground">{o.expected_date && o.status === "ordered" ? `expected ${o.expected_date}` : ""}{o.expected_date && o.tracking_number && o.status === "ordered" ? " · " : ""}{trackingText(o.tracking_carrier, o.tracking_number) ?? ""}</div>}</td>
                     <td className="text-right whitespace-nowrap">{o.status === "ordered"
-                      ? <><Button size="xs" variant="outline" onClick={() => setReceiving(o)}>Receive</Button><button type="button" className="ml-1.5 align-middle" aria-label="Delete order" title="Delete order" onClick={() => removeOrder(o)}><Trash2Icon className="size-3.5 text-muted-foreground hover:text-fail" /></button></>
-                      : <span className="text-muted-foreground">{o.status}{o.received_bucket ? ` · ${BUCKET_LABEL[o.received_bucket as Bucket]}` : ""}</span>}</td>
+                      ? <Button size="xs" variant="outline" onClick={() => setReceiving(o)}>Receive</Button>
+                      : <span className="text-muted-foreground">{o.status}{o.received_bucket ? ` · ${BUCKET_LABEL[o.received_bucket as Bucket]}` : ""}</span>}
+                      <div><OrderEditButton p={o} onSaved={() => { load(); onChanged(); }} /><OrderDeleteButton p={o} onDeleted={() => { load(); onChanged(); }} /></div></td>
                   </tr>
                 ))}</tbody></table>
               </section>

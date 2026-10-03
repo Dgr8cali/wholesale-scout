@@ -6,6 +6,8 @@ import {
 } from "../stock/levels";
 import { planItemsCsv, planStockPilotRaw, type AsinBySku, type ImportPlan } from "../stock/stockpilot";
 import { chunks, db, must } from "./db";
+import { getKeepa } from "../keepa/client";
+import { getSpApi } from "../spapi/client";
 
 const DAY = 86_400_000;
 const today = () => new Date().toLocaleDateString("en-CA", { timeZone: "Europe/London" });
@@ -46,8 +48,11 @@ export interface StockItem {
   lead_time_days: number | null; image_url: string | null; notes: string | null; source_ref: string | null; created_at: string;
   /** Archived (soft-deleted): hidden from Levels, Reorder and Home until restored. */
   archived_at?: string | null;
+  /** From the catalogue product (when the item has an ASIN): brand and package data. */
+  brand?: string | null; weight_g?: number | null; dims_cm?: { l: number; w: number; h: number } | null; product_id?: string | null;
+  image_checked_at?: string | null;
 }
-const ITEM_COLS = "id, sku, name, asin, barcode, category, status, parent_sku, unit_cost, packaging_cost, reorder_level, supplier_id, lead_time_days, image_url, notes, source_ref, created_at, archived_at";
+const ITEM_COLS = "id, sku, name, asin, barcode, category, status, parent_sku, unit_cost, packaging_cost, reorder_level, supplier_id, lead_time_days, image_url, notes, source_ref, created_at, archived_at, brand, weight_g, dims_cm, product_id, image_checked_at";
 const toItem = (r: Record<string, unknown>): StockItem => ({ ...(r as unknown as StockItem), unit_cost: n(r.unit_cost), packaging_cost: n(r.packaging_cost), reorder_level: n(r.reorder_level), lead_time_days: n(r.lead_time_days) });
 
 export interface ItemLevels {
@@ -157,7 +162,7 @@ export async function getItem(id: string) {
     d.from("stock_movements").select("*").eq("item_id", id).order("date", { ascending: false }).order("created_at", { ascending: false }).limit(200),
     d.from("stock_sales").select("*").eq("item_id", id).order("date", { ascending: false }).limit(100),
     // Its purchases (the Tracker's), newest first: the open ones are "on order".
-    d.from("purchases").select("id, status, units, landed_gbp, ordered_on, expected_date, order_id, order_url, tracking_carrier, tracking_number, supplier_name, received_bucket").eq("stock_item_id", id).order("ordered_on", { ascending: false }).limit(50),
+    d.from("purchases").select("*").eq("stock_item_id", id).order("ordered_on", { ascending: false }).limit(50),
   ]);
   const it = must(item, "item") as Record<string, unknown> | null;
   if (!it) return null;
@@ -187,18 +192,83 @@ export async function saveItem(id: string | null, x: Record<string, unknown>): P
   return toItem(row as Record<string, unknown>);
 }
 
-/**
- * The stock item for an ASIN (an Ads product, a private-label listing): found by ASIN, else made
- * with the given name and costs. They share it, so stock and sales meet in one place.
- */
-export async function ensureStockItemForAsin(asin: string, x: { name: string; unitCost?: number | null }): Promise<StockItem> {
+/** What the catalogue knows about an ASIN: the wholesale product (title, brand, image, package), else the Ads product. */
+async function catalogueFor(asin: string) {
   const d = db();
-  const found = (must(await d.from("stock_items").select(ITEM_COLS).eq("asin", asin).limit(1), "item") as Record<string, unknown>[])[0];
-  if (found) return toItem(found);
+  const [prod, ads] = await Promise.all([
+    d.from("products").select("id, title, brand, image_url, weight_g, dims_cm, updated_at").eq("asin", asin).order("updated_at", { ascending: false }).limit(5),
+    d.from("ads_products").select("title, image, weight_g, dims").eq("asin", asin).limit(1),
+  ]);
+  const ps = (prod.data ?? []) as { id: string; title: string | null; brand: string | null; image_url: string | null; weight_g: number | null; dims_cm: StockItem["dims_cm"] }[];
+  const p = ps.find((x) => x.title) ?? ps[0] ?? null;
+  const a = ((ads.data ?? []) as { title: string | null; image: string | null; weight_g: number | null; dims: StockItem["dims_cm"] }[])[0] ?? null;
+  return {
+    productId: p?.id ?? null, title: p?.title ?? a?.title ?? null, brand: p?.brand && p.brand !== "Unknown brand" ? p.brand : null,
+    image: ps.find((x) => x.image_url)?.image_url || a?.image || null,
+    weightG: p?.weight_g != null ? Number(p.weight_g) : a?.weight_g != null ? Number(a.weight_g) : null, dims: p?.dims_cm ?? a?.dims ?? null,
+  };
+}
+
+/**
+ * The stock item for an ASIN (a product-page purchase, an Ads product, a private-label listing):
+ * found by ASIN (an active one first; an archived one is restored), else made. Either way its empty
+ * fields are filled from the catalogue: title, image, brand, package size and weight, the catalogue
+ * product, and the purchase's supplier and cost. So a purchase from a product page and one from
+ * Stock make the same record.
+ */
+export async function ensureStockItemForAsin(asin: string, x: { name?: string | null; unitCost?: number | null; supplierId?: string | null; productId?: string | null }): Promise<StockItem> {
+  const d = db();
+  const all = (must(await d.from("stock_items").select(ITEM_COLS).eq("asin", asin), "item") as Record<string, unknown>[]).map(toItem);
+  const cat = await catalogueFor(asin);
+  const found = all.find((i) => !i.archived_at) ?? all[0] ?? null;
+  if (found) {
+    const fill: Record<string, unknown> = {};
+    if (!found.image_url && cat.image) fill.image_url = cat.image;
+    if (!found.brand && cat.brand) fill.brand = cat.brand;
+    if (found.weight_g == null && cat.weightG != null) fill.weight_g = cat.weightG;
+    if (!found.dims_cm && cat.dims) fill.dims_cm = cat.dims;
+    if (!found.product_id && (x.productId ?? cat.productId)) fill.product_id = x.productId ?? cat.productId;
+    if (!found.supplier_id && x.supplierId) fill.supplier_id = x.supplierId;
+    if (found.unit_cost == null && x.unitCost != null) fill.unit_cost = x.unitCost;
+    if (found.archived_at) fill.archived_at = null;
+    if (!Object.keys(fill).length) return found;
+    return toItem(must(await d.from("stock_items").update({ ...fill, updated_at: now() }).eq("id", found.id).select(ITEM_COLS).single(), "fill item") as Record<string, unknown>);
+  }
   const inv = (await d.from("amazon_inventory").select("sku").eq("asin", asin).limit(1)).data as { sku: string }[] | null;
   let sku = inv?.[0]?.sku?.toUpperCase() ?? asin;
   if ((must(await d.from("stock_items").select("id").eq("sku", sku), "sku") as unknown[]).length) sku = asin;
-  return toItem(must(await d.from("stock_items").insert({ sku, name: x.name.slice(0, 200), asin, unit_cost: x.unitCost ?? null }).select(ITEM_COLS).single(), "add item") as Record<string, unknown>);
+  return toItem(must(await d.from("stock_items").insert({
+    sku, name: (cat.title ?? x.name ?? asin).slice(0, 200), asin, unit_cost: x.unitCost ?? null, supplier_id: x.supplierId ?? null,
+    image_url: cat.image, brand: cat.brand, weight_g: cat.weightG, dims_cm: cat.dims, product_id: x.productId ?? cat.productId,
+  }).select(ITEM_COLS).single(), "add item") as Record<string, unknown>);
+}
+
+/**
+ * An item's image when it has an ASIN and none: the catalogue product or Ads product (free), then
+ * SP-API's catalogue (free), then Keepa (1 token) when `keepa` allows. Looked for once: an item
+ * nothing has a picture of isn't looked up again.
+ */
+export async function ensureItemImage(itemId: string, opts: { keepa?: boolean } = {}): Promise<{ image: string | null; source: string | null; tokensUsed: number }> {
+  const d = db();
+  const it = toItem(must(await d.from("stock_items").select(ITEM_COLS).eq("id", itemId).single(), "item") as Record<string, unknown>);
+  if (it.image_url) return { image: it.image_url, source: "item", tokensUsed: 0 };
+  if (!it.asin || it.image_checked_at) return { image: null, source: null, tokensUsed: 0 };
+  let image: string | null = (await catalogueFor(it.asin)).image, source: string | null = image ? "catalogue" : null, tokensUsed = 0;
+  if (!image) {
+    const spapi = getSpApi();
+    if (spapi) { try { image = (await spapi.imagesByAsins([it.asin])).get(it.asin) || null; if (image) source = "SP-API"; } catch { /* free source failed: try Keepa */ } }
+  }
+  if (!image && opts.keepa !== false) {
+    const keepa = getKeepa();
+    if (keepa.available) {
+      const r = await keepa.lookupByAsins([it.asin], undefined, { buyBox: false });
+      tokensUsed = r.tokensUsed;
+      image = r.byAsin.get(it.asin)?.imageUrl ?? null;
+      if (image) source = "Keepa";
+    }
+  }
+  must(await d.from("stock_items").update({ image_checked_at: now(), ...(image ? { image_url: image } : {}) }).eq("id", itemId), "item image");
+  return { image, source, tokensUsed };
 }
 
 /* ===================== movements ===================== */

@@ -22,7 +22,9 @@ The prediction is frozen then, from the product's latest screening: sell price, 
 
 Each purchase has a status: **Ordered** → **Received** → **Sent to Amazon** → **Live** → **Closed** (sold out or written off). Change it on the product's page; the date each status was reached is kept.
 
-**Order** on a purchase (on the Tracker and on the product's page) holds the supplier's side: the **order id** and **order link** (shown as a link on the row), the order and **expected** dates, the **carrier** and **tracking number**, and the **currency** with its rate and unit price when not GBP, plus notes. Receiving a stock purchase carries the order number onto the Stock receipt. **Record a stock order** records an order of a stock item: see [Stock: orders](/help/pages/stock#orders-from-ordered-to-received).
+Every purchase belongs to a [stock item](/help/pages/stock#every-purchase-belongs-to-a-stock-item): recording one on a product page finds the item by ASIN, or makes it from the catalogue (title, image, brand, package data, supplier). The Tracker and the product page show each purchase's title and image from its stock item (the catalogue product for older rows), and **Stock →** opens the item.
+
+**Edit** on a purchase (on the Tracker, the product's page, Stock → Orders and the item's drawer: the same record everywhere) changes the item, supplier, quantity, unit cost and the supplier's side: the **order id** and **order link** (shown as a link on the row), the order and **expected** dates, the **carrier** and **tracking number**, and the **currency** with its rate and unit price when not GBP, plus notes. Receiving a stock purchase carries the order number onto the Stock receipt, and an edit after that changes the receipt too. **Delete** is offered while a purchase is still Ordered. **Record a stock order** records an order of a stock item: see [Stock: orders](/help/pages/stock#orders-from-ordered-to-received).
 
 ## The Tracker page
 
