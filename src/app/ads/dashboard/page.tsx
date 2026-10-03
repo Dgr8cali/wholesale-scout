@@ -18,12 +18,19 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { TERM_STATUS_LABEL, type Ratios, type TermStatus, type Totals } from "@/lib/ads/metrics";
 import { api } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
+import { KeywordBankPanel } from "@/components/ads/KeywordBank";
 
 interface Economics {
   price: number; fees: number | null; landed: number | null; priceSource: "manual" | "keepa" | "ads" | null; referralCategory: string;
   referral: number | null; fba: number | null; storage: number | null; returns: number | null; sizeKnown: boolean; margin: number | null; breakEvenAcos: number | null; needs: string[];
 }
-interface AsinRow { asin: string; title: string | null; campaigns: number; totals: Totals; ratios: Ratios; economics: Economics; phase: "launch" | "steady"; targetAcos: number; profitAfterAds: number | null; from: string | null; to: string | null }
+interface Insights {
+  period: string; tacos: number | null; organicShare: number | null; share30: { value: number; period: string } | null; reviews: number | null; suggestTacos: boolean;
+  split: { adUnits: number; totalUnits: number | null; adSales: number; totalSales: number | null };
+  breakEvenTacos: number | null; optimise: "acos" | "tacos"; targetTacos: number | null; acosForTacos: { acos: number; adShare: number | null; capped: boolean } | null;
+  health: { status: "ok" | "problem" | "not enough data"; message: string; problems: string[] };
+}
+interface AsinRow { asin: string; title: string | null; campaigns: number; totals: Totals; ratios: Ratios; economics: Economics; phase: "launch" | "steady"; targetAcos: number; profitAfterAds: number | null; from: string | null; to: string | null; insights?: Insights }
 interface CampaignRow {
   id: string; name: string; state: string | null; targeting: string | null; asin: string | null; asin_source: string | null;
   totals: Totals | null; ratios: Ratios | null; source: string | null; from: string | null; to: string | null; breakEvenAcos: number | null; targetAcos: number; profitAfterAds: number | null;
@@ -111,7 +118,9 @@ function Dashboard({ d, load }: { d: Dash; load: () => void }) {
         <ProductSection key={a.asin} asin={a.asin} look={d.looks?.[a.asin]} stock={d.stock[a.asin]} plan={d.plans.find((p) => p.asin === a.asin)} onSaved={load}
           sub={`${a.campaigns} campaign${a.campaigns === 1 ? "" : "s"} · ${day(a.from)} – ${day(a.to)} · ${a.phase} · target ACoS ${pct(a.targetAcos, 0)}`}>
           <AsinTile a={a} onSaved={load} />
+          {a.insights && <ListingHealth h={a.insights.health} />}
           <ExplainPanel asin={a.asin} />
+          <KeywordBankPanel asin={a.asin} />
           <CampaignTable rows={d.campaigns.filter((c) => c.asin === a.asin)} onSaved={load} />
           <KeywordTable rows={d.keywords.filter((k) => k.asin === a.asin)} />
           <TermTable rows={d.terms.filter((t) => t.asin === a.asin)} campaigns={d.campaigns.filter((c) => c.asin === a.asin)} />
@@ -353,7 +362,14 @@ function AsinTile({ a, onSaved }: { a: AsinRow; onSaved: () => void }) {
         <Metric label="Conversion" value={pct(r.conversion)} sub="orders ÷ clicks" />
         <Metric label="CTR" value={pct(r.ctr, 2)} sub={`${n0(t.clicks)} clicks of ${n0(t.impressions)}`} />
         <Metric label="Fees a unit" value={gbp(e.fees)} sub={e.fees == null ? "needs the size" : `referral ${gbp(e.referral)}, FBA ${gbp(e.fba)}, storage ${gbp(e.storage)}, returns ${gbp(e.returns)}`} />
+        {a.insights && <Metric label="Organic share" value={pct(a.insights.organicShare, 0)} sub={a.insights.organicShare == null ? "needs Amazon's orders for the period" : `of ${n0(a.insights.split.totalUnits)} units sold · TACoS ${pct(a.insights.tacos)}`} />}
       </div>
+      {a.insights?.optimise === "tacos" && a.insights.acosForTacos && (
+        <p className="text-xs text-muted-foreground">TACoS mode: target TACoS {pct(a.insights.targetTacos, 0)}{a.insights.acosForTacos.adShare ? ` ÷ ${pct(a.insights.acosForTacos.adShare, 0)} ad share of sales = ${pct(a.insights.acosForTacos.acos, 0)} ACoS allowed${a.insights.acosForTacos.capped ? " (capped at 100%)" : ""}` : " (no sales split yet: used as the ACoS target)"}. The bid rules use it.</p>
+      )}
+      {a.insights?.suggestTacos && (
+        <p className="rounded-md bg-brand-soft/50 px-3 py-1.5 text-xs">Organic sales are {pct(a.insights.share30?.value ?? null, 0)} of units ({a.insights.share30?.period}) with {a.insights.reviews} reviews: consider <b>TACoS mode</b> (Price, costs and target), so the ads are judged on all sales, not only their own.</p>
+      )}
       <button type="button" className="flex items-center gap-1 text-xs font-medium text-brand hover:underline" onClick={() => setOpen((v) => !v)}>
         <ChevronRightIcon className={cn("size-3.5 transition-transform", open && "rotate-90")} /> Price, costs and target
       </button>
@@ -364,16 +380,18 @@ function AsinTile({ a, onSaved }: { a: AsinRow; onSaved: () => void }) {
 
 function EconEditor({ a, onSaved }: { a: AsinRow; onSaved: () => void }) {
   const e = a.economics;
+  const ins = a.insights;
   const [f, setF] = useState({
     price: e.priceSource === "manual" ? String(e.price) : "", landed: e.landed != null ? String(e.landed) : "", fba: "",
     weight: "", l: "", w: "", h: "", phase: a.phase, launch: "", steady: "",
+    optimise: ins?.optimise ?? "acos", tacos: ins?.optimise === "tacos" && ins.targetTacos != null && ins.targetTacos !== ins.breakEvenTacos ? String(Math.round(ins.targetTacos * 1000) / 10) : "",
   });
   const [busy, setBusy] = useState<string | null>(null);
   const num = (s: string) => (s.trim() === "" ? null : Number(s));
   const save = async () => {
     setBusy("save");
     try {
-      const product: Record<string, unknown> = { price: num(f.price), landed_cost: num(f.landed), phase: f.phase };
+      const product: Record<string, unknown> = { price: num(f.price), landed_cost: num(f.landed), phase: f.phase, optimise: f.optimise, target_tacos: num(f.tacos) };
       if (f.fba.trim()) product.fba_fee = num(f.fba);
       if (f.weight.trim()) product.weight_g = num(f.weight);
       if (f.l && f.w && f.h) product.dims = { l: Number(f.l), w: Number(f.w), h: Number(f.h) };
@@ -427,6 +445,18 @@ function EconEditor({ a, onSaved }: { a: AsinRow; onSaved: () => void }) {
         </label>
         {field("launch", "Target ACoS, launch (%)", undefined, "Blank: Settings → Ads")}
         {field("steady", "Target ACoS, steady (%)", undefined, "Blank: Settings → Ads")}
+      </div>
+      <div className="grid gap-3 rounded-md bg-surface-2 p-3 sm:grid-cols-[12rem_12rem_1fr]">
+        <label className="space-y-1">
+          <span className="field-label">Optimise for</span>
+          <NativeSelect className="w-full" value={f.optimise} onChange={(ev) => setF({ ...f, optimise: ev.target.value as "acos" | "tacos" })}>
+            <NativeSelectOption value="acos">ACoS (default)</NativeSelectOption><NativeSelectOption value="tacos">TACoS</NativeSelectOption>
+          </NativeSelect>
+        </label>
+        {f.optimise === "tacos" ? field("tacos", "Target TACoS (%)", ins?.breakEvenTacos != null ? (ins.breakEvenTacos * 100).toFixed(1) : undefined, `Blank: break-even TACoS ${pct(ins?.breakEvenTacos ?? null)}`) : <span />}
+        <p className="text-xs text-muted-foreground">
+          <b>TACoS</b> = ad spend ÷ all sales (ads and organic){ins?.tacos != null ? `: ${pct(ins.tacos)} ${ins.period}` : ""}. Break-even TACoS = margin ÷ price{ins?.breakEvenTacos != null ? ` = ${pct(ins.breakEvenTacos)}` : ""}: the ads may take the whole margin of every unit sold, organic + ad{ins?.split.totalUnits != null ? ` (${n0(ins.split.totalUnits)} units, ${n0(ins.split.adUnits)} from ads)` : ""}, not only the ad-attributed ones. In TACoS mode the bid rules compare with the ACoS the target TACoS allows (target TACoS ÷ the ad share of sales), Ranked eases off 25% instead of 20%, and their reasons say &ldquo;TACoS mode&rdquo;. Worth it once organic sales carry the product (over half for 30 days, 30+ reviews).
+        </p>
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <Button size="sm" onClick={save} disabled={!!busy}>{busy === "save" && <LoaderIcon className="animate-spin" />} Save</Button>
@@ -657,5 +687,14 @@ function KeywordTable({ rows }: { rows: KeywordRow[] }) {
       </div>
       <p className="text-xs text-muted-foreground">Organic rank comes from the extension&apos;s manual rank checks (Help: Ads: rank checks).</p>
     </section>
+  );
+}
+
+/** Listing health: the ad CTR and CVR against the niche; poor, and the listing (not the bids) needs work. */
+function ListingHealth({ h }: { h: Insights["health"] }) {
+  return (
+    <p className={cn("rounded-md px-3 py-1.5 text-xs", h.status === "problem" ? "bg-warn-soft text-warn" : "bg-surface-2 text-muted-foreground")}>
+      <b className={h.status === "problem" ? "" : "text-foreground"}>Listing health:</b> {h.message}{h.status === "problem" ? " Bid up proposals are held back for this product meanwhile." : ""}
+    </p>
   );
 }

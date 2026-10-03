@@ -5,11 +5,11 @@ import type { RuleConfig } from "@/lib/ads/rules";
 
 export const GET = handle(async () => Response.json({ config: await rulesConfig() }));
 
-/** { rule, enabled?, mode?, thresholds? }: one rule's settings. */
+/** { rule, enabled?, mode?, thresholds?, lookbackDays? }: one rule's settings. */
 export const PUT = handle(async (req: NextRequest) => {
   const b = (await req.json().catch(() => ({}))) as { rule?: string } & Partial<RuleConfig>;
   try {
-    return Response.json({ config: await saveRule(String(b.rule ?? ""), { enabled: b.enabled, mode: b.mode, thresholds: b.thresholds }) });
+    return Response.json({ config: await saveRule(String(b.rule ?? ""), { enabled: b.enabled, mode: b.mode, thresholds: b.thresholds, ...(b.lookbackDays !== undefined ? { lookbackDays: b.lookbackDays } : {}) }) });
   } catch (e) {
     return Response.json({ error: (e as Error).message }, { status: 400 });
   }

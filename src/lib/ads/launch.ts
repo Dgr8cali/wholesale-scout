@@ -19,6 +19,8 @@ export interface LaunchInput {
   startingBid: number;
   /** yyyy-mm-dd. */
   startDate: string;
+  /** The product's blacklist: negative phrases in every new campaign. */
+  negatives?: string[];
 }
 
 export interface LaunchCampaign { name: string; kind: "Auto" | "Broad" | "Exact" | "PT"; budget: number; bid: number; share: number; targets: string[] }
@@ -36,9 +38,10 @@ const clean = (xs: string[]) => [...new Set(xs.map((x) => x.trim().toLowerCase()
 
 export function buildLaunch(i: LaunchInput): Launch {
   const warnings: string[] = [];
-  const terms = clean(i.headTerms);
+  const terms = clean(i.headTerms).filter((t) => !clean(i.negatives ?? []).some((n) => ` ${t} `.includes(` ${n} `)));
+  const allTerms = clean(i.headTerms);
   const asins = [...new Set(i.competitorAsins.map((a) => a.trim().toUpperCase()).filter((a) => /^[A-Z0-9]{10}$/.test(a) && a !== i.asin))];
-  if (!terms.length) warnings.push("No head terms: the Broad and Exact campaigns are left out");
+  if (!terms.length) warnings.push(allTerms.length ? "Every head term is on the blacklist: the Broad and Exact campaigns are left out" : "No head terms: the Broad and Exact campaigns are left out");
   if (!asins.length) warnings.push("No competitor ASINs: the product-targeting campaign is left out");
   if (!i.sku.trim()) warnings.push("No SKU: the product ad rows need the SKU Amazon knows the product by");
   const kinds = (["Auto", "Broad", "Exact", "PT"] as const).filter((k) => (k === "Broad" || k === "Exact" ? terms.length > 0 : k === "PT" ? asins.length > 0 : true));
@@ -51,7 +54,11 @@ export function buildLaunch(i: LaunchInput): Launch {
     targets: k === "PT" ? asins : k === "Auto" ? ["close-match", "substitutes"] : terms,
   }));
   if (campaigns.some((c) => c.budget === 1 && c.share * i.dailyBudget < 1)) warnings.push("A campaign's share is under Amazon's £1 a day minimum: raised to £1");
-  const base = { kind: "create_campaign" as const, biddingStrategy: LAUNCH_STRATEGY, startDate: i.startDate, sku: i.sku.trim(), placements: [{ placement: "top", percentage: 0 }] };
+  const negatives = clean(i.negatives ?? []).map((text) => ({ text, matchType: "Negative phrase" as const }));
+  // A blacklisted head term would be negated in its own campaign: leave it out, and say so.
+  const blocked = allTerms.filter((t) => negatives.some((n) => ` ${t} `.includes(` ${n.text} `)));
+  if (blocked.length) warnings.push(`On the blacklist, so left out of Broad and Exact: ${blocked.map((t) => `"${t}"`).join(", ")}`);
+  const base = { kind: "create_campaign" as const, biddingStrategy: LAUNCH_STRATEGY, startDate: i.startDate, sku: i.sku.trim(), placements: [{ placement: "top", percentage: 0 }], ...(negatives.length ? { negatives } : {}) };
   const changes: BulkChange[] = campaigns.map((c) => {
     const common = { ...base, name: c.name, dailyBudget: c.budget, adGroupName: `${c.kind} ad group`, defaultBid: c.bid };
     switch (c.kind) {

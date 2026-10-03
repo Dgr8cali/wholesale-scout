@@ -1,8 +1,8 @@
 # Wholesale Scout: status
 
 Read this first in a new session. Keep it current: every commit that changes a feature updates
-it (what's built, the backlog, the rough edges). Last updated: 3 Oct 2026 (purchases unified with stock items;
-Stock → Orders).
+it (what's built, the backlog, the rough edges). Last updated: 3 Oct 2026 (Ads Phase 5: smoothed conversion, keyword
+lists, per-rule windows, TACoS mode, listing health, keyword bank).
 
 Wholesale Scout is a single-user Amazon UK seller's workbench: Next.js 16 (App Router, `proxy.ts`
 password gate), Supabase (Postgres, RLS on, service-role access from the server only), Vercel
@@ -52,7 +52,15 @@ bottom. Thirteen rules (harvest, negatives, bids, pause, placement, budget, revi
 negative/winner, stock guard, ranked, slipping) raise proposals to approve, skip or snooze; the
 approved export as a bulk sheet in Amazon's own column order, as batches that can be reverted,
 with snapshots to restore. Also: n-grams, the launcher (Auto/Broad/Exact/PT Create sheet and a
-60-day plan), extension rank checks. The AI research layer (Claude, on your click only): Explain this product (a cited
+60-day plan), extension rank checks. Phase 5: bids use a smoothed conversion ((orders + k × product's) ÷ (clicks
++ k), k = 20 in Settings → Ads), shown raw and smoothed in every reason (Bid down, Bid up's ceiling,
+Harvest's cap, the launcher's starting bid); each rule has its own lookback window (7/14/30/60 days);
+whitelist and blacklist (account and per product: never negatived/paused; negative phrases in new
+campaigns and proposed for broad/auto ones); TACoS mode per product (target TACoS → the ACoS it
+allows, Ranked −25%, organic share on the tile, a switch suggestion); listing health (ad CTR/CVR vs
+the niche; holds Bid up back when poor); the keyword bank (Ads → Keywords and per product: POE,
+harvested, n-gram winners, rank-tracked and manual terms; Add as exact / negative queue approved
+proposals; feeds the launcher's head terms). The AI research layer (Claude, on your click only): Explain this product (a cited
 narrative per product), Recommend targets (launch and steady ACoS, Apply writes them) and the
 monthly review on Ads → Review (per product, account-wide, did applied batches work, three ranked
 recommendations mapped to rules; optional schedule on the 1st, off by default). Every call is
@@ -118,6 +126,9 @@ StockPilot data is imported (3 items). Ads days of cover and the stock guard cou
 - **Stock audit** records "you" as the actor: the app has one user behind the password gate, so it doesn't tell people apart.
 - **Order currency**: the landed cost per unit is kept in £; editing an order's price in another currency or its rate re-works the £ (and its receipt's unit cost).
 - **Ordered stock shows as "out" on Levels** until it's received (e.g. the Biotene and Lifeproof items made from their product-page purchases).
+- **Rule windows on range data**: search terms and keywords come in import ranges, not days, so a window shorter than an import counts that import in full (the rule says so). Exact windows need imports of about the window's length, or the Ads API.
+- **The launcher's smoothed starting bid** (target × price × the product's conversion: £0.18 for the pill box) is well under its £0.55 CPC; new campaigns may get few impressions at first. Raise it on the launch form if so.
+- **The pill box's keyword bank is thin** (1 harvested term): it has no linked private-label candidate (no Opportunity Explorer terms) and no rank checks yet.
 - **SP-API roles** (Brand Analytics, Finance): see above.
 
 ## Conventions for every session

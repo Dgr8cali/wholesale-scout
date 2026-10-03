@@ -1,7 +1,7 @@
 ---
 title: "Ads: rules and proposals"
 summary: The thirteen Ads rules, how proposals are raised, approved, skipped and snoozed, and how to export the approved changes as a bulk sheet and upload it in Amazon Ads.
-synonyms: [ads rules, proposals, n-gram, ngram, stock guard, days of cover, inventory, organic rank, revert, rollback, snapshot, restore, harvest, negative keywords, negative exact, negative phrase, bid down, bid up, pause keyword, placement adjustment, budget, revive, bulk sheet, bulk upload, bulk operations, approve, snooze]
+synonyms: [ads rules, proposals, smoothed conversion, smoothing, bayesian, lookback, window, whitelist, blacklist, keyword lists, listing health, tacos mode, n-gram, ngram, stock guard, days of cover, inventory, organic rank, revert, rollback, snapshot, restore, harvest, negative keywords, negative exact, negative phrase, bid down, bid up, pause keyword, placement adjustment, budget, revive, bulk sheet, bulk upload, bulk operations, approve, snooze]
 workspace: ads
 order: 2
 ---
@@ -9,12 +9,20 @@ order: 2
 
 ## The rules
 
-Each product's **target ACoS** is its own (launch or steady, on the dashboard), else Settings → Ads (30%). Its **price** is the one the dashboard uses. Every threshold below is a default you can change on **Ads → Rules**.
+Each product's **target ACoS** is its own (launch or steady, on the dashboard), else Settings → Ads (30%); in [TACoS mode](/help/howto/ads-tacos-mode) it's the ACoS the product's target TACoS allows, and the reasons say "TACoS mode". Its **price** is the one the dashboard uses. Every threshold below is a default you can change on **Ads → Rules**, and every proposal's reason gives the figures it used.
 
-1. **Harvest.** A search term with 2+ orders at or under the target ACoS, found by an auto, broad or phrase target, becomes an exact keyword in the product's Exact campaign (bid = the term's CPC × 1.1, capped at target ACoS × price × conversion), plus a negative exact where it was found. With no Exact campaign, it proposes creating one.
+**Smoothed conversion.** A keyword's own conversion is noisy on few clicks: 3 orders from 12 clicks reads as 25%. So the bids use a smoothed one: (orders + k × the product's conversion) ÷ (clicks + k), with k = 20 clicks (Settings → Ads → Conversion smoothing; 0 turns it off). The product's conversion is over the latest import, else the account's, else 7%. A keyword with lots of clicks keeps close to its own figure; one with few is pulled towards the product's. Bid down, Bid up's ceiling, Harvest's bid cap and the launcher's starting bid use it, and each reason shows both: "3 orders / 18 clicks raw 17%, smoothed 11% (towards the product's 6.7%)".
+
+**Each rule's window.** On Ads → Rules every rule has **Looks back over** 7, 14, 30 or 60 days (defaults: Harvest, Negative, Bid down, Pause, Placement and the n-gram rules 60; Ranked 30; Bid up, Revive and Slipping 14; Budget 7), ending at the latest import. Search terms count only the imports that reach into the window; one that starts before it counts in full (a range can't be split into days) and the rule says so: import a search term report of just those days for an exact window. Keywords, targets and placements carry the latest bulk export's range: a rule whose window is shorter says so too. Daily rows and rank checks are counted inside the window. The dry run uses each rule's window. Bid up still compares impressions week on week.
+
+**Keyword lists.** Settings → Ads → **Keyword lists** has a **whitelist** (terms never negatived or paused: your brand, the product's exact head terms) and a **blacklist** (words never right for the product, like "free", "used", "replacement"), for the whole account and per product (a product's add to the account's, or replace them when "Also use the account's lists" is off). Negative, N-gram negative, Pause and Harvest's negative skip anything touching a whitelisted term, and **What the rules couldn't check** says so ("is on the whitelist: never negatived"). The blacklist is added as negative phrases to every new campaign (the launcher's, and Harvest's new Exact campaign), and proposed (under Negative) as campaign-level negative phrases for the product's broad and auto campaigns that lack them.
+
+**Listing health** (on each product on the dashboard) compares the product's ad CTR and conversion with its niche. While it says the listing is the problem, **Bid up** is held back for the product, and its note says why. See [Ads: TACoS mode](/help/howto/ads-tacos-mode#listing-health).
+
+1. **Harvest.** A search term with 2+ orders at or under the target ACoS, found by an auto, broad or phrase target, becomes an exact keyword in the product's Exact campaign (bid = the term's CPC × 1.1, capped at target ACoS × price × smoothed conversion), plus a negative exact where it was found. With no Exact campaign, it proposes creating one.
 2. **Negative.** A search term with 15+ clicks and no order, or no order after spending half the price, becomes a negative exact in its campaign. (Words that waste money across several terms are Rule 9's.)
-3. **Bid down.** A keyword or target with 10+ clicks and ACoS over 1.2 × the target gets the bid that would hit the target: target ACoS × price × its conversion rate, at least £0.10.
-4. **Bid up.** A keyword under 0.7 × the target with 2+ orders, in a campaign out of budget on 3 of the last 7 days or with impressions down 10%+ week on week (daily Campaign report), gets +15%, up to £1.50.
+3. **Bid down.** A keyword or target with 10+ clicks and ACoS over 1.2 × the target gets the bid that would hit the target: target ACoS × price × its smoothed conversion, at least £0.10.
+4. **Bid up.** A keyword under 0.7 × the target with 2+ orders, in a campaign out of budget on 3 of the last 7 days or with impressions down 10%+ week on week (daily Campaign report), gets +15%, up to £1.50 and never over the bid for the target at its smoothed conversion. Held back while the product's listing health is poor.
 5. **Pause.** A keyword with 25+ clicks and no order is paused.
 6. **Placement.** A placement with 10+ clicks whose ACoS is 25%+ better than its campaign's, and itself no more than 1.2 × the target, gets +20 points of bid adjustment (up to 100%); one 25%+ worse than its campaign gets −20 (down to 0), whatever the target.
 7. **Budget.** A campaign out of budget on 3 of the last 7 days at or under the target gets +20% budget; over 1.5 × the target for 14 days, −25%.
@@ -22,12 +30,12 @@ Each product's **target ACoS** is its own (launch or steady, on the dashboard), 
 9. **N-gram negative.** A word or word pair with 20+ clicks (or the product's price spent) and no order, in 3+ distinct search terms and in none with an order, becomes a negative phrase in every ad group where it has served for that product. See [N-grams](#n-grams).
 10. **N-gram winner.** A word or word pair with 5+ orders at or under the target across 3+ terms puts its top 5 terms forward for harvest (as Rule 1 would), even when each term alone is under the harvest threshold.
 11. **Stock guard.** Under 10 days of FBA cover, the product's campaigns get budget −50% and bids −30%; under 3 days they're paused; back over 21 days, the values from before the guard are restored. See [Stock guard](#stock-guard).
-12. **Ranked — ease off.** A keyword whose organic position was 8 or better on the last 3 rank checks gets bid −20%: the ad pays for a slot the listing already holds. See [Ads: rank checks](/help/howto/ads-rank-checks).
+12. **Ranked — ease off.** A keyword whose organic position was 8 or better on the last 3 rank checks gets bid −20% (−25% in TACoS mode): the ad pays for a slot the listing already holds. See [Ads: rank checks](/help/howto/ads-rank-checks).
 13. **Slipping.** A keyword whose organic position fell 10+ places between the last two rank checks, while its ads sell under the target ACoS, gets bid +10%.
 
 When two rules want to change the same keyword's bid, one wins: pause, then bid down, ranked, slipping, bid up, revive. A campaign under the stock guard gets only the guard's changes (and negatives and harvests) until stock recovers. During a product's [launch](/help/howto/ads-launching-a-product) weeks 1–2, only harvests and negatives are proposed.
 
-**What the bulk export can't tell.** It has totals for one range: nothing day by day. **Bid up**, **Budget** and **Revive** read the **daily Campaign report** as well. Negative and Pause use the latest bulk export's range as the "last 60 days"; export about 60 days for them.
+**What the bulk export can't tell.** It has totals for one range: nothing day by day. **Bid up**, **Budget** and **Revive** read the **daily Campaign report** as well. A rule whose window is shorter than the bulk export's range says so: export about as many days as the window for it.
 
 ### The daily reports (for Bid up, Budget and Revive)
 
@@ -35,7 +43,7 @@ In Amazon Ads: **Measurement & reporting → Sponsored ads reports → Create re
 
 From the daily rows the rules work out:
 
-- **Days out of budget**: days in the last 7 when the spend reached 95% of the campaign's daily budget.
+- **Days out of budget**: days in the rule's window (Budget 7, Bid up 14 by default) when the spend reached 95% of the campaign's daily budget.
 - **7- and 14-day windows**: spend, sales and ACoS over the last week and the last two weeks.
 - **The impressions trend**: impressions over the last 7 days against the 7 before.
 

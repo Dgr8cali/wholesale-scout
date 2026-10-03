@@ -14,20 +14,20 @@ import { Skeleton } from "@/components/ui/skeleton";
 import type { LaunchCampaign, PlanStep } from "@/lib/ads/launch";
 import { api } from "@/lib/ui/client";
 
-interface Defaults { asin: string | null; title: string | null; sku: string; price: number | null; headTerms: string[]; competitorAsins: string[]; dailyBudget: number; targetAcos: number; steadyTargetAcos: number | null; startingBid: number; startDate: string; notes: string[] }
+interface Defaults { asin: string | null; title: string | null; sku: string; price: number | null; headTerms: string[]; competitorAsins: string[]; dailyBudget: number; targetAcos: number; steadyTargetAcos: number | null; startingBid: number; startDate: string; notes: string[]; negatives?: string[] }
 interface Picker { defaults: Defaults; products: { asin: string; title: string | null }[]; candidates: { id: string; name: string }[] }
 interface Preview { campaigns: LaunchCampaign[]; plan: PlanStep[]; warnings: string[]; describe: string[]; rows: number }
 
-interface Form { asin: string; sku: string; price: string; headTerms: string; competitorAsins: string; dailyBudget: string; targetAcos: string; steadyTargetAcos: string; startingBid: string; startDate: string }
+interface Form { asin: string; sku: string; price: string; headTerms: string; competitorAsins: string; dailyBudget: string; targetAcos: string; steadyTargetAcos: string; startingBid: string; startDate: string; negatives: string }
 const toForm = (d: Defaults): Form => ({
   asin: d.asin ?? "", sku: d.sku, price: d.price != null ? String(d.price) : "", headTerms: d.headTerms.join("\n"), competitorAsins: d.competitorAsins.join("\n"),
   dailyBudget: String(d.dailyBudget), targetAcos: String(Math.round(d.targetAcos * 100)), steadyTargetAcos: d.steadyTargetAcos != null ? String(Math.round(d.steadyTargetAcos * 100)) : "",
-  startingBid: d.startingBid.toFixed(2), startDate: d.startDate,
+  startingBid: d.startingBid.toFixed(2), startDate: d.startDate, negatives: (d.negatives ?? []).join("\n"),
 });
 const toInput = (f: Form) => ({
   asin: f.asin.trim().toUpperCase(), sku: f.sku.trim(), price: Number(f.price), headTerms: f.headTerms.split(/\n|,/), competitorAsins: f.competitorAsins.split(/[\s,]+/),
   dailyBudget: Number(f.dailyBudget), targetAcos: Number(f.targetAcos) / 100, steadyTargetAcos: f.steadyTargetAcos ? Number(f.steadyTargetAcos) / 100 : null,
-  startingBid: Number(f.startingBid), startDate: f.startDate,
+  startingBid: Number(f.startingBid), startDate: f.startDate, negatives: f.negatives.split(/\n|,/),
 });
 const day = (d: string) => new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 
@@ -106,13 +106,15 @@ export default function AdsLaunchPage() {
             {field("dailyBudget", "Daily budget, all four (£)", "From a candidate: Gate 7 launch ads ÷ 60", { type: "number", step: "0.5" })}
             {field("targetAcos", "Launch target ACoS (%)", undefined, { type: "number" })}
             {field("steadyTargetAcos", "Steady target ACoS (%)", "For week 8 (optional)", { type: "number" })}
-            {field("startingBid", "Starting bid (£)", "Settings → Ads CPC × 0.8", { type: "number", step: "0.01" })}
+            {field("startingBid", "Starting bid (£)", "Target × price × smoothed conversion (see the notes)", { type: "number", step: "0.01" })}
             {field("startDate", "Start date", undefined, { type: "date" })}
           </div>
           <label className="block space-y-1"><span className="field-label">Head terms, one a line</span>
             <textarea className="min-h-28 w-full rounded-md border bg-transparent px-2 py-1.5 text-sm" value={form.headTerms} onChange={set("headTerms")} placeholder="From a candidate: Gate 5's top 8 search terms by volume" /></label>
           <label className="block space-y-1"><span className="field-label">Competitor ASINs</span>
             <textarea className="min-h-16 w-full rounded-md border bg-transparent px-2 py-1.5 font-mono text-xs" value={form.competitorAsins} onChange={set("competitorAsins")} placeholder="From a candidate: its page-one list" /></label>
+          <label className="block space-y-1"><span className="field-label">Negative phrases in every campaign (the blacklist)</span>
+            <textarea className="min-h-16 w-full rounded-md border bg-transparent px-2 py-1.5 text-sm" value={form.negatives} onChange={set("negatives")} placeholder="From Settings → Ads → Keyword lists and the product's own" /></label>
         </section>
         <section className="space-y-3">
           {!preview ? <p className="panel p-4 text-sm text-muted-foreground">Fill in the ASIN, price, budget, target and bid to see the campaigns.</p> : (

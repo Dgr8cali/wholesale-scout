@@ -3,7 +3,9 @@ import { bulkRows, describeChange, type BulkChange } from "../ads/bulk";
 import { buildLaunch, type LaunchInput } from "../ads/launch";
 import { diffSnapshot, restoresFor, revertChanges, takeSnapshot, type EntityState, type Snapshot } from "../ads/snapshot";
 import { SpApiError, getSpApi } from "../spapi/client";
-import { adsSettings, saveAdsProduct } from "./ads";
+import { priorConversion } from "../ads/smooth";
+import { adsDashboard, adsSettings, saveAdsProduct } from "./ads";
+import { keywordBank, listsByAsin } from "./adsKeywords";
 import { stockByAsinAllBuckets } from "./stock";
 import { syncStock } from "./amazonSync";
 import { chunks, db, must } from "./db";
@@ -293,9 +295,33 @@ export async function launchDefaults(opts: { asin?: string | null; candidateId?:
     if (sku) notes.push(`SKU ${sku} is the one Amazon has for ${asin}: change it if this launch is a different listing (a new pack size has its own SKU)`);
   }
   const start = new Date(Date.now() + DAY).toLocaleDateString("en-CA", { timeZone: "Europe/London" });
+  // The product's own lists and keyword bank: the blacklist goes in as negative phrases, and the bank
+  // fills the head terms when the candidate gave none.
+  let negatives: string[] = [];
+  if (asin) {
+    negatives = (await listsByAsin([asin]))[asin]?.blacklist ?? [];
+    if (!headTerms.length) {
+      const bank = await keywordBank(asin).catch(() => null);
+      if (bank?.headTerms.length) { headTerms = bank.headTerms; notes.push(`Head terms from the keyword bank (${bank.rows.length} terms): Opportunity Explorer's biggest, then what sells, then yours`); }
+    }
+  }
+  // Starting bid: the target ACoS × price × the smoothed conversion. A new launch has no clicks, so
+  // that's the prior: the product's conversion, else the account's, else 7%.
+  let startingBid = Math.round(settings.cpc * 0.8 * 100) / 100;
+  const dash = await adsDashboard();
+  const mine = asin ? dash.asins.find((x) => x.asin === asin) : null;
+  // No price typed: the dashboard's (Keepa's Buy Box, else the ads' average sale price).
+  if (price == null && mine?.economics.priceSource) price = mine.economics.price;
+  if (price) {
+    const acct = dash.asins.reduce((s, x) => ({ clicks: s.clicks + x.totals.clicks, orders: s.orders + x.totals.orders }), { clicks: 0, orders: 0 });
+    const prior = priorConversion(mine ? { clicks: mine.totals.clicks, orders: mine.totals.orders } : null, acct, settings.smoothingK);
+    const bid = Math.max(0.1, Math.round(targetAcos * price * prior.value * 100) / 100);
+    notes.push(`Starting bid £${bid.toFixed(2)} = ${Math.round(targetAcos * 100)}% target × £${price.toFixed(2)} × ${(prior.value * 100).toFixed(1)}% conversion (${prior.source === "product" ? "the product's" : prior.source === "account" ? "the account's" : "the 7% default: no clicks yet"}, which smoothing starts every keyword from). Settings → Ads CPC × 0.8 would be £${startingBid.toFixed(2)}`);
+    startingBid = bid;
+  }
   return {
     asin, title, sku, price, headTerms, competitorAsins, dailyBudget: dailyBudget ?? 10, targetAcos, steadyTargetAcos: steady,
-    startingBid: Math.round(settings.cpc * 0.8 * 100) / 100, startDate: start, notes,
+    startingBid, startDate: start, notes, negatives,
   };
 }
 

@@ -32,7 +32,7 @@ describe("workspaces", () => {
     ]);
     expect(workspace("stock").nav.map((n) => n.href)).toEqual(["/stock/levels", "/stock/movements", "/stock/sales", "/stock/orders", "/stock/reorder", "/stock/import"]);
     expect(workspace("pl").nav.map((n) => [n.href, n.soon ?? false])).toEqual([["/pl/candidates", false], ["/pl/niche-hunt", false], ["/pl/quotes", false], ["/pl/launch", false]]);
-    expect(workspace("ads").nav.map((n) => n.href)).toEqual(["/ads/dashboard", "/ads/imports", "/ads/rules", "/ads/proposals", "/ads/ngrams", "/ads/launch", "/ads/review"]);
+    expect(workspace("ads").nav.map((n) => n.href)).toEqual(["/ads/dashboard", "/ads/imports", "/ads/rules", "/ads/proposals", "/ads/keywords", "/ads/ngrams", "/ads/launch", "/ads/review"]);
     expect(workspace("ads").nav.some((n) => n.soon)).toBe(false);
     expect(workspace("wholesale").nav.map((n) => n.label)).toEqual(expect.arrayContaining(["Runs", "Upload", "Check ASINs", "Qogita", "Sellers", "Brands", "Suppliers", "Favourites", "Watchlist", "Plan", "Hunt"]));
   });

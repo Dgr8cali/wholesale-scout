@@ -12,7 +12,7 @@ import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { SortTh, useSortable } from "@/components/SortableTable";
-import { RULES, type RuleConfig, type RuleId, type RuleMeta, type RulesConfig, type Threshold } from "@/lib/ads/rules";
+import { LOOKBACKS, RULES, type RuleConfig, type RuleId, type RuleMeta, type RulesConfig, type Threshold } from "@/lib/ads/rules";
 import { api } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
 
@@ -89,6 +89,14 @@ function RuleCard({ meta, cfg, changed, dry, running, onEdit, onSave, onReset }:
         <label className="flex items-center gap-2 text-sm"><Switch checked={cfg.enabled} onCheckedChange={(v) => onEdit({ enabled: v })} aria-label={`${meta.label} on`} />{cfg.enabled ? "On" : "Off"}</label>
       </div>
       <div className="grid grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-3">
+        {meta.lookback != null && (
+          <label className="space-y-1" title="The days of data this rule reads, to the latest import: search terms from the imports in the window, daily rows in it, rank checks in it">
+            <span className="field-label">Looks back over</span>
+            <NativeSelect className="h-8 w-full" value={String(cfg.lookbackDays ?? meta.lookback)} onChange={(e) => onEdit({ lookbackDays: Number(e.target.value) })}>
+              {LOOKBACKS.map((d) => <NativeSelectOption key={d} value={d}>{d} days{d === meta.lookback ? " (default)" : ""}</NativeSelectOption>)}
+            </NativeSelect>
+          </label>
+        )}
         {meta.thresholds.map((t) => (
           <label key={t.key} className="space-y-1">
             <span className="field-label">{t.label}{UNIT[t.unit] ? ` (${UNIT[t.unit]})` : ""}</span>

@@ -3,23 +3,28 @@ import { describeChange, writeBulkFile, type BulkChange } from "../ads/bulk";
 import { ngramTable } from "../ads/ngrams";
 import { restoresFor } from "../ads/snapshot";
 import { countByRule, DEFAULT_RULES, mergeRules, RULE_IDS, runRules, type Proposal, type RuleConfig, type RuleId, type RulesConfig, type RulesInput, type RuleTerm } from "../ads/rules";
-import { adsDashboard, loadAll } from "./ads";
+import { adsDashboard, adsSettings, loadAll } from "./ads";
+import { listsByAsin } from "./adsKeywords";
 import { createBatch, entityState, guardsByAsin, launchPlans, rankHistory, stockByAsin } from "./adsOps";
 import { chunks, db, must } from "./db";
 
 /* ===================== rule settings ===================== */
 
 export async function rulesConfig(): Promise<RulesConfig> {
-  const res = await db().from("ads_rules").select("rule, enabled, mode, thresholds");
-  if (res.error) return DEFAULT_RULES; // before the migration
-  return mergeRules(Object.fromEntries((res.data as { rule: string; enabled: boolean; mode: string; thresholds: Record<string, number> }[]).map((r) => [r.rule, r as unknown as Partial<RuleConfig>])));
+  let res = await db().from("ads_rules").select("rule, enabled, mode, thresholds, lookback_days");
+  if (res.error) res = await db().from("ads_rules").select("rule, enabled, mode, thresholds") as typeof res; // before the migration
+  if (res.error) return DEFAULT_RULES;
+  return mergeRules(Object.fromEntries((res.data as { rule: string; enabled: boolean; mode: string; thresholds: Record<string, number>; lookback_days?: number | null }[])
+    .map((r) => [r.rule, { enabled: r.enabled, mode: r.mode, thresholds: r.thresholds, lookbackDays: r.lookback_days ?? undefined } as unknown as Partial<RuleConfig>])));
 }
 
 export async function saveRule(rule: string, patch: Partial<RuleConfig>): Promise<RulesConfig> {
   if (!RULE_IDS.includes(rule as RuleId)) throw new Error(`No rule "${rule}"`);
   const cur = (await rulesConfig())[rule as RuleId];
+  if (patch.lookbackDays != null && ![7, 14, 30, 60].includes(Number(patch.lookbackDays))) throw new Error("The window is 7, 14, 30 or 60 days");
   const next = mergeRules({ [rule]: { ...cur, ...patch, thresholds: { ...cur.thresholds, ...(patch.thresholds ?? {}) } } })[rule as RuleId];
-  must(await db().from("ads_rules").upsert({ rule, ...next, updated_at: new Date().toISOString() }, { onConflict: "rule" }), "save rule");
+  const { lookbackDays, ...rest } = next;
+  must(await db().from("ads_rules").upsert({ rule, ...rest, lookback_days: lookbackDays, updated_at: new Date().toISOString() }, { onConflict: "rule" }), "save rule");
   return rulesConfig();
 }
 
@@ -65,13 +70,18 @@ async function rulesInput(): Promise<RulesInput> {
     const units = a.totals.units ?? a.totals.orders;
     return [a.asin, days ? units / days : null] as const;
   }));
-  const [stock, guards, plans, ranks] = await Promise.all([stockByAsin(dash.asins.map((a) => a.asin), adsUnits), guardsByAsin(), launchPlans(), rankHistory()]);
+  const [stock, guards, plans, ranks, lists, settings] = await Promise.all([stockByAsin(dash.asins.map((a) => a.asin), adsUnits), guardsByAsin(), launchPlans(), rankHistory(), listsByAsin(dash.asins.map((a) => a.asin)), adsSettings()]);
   const products: RulesInput["products"] = {};
   for (const a of dash.asins) {
     const sku = ads.find((p) => p.asin === a.asin && !/archived/i.test(p.state ?? ""))?.sku ?? null;
+    const i = a.insights;
     products[a.asin] = {
+      // In TACoS mode the dashboard's target is already the ACoS its TACoS target allows.
       asin: a.asin, price: a.economics.priceSource ? a.economics.price : null, targetAcos: a.targetAcos, sku,
       stock: stock[a.asin] ?? null, guard: guards[a.asin] ?? null, launchStart: plans.find((p) => p.asin === a.asin)?.start_date ?? null,
+      lists: lists[a.asin],
+      tacos: i?.acosForTacos && i.targetTacos != null ? { targetTacos: i.targetTacos, adShare: i.acosForTacos.adShare, capped: i.acosForTacos.capped } : null,
+      listingProblem: i?.health.status === "problem" ? i.health.message : null,
     };
   }
 
@@ -111,6 +121,12 @@ async function rulesInput(): Promise<RulesInput> {
     negatives: (must(negatives, "negatives") as Record<string, unknown>[]).map((x) => ({ campaign: x.campaign as string, adGroupId: x.ad_group_id as string | null, text: x.keyword_text as string, matchType: x.match_type as string })),
     ranks: Object.fromEntries(Object.entries(ranks).map(([asin, ks]) => [asin, Object.fromEntries(Object.entries(ks).map(([k, hs]) => [k, hs.map((h) => ({ position: h.position, checkedAt: h.checkedAt }))]))])),
     range, today: new Date().toISOString().slice(0, 10),
+    // Per import range, so each rule counts only the ranges in its window.
+    termRows: (all.terms as Record<string, unknown>[]).map((r) => ({
+      campaign: r.campaign as string, term: r.term as string, adGroupIds: r.ad_group_id ? [r.ad_group_id as string] : [], matchTypes: r.keyword_id ? [(r.match_type as string | null) ?? null] : [],
+      from: (r.date_from as string | null) ?? null, to: (r.date_to as string | null) ?? null, ...perf(r),
+    })),
+    smoothingK: settings.smoothingK,
   };
 }
 
@@ -142,7 +158,7 @@ export async function dryRun(config?: Partial<Record<string, Partial<RuleConfig>
   const cfg = config ? mergeRules(config) : await rulesConfig();
   // A dry run counts every rule, on or off.
   const r = runRules(await rulesInput(), mergeRules(Object.fromEntries(RULE_IDS.map((id) => [id, { ...cfg[id], enabled: true }]))));
-  return { counts: countByRule(r), notes: r.notes };
+  return { counts: countByRule(r), notes: r.notes, proposals: r.proposals.map((p) => ({ rule: p.rule, asin: p.asin, campaign: p.campaignName, label: p.entity.label, current: p.current, proposed: p.proposed, reason: p.reason })) };
 }
 
 /* ===================== proposals ===================== */

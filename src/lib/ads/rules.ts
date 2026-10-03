@@ -9,6 +9,8 @@ import type { BulkChange } from "./bulk";
 import { dailySignals, windowOf, type DailyRow, type DailySignals } from "./daily";
 import { chooseRanges } from "./metrics";
 import { ngramTable, termHasGram, type GramTerm } from "./ngrams";
+import { normTerm, whitelistHit, type KeywordLists } from "./lists";
+import { conversionTxt, DEFAULT_SMOOTHING_K, priorConversion, smoothedConversion, type Prior } from "./smooth";
 
 export type RuleId = "harvest" | "negative" | "bid_down" | "bid_up" | "pause" | "placement" | "budget" | "revive"
   | "ngram_negative" | "ngram_winner" | "stock_guard" | "ranked" | "slipping";
@@ -16,7 +18,13 @@ export type Confidence = "low" | "medium" | "high";
 export type RuleMode = "propose" | "auto";
 
 export interface Threshold { key: string; label: string; unit: "count" | "times" | "pct" | "gbp" | "days" | "points"; default: number }
-export interface RuleMeta { id: RuleId; label: string; summary: string; thresholds: Threshold[] }
+export interface RuleMeta {
+  id: RuleId; label: string; summary: string; thresholds: Threshold[];
+  /** Its analysis window by default (days), or null when the rule reads no performance window. */
+  lookback: number | null;
+}
+/** The windows a rule can read: 7, 14, 30 or 60 days. */
+export const LOOKBACKS = [7, 14, 30, 60] as const;
 
 export const RULES: RuleMeta[] = [
   {
@@ -26,6 +34,7 @@ export const RULES: RuleMeta[] = [
       { key: "minOrders", label: "Orders at least", unit: "count", default: 2 },
       { key: "cpcMultiplier", label: "Bid = the term's CPC ×", unit: "times", default: 1.1 },
     ],
+    lookback: 60,
   },
   {
     id: "negative", label: "Negative",
@@ -33,21 +42,22 @@ export const RULES: RuleMeta[] = [
     thresholds: [
       { key: "minClicks", label: "Clicks with no order", unit: "count", default: 15 },
       { key: "spendOfPrice", label: "Or spend with no order, % of price", unit: "pct", default: 50 },
-      { key: "windowDays", label: "Over the last", unit: "days", default: 60 },
     ],
+    lookback: 60,
   },
   {
     id: "bid_down", label: "Bid down",
-    summary: "A keyword or target with enough clicks and ACoS well over the target gets the bid that would hit the target at its conversion rate.",
+    summary: "A keyword or target with enough clicks and ACoS well over the target gets the bid that would hit the target at its smoothed conversion rate (its own, pulled towards the product's).",
     thresholds: [
       { key: "minClicks", label: "Clicks at least", unit: "count", default: 10 },
       { key: "overTarget", label: "ACoS over target ×", unit: "times", default: 1.2 },
       { key: "floor", label: "Lowest bid", unit: "gbp", default: 0.1 },
     ],
+    lookback: 60,
   },
   {
     id: "bid_up", label: "Bid up",
-    summary: "A keyword converting well under the target, in a campaign held back (out of budget on several days, or its impressions falling week on week), gets a higher bid. Needs the daily Campaign report.",
+    summary: "A keyword converting well under the target, in a campaign held back (out of budget on several days, or its impressions falling week on week), gets a higher bid, at most the bid for the target at its smoothed conversion. Held back while the product's listing health is poor. Needs the daily Campaign report.",
     thresholds: [
       { key: "underTarget", label: "ACoS under target ×", unit: "times", default: 0.7 },
       { key: "minOrders", label: "Orders at least", unit: "count", default: 2 },
@@ -55,14 +65,15 @@ export const RULES: RuleMeta[] = [
       { key: "step", label: "Raise by", unit: "pct", default: 15 },
       { key: "cap", label: "Highest bid", unit: "gbp", default: 1.5 },
     ],
+    lookback: 14,
   },
   {
     id: "pause", label: "Pause",
     summary: "A keyword with many clicks and no order is paused.",
     thresholds: [
       { key: "minClicks", label: "Clicks with no order", unit: "count", default: 25 },
-      { key: "windowDays", label: "Over the last", unit: "days", default: 60 },
     ],
+    lookback: 60,
   },
   {
     id: "placement", label: "Placement",
@@ -74,27 +85,28 @@ export const RULES: RuleMeta[] = [
       { key: "max", label: "Highest adjustment", unit: "pct", default: 100 },
       { key: "minClicks", label: "Placement clicks at least", unit: "count", default: 10 },
     ],
+    lookback: 60,
   },
   {
     id: "budget", label: "Budget",
     summary: "A campaign that keeps running out of budget at or under the target ACoS gets more budget; one far over the target for two weeks gets less. Needs the daily Campaign report.",
     thresholds: [
-      { key: "hitDays", label: "Days out of budget at least", unit: "count", default: 3 },
-      { key: "windowDays", label: "Of the last", unit: "days", default: 7 },
+      { key: "hitDays", label: "Days out of budget at least (in the window)", unit: "count", default: 3 },
       { key: "up", label: "Raise by", unit: "pct", default: 20 },
       { key: "overTarget", label: "Cut when ACoS over target ×", unit: "times", default: 1.5 },
       { key: "overDays", label: "For", unit: "days", default: 14 },
       { key: "down", label: "Cut by", unit: "pct", default: 25 },
     ],
+    lookback: 7,
   },
   {
     id: "revive", label: "Revive",
     summary: "An exact keyword that has sold before but had no impressions lately gets a higher bid: its campaign had none in the daily Campaign report, or it had none in a recent short bulk export.",
     thresholds: [
       { key: "minOrders", label: "Lifetime orders at least", unit: "count", default: 3 },
-      { key: "quietDays", label: "No impressions for", unit: "days", default: 14 },
       { key: "step", label: "Raise by", unit: "pct", default: 10 },
     ],
+    lookback: 14,
   },
   {
     id: "ngram_negative", label: "N-gram negative",
@@ -104,6 +116,7 @@ export const RULES: RuleMeta[] = [
       { key: "spendOfPrice", label: "Or spend with no order, % of price", unit: "pct", default: 100 },
       { key: "minTerms", label: "In distinct search terms at least", unit: "count", default: 3 },
     ],
+    lookback: 60,
   },
   {
     id: "ngram_winner", label: "N-gram winner",
@@ -113,6 +126,7 @@ export const RULES: RuleMeta[] = [
       { key: "minTerms", label: "Across terms with an order, at least", unit: "count", default: 3 },
       { key: "topTerms", label: "Terms to harvest", unit: "count", default: 5 },
     ],
+    lookback: 60,
   },
   {
     id: "stock_guard", label: "Stock guard",
@@ -124,6 +138,7 @@ export const RULES: RuleMeta[] = [
       { key: "pauseDays", label: "Pause under (days of cover)", unit: "days", default: 3 },
       { key: "restoreDays", label: "Restore over (days of cover)", unit: "days", default: 21 },
     ],
+    lookback: null,
   },
   {
     id: "ranked", label: "Ranked — ease off",
@@ -133,6 +148,7 @@ export const RULES: RuleMeta[] = [
       { key: "checks", label: "On the last checks", unit: "count", default: 3 },
       { key: "step", label: "Lower by", unit: "pct", default: 20 },
     ],
+    lookback: 30,
   },
   {
     id: "slipping", label: "Slipping",
@@ -141,18 +157,22 @@ export const RULES: RuleMeta[] = [
       { key: "drop", label: "Places lost at least", unit: "count", default: 10 },
       { key: "step", label: "Raise by", unit: "pct", default: 10 },
     ],
+    lookback: 14,
   },
 ];
 
 export const RULE_LABEL = Object.fromEntries(RULES.map((r) => [r.id, r.label])) as Record<RuleId, string>;
 export const RULE_IDS = RULES.map((r) => r.id);
 
-export interface RuleConfig { enabled: boolean; mode: RuleMode; thresholds: Record<string, number> }
+export interface RuleConfig { enabled: boolean; mode: RuleMode; thresholds: Record<string, number>; /** Its analysis window, days (null: none). */ lookbackDays: number | null }
 export type RulesConfig = Record<RuleId, RuleConfig>;
 
 export const DEFAULT_RULES: RulesConfig = Object.fromEntries(RULES.map((r) => [r.id, {
-  enabled: true, mode: "propose", thresholds: Object.fromEntries(r.thresholds.map((t) => [t.key, t.default])),
+  enabled: true, mode: "propose", thresholds: Object.fromEntries(r.thresholds.map((t) => [t.key, t.default])), lookbackDays: r.lookback,
 }])) as RulesConfig;
+
+/** The nearest allowed window (7, 14, 30, 60). */
+const snapLookback = (v: number) => LOOKBACKS.reduce((a, b) => (Math.abs(b - v) < Math.abs(a - v) ? b : a), LOOKBACKS[0] as number);
 
 /** Saved settings over the defaults: unknown keys dropped, missing ones defaulted. */
 export function mergeRules(saved: Partial<Record<string, Partial<RuleConfig>>>): RulesConfig {
@@ -162,7 +182,11 @@ export function mergeRules(saved: Partial<Record<string, Partial<RuleConfig>>>):
       const v = Number(s.thresholds?.[t.key]);
       return [t.key, Number.isFinite(v) && v >= 0 ? v : t.default];
     }));
-    return [r.id, { enabled: s.enabled ?? true, mode: s.mode === "auto" ? "auto" : "propose", thresholds }];
+    // The window: saved, else the old "over the last N days" thresholds (windowDays, quietDays), else the default.
+    const old = Number(s.thresholds?.windowDays ?? s.thresholds?.quietDays);
+    const lb = Number(s.lookbackDays);
+    const lookbackDays = r.lookback == null ? null : Number.isFinite(lb) && lb > 0 ? snapLookback(lb) : Number.isFinite(old) && old > 0 ? snapLookback(old) : r.lookback;
+    return [r.id, { enabled: s.enabled ?? true, mode: s.mode === "auto" ? "auto" : "propose", thresholds, lookbackDays }];
   })) as RulesConfig;
 }
 
@@ -178,6 +202,15 @@ export interface RuleProduct {
   guard?: { label: string; restores: BulkChange[] } | null;
   /** Launch plan start: weeks 1–2 are harvest only. */
   launchStart?: string | null;
+  /** Its whitelist (never negatived or paused) and blacklist (negative phrase in new campaigns). */
+  lists?: KeywordLists;
+  /**
+   * TACoS mode: targetAcos above is the ACoS the target TACoS allows (target TACoS ÷ ad share of
+   * sales); this says so in the reasons, and Ranked eases off harder.
+   */
+  tacos?: { targetTacos: number; adShare: number | null; capped: boolean } | null;
+  /** Listing health says the listing, not the bids, is the problem: Bid up waits (the message says why). */
+  listingProblem?: string | null;
 }
 export interface RuleCampaign extends Perf {
   id: string; campaignId: string | null; name: string; asin: string | null; targeting: string | null; state: string | null;
@@ -195,6 +228,8 @@ export interface RuleTarget extends Perf { targetId: string; campaign: string; a
 export interface RulePlacement extends Perf { campaign: string; placement: string; percentage: number | null }
 export interface RuleTerm extends Perf {
   campaign: string; term: string; adGroupIds: string[];
+  /** The import range these figures cover (per-range rows; null when summed already). */
+  from?: string | null; to?: string | null;
   /** The match types of the keywords that matched it; null for product targeting (auto). Empty when the report doesn't say. */
   matchTypes: (string | null)[];
 }
@@ -209,6 +244,13 @@ export interface RulesInput {
   /** The range the entity figures cover (the latest bulk export). */
   range: { from: string; to: string } | null;
   today: string;
+  /**
+   * Search terms per import range (not summed), so each rule counts only the ranges in its own
+   * window; without them, `terms` (summed) is used by every rule.
+   */
+  termRows?: RuleTerm[];
+  /** Smoothing weight in clicks (Settings → Ads; default 20). */
+  smoothingK?: number;
 }
 
 /* ===================== output ===================== */
@@ -267,6 +309,49 @@ export function runRules(input: RulesInput, config: RulesConfig = DEFAULT_RULES)
   const th = (r: RuleId) => config[r]?.thresholds ?? DEFAULT_RULES[r].thresholds;
   const campaign = new Map(input.campaigns.map((c) => [c.id, c]));
   const product = (c: RuleCampaign) => (c.asin ? input.products[c.asin] ?? null : null);
+
+  /* ---- Each rule's window: the last N days of the data (to the latest import) ---- */
+  const lb = (r: RuleId) => config[r]?.lookbackDays ?? RULES.find((x) => x.id === r)!.lookback ?? 60;
+  const dataEnd = input.range?.to ?? input.today;
+  const windowStart = (r: RuleId) => new Date(Date.parse(`${dataEnd}T00:00:00Z`) - (lb(r) - 1) * DAY).toISOString().slice(0, 10);
+  /** Search terms over the rule's window: the import ranges that reach into it, summed per campaign and term. */
+  const termsFor = (r: RuleId): RuleTerm[] => {
+    if (!input.termRows) return input.terms;
+    const start = windowStart(r);
+    const rows = input.termRows.filter((t) => !t.to || t.to >= start);
+    const early = rows.map((t) => t.from).filter((f): f is string => !!f && f < start).sort()[0];
+    if (early) note(r, `Search terms: an import starts ${dayTxt(early)}, before the ${lb(r)}-day window (from ${dayTxt(start)}). A range can't be split into days, so it counts in full: import a search term report of the last ${lb(r)} days for an exact window`);
+    const out = new Map<string, RuleTerm>();
+    for (const t of rows) {
+      const k = `${t.campaign}|${t.term}`;
+      const cur = out.get(k) ?? { campaign: t.campaign, term: t.term, adGroupIds: [], matchTypes: [], impressions: null, clicks: 0, cost: 0, orders: 0, sales: 0 };
+      cur.clicks += t.clicks; cur.cost += t.cost; cur.orders += t.orders; cur.sales += t.sales;
+      cur.impressions = t.impressions == null ? cur.impressions : (cur.impressions ?? 0) + t.impressions;
+      for (const g of t.adGroupIds) if (!cur.adGroupIds.includes(g)) cur.adGroupIds.push(g);
+      cur.matchTypes.push(...t.matchTypes);
+      out.set(k, cur);
+    }
+    return [...out.values()];
+  };
+
+  /* ---- Smoothed conversion: a keyword's own, pulled towards its product's by k clicks ---- */
+  const k = input.smoothingK ?? DEFAULT_SMOOTHING_K;
+  const sumOf = (cs: RuleCampaign[]) => cs.reduce((a, c) => ({ clicks: a.clicks + c.clicks, orders: a.orders + c.orders }), { clicks: 0, orders: 0 });
+  const account = sumOf(input.campaigns);
+  const priors = new Map<string, Prior>();
+  const priorFor = (asin: string | null) => {
+    const key = asin ?? "";
+    if (!priors.has(key)) priors.set(key, priorConversion(asin ? sumOf(input.campaigns.filter((c) => c.asin === asin)) : null, account, k));
+    return priors.get(key)!;
+  };
+  const smooth = (x: { orders: number; clicks: number }, asin: string | null) => {
+    const prior = priorFor(asin);
+    const v = smoothedConversion(x.orders, x.clicks, prior.value, k);
+    return { v, txt: conversionTxt(x.orders, x.clicks, v, prior) };
+  };
+
+  /* ---- Whitelist: never negatived or paused ---- */
+  const white = (asin: string | null, text: string) => (asin ? whitelistHit(text, input.products[asin]?.lists?.whitelist ?? []) : null);
   const rangeDays = input.range ? Math.round((Date.parse(input.range.to) - Date.parse(input.range.from)) / DAY) + 1 : null;
   const rangeTxt = input.range ? ` (${dayTxt(input.range.from)} – ${dayTxt(input.range.to)})` : "";
   const perMonth = (cost: number) => (rangeDays ? (cost / rangeDays) * 30 : null);
@@ -280,14 +365,16 @@ export function runRules(input: RulesInput, config: RulesConfig = DEFAULT_RULES)
     if (!p?.price) { if (c.clicks) note(r, c.asin ? `${c.asin} has no price yet (set it on the dashboard)` : `"${c.name}" has no ASIN: set one on the dashboard`); return null; }
     return p;
   };
-  for (const r of ["negative", "pause"] as const) {
-    if (on(r) && rangeDays && rangeDays > th(r).windowDays + 2) note(r, `The latest bulk export covers ${rangeDays} days, more than the ${th(r).windowDays}-day window: export the last ${th(r).windowDays} days for this rule`);
+  // Keywords, targets and placements carry the latest bulk export's figures: one range.
+  const bulkRules: RuleId[] = input.termRows ? ["pause", "bid_down", "placement"] : ["negative", "harvest", "ngram_negative", "ngram_winner", "pause", "bid_down", "placement"];
+  for (const r of bulkRules) {
+    if (on(r) && rangeDays && rangeDays > lb(r) + 2) note(r, `The latest bulk export covers ${rangeDays} days, more than the ${lb(r)}-day window: its figures count in full. Export the last ${lb(r)} days for this rule`);
   }
 
   /* ---- Negative (term-level and word-level) ---- */
   if (on("negative")) {
     const t = th("negative");
-    for (const term of input.terms) {
+    for (const term of termsFor("negative")) {
       const c = campaign.get(term.campaign);
       if (!c || term.orders > 0) continue;
       const price = product(c)?.price ?? null;
@@ -295,6 +382,8 @@ export function runRules(input: RulesInput, config: RulesConfig = DEFAULT_RULES)
       const bySpend = price != null && price > 0 && term.cost >= (price * t.spendOfPrice) / 100;
       if (!byClicks && !bySpend) continue;
       if (negatedExact(c.id, term.term) || unexportable("negative", c)) continue;
+      const w = white(c.asin, term.term);
+      if (w) { note("negative", `"${term.term}" (${perfTxt(term)}) is on the whitelist ("${w}"): never negatived`); continue; }
       const adGroupId = term.adGroupIds.length === 1 ? term.adGroupIds[0] : null;
       const saved = perMonth(term.cost);
       out.push({
@@ -325,14 +414,17 @@ export function runRules(input: RulesInput, config: RulesConfig = DEFAULT_RULES)
     const key = `term:${c.id}:${term.term}`;
     if (harvested.has(key) || unexportable(rule, c)) return;
     const a = acosOf(term);
-    const conv = term.orders / term.clicks;
+    const sm = smooth(term, p.asin);
+    const conv = sm.v;
     const cpc = term.cost / term.clicks;
     const cap = p.targetAcos * p.price! * conv;
     const bid = Math.max(0.02, round2(Math.min(cpc * t.cpcMultiplier, cap)));
     const found = term.matchTypes.length ? [...new Set(term.matchTypes.map((m) => (m ? m.toLowerCase() : "auto targeting")))].join("/") : (c.targeting ?? "").toLowerCase();
     const why = `${lead}"${term.term}": ${perfTxt(term)} = ${acosTxt(a)}${rule === "harvest" ? `, at or under the ${pct(p.targetAcos, 0)} target` : ""}${rangeTxt}, found by ${found} in ${c.name}.`;
     const target = exactCampaign(p.asin, c.id);
-    const negate = !negatedExact(c.id, term.term);
+    const w = white(p.asin, term.term);
+    if (w) note(rule, `"${term.term}" is on the whitelist ("${w}"): harvested without the negative where it was found`);
+    const negate = !negatedExact(c.id, term.term) && !w;
     if (!target) {
       if (!p.sku) { note(rule, `${p.asin} has no Exact campaign, and no SKU from a product ad to create one with`); return; }
       const g = newCampaigns.get(p.asin) ?? { p, c, items: [] };
@@ -354,7 +446,7 @@ export function runRules(input: RulesInput, config: RulesConfig = DEFAULT_RULES)
       current: `${found} in ${c.name}`,
       proposed: [changes.some((x) => x.kind === "create_keyword") ? `exact in ${target.name} at ${gbp(bid)}` : `already exact in ${target.name}`, negate ? `negative exact in ${c.name}` : null].filter(Boolean).join(" + "),
       reason: changes.some((x) => x.kind === "create_keyword")
-        ? `${why} Bid: the term's ${gbp(cpc)} CPC × ${t.cpcMultiplier}, capped at ${pct(p.targetAcos, 0)} × ${gbp(p.price!)} × ${pct(conv)} conversion = ${gbp(cap)}.`
+        ? `${why} Bid: the term's ${gbp(cpc)} CPC × ${t.cpcMultiplier}, capped at ${pct(p.targetAcos, 0)} × ${gbp(p.price!)} × ${pct(conv)} smoothed conversion = ${gbp(cap)} (${sm.txt}).`
         : `${why} ${target.name} already has it as an exact keyword, so only the negative is needed.`,
       confidence: confidence(term.clicks, term.orders),
       effect: "The term gets its own exact bid; the negative stops the broader target buying the same clicks",
@@ -363,7 +455,7 @@ export function runRules(input: RulesInput, config: RulesConfig = DEFAULT_RULES)
   };
   if (on("harvest")) {
     const t = th("harvest");
-    for (const term of input.terms) {
+    for (const term of termsFor("harvest")) {
       const c = campaign.get(term.campaign);
       if (!c || term.orders < t.minOrders) continue;
       const p = needsPrice("harvest", c);
@@ -375,17 +467,18 @@ export function runRules(input: RulesInput, config: RulesConfig = DEFAULT_RULES)
   }
 
   /* ---- N-grams (Rules 9 and 10) ---- */
-  const gramTerms: GramTerm[] = input.terms.flatMap((t) => {
+  const gramTermsOf = (ts: RuleTerm[]): GramTerm[] => ts.flatMap((t) => {
     const c = campaign.get(t.campaign);
     return c?.asin ? [{ asin: c.asin, campaign: c.id, adGroupIds: t.adGroupIds, term: t.term, impressions: t.impressions, clicks: t.clicks, cost: t.cost, orders: t.orders, sales: t.sales }] : [];
   });
-  const gramRows = ngramTable(gramTerms);
   if (on("ngram_negative")) {
     const t = th("ngram_negative");
-    for (const g of gramRows) {
+    for (const g of ngramTable(gramTermsOf(termsFor("ngram_negative")))) {
       const p = input.products[g.asin];
       const bySpend = p?.price != null && p.price > 0 && g.cost >= p.price * t.spendOfPrice / 100;
       if (g.orders > 0 || g.convertingTerms > 0 || g.terms < t.minTerms || (g.clicks < t.minClicks && !bySpend)) continue;
+      const w = white(g.asin, g.gram);
+      if (w) { note("ngram_negative", `"${g.gram}" (${perfTxt(g)}) is on the whitelist ("${w}"): never negatived`); continue; }
       const changes: BulkChange[] = [];
       const where: string[] = [];
       for (const sv of g.servedIn) {
@@ -410,10 +503,11 @@ export function runRules(input: RulesInput, config: RulesConfig = DEFAULT_RULES)
   }
   if (on("ngram_winner")) {
     const t = th("ngram_winner");
-    for (const g of gramRows) {
+    const winTerms = termsFor("ngram_winner");
+    for (const g of ngramTable(gramTermsOf(winTerms))) {
       const p = input.products[g.asin];
       if (!p?.price || g.orders < t.minOrders || g.convertingTerms < t.minTerms || g.acos == null || g.acos > p.targetAcos) continue;
-      const cands = input.terms
+      const cands = winTerms
         .filter((x) => x.orders > 0 && termHasGram(x.term, g.gram) && campaign.get(x.campaign)?.asin === g.asin && fromNonExact(x, campaign.get(x.campaign)!))
         .sort((a, b) => b.orders - a.orders || (acosOf(a) ?? 0) - (acosOf(b) ?? 0))
         .slice(0, t.topTerms);
@@ -428,11 +522,12 @@ export function runRules(input: RulesInput, config: RulesConfig = DEFAULT_RULES)
       ...base(g.items.some((x) => x.rule === "harvest") ? "harvest" : "ngram_winner", g.c), key: `exact-campaign:${asin}`,
       entity: { type: "campaign", label: name, campaignId: null, adGroupId: null, keywordId: null, targetId: null },
       current: `no Exact campaign for ${asin}`, proposed: `create "${name}" with ${plural(g.items.length, "exact keyword")}`,
-      reason: `${g.items.map((x) => `"${x.term.term}" (${plural(x.term.orders, "order")}, ${acosTxt(acosOf(x.term))} in ${x.c.name})`).join("; ")} qualify for harvest, and ${asin} has no campaign of exact keywords to put them in.`,
+      reason: `${g.items.map((x) => `"${x.term.term}" (${plural(x.term.orders, "order")}, ${acosTxt(acosOf(x.term))} in ${x.c.name})`).join("; ")} qualify for harvest, and ${asin} has no campaign of exact keywords to put them in.${g.p.lists?.blacklist.length ? ` The new campaign starts with the blacklist as negative phrases (${g.p.lists.blacklist.map((b) => `"${b}"`).join(", ")}).` : ""}`,
       confidence: confidence(clicks, orders), effect: "Converting terms get their own exact bids",
       changes: [
-        { kind: "create_campaign", name, dailyBudget: g.c.budget ?? 5, biddingStrategy: "Dynamic bids - down only", startDate: input.today, adGroupName: "Exact", defaultBid: Math.max(...g.items.map((x) => x.bid)), sku: g.p.sku!, keywords: g.items.map((x) => ({ text: x.term.term, matchType: "Exact" as const, bid: x.bid })) },
-        ...g.items.filter((x) => !negatedExact(x.c.id, x.term.term) && x.c.campaignId).map((x): BulkChange => ({ kind: "create_negative", campaignId: x.c.campaignId!, adGroupId: x.term.adGroupIds.length === 1 ? x.term.adGroupIds[0] : null, text: x.term.term, matchType: "Negative exact" })),
+        { kind: "create_campaign", name, dailyBudget: g.c.budget ?? 5, biddingStrategy: "Dynamic bids - down only", startDate: input.today, adGroupName: "Exact", defaultBid: Math.max(...g.items.map((x) => x.bid)), sku: g.p.sku!, keywords: g.items.map((x) => ({ text: x.term.term, matchType: "Exact" as const, bid: x.bid })),
+          negatives: (g.p.lists?.blacklist ?? []).map((text) => ({ text, matchType: "Negative phrase" as const })) },
+        ...g.items.filter((x) => !negatedExact(x.c.id, x.term.term) && x.c.campaignId && !white(asin, x.term.term)).map((x): BulkChange => ({ kind: "create_negative", campaignId: x.c.campaignId!, adGroupId: x.term.adGroupIds.length === 1 ? x.term.adGroupIds[0] : null, text: x.term.term, matchType: "Negative exact" })),
       ],
       clicks, orders,
     });
@@ -445,6 +540,8 @@ export function runRules(input: RulesInput, config: RulesConfig = DEFAULT_RULES)
     for (const k of input.keywords) {
       const c = campaign.get(k.campaign);
       if (!c || !live(k.state) || k.orders > 0 || k.clicks < t.minClicks || unexportable("pause", c)) continue;
+      const w = white(c.asin, k.text);
+      if (w) { note("pause", `"${k.text}" (${perfTxt(k)}) is on the whitelist ("${w}"): never paused`); continue; }
       paused.add(k.keywordId);
       out.push({
         ...base("pause", c), key: `kw:${k.keywordId}`,
@@ -473,7 +570,8 @@ export function runRules(input: RulesInput, config: RulesConfig = DEFAULT_RULES)
       if (!p || a == null || a <= p.targetAcos * t.overTarget || unexportable("bid_down", c)) continue;
       const current = it.bid ?? input.adGroups.find((g) => g.adGroupId === it.adGroupId)?.defaultBid ?? null;
       if (current == null) continue;
-      const conv = it.x.orders / it.x.clicks;
+      const sm = smooth(it.x, c.asin);
+      const conv = sm.v;
       const ideal = p.targetAcos * p.price! * conv;
       const bid = Math.max(t.floor, round2(ideal));
       if (bid >= current) continue;
@@ -484,7 +582,7 @@ export function runRules(input: RulesInput, config: RulesConfig = DEFAULT_RULES)
         entity: { type: it.kind, label: it.label, campaignId: c.campaignId, adGroupId: it.adGroupId, keywordId: it.kind === "keyword" ? it.id : null, targetId: it.kind === "target" ? it.id : null },
         current: gbp(current), proposed: gbp(bid),
         reason: (Number.isFinite(a) ? `${perfTxt(it.x)} = ${pct(a)} ACoS, over ${t.overTarget} × the ${pct(p.targetAcos, 0)} target${rangeTxt}. ` : `${perfTxt(it.x)}, no sales${rangeTxt}. `) +
-          (it.x.orders ? `The bid for ${pct(p.targetAcos, 0)} ACoS at ${gbp(p.price!)} and ${pct(conv)} conversion is ${gbp(ideal)}${ideal < t.floor ? `, so the ${gbp(t.floor)} floor` : ""}.` : `No order yet: down to the ${gbp(t.floor)} floor.`),
+          `Conversion: ${sm.txt}. The bid for ${pct(p.targetAcos, 0)} ACoS at ${gbp(p.price!)} and ${pct(conv)} smoothed conversion is ${gbp(ideal)}${ideal < t.floor ? `, so the ${gbp(t.floor)} floor` : ""}.`,
         confidence: confidence(it.x.clicks, it.x.orders),
         effect: saved != null ? `About ${gbp(saved)} a month less at the same clicks (CPC ${gbp(cpc)} → at most ${gbp(bid)})` : null,
         changes: [it.kind === "keyword"
@@ -497,12 +595,18 @@ export function runRules(input: RulesInput, config: RulesConfig = DEFAULT_RULES)
 
   /* ---- Daily data (Bid up, Budget, Revive): the daily Campaign report ---- */
   const bt = th("budget");
-  const signals = new Map<string, DailySignals | null>(input.campaigns.map((c) => [c.id, dailySignals(c.daily, c.budget, input.today, bt.windowDays)]));
+  const signalCache = new Map<string, DailySignals | null>();
+  /** A campaign's daily signals over a window (days out of budget counted within it). */
+  const signalsOver = (c: RuleCampaign, days: number) => {
+    const key = `${c.id}|${days}`;
+    if (!signalCache.has(key)) signalCache.set(key, dailySignals(c.daily, c.budget, input.today, days));
+    return signalCache.get(key)!;
+  };
   const anyDaily = input.campaigns.some((c) => c.daily.length);
   const DAILY_HOW = "Import the daily Campaign report (Sponsored Products, Campaign, time unit Daily) on Ads → Imports";
   /** A campaign's daily signals when recent enough; otherwise a note says why not. */
-  const signalsFor = (r: RuleId, c: RuleCampaign) => {
-    const sg = signals.get(c.id);
+  const signalsFor = (r: RuleId, c: RuleCampaign, days = lb(r)) => {
+    const sg = signalsOver(c, days);
     if (!sg) return null;
     if (!sg.fresh) { note(r, `"${c.name}": its daily data ends ${dayTxt(sg.last)}, too old to act on. ${DAILY_HOW}`); return null; }
     return sg;
@@ -520,22 +624,27 @@ export function runRules(input: RulesInput, config: RulesConfig = DEFAULT_RULES)
       const p = needsPrice("bid_up", c);
       const a = acosOf(k);
       if (!p || a == null || a >= p.targetAcos * t.underTarget) continue;
-      const sg = signalsFor("bid_up", c);
+      if (p.listingProblem) { note("bid_up", `${p.asin}: ${p.listingProblem} Bid up is held back for it until the listing converts`); continue; }
+      // Impressions compare week on week; days out of budget count over the rule's window.
+      const sg = signalsFor("bid_up", c, 7);
       if (!sg) continue;
-      const limited = sg.budgetLimitedDays >= bt.hitDays;
+      const limitedDays = signalsOver(c, lb("bid_up"))?.budgetLimitedDays ?? 0;
+      const limited = limitedDays >= bt.hitDays;
+      const sm = smooth(k, c.asin);
+      const ceiling = round2(p.targetAcos * p.price! * sm.v);
       const falling = sg.impressionsChange != null && sg.impressionsChange <= -t.impressionsFall / 100;
       if ((!limited && !falling) || unexportable("bid_up", c)) continue;
-      const bid = Math.min(t.cap, round2(k.bid * (1 + t.step / 100)));
-      if (bid <= k.bid) continue;
+      const bid = Math.min(t.cap, round2(k.bid * (1 + t.step / 100)), ceiling);
+      if (bid <= k.bid) { note("bid_up", `"${k.text}": its ${gbp(k.bid)} bid is already at or over the ${gbp(ceiling)} the target allows at its smoothed conversion (${sm.txt})`); continue; }
       const why = [
-        limited ? `${c.name} ran out of budget on ${sg.budgetLimitedDays} of the last ${bt.windowDays} days (to ${dayTxt(sg.last)})` : null,
+        limited ? `${c.name} ran out of budget on ${limitedDays} of the last ${lb("bid_up")} days (to ${dayTxt(sg.last)})` : null,
         falling ? `its impressions fell ${pctChange(sg.impressionsChange!)} week on week (${sg.week.impressions.toLocaleString("en-GB")} against ${sg.prevWeek.impressions.toLocaleString("en-GB")})` : null,
       ].filter(Boolean).join(", and ");
       out.push({
         ...base("bid_up", c), key: `kw:${k.keywordId}`,
         entity: { type: "keyword", label: `${k.text} (${k.matchType.toLowerCase()})`, campaignId: c.campaignId, adGroupId: k.adGroupId, keywordId: k.keywordId, targetId: null },
         current: gbp(k.bid), proposed: gbp(bid),
-        reason: `${perfTxt(k)} = ${pct(a)} ACoS, under ${t.underTarget} × the ${pct(p.targetAcos, 0)} target${rangeTxt}, and ${why}.`,
+        reason: `${perfTxt(k)} = ${pct(a)} ACoS, under ${t.underTarget} × the ${pct(p.targetAcos, 0)} target${rangeTxt}, and ${why}. Raised ${t.step}%, at most ${gbp(ceiling)}: the bid for the target at ${pct(sm.v)} smoothed conversion (${sm.txt}).`,
         confidence: confidence(k.clicks, k.orders), effect: `Up to ${t.step}% more per click on a keyword selling at ${pct(a)} ACoS`,
         changes: [{ kind: "keyword_bid", campaignId: c.campaignId!, adGroupId: k.adGroupId, keywordId: k.keywordId, bid }],
         clicks: k.clicks, orders: k.orders,
@@ -598,7 +707,7 @@ export function runRules(input: RulesInput, config: RulesConfig = DEFAULT_RULES)
       let next: number | null = null, reason = "", conf: Perf = wk;
       if (hits >= bt.hitDays && wa != null && wa <= p.targetAcos) {
         next = round2(c.budget * (1 + bt.up / 100));
-        reason = `Spent its ${gbp(c.budget)} budget on ${hits} of the last ${bt.windowDays} days at ${pct(wa)} ACoS (target ${pct(p.targetAcos, 0)}): ${perfTxt(wk)}.`;
+        reason = `Spent its ${gbp(c.budget)} budget on ${hits} of the last ${lb("budget")} days at ${pct(wa)} ACoS (target ${pct(p.targetAcos, 0)}): ${perfTxt(wk)}.`;
       } else if (span.length >= bt.overDays && sa != null && sa > p.targetAcos * bt.overTarget) {
         next = round2(c.budget * (1 - bt.down / 100));
         reason = `${acosTxt(sa)} over the last ${bt.overDays} days, over ${bt.overTarget} × the ${pct(p.targetAcos, 0)} target: ${perfTxt(sp)}.`;
@@ -618,7 +727,7 @@ export function runRules(input: RulesInput, config: RulesConfig = DEFAULT_RULES)
 
   /* ---- Revive ---- */
   if (on("revive")) {
-    const t = th("revive");
+    const t: Record<string, number> = { ...th("revive"), quietDays: lb("revive") };
     const latest = input.keywords.flatMap((k) => k.history.map((h) => h.to)).sort().at(-1) ?? null;
     const recentOf = (k: RuleKeyword) => k.history.find((h) => latest && h.to >= new Date(Date.parse(latest) - DAY).toISOString().slice(0, 10) && (Date.parse(h.to) - Date.parse(h.from)) / DAY + 1 <= t.quietDays + 1);
     let candidates = 0, seen = 0;
@@ -630,7 +739,7 @@ export function runRules(input: RulesInput, config: RulesConfig = DEFAULT_RULES)
       candidates++;
       // Quiet: its campaign (running) had no impressions over the last N days of the daily report,
       // or the keyword had none in a short bulk export.
-      const sg = signals.get(c.id);
+      const sg = signalsOver(c, lb("revive"));
       const daily = sg && sg.fresh && live(c.state) && live(k.state) ? windowOf(c.daily, sg.last, t.quietDays) : null;
       const recent = recentOf(k);
       if (daily && daily.days >= t.quietDays - 1) seen++;
@@ -707,31 +816,37 @@ export function runRules(input: RulesInput, config: RulesConfig = DEFAULT_RULES)
   }
 
   /* ---- Organic rank (Rules 12 and 13) ---- */
-  const ranksFor = (asin: string | null, text: string) => (asin ? input.ranks?.[asin]?.[text.trim().toLowerCase()] ?? [] : []);
+  const ranksFor = (asin: string | null, text: string, r: RuleId) => {
+    const since = new Date(Date.parse(`${input.today}T00:00:00Z`) - (lb(r) - 1) * DAY).toISOString().slice(0, 10);
+    return (asin ? input.ranks?.[asin]?.[text.trim().toLowerCase()] ?? [] : []).filter((h) => h.checkedAt.slice(0, 10) >= since);
+  };
   const posTxt = (x: number | null) => (x == null ? "not in the top 48" : `#${x}`);
   for (const k of input.keywords) {
     const c = campaign.get(k.campaign);
     if (!c?.campaignId || !c.asin || !live(k.state) || k.bid == null) continue;
-    const hist = ranksFor(c.asin, k.text);
-    if (!hist.length) continue;
+    if (!(input.ranks?.[c.asin]?.[k.text.trim().toLowerCase()] ?? []).length) continue;
     const label = `${k.text} (${k.matchType.toLowerCase()})`;
     const entity = { type: "keyword" as const, label, campaignId: c.campaignId, adGroupId: k.adGroupId, keywordId: k.keywordId, targetId: null };
     if (on("ranked")) {
       const t = th("ranked");
-      const last = hist.slice(-t.checks);
+      const tacos = input.products[c.asin]?.tacos;
+      // TACoS mode eases off harder: the organic slot is worth more than the ad's ACoS shows.
+      const step = tacos ? t.step * 1.25 : t.step;
+      const last = ranksFor(c.asin, k.text, "ranked").slice(-t.checks);
       if (last.length === t.checks && last.every((h) => h.position != null && h.position <= t.maxPosition)) {
-        const bid = Math.max(0.02, round2(k.bid * (1 - t.step / 100)));
+        const bid = Math.max(0.02, round2(k.bid * (1 - step / 100)));
         out.push({
           ...base("ranked", c), key: `kw:${k.keywordId}`, entity, current: gbp(k.bid), proposed: gbp(bid),
-          reason: `Organic ${last.map((h) => posTxt(h.position)).join(", ")} for "${k.text}" on the last ${t.checks} rank checks: the product already holds a page-one slot. Ads: ${perfTxt(k)}.`,
-          confidence: confidence(k.clicks, k.orders), effect: `Up to ${t.step}% less per click on a search the listing wins organically`,
+          reason: `Organic ${last.map((h) => posTxt(h.position)).join(", ")} for "${k.text}" on the last ${t.checks} rank checks: the product already holds a page-one slot. Ads: ${perfTxt(k)}.${tacos ? ` Lowered ${step}% (TACoS mode eases off harder than the usual ${t.step}%).` : ""}`,
+          confidence: confidence(k.clicks, k.orders), effect: `Up to ${step}% less per click on a search the listing wins organically`,
           changes: [{ kind: "keyword_bid", campaignId: c.campaignId, adGroupId: k.adGroupId, keywordId: k.keywordId, bid }], clicks: k.clicks, orders: k.orders,
         });
       }
     }
-    if (on("slipping") && hist.length >= 2) {
+    const slipHist = ranksFor(c.asin, k.text, "slipping");
+    if (on("slipping") && slipHist.length >= 2) {
       const t = th("slipping");
-      const [prev, last] = hist.slice(-2);
+      const [prev, last] = slipHist.slice(-2);
       const lost = (last.position ?? 49) - (prev.position ?? 49);
       const p = input.products[c.asin];
       const a = acosOf(k);
@@ -742,6 +857,31 @@ export function runRules(input: RulesInput, config: RulesConfig = DEFAULT_RULES)
           reason: `Organic rank for "${k.text}" fell from ${posTxt(prev.position)} to ${posTxt(last.position)} (${lost} places), while its ads sell at ${pct(a)} ACoS, under the ${pct(p.targetAcos, 0)} target: ${perfTxt(k)}.`,
           confidence: confidence(k.clicks, k.orders), effect: "More ad visibility while organic rank recovers",
           changes: [{ kind: "keyword_bid", campaignId: c.campaignId, adGroupId: k.adGroupId, keywordId: k.keywordId, bid }], clicks: k.clicks, orders: k.orders,
+        });
+      }
+    }
+  }
+
+  /* ---- Blacklist: the product's never-fit words, as negative phrases in its broad and auto campaigns ---- */
+  if (on("negative")) {
+    for (const p of Object.values(input.products)) {
+      const bl = p.lists?.blacklist ?? [];
+      if (!bl.length) continue;
+      for (const c of input.campaigns.filter((x) => x.asin === p.asin && x.campaignId && live(x.state))) {
+        const auto = /auto/i.test(c.targeting ?? "");
+        if (!auto && !kwIn(c.id).some((x) => !isExact(x.matchType))) continue;
+        const have = negativesIn(c.id).filter((x) => /phrase/i.test(x.matchType)).map((x) => normTerm(x.text));
+        const missing = bl.filter((b) => !have.includes(b));
+        if (!missing.length) continue;
+        const list = missing.map((b) => `"${b}"`).join(", ");
+        out.push({
+          ...base("negative", c), key: `blacklist:${c.id}`,
+          entity: { type: "campaign", label: c.name, campaignId: c.campaignId, adGroupId: null, keywordId: null, targetId: null },
+          current: `${missing.length} of ${plural(bl.length, "blacklist term")} not negatived`, proposed: `negative phrase: ${list}`,
+          reason: `${p.asin}'s blacklist (Settings → Ads → Keyword lists) says ${list} never fit${missing.length === 1 ? "s" : ""} the product: ${c.name} (${auto ? "auto" : "broad/phrase"}) gets ${missing.length === 1 ? "it" : "them"} as campaign-level negative phrase${missing.length === 1 ? "" : "s"} before it buys clicks on them.`,
+          confidence: "high", effect: "No clicks bought on searches the product can't sell to",
+          changes: missing.map((text): BulkChange => ({ kind: "create_negative", campaignId: c.campaignId!, adGroupId: null, text, matchType: "Negative phrase" })),
+          clicks: 0, orders: 0,
         });
       }
     }
@@ -772,6 +912,16 @@ export function runRules(input: RulesInput, config: RulesConfig = DEFAULT_RULES)
   }
   out.length = 0;
   out.push(...kept, ...best.values());
+
+  // TACoS mode: every rule that compares with the target says how it was set.
+  const TARGET_RULES: RuleId[] = ["harvest", "ngram_winner", "bid_down", "bid_up", "placement", "budget", "slipping"];
+  for (const x of out) {
+    const pr = x.asin ? input.products[x.asin] : null;
+    if (!pr?.tacos || !TARGET_RULES.includes(x.rule)) continue;
+    const tc = pr.tacos;
+    x.reason += ` TACoS mode: target TACoS ${pct(tc.targetTacos, 0)}${tc.adShare ? ` ÷ ${pct(tc.adShare, 0)} ad share of sales = ${pct(pr.targetAcos, 0)} ACoS allowed${tc.capped ? " (capped at 100%)" : ""}` : " (no split of ad and organic sales yet: used as the ACoS target)"}.`;
+  }
+  for (const x of out) if (x.rule === "ranked" && x.asin && input.products[x.asin]?.tacos && !/TACoS mode/.test(x.reason)) x.reason += " TACoS mode.";
 
   out.sort((a, b) => (a.asin ?? "~").localeCompare(b.asin ?? "~") || RULE_ORDER[a.rule] - RULE_ORDER[b.rule] || CONF_ORDER[a.confidence] - CONF_ORDER[b.confidence] || b.clicks - a.clicks);
   return { proposals: out, notes };

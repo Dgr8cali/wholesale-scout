@@ -1,5 +1,5 @@
 -- Wholesale Scout schema, dumped by scripts/schema-backup.mjs. No data.
--- Dumped 2026-10-03T12:50:47.002Z. Safe to re-run. Restore: npm run schema:restore
+-- Dumped 2026-10-03T15:40:06.943Z. Safe to re-run. Restore: npm run schema:restore
 
 -- @section extensions
 create extension if not exists "pg_cron";
@@ -217,6 +217,38 @@ alter table "ads_imports" add column if not exists "date_from" date;
 alter table "ads_imports" add column if not exists "date_to" date;
 alter table "ads_imports" add column if not exists "imported_at" timestamp with time zone default now();
 alter table "ads_imports" enable row level security;
+
+create table if not exists "ads_keyword_bank" (
+  "id" uuid default gen_random_uuid() not null,
+  "asin" text not null,
+  "text" text not null,
+  "norm" text not null,
+  "source" text default 'manual'::text not null,
+  "note" text,
+  "created_at" timestamp with time zone default now() not null
+);
+alter table "ads_keyword_bank" add column if not exists "id" uuid default gen_random_uuid();
+alter table "ads_keyword_bank" add column if not exists "asin" text;
+alter table "ads_keyword_bank" add column if not exists "text" text;
+alter table "ads_keyword_bank" add column if not exists "norm" text;
+alter table "ads_keyword_bank" add column if not exists "source" text default 'manual'::text;
+alter table "ads_keyword_bank" add column if not exists "note" text;
+alter table "ads_keyword_bank" add column if not exists "created_at" timestamp with time zone default now();
+alter table "ads_keyword_bank" enable row level security;
+
+create table if not exists "ads_keyword_lists" (
+  "scope" text not null,
+  "kind" text not null,
+  "terms" text[] default '{}'::text[] not null,
+  "use_account" boolean default true not null,
+  "updated_at" timestamp with time zone default now() not null
+);
+alter table "ads_keyword_lists" add column if not exists "scope" text;
+alter table "ads_keyword_lists" add column if not exists "kind" text;
+alter table "ads_keyword_lists" add column if not exists "terms" text[] default '{}'::text[];
+alter table "ads_keyword_lists" add column if not exists "use_account" boolean default true;
+alter table "ads_keyword_lists" add column if not exists "updated_at" timestamp with time zone default now();
+alter table "ads_keyword_lists" enable row level security;
 
 create table if not exists "ads_keyword_ranges" (
   "keyword_id" text not null,
@@ -454,7 +486,9 @@ create table if not exists "ads_products" (
   "phase" text default 'launch'::text not null,
   "updated_at" timestamp with time zone default now() not null,
   "image" text,
-  "pl_candidate_id" uuid
+  "pl_candidate_id" uuid,
+  "optimise" text default 'acos'::text not null,
+  "target_tacos" numeric
 );
 alter table "ads_products" add column if not exists "asin" text;
 alter table "ads_products" add column if not exists "title" text;
@@ -468,6 +502,8 @@ alter table "ads_products" add column if not exists "phase" text default 'launch
 alter table "ads_products" add column if not exists "updated_at" timestamp with time zone default now();
 alter table "ads_products" add column if not exists "image" text;
 alter table "ads_products" add column if not exists "pl_candidate_id" uuid;
+alter table "ads_products" add column if not exists "optimise" text default 'acos'::text;
+alter table "ads_products" add column if not exists "target_tacos" numeric;
 alter table "ads_products" enable row level security;
 
 create table if not exists "ads_proposals" (
@@ -555,13 +591,15 @@ create table if not exists "ads_rules" (
   "enabled" boolean default true not null,
   "mode" text default 'propose'::text not null,
   "thresholds" jsonb default '{}'::jsonb not null,
-  "updated_at" timestamp with time zone default now() not null
+  "updated_at" timestamp with time zone default now() not null,
+  "lookback_days" integer
 );
 alter table "ads_rules" add column if not exists "rule" text;
 alter table "ads_rules" add column if not exists "enabled" boolean default true;
 alter table "ads_rules" add column if not exists "mode" text default 'propose'::text;
 alter table "ads_rules" add column if not exists "thresholds" jsonb default '{}'::jsonb;
 alter table "ads_rules" add column if not exists "updated_at" timestamp with time zone default now();
+alter table "ads_rules" add column if not exists "lookback_days" integer;
 alter table "ads_rules" enable row level security;
 
 create table if not exists "ads_search_terms" (
@@ -2120,6 +2158,16 @@ do $$ begin
   end if;
 end $$;
 do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'ads_keyword_bank_pkey' and conrelid = '"ads_keyword_bank"'::regclass) then
+    alter table "ads_keyword_bank" add constraint "ads_keyword_bank_pkey" PRIMARY KEY (id);
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'ads_keyword_lists_pkey' and conrelid = '"ads_keyword_lists"'::regclass) then
+    alter table "ads_keyword_lists" add constraint "ads_keyword_lists_pkey" PRIMARY KEY (scope, kind);
+  end if;
+end $$;
+do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'ads_keyword_ranges_pkey' and conrelid = '"ads_keyword_ranges"'::regclass) then
     alter table "ads_keyword_ranges" add constraint "ads_keyword_ranges_pkey" PRIMARY KEY (keyword_id, date_from, date_to);
   end if;
@@ -2490,6 +2538,11 @@ do $$ begin
   end if;
 end $$;
 do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'ads_keyword_bank_asin_norm_key' and conrelid = '"ads_keyword_bank"'::regclass) then
+    alter table "ads_keyword_bank" add constraint "ads_keyword_bank_asin_norm_key" UNIQUE (asin, norm);
+  end if;
+end $$;
+do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'ads_search_terms_key' and conrelid = '"ads_search_terms"'::regclass) then
     alter table "ads_search_terms" add constraint "ads_search_terms_key" UNIQUE (campaign, ad_group_id, keyword_id, term, date_from, date_to);
   end if;
@@ -2605,8 +2658,18 @@ do $$ begin
   end if;
 end $$;
 do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'ads_keyword_lists_kind_check' and conrelid = '"ads_keyword_lists"'::regclass) then
+    alter table "ads_keyword_lists" add constraint "ads_keyword_lists_kind_check" CHECK ((kind = ANY (ARRAY['whitelist'::text, 'blacklist'::text])));
+  end if;
+end $$;
+do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'ads_negative_keywords_level_check' and conrelid = '"ads_negative_keywords"'::regclass) then
     alter table "ads_negative_keywords" add constraint "ads_negative_keywords_level_check" CHECK ((level = ANY (ARRAY['ad group'::text, 'campaign'::text])));
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'ads_products_optimise_check' and conrelid = '"ads_products"'::regclass) then
+    alter table "ads_products" add constraint "ads_products_optimise_check" CHECK ((optimise = ANY (ARRAY['acos'::text, 'tacos'::text])));
   end if;
 end $$;
 do $$ begin
@@ -2627,6 +2690,11 @@ end $$;
 do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'ads_rank_checks_position_check' and conrelid = '"ads_rank_checks"'::regclass) then
     alter table "ads_rank_checks" add constraint "ads_rank_checks_position_check" CHECK ((("position" >= 1) AND ("position" <= 48)));
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'ads_rules_lookback_days_check' and conrelid = '"ads_rules"'::regclass) then
+    alter table "ads_rules" add constraint "ads_rules_lookback_days_check" CHECK ((lookback_days = ANY (ARRAY[7, 14, 30, 60])));
   end if;
 end $$;
 do $$ begin
@@ -3454,3 +3522,4 @@ insert into schema_migrations (name) values ('20261002001600_pl_review_dumps.sql
 insert into schema_migrations (name) values ('20261003000100_stock_orders.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261003000200_stock_corrections.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261003000300_purchase_items.sql') on conflict do nothing;
+insert into schema_migrations (name) values ('20261003000500_ads_phase5.sql') on conflict do nothing;

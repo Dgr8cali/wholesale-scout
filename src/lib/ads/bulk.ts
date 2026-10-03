@@ -180,7 +180,9 @@ export type BulkChange =
       targetingType?: "Manual" | "Auto";
       /** Product targeting rows: an auto campaign's targeting groups, or asin="B0…" in a manual one. */
       targets?: { expression: string; bid: number; state: "enabled" | "paused" }[];
-      placements?: { placement: string; percentage: number }[] }
+      placements?: { placement: string; percentage: number }[];
+      /** Negative keywords in its ad group from the start (the product's blacklist). */
+      negatives?: { text: string; matchType: "Negative phrase" | "Negative exact" }[] }
   /** Negative keywords can't be paused: archived is how one is switched off. */
   | { kind: "negative_state"; campaignId: string; adGroupId: string | null; keywordId: string; state: "enabled" | "archived" };
 
@@ -199,6 +201,7 @@ export function bulkRows(c: BulkChange): BulkRow[] {
       { ...p, Entity: "Product ad", "Ad group ID": c.adGroupName, SKU: c.sku, State: "enabled" },
       ...c.keywords.map((k) => ({ ...p, Entity: "Keyword", "Ad group ID": c.adGroupName, "Keyword text": k.text, "Match type": k.matchType, Bid: money(k.bid), State: "enabled" })),
       ...(c.targets ?? []).map((t) => ({ ...p, Entity: "Product targeting", "Ad group ID": c.adGroupName, "Product targeting expression": t.expression, Bid: money(t.bid), State: t.state })),
+      ...(c.negatives ?? []).map((x) => ({ ...p, Entity: "Negative keyword", "Ad group ID": c.adGroupName, "Keyword text": x.text, "Match type": x.matchType, State: "enabled" })),
     ];
   }
   return [bulkRow(c)];
@@ -266,6 +269,6 @@ export function describeChange(c: BulkChange): string {
     case "create_keyword": return `New keyword "${c.text}" (${c.matchType.toLowerCase()}) at £${c.bid.toFixed(2)} in campaign ${c.campaignId}`;
     case "create_negative": return `New ${c.matchType.toLowerCase()} "${c.text}" in campaign ${c.campaignId}${c.adGroupId ? "" : " (campaign level)"}`;
     case "negative_state": return `Negative ${c.keywordId}: ${c.state}`;
-    case "create_campaign": return `New ${c.targetingType === "Auto" ? "auto" : "manual"} campaign "${c.name}" at £${c.dailyBudget.toFixed(2)}/day: ${c.keywords.length ? `${c.keywords.length} keywords` : `${c.targets?.length ?? 0} targets`}`;
+    case "create_campaign": return `New ${c.targetingType === "Auto" ? "auto" : "manual"} campaign "${c.name}" at £${c.dailyBudget.toFixed(2)}/day: ${c.keywords.length ? `${c.keywords.length} keywords` : `${c.targets?.length ?? 0} targets`}${c.negatives?.length ? `, ${c.negatives.length} negative${c.negatives.length === 1 ? "" : "s"}` : ""}`;
   }
 }

@@ -46,9 +46,11 @@ describe("runRules on the pill box account (target 30%, price £8.99)", () => {
 
   it("bid down: pill organiser 3 times a day in EXACT HERO (110% ACoS)", () => {
     const p = find("bid_down", "pill organiser 3 times a day", EXACT_HERO)!;
-    expect(p).toMatchObject({ current: "£0.40", proposed: "£0.19", confidence: "medium" });
+    // 2 orders / 29 clicks (6.9%), smoothed towards the product's 13 / 195 (6.7%) by 20 clicks = 6.8%: 0.3 × £8.99 × 6.8% = £0.18.
+    expect(p).toMatchObject({ current: "£0.40", proposed: "£0.18", confidence: "medium" });
     expect(p.reason).toMatch(/29 clicks, 2 orders, £19\.81 spent, £17\.98 sales = 110\.2% ACoS/);
-    expect(p.changes[0]).toMatchObject({ kind: "keyword_bid", campaignId: EXACT_HERO, bid: 0.19 });
+    expect(p.reason).toMatch(/Conversion: 2 orders \/ 29 clicks raw 6\.9%, smoothed 6\.8% \(towards the product's 6\.7%\)/);
+    expect(p.changes[0]).toMatchObject({ kind: "keyword_bid", campaignId: EXACT_HERO, bid: 0.18 });
   });
 
   it("placement: no raise for a placement better than its campaign but itself over 1.2 × target", () => {
@@ -74,8 +76,9 @@ describe("runRules on the pill box account (target 30%, price £8.99)", () => {
     input.keywords = input.keywords.filter((k) => !(k.campaign === EXACT_HERO && k.text === "pill box"));
     const p = runRules(input).proposals.find((x) => x.rule === "harvest" && x.entity.label === "pill box")!;
     expect(p.changes[0]).toMatchObject({ kind: "create_keyword", campaignId: EXACT_HERO, text: "pill box", matchType: "Exact" });
-    // CPC £0.62 × 1.1 = £0.68, capped at 30% × £8.99 × 25% = £0.67
-    expect(p.changes[0]).toMatchObject({ bid: 0.67 });
+    // CPC £0.62 × 1.1 = £0.68, capped at 30% × £8.99 × smoothed conversion: 2 / 8 raw 25% → (2 + 20 × 6.7%) / 28 = 11.9% → £0.32
+    expect(p.changes[0]).toMatchObject({ bid: 0.32 });
+    expect(p.reason).toMatch(/2 orders \/ 8 clicks raw 25%, smoothed 12%/);
   });
 
   it("says what the bulk export can't tell", () => {
@@ -109,9 +112,12 @@ describe("rules on made-up data", () => {
     expect(r.proposals[0].changes[0]).toEqual({ kind: "keyword_state", campaignId: "111", adGroupId: "g1", keywordId: "k1", state: "paused" });
   });
 
-  it("bid down to the floor with no orders; nothing when the new bid isn't lower", () => {
-    expect(runRules(input({ keywords: [kw({ clicks: 12, cost: 6 })] })).proposals[0]).toMatchObject({ rule: "bid_down", proposed: "£0.10" });
-    // 3 orders in 10 clicks: 0.3 × £20 × 30% = £1.80 > £0.50
+  it("bid down with no orders goes to the smoothed bid (not straight to the floor); nothing when the new bid isn't lower", () => {
+    // 0 / 12, smoothed towards the product's 10 / 100 by 20 clicks: 2 / 32 = 6.25% → 0.3 × £20 × 6.25% = £0.38.
+    expect(runRules(input({ keywords: [kw({ clicks: 12, cost: 6 })] })).proposals[0]).toMatchObject({ rule: "bid_down", proposed: "£0.38" });
+    // With k = 0 there's no smoothing: 0% conversion → the £0.10 floor.
+    expect(runRules({ ...input({ keywords: [kw({ clicks: 12, cost: 6 })] }), smoothingK: 0 }).proposals[0]).toMatchObject({ proposed: "£0.10" });
+    // 3 orders in 10 clicks: smoothed (3 + 2) / 30 = 16.7% → 0.3 × £20 × 16.7% = £1.00 > £0.50
     expect(runRules(input({ keywords: [kw({ clicks: 10, cost: 30, orders: 3, sales: 60 })] })).proposals).toEqual([]);
   });
 
@@ -196,7 +202,8 @@ describe("rules on made-up data", () => {
     expect(r.proposals.find((p) => p.rule === "budget")).toMatchObject({ current: "£10.00/day", proposed: "£12.00/day" });
     const up = r.proposals.find((p) => p.rule === "bid_up")!;
     expect(up).toMatchObject({ current: "£0.50", proposed: "£0.58" });
-    expect(up.reason).toMatch(/ran out of budget on 4 of the last 7 days/);
+    expect(up.reason).toMatch(/ran out of budget on 4 of the last 14 days/);
+    expect(up.reason).toMatch(/at most £0\.60: the bid for the target at 10\.0% smoothed conversion/);
     // With daily data, the notes are only what needs the API.
     expect(r.notes.bid_up).toEqual([expect.stringMatching(/Amazon Ads API/)]);
     expect(r.notes.budget).toEqual([expect.stringMatching(/hourly data: the Amazon Ads API/)]);

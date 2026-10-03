@@ -1,6 +1,7 @@
 import "server-only";
 import { asinFromName, dateFromFileName, parseReport, placementName, REPORT_LABEL, type AdsRow, type ParsedReport, type ReportType } from "../ads/parse";
 import { parseBulk, type ParsedBulk, type Perf } from "../ads/bulk";
+import { insightsFor, type Insights } from "./adsInsights";
 import { add, breakEvenAcos, campaignTotals, chooseRanges, marginBeforeAds, profitAfterAds, ratios, termStatus, ZERO, type Range, type Totals, type UnitEconomics } from "../ads/metrics";
 import { computeFees, DEFAULT_FEE_ASSUMPTIONS, referralCategoryFor } from "../fees/engine";
 import { getKeepa } from "../keepa/client";
@@ -13,14 +14,20 @@ import { saveSnapshot } from "./process";
  * The Ads workspace's settings: the default target ACoS (30%), and the CPC private label's ad
  * estimate uses: £0.60 to start, then the account's trailing CPC after each import while "auto" is on.
  */
-export interface AdsSettings { targetAcos: number; cpc: number; cpcAuto: boolean }
-export const DEFAULT_ADS_SETTINGS: AdsSettings = { targetAcos: 30, cpc: 0.6, cpcAuto: true };
+export interface AdsSettings {
+  targetAcos: number; cpc: number; cpcAuto: boolean;
+  /** Smoothed conversion: how many clicks of the product's conversion a keyword's own is pulled towards. */
+  smoothingK: number;
+  /** Listing health's CTR benchmark, %. */
+  ctrBenchmark: number;
+}
+export const DEFAULT_ADS_SETTINGS: AdsSettings = { targetAcos: 30, cpc: 0.6, cpcAuto: true, smoothingK: 20, ctrBenchmark: 0.4 };
 
 export async function adsSettings(): Promise<AdsSettings> {
   const res = await db().from("ads_settings").select("key, value");
   if (res.error) return DEFAULT_ADS_SETTINGS; // before the migration
   const v = Object.fromEntries((res.data as { key: string; value: number }[]).map((r) => [r.key, Number(r.value)]));
-  return { targetAcos: v.targetAcos ?? 30, cpc: v.cpc ?? 0.6, cpcAuto: (v.cpcAuto ?? 1) >= 1 };
+  return { targetAcos: v.targetAcos ?? 30, cpc: v.cpc ?? 0.6, cpcAuto: (v.cpcAuto ?? 1) >= 1, smoothingK: v.smoothingK ?? 20, ctrBenchmark: v.ctrBenchmark ?? 0.4 };
 }
 
 export async function saveAdsSettings(input: Partial<AdsSettings>): Promise<AdsSettings> {
@@ -36,6 +43,16 @@ export async function saveAdsSettings(input: Partial<AdsSettings>): Promise<AdsS
     rows.push({ key: "cpc", value: v });
   }
   if (input.cpcAuto !== undefined) rows.push({ key: "cpcAuto", value: input.cpcAuto ? 1 : 0 });
+  if (input.smoothingK !== undefined) {
+    const v = Number(input.smoothingK);
+    if (!(Number.isInteger(v) && v >= 0 && v <= 500)) throw new Error("Smoothing must be a whole number of clicks, 0–500");
+    rows.push({ key: "smoothingK", value: v });
+  }
+  if (input.ctrBenchmark !== undefined) {
+    const v = Number(input.ctrBenchmark);
+    if (!(v > 0 && v < 10)) throw new Error("The CTR benchmark must be between 0 and 10%");
+    rows.push({ key: "ctrBenchmark", value: v });
+  }
   if (rows.length) must(await db().from("ads_settings").upsert(rows.map((r) => ({ ...r, updated_at: new Date().toISOString() })), { onConflict: "key" }), "save ads settings");
   return adsSettings();
 }
@@ -344,6 +361,9 @@ export interface AdsProduct {
   asin: string; title: string | null; price: number | null; landed_cost: number | null; referral_category: string | null;
   weight_g: number | null; dims: { l: number; w: number; h: number } | null; fba_fee: number | null; phase: "launch" | "steady";
   image?: string | null;
+  /** Optimise for ACoS (default) or TACoS, with the target TACoS (%). */
+  optimise?: "acos" | "tacos"; target_tacos?: number | null;
+  pl_candidate_id?: string | null;
 }
 
 export interface AsinEconomics extends UnitEconomics {
@@ -395,7 +415,7 @@ export async function adsDashboard(lookAsins: string[] = []) {
   const settings = await adsSettings();
   const figs = campaignFigures(all);
   const [products, targets, placementsRes, adsRes, kwRes, negRes] = await Promise.all([
-    db().from("ads_products").select("asin, title, image, price, landed_cost, referral_category, weight_g, dims, fba_fee, phase, pl_candidate_id"),
+    db().from("ads_products").select("asin, title, image, price, landed_cost, referral_category, weight_g, dims, fba_fee, phase, pl_candidate_id, optimise, target_tacos"),
     db().from("ads_targets").select("asin, target_acos_launch, target_acos_steady"),
     db().from("ads_placements").select("campaign, placement, percentage, date_from, date_to, impressions, clicks, cost, orders, sales, units"),
     db().from("ads_product_ads").select("campaign, sku, asin, state"),
@@ -419,7 +439,12 @@ export async function adsDashboard(lookAsins: string[] = []) {
 
   // Per ASIN.
   const asins = [...new Set(all.campaigns.map((c) => c.asin).filter((x): x is string => !!x))];
-  const asinRows = [];
+  const asinRows: {
+    asin: string; title: string | null; campaigns: number; totals: Totals; ratios: ReturnType<typeof ratios>; economics: AsinEconomics;
+    phase: "launch" | "steady"; targetAcos: number; profitAfterAds: ReturnType<typeof profitAfterAds>; from: string | null; to: string | null;
+    /** TACoS, organic share, TACoS mode and listing health. */
+    insights?: Insights;
+  }[] = [];
   const econByAsin = new Map<string, AsinEconomics>();
   for (const asin of asins) {
     const mine = figs.filter((f) => f.campaign.asin === asin && f.totals);
@@ -435,6 +460,19 @@ export async function adsDashboard(lookAsins: string[] = []) {
     });
   }
 
+  // Beyond ACoS: the sales split, TACoS mode's target and listing health. In TACoS mode the product's
+  // ACoS target is the one its TACoS target allows, so the chips and the rules follow it.
+  const insights = await insightsFor(asinRows, {
+    daily: (all.daily as Record<string, unknown>[]).map((r) => ({ campaign: r.campaign as string, date: r.date as string, impressions: n(r.impressions), clicks: Number(r.clicks), cost: Number(r.cost), orders: Number(r.orders), sales: Number(r.sales) })),
+    campaignAsin: new Map(all.campaigns.map((c) => [c.id, c.asin])), products: prod, ctrBenchmark: settings.ctrBenchmark / 100,
+  });
+  for (const r of asinRows) {
+    const i = insights[r.asin];
+    r.insights = i;
+    if (i?.acosForTacos) r.targetAcos = i.acosForTacos.acos;
+  }
+  const effectiveTarget = (asin: string | null) => (asin ? asinRows.find((r) => r.asin === asin)?.targetAcos ?? targetFor(asin).target : targetFor(asin).target);
+
   // Per campaign.
   const campaigns = figs.map((f) => {
     const e = f.campaign.asin ? econByAsin.get(f.campaign.asin) : undefined;
@@ -446,7 +484,7 @@ export async function adsDashboard(lookAsins: string[] = []) {
     return {
       ...f.campaign, totals: f.totals, ratios: f.totals ? ratios(f.totals) : null, source: f.source, from: f.from, to: f.to, placements, advertised,
       keywords: keywordRows.filter((k) => k.campaign === f.campaign.id).length, negatives: negativeRows.filter((k) => k.campaign === f.campaign.id).length,
-      breakEvenAcos: e?.breakEvenAcos ?? null, targetAcos: targetFor(f.campaign.asin).target,
+      breakEvenAcos: e?.breakEvenAcos ?? null, targetAcos: effectiveTarget(f.campaign.asin),
       profitAfterAds: f.totals && e ? profitAfterAds(f.totals, e) : null,
     };
   }).sort((a, b) => (b.totals?.cost ?? 0) - (a.totals?.cost ?? 0));
@@ -545,6 +583,15 @@ export async function saveAdsProduct(asin: string, patch: Partial<Omit<AdsProduc
   if (!isAsin(asin)) throw new Error("An ASIN is 10 letters and digits");
   const row: Record<string, unknown> = { asin, updated_at: new Date().toISOString() };
   for (const k of ["title", "image", "price", "landed_cost", "referral_category", "weight_g", "dims", "fba_fee", "phase"] as const) if (patch[k] !== undefined) row[k] = patch[k];
+  if (patch.optimise !== undefined) {
+    if (!["acos", "tacos"].includes(String(patch.optimise))) throw new Error("Optimise for acos or tacos");
+    row.optimise = patch.optimise;
+  }
+  if (patch.target_tacos !== undefined) {
+    const v = patch.target_tacos == null || (patch.target_tacos as unknown) === "" ? null : Number(patch.target_tacos);
+    if (v != null && !(v > 0 && v < 100)) throw new Error("Target TACoS must be between 0 and 100%");
+    row.target_tacos = v;
+  }
   must(await db().from("ads_products").upsert(row, { onConflict: "asin" }), "save product");
 }
 

@@ -17,22 +17,25 @@ export function AdsSettingsTab() {
   const [acos, setAcos] = useState<string | null>(null);
   const [cpc, setCpc] = useState("");
   const [cpcAuto, setCpcAuto] = useState(true);
+  const [smoothK, setSmoothK] = useState("20");
+  const [ctrB, setCtrB] = useState("0.4");
   const [error, setError] = useState<string | null>(null);
+  const take = (st: { targetAcos: number; cpc: number; cpcAuto: boolean; smoothingK: number; ctrBenchmark: number }) => {
+    setAcos(String(st.targetAcos));
+    setCpc(st.cpc.toFixed(2));
+    setCpcAuto(st.cpcAuto);
+    setSmoothK(String(st.smoothingK));
+    setCtrB(String(st.ctrBenchmark));
+  };
   useEffect(() => {
-    api<{ settings: { targetAcos: number; cpc: number; cpcAuto: boolean } }>("/api/ads/settings").then((r) => {
-      setAcos(String(r.settings.targetAcos));
-      setCpc(r.settings.cpc.toFixed(2));
-      setCpcAuto(r.settings.cpcAuto);
-    }).catch((e: Error) => setError(e.message));
+    api<{ settings: { targetAcos: number; cpc: number; cpcAuto: boolean; smoothingK: number; ctrBenchmark: number } }>("/api/ads/settings").then((r) => take(r.settings)).catch((e: Error) => setError(e.message));
   }, []);
   if (error) return <ErrorState title="Couldn't load the Ads settings" message={error} />;
   if (acos == null) return <Skeleton className="h-40 rounded-lg" />;
   const save = async () => {
     try {
-      const r = await api<{ settings: { targetAcos: number; cpc: number; cpcAuto: boolean } }>("/api/ads/settings", { method: "PUT", json: { targetAcos: Number(acos), cpc: Number(cpc), cpcAuto } });
-      setAcos(String(r.settings.targetAcos));
-      setCpc(r.settings.cpc.toFixed(2));
-      setCpcAuto(r.settings.cpcAuto);
+      const r = await api<{ settings: { targetAcos: number; cpc: number; cpcAuto: boolean; smoothingK: number; ctrBenchmark: number } }>("/api/ads/settings", { method: "PUT", json: { targetAcos: Number(acos), cpc: Number(cpc), cpcAuto, smoothingK: Number(smoothK), ctrBenchmark: Number(ctrB) } });
+      take(r.settings);
       toast.success("Saved");
     } catch (e) {
       toast.error((e as Error).message);
@@ -60,6 +63,19 @@ export function AdsSettingsTab() {
         </label>
         <label className="flex items-center gap-2 pb-6 text-sm"><Switch checked={cpcAuto} onCheckedChange={setCpcAuto} /> Follow the account&apos;s trailing CPC after each import</label>
       </div>
+      <div className="flex flex-wrap items-start gap-4">
+        <label className="block w-56 space-y-1.5">
+          <span className="field-label">Conversion smoothing (clicks)</span>
+          <Input className="num" type="number" step={1} min={0} value={smoothK} onChange={(e) => setSmoothK(e.target.value)} />
+          <span className="block text-2xs text-muted-foreground">Bids use (orders + k × the product&apos;s conversion) ÷ (clicks + k), so 3 orders from 12 clicks doesn&apos;t read as 25%. Default 20; 0 turns it off</span>
+        </label>
+        <label className="block w-56 space-y-1.5">
+          <span className="field-label">CTR benchmark (%)</span>
+          <Input className="num" type="number" step="0.05" min={0.05} value={ctrB} onChange={(e) => setCtrB(e.target.value)} />
+          <span className="block text-2xs text-muted-foreground">Listing health: an ad CTR under 60% of this is likely a listing problem. Default 0.4%</span>
+        </label>
+      </div>
+      <KeywordListsEditor />
       <p className="max-w-3xl text-sm text-muted-foreground">
         The rules&apos; thresholds (harvest, negatives, bid changes, pause, placements, budgets, revive) are set on <Link className="underline" href="/ads/rules">Ads → Rules</Link>, with on/off, mode and a dry run per rule.
       </p>
@@ -134,6 +150,64 @@ function AiSettings() {
       </div>
       <p className="text-2xs text-muted-foreground">Prices are the cost line&apos;s defaults per model; check them against Anthropic&apos;s pricing page and edit if they differ.</p>
       <label className="flex items-center gap-2 text-sm"><Switch checked={draft.reviewSchedule} onCheckedChange={(v) => setDraft({ ...draft, reviewSchedule: v })} /> Run the monthly review on the 1st at 06:00 (last month; off by default)</label>
+    </div>
+  );
+}
+
+interface Lists { whitelist: string[]; blacklist: string[] }
+interface ListsData { account: Lists; products: Record<string, Lists & { useAccount: boolean }> }
+
+/** Settings → Ads → Keyword lists: the account's whitelist and blacklist, and a product's own. */
+function KeywordListsEditor() {
+  const [data, setData] = useState<ListsData | null>(null);
+  const [products, setProducts] = useState<{ asin: string; title: string | null }[]>([]);
+  const [scope, setScope] = useState("account");
+  const [draft, setDraft] = useState<{ whitelist: string; blacklist: string; useAccount: boolean } | null>(null);
+  const fill = (d: ListsData, sc: string) => {
+    const l = sc === "account" ? { ...d.account, useAccount: true } : d.products[sc] ?? { whitelist: [], blacklist: [], useAccount: true };
+    setDraft({ whitelist: l.whitelist.join("\n"), blacklist: l.blacklist.join("\n"), useAccount: l.useAccount });
+  };
+  useEffect(() => {
+    api<ListsData>("/api/ads/keyword-lists").then((d) => { setData(d); fill(d, "account"); }).catch((e: Error) => toast.error(e.message));
+    api<{ asins: { asin: string; title: string | null }[] }>("/api/ads/dashboard").then((r) => setProducts(r.asins.map((a) => ({ asin: a.asin, title: a.title })))).catch(() => {});
+  }, []);
+  if (!data || !draft) return null;
+  const save = async () => {
+    try {
+      const d = await api<ListsData>("/api/ads/keyword-lists", { method: "PUT", json: { scope, whitelist: draft.whitelist, blacklist: draft.blacklist, useAccount: draft.useAccount } });
+      setData(d);
+      fill(d, scope);
+      toast.success("Keyword lists saved: the rules use them from the next run");
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
+  return (
+    <div className="space-y-3 border-t pt-4" id="keyword-lists">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="space-y-1">
+          <h3 className="text-sm font-semibold">Keyword lists</h3>
+          <p className="max-w-3xl text-sm text-muted-foreground"><b>Whitelist</b>: terms never negatived or paused (your brand name, the product&apos;s exact head terms); the rules skip them and say so. <b>Blacklist</b>: words or phrases always added as negative phrase to a product&apos;s new campaigns (the launcher and harvest&apos;s new Exact campaign), and proposed for its broad and auto campaigns. One term a line.</p>
+        </div>
+        <Button variant="outline" onClick={save}>Save lists</Button>
+      </div>
+      <label className="flex items-center gap-2 text-sm"><span className="field-label">Lists for</span>
+        <NativeSelect value={scope} onChange={(e) => { setScope(e.target.value); fill(data, e.target.value); }}>
+          <NativeSelectOption value="account">The whole account</NativeSelectOption>
+          {products.map((p) => <NativeSelectOption key={p.asin} value={p.asin}>{p.asin}{p.title ? ` · ${p.title.slice(0, 40)}` : ""}</NativeSelectOption>)}
+        </NativeSelect></label>
+      {scope !== "account" && (
+        <label className="flex items-center gap-2 text-sm"><Switch checked={draft.useAccount} onCheckedChange={(v) => setDraft({ ...draft, useAccount: v })} /> Also use the account&apos;s lists (these add to them){!draft.useAccount ? ": off, so only this product's own apply" : ""}</label>
+      )}
+      <div className="grid gap-3 md:grid-cols-2">
+        <label className="space-y-1"><span className="field-label">Whitelist{scope !== "account" ? " (this product's own)" : ""}</span>
+          <textarea className="min-h-24 w-full rounded-md border bg-transparent px-2 py-1.5 text-sm" value={draft.whitelist} onChange={(e) => setDraft({ ...draft, whitelist: e.target.value })} placeholder="your brand\npill organiser 7 day" /></label>
+        <label className="space-y-1"><span className="field-label">Blacklist{scope !== "account" ? " (this product's own)" : ""}</span>
+          <textarea className="min-h-24 w-full rounded-md border bg-transparent px-2 py-1.5 text-sm" value={draft.blacklist} onChange={(e) => setDraft({ ...draft, blacklist: e.target.value })} placeholder="free\nused\nreplacement" /></label>
+      </div>
+      {scope !== "account" && draft.useAccount && (data.account.whitelist.length > 0 || data.account.blacklist.length > 0) && (
+        <p className="text-xs text-muted-foreground">Plus the account&apos;s: whitelist {data.account.whitelist.join(", ") || "—"}; blacklist {data.account.blacklist.join(", ") || "—"}.</p>
+      )}
     </div>
   );
 }
