@@ -24,6 +24,8 @@ On **Niches**, drop the CSV (or choose it), pick its **Opportunity Explorer cate
 
 **Duplicates.** Opportunity Explorer often lists the same niche under two names ("window cleaner" and "window cleaning equipment": the same three search terms, the same search volume). The first is kept, and the other shows under it as "also: …".
 
+**The same niche in several categories.** A niche can be in more than one category's download (pool heater is in DIY & Tools and Garden). It's one row, with every category it appeared in shown as chips under its name; filtering by a category shows it under each. When two rows merge, the one kept is the one with a candidate, else the one furthest along (shortlisted before new, new before dismissed), else the older one; it gets every category and alias, both rows' notes, the shape and incumbent check, and the Keepa tokens both spent. Re-importing a category doesn't remove a niche that's also in another: it just drops this category from its chips if the new file no longer has it.
+
 ## The score (0–100)
 
 Every niche is scored from Opportunity Explorer's own figures. Open a niche (the arrow by its name) to see each part and its points.

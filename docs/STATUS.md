@@ -1,8 +1,7 @@
 # Wholesale Scout: status
 
 Read this first in a new session. Keep it current: every commit that changes a feature updates
-it (what's built, the backlog, the rough edges). Last updated: 5 Oct 2026 (Niche Import paged on the server; the 1,000-row cap fixed
-everywhere it bit).
+it (what's built, the backlog, the rough edges). Last updated: 5 Oct 2026 (Niche Import: one row per niche across categories).
 
 Wholesale Scout is a single-user Amazon UK seller's workbench: Next.js 16 (App Router, `proxy.ts`
 password gate), Supabase (Postgres, RLS on, service-role access from the server only), Vercel
@@ -43,7 +42,9 @@ open/contested/dominated) and creates candidates; re-importing a category keeps 
 shape. The category is picked from Opportunity Explorer's 25 top-level UK categories (or Other…),
 each mapped to the rate card category candidates use for fees. Home has a Niches tile. The Niches table is filtered, flag-hidden,
 sorted and paged in SQL (100 a page, 50–500, "showing X–Y of N"), with the summary strip counted
-over every niche in scope. Quotes turns supplier quotes into
+over every niche in scope. A niche in several categories' downloads (identical search terms and search volume) is
+one row with every category (`categories`, shown as chips), its status, notes, shape and ledgers merged,
+on every import; the existing data was merged (233 niches across categories, 242 rows folded in). Quotes turns supplier quotes into
 a landed cost per unit and total cash (FX, freight, duty, import VAT, inspection), writes it into
 Gates 0 and 7, chooses a supplier and generates the RFQ. Gate 4's review miner takes pasted 1–3★ reviews per top-5 ASIN (`pl_review_dumps`), splits
 them, counts complaint phrases locally (stop words, bigrams/trigrams, an editable synonym list) into a

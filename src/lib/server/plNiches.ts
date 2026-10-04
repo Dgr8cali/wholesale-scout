@@ -4,6 +4,7 @@ import { addDailyTokens, PL_KEEP_DAYS, type TokensByDay } from "../keepaLedger";
 import { DEFAULT_BRAND_TERMS, parseBrandTerms } from "../pl/brandTerms";
 import { nicheFlags, scoreNiche } from "../pl/nicheScore";
 import { parseNichesCsv, type ParsedNiche } from "../pl/poeNiches";
+import { mergeGroup, nicheKey, type MergeRow } from "../pl/nicheMerge";
 import { activeRateCard, allRows, chunks, db, must } from "./db";
 import { createCandidate } from "./pl";
 import { termCheckPlan, termIncumbentCheck } from "./plHunt";
@@ -18,6 +19,8 @@ export interface NicheRow {
   avg_price: number | null; min_price: number | null; max_price: number | null; return_rate: number | null;
   extra: { aliases?: string[]; incumbents?: unknown }; score: number | null; score_breakdown: unknown; flags: string[];
   shape: "open" | "contested" | "dominated" | null; status: NicheStatus; notes: string | null; candidate_id: string | null;
+  /** Every category whose download had it (the same niche in two categories is one row). */
+  categories: string[];
   created_at: string; updated_at: string;
   /** From its import. */
   category?: string;
@@ -113,11 +116,23 @@ export async function importNiches(x: { text: string; category: string; filename
   const d = db();
   const brands = await brandTerms();
   const old = await importsFor(category);
+  const oldIds = old.map((o) => o.id);
+  const sameCat = (c: string) => c.trim().toLowerCase() === category.toLowerCase();
+  // Every niche listing this category: owned by its old import, or merged into another category's row.
+  const listing = await allRows<Record<string, unknown>>((a, b) => d.from("pl_niches").select("id, import_id, customer_need, categories, status, notes, shape, candidate_id, extra, keepa_by_day").order("id").range(a, b), "niches in the category")
+    .then((rows) => rows.filter((r) => ((r.categories as string[]) ?? []).some(sameCat) || oldIds.includes(r.import_id as string)));
   const kept = new Map<string, Record<string, unknown>>();
-  if (old.length) {
-    const oldIds = old.map((o) => o.id);
-    const rows = await allRows<Record<string, unknown>>((a, b) => d.from("pl_niches").select("id, customer_need, status, notes, shape, candidate_id, extra, keepa_by_day").in("import_id", oldIds).order("id").range(a, b), "old niches");
-    for (const r of rows) kept.set(String(r.customer_need).toLowerCase(), r);
+  for (const r of listing) kept.set(String(r.customer_need).toLowerCase(), r);
+  // A niche also in other categories stays: it leaves this category (back if the new file has it)
+  // and, if this category's old import owned it, moves to another category's import.
+  const ownerOf = new Map((await allRows<{ id: string; category: string }>((a, b) => d.from("pl_niche_imports").select("id, category").order("id").range(a, b), "imports"))
+    .filter((i) => !oldIds.includes(i.id)).map((i) => [i.category.trim().toLowerCase(), i.id]));
+  for (const r of listing) {
+    const others = ((r.categories as string[]) ?? []).filter((c) => !sameCat(c));
+    if (!others.length) continue;
+    const owner = oldIds.includes(r.import_id as string) ? others.map((c) => ownerOf.get(c.trim().toLowerCase())).find(Boolean) : (r.import_id as string);
+    if (!owner) continue;
+    must(await d.from("pl_niches").update({ categories: others, import_id: owner, updated_at: now() }).eq("id", r.id), "keep a niche in its other categories");
   }
   const imp = must(await d.from("pl_niche_imports").insert({
     category, marketplace: x.marketplace?.trim() || "UK", filename: x.filename ?? null, row_count: p.niches.length, unmapped: p.unmapped, duplicates: p.duplicates,
@@ -128,7 +143,7 @@ export async function importNiches(x: { text: string; category: string; filename
     if (k) preserved++;
     const prevExtra = (k?.extra ?? {}) as Record<string, unknown>;
     return {
-      import_id: imp.id, customer_need: n.customer_need, search_terms: n.search_terms, top_clicked_products: n.top_clicked_products,
+      import_id: imp.id, categories: [category], customer_need: n.customer_need, search_terms: n.search_terms, top_clicked_products: n.top_clicked_products,
       sv_360: n.sv_360, growth_180: n.growth_180, sv_90: n.sv_90, growth_90: n.growth_90, units_360_min: n.units_360_min, units_360_max: n.units_360_max,
       units_per_product_min: n.units_per_product_min, units_per_product_max: n.units_per_product_max, units_per_product_mid: n.units_per_product_mid,
       avg_price: n.avg_price, min_price: n.min_price, max_price: n.max_price, return_rate: n.return_rate,
@@ -140,8 +155,39 @@ export async function importNiches(x: { text: string; category: string; filename
     };
   });
   for (const c of chunks(rows, 200)) must(await d.from("pl_niches").insert(c), "save niches");
-  if (old.length) must(await d.from("pl_niche_imports").delete().in("id", old.map((o) => o.id)), "replace the old import");
-  return { importId: imp.id, category, niches: rows.length, duplicates: p.duplicates, preserved, replaced: old.length > 0, unmapped: p.unmapped };
+  if (old.length) must(await d.from("pl_niche_imports").delete().in("id", oldIds), "replace the old import");
+  // The same niche downloaded in another category: one row, every category on it.
+  const merged = await mergeDuplicateNiches();
+  return { importId: imp.id, category, niches: rows.length, duplicates: p.duplicates, preserved, replaced: old.length > 0, unmapped: p.unmapped, mergedAcrossCategories: merged.merged };
+}
+
+/**
+ * Merge niches that are the same niche in different categories (identical search terms and search
+ * volume): one row kept, with every category, the furthest status, the notes, the shape and the
+ * Keepa ledgers of all of them. After every import, and once for the rows already there.
+ */
+export async function mergeDuplicateNiches(): Promise<{ groups: number; merged: number }> {
+  const d = db();
+  const rows = await allRows<Record<string, unknown>>((a, b) => d.from("pl_niches").select("id, customer_need, search_terms, sv_360, categories, status, notes, shape, candidate_id, extra, keepa_by_day, created_at, flags").order("id").range(a, b), "niches to merge");
+  const groups = new Map<string, Record<string, unknown>[]>();
+  for (const r of rows) {
+    const k = nicheKey(r.search_terms as string[], r.sv_360 == null ? null : Number(r.sv_360));
+    if (k) groups.set(k, [...(groups.get(k) ?? []), r]);
+  }
+  let g = 0, merged = 0;
+  for (const list of groups.values()) {
+    if (list.length < 2) continue;
+    g++;
+    const m = mergeGroup(list as unknown as MergeRow[]);
+    const keepRow = list.find((r) => r.id === m.keep.id)!;
+    must(await d.from("pl_niches").update({
+      ...m.patch, updated_at: now(),
+      ...derivedCols({ customer_need: m.keep.customer_need, search_terms: keepRow.search_terms as string[], flags: keepRow.flags as string[], shape: m.patch.shape, extra: m.patch.extra }),
+    }).eq("id", m.keep.id), "merge niches");
+    for (const c of chunks(m.drop, 200)) must(await d.from("pl_niches").delete().in("id", c), "drop merged niches");
+    merged += m.drop.length;
+  }
+  return { groups: g, merged };
 }
 
 /* ===================== reading and acting ===================== */
@@ -167,18 +213,19 @@ export interface NicheQuery {
   hideFlags?: string[]; sort?: NicheSort; dir?: "asc" | "desc"; page?: number; pageSize?: number;
 }
 
-const COLS = "id, import_id, customer_need, search_terms, top_clicked_products, sv_360, growth_180, sv_90, growth_90, units_360_min, units_360_max, units_per_product_min, units_per_product_max, units_per_product_mid, avg_price, min_price, max_price, return_rate, extra, score, score_breakdown, flags, shape, status, notes, candidate_id, created_at, updated_at";
+const COLS = "id, import_id, categories, customer_need, search_terms, top_clicked_products, sv_360, growth_180, sv_90, growth_90, units_360_min, units_360_max, units_per_product_min, units_per_product_max, units_per_product_mid, avg_price, min_price, max_price, return_rate, extra, score, score_breakdown, flags, shape, status, notes, candidate_id, created_at, updated_at";
 
 /** The niches matching the filters, sorted and paged in SQL, with the total that match. */
 export async function nichePage(x: NicheQuery) {
   const d = db();
   const { imports } = await listImports();
   const cat = new Map(imports.map((i) => [i.id, i.category]));
-  const importIds = x.category ? imports.filter((i) => i.category === x.category).map((i) => i.id) : null;
+  void imports;
   const pageSize = Math.min(500, Math.max(10, Math.round(Number(x.pageSize) || 100)));
   const page = Math.max(1, Math.round(Number(x.page) || 1));
   let q = d.from("pl_niches").select(COLS, { count: "exact" });
-  if (importIds) q = q.in("import_id", importIds.length ? importIds : ["00000000-0000-0000-0000-000000000000"]);
+  // A niche in several categories shows under each.
+  if (x.category) q = q.contains("categories", [x.category]);
   if (x.minScore != null && Number.isFinite(Number(x.minScore)) && Number(x.minScore) > 0) q = q.gte("score", Number(x.minScore));
   const band = x.price ? (PRICE_BANDS[x.price] as { gte?: number; lte?: number; lt?: number; gt?: number }) : null;
   if (band?.gte != null) q = q.gte("avg_price", band.gte);
@@ -205,11 +252,9 @@ export async function nichePage(x: NicheQuery) {
  */
 export async function nicheStats(x: { category?: string | null; hideFlags?: string[] }) {
   const d = db();
-  const { imports } = await listImports();
-  const ids = x.category ? imports.filter((i) => i.category === x.category).map((i) => i.id) : null;
   const scope = () => {
     const q = d.from("pl_niches").select("id", { count: "exact", head: true });
-    return ids ? q.in("import_id", ids.length ? ids : ["00000000-0000-0000-0000-000000000000"]) : q;
+    return x.category ? q.contains("categories", [x.category]) : q;
   };
   const hide = (x.hideFlags ?? []).filter((f) => /^[A-Z_]+$/.test(f));
   const [total, scoring60, hidden, shortlisted, checked] = await Promise.all([

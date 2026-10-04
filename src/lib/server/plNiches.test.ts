@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
 import { __setDbForTests } from "./db";
 import { FakeDb } from "./fakeDb";
-import { bulkNicheStatus, importNiches, nichePage, nicheStats, previewNicheImport, reflagNiches, saveBrandTerms, updateNiche } from "./plNiches";
+import { bulkNicheStatus, importNiches, mergeDuplicateNiches, nichePage, nicheStats, previewNicheImport, reflagNiches, saveBrandTerms, updateNiche } from "./plNiches";
 
 const csv = readFileSync(join(__dirname, "../../../docs/samples/poe/diy-tools.csv"), "utf8");
 
@@ -67,7 +67,7 @@ describe("Niche Import (FakeDb)", () => {
       return `"${f.join('","')}"`;
     })].join("\n");
     expect((await importNiches({ text: file("", 0, null), category: "DIY & Tools" })).niches).toBe(500);
-    expect((await importNiches({ text: file("(garden)", 1, 321), category: "Garden" })).niches).toBe(500);
+    expect((await importNiches({ text: file("(garden)", 100000, 321), category: "Garden" })).niches).toBe(500);
     expect(fake.tables.pl_niches).toHaveLength(1000);
 
     const p1 = await nichePage({ status: "all", pageSize: 100 });
@@ -92,5 +92,29 @@ describe("Niche Import (FakeDb)", () => {
     await saveBrandTerms("window cleaner");
     expect(fake.tables.pl_niches.filter((n) => (n.flags as string[]).includes("BIG_BRAND") && String(n.customer_need).startsWith("window cleaner"))).toHaveLength(2);
     expect(await reflagNiches()).toBe(0);
+  });
+
+  it("the same niche in two categories' downloads is one row with both categories; status merges; re-imports keep it", async () => {
+    await importNiches({ text: csv, category: "DIY & Tools" });
+    const wc = fake.tables.pl_niches.find((n) => n.customer_need === "window cleaner")!;
+    await updateNiche(String(wc.id), { status: "shortlisted", notes: "squeegee" });
+    // The same download under Garden: every niche is already there.
+    const g = await importNiches({ text: csv, category: "Garden" });
+    expect(g.mergedAcrossCategories).toBe(496);
+    expect(fake.tables.pl_niches).toHaveLength(496);
+    const one = fake.tables.pl_niches.find((n) => n.customer_need === "window cleaner")!;
+    expect(one).toMatchObject({ id: wc.id, status: "shortlisted", notes: "squeegee" });
+    expect((one.categories as string[]).sort()).toEqual(["DIY & Tools", "Garden"]);
+    expect((await nichePage({ category: "Garden", status: "all" })).total).toBe(496);
+    expect((await nicheStats({ category: "DIY & Tools" })).shortlisted).toBe(1);
+    // DIY & Tools again without window cleaner: it stays, under Garden only, on Garden's import.
+    const lines = csv.replace(/\r/g, "").split("\n").filter((l) => !l.startsWith('"window cleaner"') && !l.startsWith('"window cleaning equipment"'));
+    await importNiches({ text: lines.join("\n"), category: "DIY & Tools" });
+    const after = fake.tables.pl_niches.find((n) => n.customer_need === "window cleaner")!;
+    expect(after).toMatchObject({ id: wc.id, status: "shortlisted", categories: ["Garden"] });
+    expect(fake.tables.pl_niche_imports.find((i) => i.id === after.import_id)!.category).toBe("Garden");
+    expect(fake.tables.pl_niches).toHaveLength(496);
+    // Nothing left to merge.
+    expect(await mergeDuplicateNiches()).toEqual({ groups: 0, merged: 0 });
   });
 });

@@ -123,8 +123,8 @@ function ImportCard({ imports, onImported }: { imports: Imp[]; onImported: () =>
     try {
       if (action === "preview") setPreview(await api<Preview>("/api/pl/niches", { method: "POST", json: { action, text: file.text, category } }));
       else {
-        const r = await api<{ niches: number; duplicates: number; preserved: number; replaced: boolean }>("/api/pl/niches", { method: "POST", json: { action, text: file.text, category, filename: file.name } });
-        toast.success(`${category}: ${r.niches} niches imported${r.duplicates ? `, ${r.duplicates} duplicates merged` : ""}${r.replaced ? `; the previous import replaced, ${r.preserved} kept their status and notes` : ""}`);
+        const r = await api<{ niches: number; duplicates: number; preserved: number; replaced: boolean; mergedAcrossCategories?: number }>("/api/pl/niches", { method: "POST", json: { action, text: file.text, category, filename: file.name } });
+        toast.success(`${category}: ${r.niches} niches imported${r.duplicates ? `, ${r.duplicates} duplicates merged` : ""}${r.mergedAcrossCategories ? `, ${r.mergedAcrossCategories} already imported under another category (one row, both categories)` : ""}${r.replaced ? `; the previous import replaced, ${r.preserved} kept their status and notes` : ""}`);
         setFile(null); setPreview(null);
         onImported();
       }
@@ -293,7 +293,11 @@ function NicheTable({ data, loading, f, change, hide, setHide, sorting, page, se
                   <button type="button" className="flex items-start gap-1 text-left font-medium hover:text-brand" onClick={() => setOpen(open === n.id ? null : n.id)}>
                     <ChevronRightIcon className={cn("mt-0.5 size-3.5 flex-none transition-transform", open === n.id && "rotate-90")} />{n.customer_need}
                   </button>
-                  {!f.category && <span className="block pl-4 text-2xs text-muted-foreground">{n.category}</span>}
+                  {(n.categories?.length ?? 0) > 0 && (!f.category || n.categories.length > 1) && (
+                    <span className="flex flex-wrap gap-1 pt-0.5 pl-4" title={n.categories.length > 1 ? "In each of these categories' downloads: one niche" : undefined}>
+                      {n.categories.map((c) => <span key={c} className={cn("rounded-full px-1.5 py-px text-[10px]", c === f.category ? "bg-brand-soft text-brand" : "bg-surface-2 text-muted-foreground")}>{c}</span>)}
+                    </span>
+                  )}
                   {(n.extra.aliases?.length ?? 0) > 0 && <span className="block pl-4 text-2xs text-muted-foreground">also: {n.extra.aliases!.join(", ")}</span>}
                   {n.notes && <span className="block pl-4 text-2xs text-muted-foreground italic">{n.notes.slice(0, 80)}</span>}
                 </td>
