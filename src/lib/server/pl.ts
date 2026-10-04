@@ -451,12 +451,16 @@ export async function plDashboard() {
   const month = ukDay().slice(0, 7);
   const inMonth = (l: TokensByDay | null | undefined) => Object.entries(l ?? {}).reduce((a, [day, t]) => a + (day.startsWith(month) ? t : 0), 0);
   const candidateLedgers = must(await db().from("pl_candidates").select("keepa_by_day"), "ledgers") as { keepa_by_day: TokensByDay | null }[];
+  const niches = await db().from("pl_niches").select("status, shape, keepa_by_day");
+  const nicheRows = (niches.error ? [] : niches.data) as { status: string; shape: string | null; keepa_by_day: TokensByDay | null }[];
   const last = huntRows[0] ?? null;
   return {
     candidates: candidates.length,
     verdicts,
     lastHunt: last ? { id: last.id, name: last.name, status: last.status, created_at: last.created_at, token_cost: last.token_cost } : null,
-    tokensThisMonth: candidateLedgers.reduce((a, r) => a + inMonth(r.keepa_by_day), 0) + huntRows.reduce((a, h) => a + inMonth(h.keepa_by_day), 0),
+    tokensThisMonth: candidateLedgers.reduce((a, r) => a + inMonth(r.keepa_by_day), 0) + huntRows.reduce((a, h) => a + inMonth(h.keepa_by_day), 0) + nicheRows.reduce((a, r) => a + inMonth(r.keepa_by_day), 0),
+    /** Niche Import: imported, shortlisted, incumbent-checked. */
+    niches: { total: nicheRows.length, shortlisted: nicheRows.filter((r) => r.status === "shortlisted").length, checked: nicheRows.filter((r) => r.shape).length },
     month,
   };
 }

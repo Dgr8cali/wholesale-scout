@@ -1,5 +1,5 @@
 -- Wholesale Scout schema, dumped by scripts/schema-backup.mjs. No data.
--- Dumped 2026-10-03T15:40:06.943Z. Safe to re-run. Restore: npm run schema:restore
+-- Dumped 2026-10-04T16:08:51.227Z. Safe to re-run. Restore: npm run schema:restore
 
 -- @section extensions
 create extension if not exists "pg_cron";
@@ -1402,6 +1402,104 @@ alter table "pl_niche_dismissals" add column if not exists "reason" text;
 alter table "pl_niche_dismissals" add column if not exists "created_at" timestamp with time zone default now();
 alter table "pl_niche_dismissals" enable row level security;
 
+create table if not exists "pl_niche_imports" (
+  "id" uuid default gen_random_uuid() not null,
+  "user_id" text,
+  "category" text not null,
+  "marketplace" text default 'UK'::text not null,
+  "filename" text,
+  "imported_at" timestamp with time zone default now() not null,
+  "row_count" integer default 0 not null,
+  "unmapped" text[] default '{}'::text[] not null,
+  "duplicates" integer default 0 not null
+);
+alter table "pl_niche_imports" add column if not exists "id" uuid default gen_random_uuid();
+alter table "pl_niche_imports" add column if not exists "user_id" text;
+alter table "pl_niche_imports" add column if not exists "category" text;
+alter table "pl_niche_imports" add column if not exists "marketplace" text default 'UK'::text;
+alter table "pl_niche_imports" add column if not exists "filename" text;
+alter table "pl_niche_imports" add column if not exists "imported_at" timestamp with time zone default now();
+alter table "pl_niche_imports" add column if not exists "row_count" integer default 0;
+alter table "pl_niche_imports" add column if not exists "unmapped" text[] default '{}'::text[];
+alter table "pl_niche_imports" add column if not exists "duplicates" integer default 0;
+alter table "pl_niche_imports" enable row level security;
+
+create table if not exists "pl_niche_settings" (
+  "key" text not null,
+  "value" jsonb not null,
+  "updated_at" timestamp with time zone default now() not null
+);
+alter table "pl_niche_settings" add column if not exists "key" text;
+alter table "pl_niche_settings" add column if not exists "value" jsonb;
+alter table "pl_niche_settings" add column if not exists "updated_at" timestamp with time zone default now();
+alter table "pl_niche_settings" enable row level security;
+
+create table if not exists "pl_niches" (
+  "id" uuid default gen_random_uuid() not null,
+  "import_id" uuid not null,
+  "user_id" text,
+  "customer_need" text not null,
+  "search_terms" text[] default '{}'::text[] not null,
+  "top_clicked_products" integer,
+  "sv_360" bigint,
+  "growth_180" numeric,
+  "sv_90" bigint,
+  "growth_90" numeric,
+  "units_360_min" bigint,
+  "units_360_max" bigint,
+  "units_per_product_min" integer,
+  "units_per_product_max" integer,
+  "units_per_product_mid" integer,
+  "avg_price" numeric,
+  "min_price" numeric,
+  "max_price" numeric,
+  "return_rate" numeric,
+  "extra" jsonb default '{}'::jsonb not null,
+  "raw_row" jsonb,
+  "score" numeric,
+  "score_breakdown" jsonb,
+  "flags" text[] default '{}'::text[] not null,
+  "shape" text,
+  "status" text default 'new'::text not null,
+  "notes" text,
+  "candidate_id" uuid,
+  "keepa_by_day" jsonb default '{}'::jsonb not null,
+  "created_at" timestamp with time zone default now() not null,
+  "updated_at" timestamp with time zone default now() not null
+);
+alter table "pl_niches" add column if not exists "id" uuid default gen_random_uuid();
+alter table "pl_niches" add column if not exists "import_id" uuid;
+alter table "pl_niches" add column if not exists "user_id" text;
+alter table "pl_niches" add column if not exists "customer_need" text;
+alter table "pl_niches" add column if not exists "search_terms" text[] default '{}'::text[];
+alter table "pl_niches" add column if not exists "top_clicked_products" integer;
+alter table "pl_niches" add column if not exists "sv_360" bigint;
+alter table "pl_niches" add column if not exists "growth_180" numeric;
+alter table "pl_niches" add column if not exists "sv_90" bigint;
+alter table "pl_niches" add column if not exists "growth_90" numeric;
+alter table "pl_niches" add column if not exists "units_360_min" bigint;
+alter table "pl_niches" add column if not exists "units_360_max" bigint;
+alter table "pl_niches" add column if not exists "units_per_product_min" integer;
+alter table "pl_niches" add column if not exists "units_per_product_max" integer;
+alter table "pl_niches" add column if not exists "units_per_product_mid" integer;
+alter table "pl_niches" add column if not exists "avg_price" numeric;
+alter table "pl_niches" add column if not exists "min_price" numeric;
+alter table "pl_niches" add column if not exists "max_price" numeric;
+alter table "pl_niches" add column if not exists "return_rate" numeric;
+alter table "pl_niches" add column if not exists "extra" jsonb default '{}'::jsonb;
+alter table "pl_niches" add column if not exists "raw_row" jsonb;
+alter table "pl_niches" add column if not exists "score" numeric;
+alter table "pl_niches" add column if not exists "score_breakdown" jsonb;
+alter table "pl_niches" add column if not exists "flags" text[] default '{}'::text[];
+alter table "pl_niches" add column if not exists "shape" text;
+alter table "pl_niches" add column if not exists "status" text default 'new'::text;
+alter table "pl_niches" add column if not exists "notes" text;
+alter table "pl_niches" add column if not exists "candidate_id" uuid;
+alter table "pl_niches" add column if not exists "keepa_by_day" jsonb default '{}'::jsonb;
+alter table "pl_niches" add column if not exists "created_at" timestamp with time zone default now();
+alter table "pl_niches" add column if not exists "updated_at" timestamp with time zone default now();
+alter table "pl_niches" enable row level security;
+
 create table if not exists "pl_poe_snapshots" (
   "id" uuid default gen_random_uuid() not null,
   "candidate_id" uuid,
@@ -2398,6 +2496,21 @@ do $$ begin
   end if;
 end $$;
 do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'pl_niche_imports_pkey' and conrelid = '"pl_niche_imports"'::regclass) then
+    alter table "pl_niche_imports" add constraint "pl_niche_imports_pkey" PRIMARY KEY (id);
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'pl_niche_settings_pkey' and conrelid = '"pl_niche_settings"'::regclass) then
+    alter table "pl_niche_settings" add constraint "pl_niche_settings_pkey" PRIMARY KEY (key);
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'pl_niches_pkey' and conrelid = '"pl_niches"'::regclass) then
+    alter table "pl_niches" add constraint "pl_niches_pkey" PRIMARY KEY (id);
+  end if;
+end $$;
+do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'pl_poe_snapshots_pkey' and conrelid = '"pl_poe_snapshots"'::regclass) then
     alter table "pl_poe_snapshots" add constraint "pl_poe_snapshots_pkey" PRIMARY KEY (id);
   end if;
@@ -2763,6 +2876,16 @@ do $$ begin
   end if;
 end $$;
 do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'pl_niches_shape_check' and conrelid = '"pl_niches"'::regclass) then
+    alter table "pl_niches" add constraint "pl_niches_shape_check" CHECK ((shape = ANY (ARRAY['open'::text, 'contested'::text, 'dominated'::text])));
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'pl_niches_status_check' and conrelid = '"pl_niches"'::regclass) then
+    alter table "pl_niches" add constraint "pl_niches_status_check" CHECK ((status = ANY (ARRAY['new'::text, 'shortlisted'::text, 'dismissed'::text, 'candidate'::text])));
+  end if;
+end $$;
+do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'pl_poe_snapshots_search_conversion_source_check' and conrelid = '"pl_poe_snapshots"'::regclass) then
     alter table "pl_poe_snapshots" add constraint "pl_poe_snapshots_search_conversion_source_check" CHECK ((search_conversion_source = ANY (ARRAY['niche'::text, 'trends'::text, 'terms'::text])));
   end if;
@@ -3098,6 +3221,16 @@ do $$ begin
   end if;
 end $$;
 do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'pl_niches_candidate_id_fkey' and conrelid = '"pl_niches"'::regclass) then
+    alter table "pl_niches" add constraint "pl_niches_candidate_id_fkey" FOREIGN KEY (candidate_id) REFERENCES pl_candidates(id) ON DELETE SET NULL;
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'pl_niches_import_id_fkey' and conrelid = '"pl_niches"'::regclass) then
+    alter table "pl_niches" add constraint "pl_niches_import_id_fkey" FOREIGN KEY (import_id) REFERENCES pl_niche_imports(id) ON DELETE CASCADE;
+  end if;
+end $$;
+do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'pl_poe_snapshots_candidate_id_fkey' and conrelid = '"pl_poe_snapshots"'::regclass) then
     alter table "pl_poe_snapshots" add constraint "pl_poe_snapshots_candidate_id_fkey" FOREIGN KEY (candidate_id) REFERENCES pl_candidates(id) ON DELETE SET NULL;
   end if;
@@ -3262,6 +3395,9 @@ CREATE INDEX IF NOT EXISTS offers_supplier_idx ON offers USING btree (supplier_i
 CREATE INDEX IF NOT EXISTS pl_candidate_asins_asin ON pl_candidate_asins USING btree (asin, snapshot_at DESC);
 CREATE INDEX IF NOT EXISTS pl_category_tree_root ON pl_category_tree USING btree (root_id);
 CREATE UNIQUE INDEX IF NOT EXISTS pl_gate_waivers_key ON pl_gate_waivers USING btree (candidate_id, gate_id, COALESCE(check_label, ''::text));
+CREATE INDEX IF NOT EXISTS pl_niche_imports_category ON pl_niche_imports USING btree (lower(category));
+CREATE INDEX IF NOT EXISTS pl_niches_import ON pl_niches USING btree (import_id);
+CREATE INDEX IF NOT EXISTS pl_niches_need ON pl_niches USING btree (lower(customer_need));
 CREATE INDEX IF NOT EXISTS pl_poe_snapshots_candidate ON pl_poe_snapshots USING btree (candidate_id, captured_at DESC);
 CREATE INDEX IF NOT EXISTS pl_quotes_candidate ON pl_quotes USING btree (candidate_id);
 CREATE INDEX IF NOT EXISTS products_asin_idx ON products USING btree (asin);
@@ -3523,3 +3659,4 @@ insert into schema_migrations (name) values ('20261003000100_stock_orders.sql') 
 insert into schema_migrations (name) values ('20261003000200_stock_corrections.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261003000300_purchase_items.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261003000500_ads_phase5.sql') on conflict do nothing;
+insert into schema_migrations (name) values ('20261004000100_pl_niches.sql') on conflict do nothing;

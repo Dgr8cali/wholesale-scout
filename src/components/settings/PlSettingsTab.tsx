@@ -51,6 +51,43 @@ export function PlSettingsTab() {
         ))}
       </div>
       {bad.length > 0 && <p className="text-sm text-fail">Needs a number: {bad.join(", ")}</p>}
+      <BrandTermsEditor />
     </section>
+  );
+}
+
+/** Niche Import's BIG_BRAND list: a search term that is or contains one of these flags its niche. */
+function BrandTermsEditor() {
+  const [text, setText] = useState<string | null>(null);
+  const [saved, setSaved] = useState("");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { api<{ terms: string[] }>("/api/pl/niche-brands").then((r) => { setText(r.terms.join("\n")); setSaved(r.terms.join("\n")); }).catch(() => {}); }, []);
+  if (text == null) return null;
+  const save = async (reset = false) => {
+    setBusy(true);
+    try {
+      const r = await api<{ terms: string[]; reflagged: number }>("/api/pl/niche-brands", { method: "PUT", json: { terms: reset ? null : text } });
+      setText(r.terms.join("\n")); setSaved(r.terms.join("\n"));
+      toast.success(`Brand list saved (${r.terms.length}); ${r.reflagged} niche${r.reflagged === 1 ? "" : "s"} re-flagged`);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="space-y-2 border-t pt-4" id="brand-terms">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="space-y-1">
+          <h3 className="text-sm font-semibold">Niche Import: brand terms</h3>
+          <p className="max-w-3xl text-sm text-muted-foreground">A niche whose customer need or search terms is or contains one of these (a whole word or phrase) gets the <b>BIG_BRAND</b> flag: shoppers search for the brand, not the product. One a line. Saving re-flags every imported niche.</p>
+        </div>
+        <span className="flex gap-1.5">
+          <Button variant="ghost" size="sm" disabled={busy} onClick={() => save(true)}>Reset to defaults</Button>
+          <Button variant="outline" size="sm" disabled={busy || text === saved} onClick={() => save()}>Save brands</Button>
+        </span>
+      </div>
+      <textarea className="min-h-40 w-full max-w-xl rounded-md border bg-transparent px-2 py-1.5 font-mono text-xs" value={text} onChange={(e) => setText(e.target.value)} />
+    </div>
   );
 }

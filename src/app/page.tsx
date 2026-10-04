@@ -29,6 +29,7 @@ interface PlDash {
   candidates: number; verdicts: Record<"pass" | "warn" | "fail" | "empty", number>;
   lastHunt: { id: string; name: string; status: string; created_at: string; token_cost: number } | null;
   tokensThisMonth: number; month: string;
+  niches?: { total: number; shortlisted: number; checked: number };
 }
 
 /** A workspace's heading on Home. */
@@ -166,8 +167,14 @@ export default function HomePage() {
         </Section>
         <Section load={pl} skeleton={<StatSkeleton />}>
           {(p) => (
+            <Stat icon={<TelescopeIcon />} label="Niches" href="/pl/niches" value={`${(p.niches?.shortlisted ?? 0).toLocaleString("en-GB")} shortlisted`}
+              hint={p.niches?.total ? `of ${p.niches.total.toLocaleString("en-GB")} imported from Opportunity Explorer · ${p.niches.checked} incumbent-checked` : "import an Opportunity Explorer category download"} />
+          )}
+        </Section>
+        <Section load={pl} skeleton={<StatSkeleton />}>
+          {(p) => (
             <Stat icon={<CoinsIcon />} label="Private label Keepa tokens this month" value={p.tokensThisMonth.toLocaleString("en-GB")}
-              hint={`candidates' refreshes and Niche Hunts, ${new Date(`${p.month}-01`).toLocaleDateString("en-GB", { month: "long", year: "numeric" })}`} />
+              hint={`candidates' refreshes, Niche Hunts and niche incumbent checks, ${new Date(`${p.month}-01`).toLocaleDateString("en-GB", { month: "long", year: "numeric" })}`} />
           )}
         </Section>
       </div>

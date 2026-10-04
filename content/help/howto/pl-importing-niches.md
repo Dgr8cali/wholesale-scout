@@ -1,0 +1,77 @@
+---
+title: "Private label: importing Opportunity Explorer niches"
+summary: Download a category's niches from Amazon's Product Opportunity Explorer, import them on Private label → Niches, read the score and the flags, shortlist, check incumbents only on the shortlist, and turn the best into candidates.
+synonyms: [niche import, niches, opportunity explorer, poe, product opportunity explorer download, niche csv, niche score, flags, spike, fading, big brand, electrical, regulated, heavy bulky, low units, shortlist, incumbent check]
+workspace: pl
+order: 1
+route: /pl/niches
+---
+**Private label → Niches** imports Amazon's own niche data, a whole category at a time, scores every niche from its figures, and flags the ones to be wary of. It spends **no Keepa tokens** until you ask for an incumbent check on a niche.
+
+## Download from Opportunity Explorer
+
+In Seller Central: **Growth → Product Opportunity Explorer**, the **Niche** view, pick a category (for example DIY & Tools), then **Download**. The CSV holds every niche in the category (up to 500). Don't edit it: the app reads it as Amazon writes it, including the title and blank line before the header, the BOM, the apostrophe Excel-proofing puts before negative numbers, and the three "Top Search Term" columns.
+
+## Import
+
+On **Niches**, drop the CSV (or choose it), give the **category** (a guess from the file name, or one you've used before), and **Preview**. The preview shows:
+
+- the line the header was found on, the rows read, and the niches after merging duplicates;
+- every field and the column it came from: columns are matched by name with case, spaces and punctuation ignored, so a future export with renamed or reordered columns still reads. Any column not recognised is listed, and kept with each row as its raw data;
+- the first 5 niches, parsed and scored.
+
+**Import** saves them. Importing the same category again replaces it, and a niche whose customer need matches keeps its status, notes, shape and incumbent check.
+
+**Duplicates.** Opportunity Explorer often lists the same niche under two names ("window cleaner" and "window cleaning equipment": the same three search terms, the same search volume). The first is kept, and the other shows under it as "also: …".
+
+## The score (0–100)
+
+Every niche is scored from Opportunity Explorer's own figures. Open a niche (the arrow by its name) to see each part and its points.
+
+| Part | Points | Reads | Full points | None |
+|---|---|---|---|---|
+| **Demand** | 20 | Search volume over 360 days, on a log scale | 2M+ searches | 100k or fewer |
+| **Growth** | 20 | Search volume growth over 180 days | +5% to +60% (0–5%: 0.8; over +60%: 0.6) | −50% or less (a straight line from 0%), or over +150%: a spike |
+| **Price** | 20 | Average price | £15–40 (£10–15 and £40–60: 0.6; £8–10 and £60–80: 0.3) | Under £8 or over £80 |
+| **Fragmentation** | 25 | Number of top-clicked products: more products sharing the clicks means no one owns the niche | 60+ | 15 or fewer |
+| **Units** | 15 | Units sold a year by the average product (the midpoint of Amazon's range) | 2,000+ | 300 or fewer |
+
+Scores of 60 and over are green. Growth and return rate are shown as percentages; the file holds them as fractions.
+
+## The flags
+
+Flags never change the score: they're chips, and you can hide flagged niches. The default view hides **Spike**, **Big brand**, **Electrical**, **Heavy/bulky** and **Regulated** (the **Hide flagged** chips; **defaults** puts them back).
+
+| Flag | When | Why it matters |
+|---|---|---|
+| **Spike** | Growth over +150% in 180 days | A one-off (eclipse glasses before an eclipse, a heatwave): the demand won't last |
+| **Fading** | Growing over 180 days but down more than 15% over 90 | The trend has turned |
+| **Low price** | Average price under £10 | Fees leave little margin |
+| **High returns** | Return rate 3% or more | Returns eat the margin and the rating |
+| **Electrical** | A word like camera, plug, charger, battery, LED, heater, extension lead, lamp, light, drill, smart, sensor, bulb… | Safety testing, certification and returns |
+| **Regulated** | glasses, safety, PPE, mask, medical, baby, food, supplement, fire, gas, smoke, paint, aerosol, resin, adhesive… | Rules, testing or dangerous-goods handling |
+| **Big brand** | A brand in the customer need or search terms (Tapo, Ring, DeWalt, Bosch, Karcher, WD-40…) | Shoppers search for the brand, not the product. The list is editable in [Settings → Private label](/settings?tab=pl#brand-terms); saving re-flags every niche |
+| **Heavy/bulky** | shelves, ladder, toilet, wardrobe, mattress, desk, door, gate, fence, rack, trolley, flooring… | Oversize FBA fees and freight |
+| **Low units** | The average product sells under 200 a year | Too little volume to be worth a launch |
+
+Words match whole (so "led" isn't found in "sledge"), plurals included ("light" finds "lights"). A word can misfire ("ring" is a brand, and also "key ring"): open the niche to judge.
+
+## Acting on niches
+
+Open a niche for its actions:
+
+- **Shortlist**, **Dismiss** (and **Reset**). Tick several rows for **Shortlist** or **Dismiss** in bulk.
+- **Notes**: saved when you click away.
+- **Check incumbents (Keepa)**: Keepa's best sellers whose titles hold the niche's first search term (one Product Finder page), the top 10 detailed for their review counts. Before it runs, it shows the cost (up to about 31 tokens; ASINs detailed in the last 7 days are reused) against your balance, with 100 kept in reserve. One check at a time, and never while a Niche Hunt is running. It writes the **shape** back: **open** (nobody over 1,000 reviews), **contested** (one), **dominated** (two or more, or one over 5,000), and lists the incumbents. The tokens count in Home's Private label tokens this month.
+- **Create candidate**: a Private label candidate named after the customer need, its first search term as the niche keyword, and the category's fee category (Opportunity Explorer's "DIY & Tools" is the rate card's "Tools and Home Improvement"), with the niche's figures in its notes. The niche shows as **candidate** and links to it.
+
+**Filters**: category, minimum score, price band, status (dismissed niches are hidden unless asked for), and a search over customer needs, search terms and aliases. Every column sorts, and the sort is remembered. The strip on top counts the niches imported, those scoring 60+, those hidden by the flags, the shortlist and the incumbent-checked.
+
+## The workflow
+
+1. Import several categories.
+2. Sort by score with the default flags hidden.
+3. Shortlist about 10.
+4. Run the incumbent check on the shortlist only (about 31 tokens each).
+5. Create candidates for the **open** and **contested** ones.
+6. Open each niche in Opportunity Explorer with the extension loaded and **Send to Private label**: its capture fills the candidate's Gates 3 and 5 (search volume, click share, conversion, search terms). See [Private label](/help/pages/private-label).

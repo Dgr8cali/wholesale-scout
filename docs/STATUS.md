@@ -1,7 +1,7 @@
 # Wholesale Scout: status
 
 Read this first in a new session. Keep it current: every commit that changes a feature updates
-it (what's built, the backlog, the rough edges). Last updated: 3 Oct 2026 (Help: "Ads: the playbook").
+it (what's built, the backlog, the rough edges). Last updated: 4 Oct 2026 (Private label: Niche Import).
 
 Wholesale Scout is a single-user Amazon UK seller's workbench: Next.js 16 (App Router, `proxy.ts`
 password gate), Supabase (Postgres, RLS on, service-role access from the server only), Vercel
@@ -32,7 +32,14 @@ a 10-line scorecard and a verdict, with Keepa filling Gates 0–2, Opportunity E
 Ads CPC, and waivers per check or gate. Niche Hunt finds niches that already pass Gates 0–1: Direct
 mode (one filtered Product Finder query per category, then detail grouped by leaf, an incumbent
 check per niche with 3+ qualifying, off-niche incumbents by Keepa category) and Leaf mode (size
-each leaf, then detail), with a hard token cap (estimate + 10%). Quotes turns supplier quotes into
+each leaf, then detail), with a hard token cap (estimate + 10%). Niche Import (Private label → Niches) reads Opportunity Explorer category
+downloads (CSV: header found by "Customer Need", fuzzy column matching, apostrophe negatives,
+duplicate niches merged as aliases), scores every niche 0–100 without Keepa (demand, growth, price,
+fragmentation, units a product) with flags (spike, fading, low price, high returns, electrical,
+regulated, big brand: an editable list in Settings → Private label, heavy/bulky, low units),
+shortlists, runs a one-at-a-time Keepa incumbent check on a niche's first search term (~31 tokens,
+open/contested/dominated) and creates candidates; re-importing a category keeps status, notes and
+shape. Home has a Niches tile. Quotes turns supplier quotes into
 a landed cost per unit and total cash (FX, freight, duty, import VAT, inspection), writes it into
 Gates 0 and 7, chooses a supplier and generates the RFQ. Gate 4's review miner takes pasted 1–3★ reviews per top-5 ASIN (`pl_review_dumps`), splits
 them, counts complaint phrases locally (stop words, bigrams/trigrams, an editable synonym list) into a
@@ -129,6 +136,8 @@ StockPilot data is imported (3 items). Ads days of cover and the stock guard cou
 - **Ordered stock shows as "out" on Levels** until it's received (e.g. the Biotene and Lifeproof items made from their product-page purchases).
 - **Rule windows on range data**: search terms and keywords come in import ranges, not days, so a window shorter than an import counts that import in full (the rule says so). Exact windows need imports of about the window's length, or the Ads API.
 - **The pill box's keyword bank is thin** (1 harvested term): it has no linked private-label candidate (no Opportunity Explorer terms) and no rank checks yet.
+- **Niche Import's word flags** are whole-word matches on fixed lists: "ring" (a brand) also flags "key ring", and "shelving unit" isn't heavy/bulky (only "shelves"/"shelf" are listed). Open the niche to judge; the brand list is editable.
+- **Opportunity Explorer growth** can be huge for one-off events: eclipse glasses read +56,382% over 180 days (the file's 563.8175 is a fraction, like the rest of the column). Anything over +150% is a spike.
 - **SP-API roles** (Brand Analytics, Finance): see above.
 
 ## Conventions for every session
