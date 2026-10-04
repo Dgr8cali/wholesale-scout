@@ -1,5 +1,6 @@
 import "server-only";
-import { feeCategoryFor, matchPoeCategory } from "../pl/poeCategories";
+import { feeCategoryFor, keepaRootsFor, matchPoeCategory } from "../pl/poeCategories";
+import { DEFAULT_OFF_NICHE, parseWordList } from "../pl/offNiche";
 import { addDailyTokens, PL_KEEP_DAYS, type TokensByDay } from "../keepaLedger";
 import { DEFAULT_BRAND_TERMS, parseBrandTerms } from "../pl/brandTerms";
 import { nicheFlags, scoreNiche } from "../pl/nicheScore";
@@ -61,6 +62,22 @@ export async function saveBrandTerms(text: string | string[] | null): Promise<{ 
   if (text == null) must(await d.from("pl_niche_settings").delete().eq("key", "brandTerms"), "reset brands");
   else must(await d.from("pl_niche_settings").upsert({ key: "brandTerms", value: parseBrandTerms(text), updated_at: now() }, { onConflict: "key" }), "save brands");
   return { terms: await brandTerms(), reflagged: await reflagNiches() };
+}
+
+/* ===================== the off-niche words (the incumbent check) ===================== */
+
+export async function offNicheWords(): Promise<string[]> {
+  const r = await db().from("pl_niche_settings").select("value").eq("key", "offNiche").maybeSingle();
+  const v = (r.data as { value: string[] } | null)?.value;
+  return Array.isArray(v) ? v : DEFAULT_OFF_NICHE;
+}
+
+/** Save the off-niche words (null: back to the defaults). The next check uses them. */
+export async function saveOffNicheWords(text: string | string[] | null): Promise<{ words: string[] }> {
+  const d = db();
+  if (text == null) must(await d.from("pl_niche_settings").delete().eq("key", "offNiche"), "reset off-niche words");
+  else must(await d.from("pl_niche_settings").upsert({ key: "offNiche", value: parseWordList(text), updated_at: now() }, { onConflict: "key" }), "save off-niche words");
+  return { words: await offNicheWords() };
 }
 
 /** Every niche's flags worked out again (after the brand list or the flag rules change). */
@@ -304,18 +321,39 @@ export async function nicheToCandidate(id: string) {
   return { candidateId: c.id, existed: false, category };
 }
 
-/** What an incumbent check on this niche's first search term would cost, and whether it can run now. */
-export async function nicheCheckPlan(id: string) {
-  const n = must(await db().from("pl_niches").select("search_terms, customer_need").eq("id", id).single(), "niche") as { search_terms: string[]; customer_need: string };
-  return { term: n.search_terms[0] ?? n.customer_need, ...(await termCheckPlan()) };
+type CheckNiche = { search_terms: string[]; customer_need: string; categories: string[] | null; extra: Record<string, unknown> | null; keepa_by_day: TokensByDay | null };
+const PET_TERM = /\b(cat|cats|kitten|dog|dogs|puppy|pet|pets)\b/i;
+
+/** What the check on a niche runs on: its first search term, its categories' Keepa roots, pet or not, and a rerun's finder list. */
+function checkInputs(n: CheckNiche, rerun: boolean) {
+  const term = n.search_terms[0] ?? n.customer_need;
+  const cats = n.categories ?? [];
+  const prev = n.extra?.incumbents as { candidates?: string[]; finderAt?: string; checkedAt?: string; found?: number; term?: string } | undefined;
+  const reuse = rerun && prev?.candidates?.length && prev.term === term ? { asins: prev.candidates, at: prev.finderAt ?? prev.checkedAt ?? "", found: prev.found } : null;
+  return {
+    term, reuse, rootCategoryIds: keepaRootsFor(cats), rootNames: cats.filter((c) => keepaRootsFor([c]).length),
+    pet: cats.some((c) => matchPoeCategory(c) === "Pet Supplies") || PET_TERM.test(term),
+  };
+}
+const CHECK_COLS = "search_terms, customer_need, categories, extra, keepa_by_day";
+
+/** What an incumbent check (or a rerun) on this niche would cost, and whether it can run now. */
+export async function nicheCheckPlan(id: string, rerun = false) {
+  const n = must(await db().from("pl_niches").select(CHECK_COLS).eq("id", id).single(), "niche") as CheckNiche;
+  const i = checkInputs(n, rerun);
+  return { term: i.term, categories: i.rootNames, ...(await termCheckPlan(i.reuse)) };
 }
 
-/** Run the incumbent check on the niche's first search term; its shape and the incumbents go on the row. */
-export async function checkNicheIncumbents(id: string) {
+/**
+ * Run the incumbent check on the niche's first search term, in its categories, on-niche titles only;
+ * the shape and the 10 best-selling incumbents go on the row. A rerun reuses the last check's finder
+ * list (within 7 days) and the 7-day snapshots.
+ */
+export async function checkNicheIncumbents(id: string, rerun = false) {
   const d = db();
-  const n = must(await d.from("pl_niches").select("search_terms, customer_need, extra, keepa_by_day").eq("id", id).single(), "niche") as { search_terms: string[]; customer_need: string; extra: Record<string, unknown>; keepa_by_day: TokensByDay | null };
-  const term = n.search_terms[0] ?? n.customer_need;
-  const r = await termIncumbentCheck(term);
+  const n = must(await d.from("pl_niches").select(CHECK_COLS).eq("id", id).single(), "niche") as CheckNiche;
+  const i = checkInputs(n, rerun);
+  const r = await termIncumbentCheck(i.term, { rootCategoryIds: i.rootCategoryIds, rootNames: i.rootNames, pet: i.pet, offNiche: await offNicheWords(), reuse: i.reuse });
   must(await d.from("pl_niches").update({
     shape: r.shape, shape_rank: derivedCols({ customer_need: "", search_terms: [], flags: [], shape: r.shape }).shape_rank,
     extra: { ...(n.extra ?? {}), incumbents: r }, keepa_by_day: addDailyTokens(n.keepa_by_day, r.tokensUsed, new Date(), PL_KEEP_DAYS), updated_at: now(),

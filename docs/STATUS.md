@@ -1,7 +1,7 @@
 # Wholesale Scout: status
 
 Read this first in a new session. Keep it current: every commit that changes a feature updates
-it (what's built, the backlog, the rough edges). Last updated: 5 Oct 2026 (Niche Import: one row per niche across categories).
+it (what's built, the backlog, the rough edges). Last updated: 5 Oct 2026 (Niches incumbent check: in the niche's Keepa category, on-niche titles only, top 10 by sales).
 
 Wholesale Scout is a single-user Amazon UK seller's workbench: Next.js 16 (App Router, `proxy.ts`
 password gate), Supabase (Postgres, RLS on, service-role access from the server only), Vercel
@@ -37,8 +37,12 @@ downloads (CSV: header found by "Customer Need", fuzzy column matching, apostrop
 duplicate niches merged as aliases), scores every niche 0–100 without Keepa (demand, growth, price,
 fragmentation, units a product) with flags (spike, fading, low price, high returns, electrical,
 regulated, big brand: an editable list in Settings → Private label, heavy/bulky, low units),
-shortlists, runs a one-at-a-time Keepa incumbent check on a niche's first search term (~31 tokens,
-open/contested/dominated) and creates candidates; re-importing a category keeps status, notes and
+shortlists, runs a one-at-a-time Keepa incumbent check on a niche's first search term (up to ~61 tokens:
+one Product Finder page restricted to the niche's categories' Keepa roots, the top 25 detailed; only
+titles with the term as a phrase, none of the off-niche words (editable in Settings → Private label,
+`src/lib/pl/offNiche.ts`; pet words allowed for pet niches) and not "for <term>" count; the 10 best
+sellers among them by monthly sold, else sales rank, decide open/contested/dominated; Rerun reuses
+the finder list and 7-day snapshots, often 0 tokens) and creates candidates; re-importing a category keeps status, notes and
 shape. The category is picked from Opportunity Explorer's 25 top-level UK categories (or Other…),
 each mapped to the rate card category candidates use for fees. Home has a Niches tile. The Niches table is filtered, flag-hidden,
 sorted and paged in SQL (100 a page, 50–500, "showing X–Y of N"), with the summary strip counted
@@ -127,7 +131,7 @@ StockPilot data is imported (3 items). Ads days of cover and the stock guard cou
 - **Ads bulk sheets haven't been uploaded to Amazon yet**: the format follows Amazon's export column for column, but acceptance is unproven until the first upload. Batch "2026-10-02 #1" (7 proposals) waits to be uploaded. Batch "2026-10-02 #3" (the dog seat belt 2-pack launch) has the SKU `REPLACE-WITH-2PACK-SKU`: re-create it on Ads → Launch with the real SKU (and the 2-pack's own ASIN once it exists); B0H9ZH3RV5 is in its launch phase because of it.
 - **Daily Ads reports** are parsed against a sample in Amazon's format: the first real daily Campaign/Placement export confirms the column names.
 - **Bid up, Budget, Revive** need the daily Campaign report imported; impression share, hourly budget timing and keyword-level days need the Ads API.
-- **Keepa's salesRankDrops** undercounts fast sellers: Niche Hunt's direct mode filters on monthlySold instead, and the incumbent check costs about 31 tokens a niche (the finder returns ASINs only).
+- **Keepa's salesRankDrops** undercounts fast sellers: Niche Hunt's direct mode filters on monthlySold instead, and the Niches incumbent check costs up to about 61 tokens a niche (the finder returns ASINs only, so 25 are detailed to read titles and sales).
 - **Off-niche incumbents** use Keepa's category; a few borderline products (filed elsewhere but near the niche) are excluded.
 - **Products** loads 50 a page from the server: a column sort orders only the loaded page.
 - **Gate 7's stock line** from a quote is units × the rounded landed cost per unit (pennies off the quote's total).
@@ -141,6 +145,7 @@ StockPilot data is imported (3 items). Ads days of cover and the stock guard cou
 - **Ordered stock shows as "out" on Levels** until it's received (e.g. the Biotene and Lifeproof items made from their product-page purchases).
 - **Rule windows on range data**: search terms and keywords come in import ranges, not days, so a window shorter than an import counts that import in full (the rule says so). Exact windows need imports of about the window's length, or the Ads API.
 - **The pill box's keyword bank is thin** (1 harvested term): it has no linked private-label candidate (no Opportunity Explorer terms) and no rank checks yet.
+- **Niches' off-niche filter** is word-based: a real product whose title happens to say "kids" or "replacement" is left out, and an off-niche one without those words (a dry bag titled "fishing bag") still counts. Excluded products are listed under the check with the reason.
 - **Niche Import's word flags** are whole-word matches on fixed lists, so broad words can misfire ("unit" in "air con unit"). Brands match as whole phrases (the term is the brand, starts with it, or has a 5+ character brand after a space), so "key ring" isn't Ring but a short brand later in a term ("outdoor tapo") is missed. The brand list is editable.
 - **Opportunity Explorer growth** can be huge for one-off events: eclipse glasses read +56,382% over 180 days (the file's 563.8175 is a fraction, like the rest of the column). Anything over +150% is a spike.
 - **SP-API roles** (Brand Analytics, Finance): see above.

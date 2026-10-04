@@ -52,6 +52,7 @@ export function PlSettingsTab() {
       </div>
       {bad.length > 0 && <p className="text-sm text-fail">Needs a number: {bad.join(", ")}</p>}
       <BrandTermsEditor />
+      <OffNicheEditor />
     </section>
   );
 }
@@ -85,6 +86,42 @@ function BrandTermsEditor() {
         <span className="flex gap-1.5">
           <Button variant="ghost" size="sm" disabled={busy} onClick={() => save(true)}>Reset to defaults</Button>
           <Button variant="outline" size="sm" disabled={busy || text === saved} onClick={() => save()}>Save brands</Button>
+        </span>
+      </div>
+      <textarea className="min-h-40 w-full max-w-xl rounded-md border bg-transparent px-2 py-1.5 font-mono text-xs" value={text} onChange={(e) => setText(e.target.value)} />
+    </div>
+  );
+}
+
+/** The incumbent check's off-niche words: a title with one of these isn't counted (a toy rod isn't a fishing rod). */
+function OffNicheEditor() {
+  const [text, setText] = useState<string | null>(null);
+  const [saved, setSaved] = useState("");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { api<{ words: string[] }>("/api/pl/niche-off-words").then((r) => { setText(r.words.join("\n")); setSaved(r.words.join("\n")); }).catch(() => {}); }, []);
+  if (text == null) return null;
+  const save = async (reset = false) => {
+    setBusy(true);
+    try {
+      const r = await api<{ words: string[] }>("/api/pl/niche-off-words", { method: "PUT", json: { words: reset ? null : text } });
+      setText(r.words.join("\n")); setSaved(r.words.join("\n"));
+      toast.success(`Off-niche words saved (${r.words.length})`);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="space-y-2 border-t pt-4" id="off-niche-words">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="space-y-1">
+          <h3 className="text-sm font-semibold">Niche Import: off-niche words</h3>
+          <p className="max-w-3xl text-sm text-muted-foreground">The incumbent check leaves out a product whose title has one of these (a whole word or phrase): toys, kids&rsquo; and pet products, cards, gifts, parts and spares. A word the search term itself uses doesn&rsquo;t count, pet words don&rsquo;t count for a pet niche, and &ldquo;for &lt;term&gt;&rdquo; (an accessory) is always left out. One a line. The next check uses them; rerun a niche to apply.</p>
+        </div>
+        <span className="flex gap-1.5">
+          <Button variant="ghost" size="sm" disabled={busy} onClick={() => save(true)}>Reset to defaults</Button>
+          <Button variant="outline" size="sm" disabled={busy || text === saved} onClick={() => save()}>Save words</Button>
         </span>
       </div>
       <textarea className="min-h-40 w-full max-w-xl rounded-md border bg-transparent px-2 py-1.5 font-mono text-xs" value={text} onChange={(e) => setText(e.target.value)} />

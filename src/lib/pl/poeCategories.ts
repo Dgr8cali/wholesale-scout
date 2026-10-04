@@ -52,3 +52,22 @@ export function feeCategoryFor(name: string | null | undefined, card: RateCard):
   if (poe && card.referral.categories.some((c) => c.name === poe.fee)) return poe.fee;
   return referralCategoryFor(name, card);
 }
+
+/**
+ * Keepa's UK root category for each Opportunity Explorer category (the incumbent check's finder is
+ * restricted to it). Clothing, shoes, bags, jewellery, watches and luggage sit under Fashion.
+ */
+export const KEEPA_ROOTS: Record<string, number> = {
+  "Home & Kitchen": 11052681, "DIY & Tools": 79903031, "Garden": 11052671, "Sports & Outdoors": 318949011,
+  "Pet Supplies": 340840031, "Baby Products": 59624031, "Stationery & Office Supplies": 192413031, "Automotive": 248877031,
+  "Health & Personal Care": 65801031, "Beauty": 117332031, "Toys & Games": 468292, "Electronics": 560798,
+  "Clothing": 11961407031, "Grocery": 340834031, "Kitchen & Home Appliances": 11052681, "Large Appliances": 908798031,
+  "Lighting": 213077031, "Luggage": 11961407031, "Musical Instruments": 340837031, "Computers & Accessories": 340831031,
+  "Jewellery": 11961407031, "Shoes & Bags": 11961407031, "Watches": 11961407031, "Books": 266239,
+  "Business/Industrial & Scientific": 5866054031,
+};
+
+/** The Keepa root category ids for a niche's categories (unknown names left out), no repeats. */
+export function keepaRootsFor(names: (string | null | undefined)[]): number[] {
+  return [...new Set(names.map((n) => KEEPA_ROOTS[matchPoeCategory(n) ?? ""]).filter((x): x is number => !!x))];
+}

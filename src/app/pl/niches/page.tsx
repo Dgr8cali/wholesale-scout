@@ -29,7 +29,11 @@ interface Preview {
   headerLine: number; mapped: Record<string, string | null>; unmapped: string[]; warnings: string[]; rows: number; niches: number; duplicates: number; replaces: number; feeCategory: string;
   sample: (NicheRow & { aliases: string[] })[];
 }
-interface Incumbents { term: string; found: number; shape: string; tokensUsed: number; reused: number; checkedAt: string; incumbents: { asin: string; title: string | null; brand: string | null; reviews: number | null; price: number | null }[] }
+interface Incumbents {
+  term: string; found: number; shape: string | null; tokensUsed: number; reused: number; checkedAt: string; rootCategories?: string[];
+  onNiche?: number; excludedCount?: number; excluded?: { asin: string; title: string | null; why: string }[]; candidates?: string[]; finderAt?: string; reusedFinder?: boolean;
+  incumbents: { asin: string; title: string | null; brand: string | null; reviews: number | null; price: number | null; monthlySold?: number | null; rank?: number | null; category?: string | null }[];
+}
 
 const pct = (g: number | null | undefined, dp = 1) => (g == null ? "—" : `${g >= 0 ? "+" : ""}${(g * 100).toLocaleString("en-GB", { maximumFractionDigits: dp, minimumFractionDigits: dp })}%`);
 const gbp = (v: number | null | undefined) => (v == null ? "—" : `£${v.toFixed(2)}`);
@@ -339,13 +343,15 @@ function NicheDetail({ n, onChanged }: { n: NicheRow; onChanged: () => void }) {
     try { await f(); onChanged(); } catch (e) { toast.error((e as Error).message); } finally { setBusy(null); }
   };
   const status = (s: string) => act(s, async () => { await api(`/api/pl/niches/${n.id}`, { method: "PATCH", json: { status: s } }); toast.success(s === "new" ? "Reset" : `${s[0].toUpperCase()}${s.slice(1)}`); });
-  const check = () => act("check", async () => {
-    const plan = await api<{ term: string; estimate: number; balance: number | null; reserve: number; fits: boolean; blocked: string | null }>(`/api/pl/niches/${n.id}`);
+  const check = (rerun: boolean) => act(rerun ? "rerun" : "check", async () => {
+    const plan = await api<{ term: string; categories: string[]; estimate: number; balance: number | null; reserve: number; fits: boolean; blocked: string | null; reusing: boolean }>(`/api/pl/niches/${n.id}${rerun ? "?rerun=1" : ""}`);
     if (plan.blocked) throw new Error(plan.blocked);
-    if (!(await confirm({ title: `Check incumbents for "${plan.term}"?`, description: `Up to ${plan.estimate} Keepa tokens (one Product Finder page, then up to 10 best sellers detailed for their reviews; ASINs detailed in the last 7 days are reused). Balance ${plan.balance ?? "?"}, ${plan.reserve} kept in reserve${plan.fits ? "" : ": not enough now, wait for the refill"}.`, confirmLabel: plan.fits ? "Run the check" : "Close" }))) return;
+    const where = plan.categories.length ? ` in ${plan.categories.join(", ")}` : " (no Keepa category for this niche: all of Amazon)";
+    const how = plan.reusing ? `the last check's 25 products again (no Product Finder call), re-detailing only those not detailed in the last 7 days` : `one Product Finder page${where}, then the top 25 detailed (ASINs detailed in the last 7 days are reused)`;
+    if (!(await confirm({ title: `${rerun ? "Rerun" : "Check"} incumbents for "${plan.term}"?`, description: `Up to ${plan.estimate} Keepa tokens: ${how}. Only titles with "${plan.term}" as a phrase and none of the off-niche words count; the 10 best sellers among them decide the shape. Balance ${plan.balance ?? "?"}, ${plan.reserve} kept in reserve${plan.fits ? "" : ": not enough now, wait for the refill"}.`, confirmLabel: plan.fits ? "Run the check" : "Close" }))) return;
     if (!plan.fits) return;
-    const r = await api<Incumbents>(`/api/pl/niches/${n.id}`, { method: "POST", json: { action: "check" } });
-    toast.success(`"${r.term}": ${r.shape} (${r.tokensUsed} token${r.tokensUsed === 1 ? "" : "s"})`);
+    const r = await api<Incumbents>(`/api/pl/niches/${n.id}`, { method: "POST", json: { action: rerun ? "rerun" : "check" } });
+    toast.success(`"${r.term}": ${r.shape ?? "no on-niche sellers"} (${r.tokensUsed} token${r.tokensUsed === 1 ? "" : "s"})`);
   });
   const candidate = () => act("candidate", async () => {
     const r = await api<{ candidateId: string; existed: boolean; category?: string }>(`/api/pl/niches/${n.id}`, { method: "POST", json: { action: "candidate" } });
@@ -363,7 +369,8 @@ function NicheDetail({ n, onChanged }: { n: NicheRow; onChanged: () => void }) {
           {n.status !== "shortlisted" && n.status !== "candidate" && <Button size="xs" disabled={!!busy} onClick={() => status("shortlisted")}>Shortlist</Button>}
           {n.status !== "dismissed" && n.status !== "candidate" && <Button size="xs" variant="outline" disabled={!!busy} onClick={() => status("dismissed")}>Dismiss</Button>}
           {(n.status === "shortlisted" || n.status === "dismissed") && <Button size="xs" variant="ghost" disabled={!!busy} onClick={() => status("new")}>Reset</Button>}
-          <Button size="xs" variant="outline" disabled={!!busy} onClick={check}>{busy === "check" && <LoaderIcon className="animate-spin" />} Check incumbents (Keepa)</Button>
+          {inc?.candidates?.length ? <Button size="xs" variant="outline" disabled={!!busy} onClick={() => check(true)} title="Reuses the last check's products and the 7-day snapshots">{busy === "rerun" && <LoaderIcon className="animate-spin" />} Rerun check</Button>
+            : <Button size="xs" variant="outline" disabled={!!busy} onClick={() => check(false)}>{busy === "check" && <LoaderIcon className="animate-spin" />} Check incumbents (Keepa)</Button>}
           {n.candidate_id ? <Button size="xs" variant="outline" asChild><Link href={`/pl/candidates?c=${n.candidate_id}`}>Open candidate</Link></Button>
             : <Button size="xs" variant="outline" disabled={!!busy} onClick={candidate}>{busy === "candidate" && <LoaderIcon className="animate-spin" />} Create candidate</Button>}
         </div>
@@ -373,13 +380,23 @@ function NicheDetail({ n, onChanged }: { n: NicheRow; onChanged: () => void }) {
           <Textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} onBlur={() => notes !== (n.notes ?? "") && act("notes", () => api(`/api/pl/niches/${n.id}`, { method: "PATCH", json: { notes } }))} /></label>
         {inc ? (
           <div className="text-xs">
-            <p><b>Incumbents for &ldquo;{inc.term}&rdquo;</b>: <span className={cn("rounded-full px-1.5 py-px font-semibold", SHAPE_CLS[inc.shape as keyof typeof SHAPE_CLS])}>{inc.shape}</span> · {inc.found.toLocaleString("en-GB")} products match · {inc.tokensUsed} tokens{inc.reused ? `, ${inc.reused} reused` : ""} · {new Date(inc.checkedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</p>
-            <ul className="mt-1 space-y-0.5">{inc.incumbents.map((x) => (
-              <li key={x.asin}><a className="num text-brand hover:underline" href={`https://www.amazon.co.uk/dp/${x.asin}`} target="_blank" rel="noreferrer">{x.asin}</a> <span className="num">{x.reviews?.toLocaleString("en-GB") ?? "?"} reviews</span> · {gbp(x.price)} · <span className="text-muted-foreground">{(x.title ?? "").slice(0, 80)}</span></li>
-            ))}</ul>
+            <p><b>Incumbents for &ldquo;{inc.term}&rdquo;</b>{inc.rootCategories?.length ? ` in ${inc.rootCategories.join(", ")}` : ""}: {inc.shape ? <span className={cn("rounded-full px-1.5 py-px font-semibold", SHAPE_CLS[inc.shape as keyof typeof SHAPE_CLS])}>{inc.shape}</span> : <span className="text-muted-foreground">no on-niche sellers</span>} · {inc.found.toLocaleString("en-GB")} products match{inc.onNiche != null ? `, ${inc.onNiche} on-niche of ${inc.candidates?.length ?? "?"} detailed` : ""} · {inc.tokensUsed} tokens{inc.reused ? `, ${inc.reused} reused` : ""}{inc.reusedFinder ? " (rerun)" : ""} · {new Date(inc.checkedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</p>
+            {inc.onNiche == null && <p className="text-amber-700 dark:text-amber-400">An old check (any word, all of Amazon): rerun it.</p>}
+            <table className="mt-1 text-xs"><tbody>{inc.incumbents.map((x) => (
+              <tr key={x.asin} className="align-top">
+                <td className="pr-2"><a className="num text-brand hover:underline" href={`https://www.amazon.co.uk/dp/${x.asin}`} target="_blank" rel="noreferrer">{x.asin}</a></td>
+                <td className="num pr-2 text-right">{x.reviews?.toLocaleString("en-GB") ?? "?"} reviews</td>
+                <td className="num pr-2 text-right">{x.monthlySold != null ? `${x.monthlySold.toLocaleString("en-GB")}+/mo` : x.rank != null ? `#${x.rank.toLocaleString("en-GB")}` : "—"}</td>
+                <td className="num pr-2 text-right">{gbp(x.price)}</td>
+                <td className="pr-2 text-muted-foreground">{x.category ?? ""}</td>
+                <td className="text-muted-foreground">{(x.title ?? "").slice(0, 80)}</td>
+              </tr>
+            ))}</tbody></table>
+            {!!inc.excludedCount && <details className="mt-1"><summary className="cursor-pointer text-muted-foreground">{inc.excludedCount} off-niche left out</summary>
+              <ul className="mt-0.5 space-y-0.5">{inc.excluded?.map((x) => <li key={x.asin}><span className="num">{x.asin}</span> · <i>{x.why}</i> · <span className="text-muted-foreground">{(x.title ?? "").slice(0, 70)}</span></li>)}</ul></details>}
             <p className="mt-1 text-muted-foreground">Open: nobody over 1,000 reviews. Contested: one. Dominated: two or more, or one over 5,000.</p>
           </div>
-        ) : <p className="text-xs text-muted-foreground">No incumbent check yet: it looks at the best sellers for &ldquo;{n.search_terms[0] ?? n.customer_need}&rdquo; and their review counts (Keepa, up to ~31 tokens).</p>}
+        ) : <p className="text-xs text-muted-foreground">No incumbent check yet: it looks at the best sellers for &ldquo;{n.search_terms[0] ?? n.customer_need}&rdquo; in the niche&rsquo;s category, on-niche titles only, and their review counts (Keepa, up to ~61 tokens).</p>}
       </div>
     </div>
   );

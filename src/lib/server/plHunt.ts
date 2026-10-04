@@ -4,13 +4,14 @@ import { addDailyTokens, PL_KEEP_DAYS, type TokensByDay } from "../keepaLedger";
 import { getKeepa, hasFinder, type KeepaCategory, type KeepaClient, type KeepaFinder, type KeepaProduct, type OnKeepaResponse } from "../keepa/client";
 import {
   defaultFilters, DETAIL_TOKENS_PER_ASIN, LIMITS, DIRECT_PAGE, DIRECT_PAGE_TOKENS, directEstimate, directSelection, filtersKey, INCUMBENT_TAKE, INCUMBENT_TOKENS, incumbentSelection, finderSelection, fittingDetailLeaves, funnel, groupNiches, huntEstimate,
-  shapeOf, SIZING_TOKENS, spendCap, TOKEN_RESERVE, TREE_MAX_CATEGORIES,
+  SIZING_TOKENS, spendCap, TOKEN_RESERVE, TREE_MAX_CATEGORIES,
   type HuntAsin, type HuntEstimate, type Niche, type NicheHuntFilters,
 } from "../pl/hunt";
 import { activeRateCard, chunks, db, must } from "./db";
 import { huntCategories, type HuntCategory } from "./hunt";
 import { createCandidate, refreshCandidate, snapshotOf } from "./pl";
 import { saveSnapshot } from "./process";
+import { classifyIncumbents, type IncumbentCandidate } from "../pl/offNiche";
 
 /**
  * Niche Hunt: the wholesale Hunt's Product Finder client and category list, the same Keepa
@@ -785,17 +786,32 @@ export async function huntTokensByDay(): Promise<TokensByDay[]> {
 
 /* ===================== an incumbent check on one search term (Niche Import) ===================== */
 
-/** A search term's incumbent check: one finder page and up to 10 details, as a niche's in a hunt. */
-export const TERM_CHECK_TOKENS = INCUMBENT_TOKENS;
+/** Products a term's check details for their titles and sales: the finder's best 25 in the category. */
+export const TERM_CANDIDATES = 25;
+/** One finder page and up to 25 details. */
+export const TERM_CHECK_TOKENS = DIRECT_PAGE_TOKENS + TERM_CANDIDATES * DETAIL_TOKENS_PER_ASIN;
+/** A rerun within this long reuses the finder's list (and the 7-day snapshots): no finder call. */
+export const TERM_REUSE_MS = 7 * 86_400_000;
 let termCheckRunning = false;
 
-/** The finder's selection for a search term: its best sellers whose title has the term's words. */
-export function termIncumbentSelection(term: string): Record<string, unknown> {
-  return { title: term.trim(), current_SALES_gte: 1, productType: [0], singleVariation: true, sort: [["current_SALES", "asc"]] };
+/**
+ * The finder's selection for a search term: best sellers in the niche's root category whose titles
+ * have the term's words (Keepa's title filter; the phrase and the off-niche words are checked after).
+ */
+export function termIncumbentSelection(term: string, rootCategoryIds: number[] = []): Record<string, unknown> {
+  return {
+    title: term.trim(), ...(rootCategoryIds.length ? { rootCategory: rootCategoryIds } : {}),
+    current_SALES_gte: 1, productType: [0], singleVariation: true, sort: [["current_SALES", "asc"]],
+  };
 }
 
-/** What a check would cost now, and whether it may run (balance, reserve, nothing else on Keepa). */
-export async function termCheckPlan(): Promise<{ estimate: number; balance: number | null; reserve: number; fits: boolean; blocked: string | null }> {
+export interface TermReuse { asins: string[]; at: string; found?: number }
+
+/**
+ * What a check would cost now, and whether it may run (balance, reserve, nothing else on Keepa). A
+ * rerun with the finder's list from the last 7 days costs only the snapshots that have aged out.
+ */
+export async function termCheckPlan(reuse?: TermReuse | null): Promise<{ estimate: number; balance: number | null; reserve: number; fits: boolean; blocked: string | null; reusing: boolean }> {
   const keepa = getKeepa();
   const balance = keepa.available ? (await keepa.tokenStatus().catch(() => null))?.tokensLeft ?? null : null;
   let blocked: string | null = null;
@@ -805,33 +821,43 @@ export async function termCheckPlan(): Promise<{ estimate: number; balance: numb
     const hunts = await db().from("pl_hunts").select("id").in("status", RUNNING).limit(1);
     if ((hunts.data ?? []).length) blocked = "A Niche Hunt is running: it has Keepa until it finishes";
   }
-  return { estimate: TERM_CHECK_TOKENS, balance, reserve: TOKEN_RESERVE, fits: balance != null && balance - TOKEN_RESERVE >= TERM_CHECK_TOKENS, blocked };
+  const reusing = !!reuse && Date.now() - Date.parse(reuse.at) < TERM_REUSE_MS && reuse.asins.length > 0;
+  const estimate = reusing ? (reuse!.asins.length - (await freshHuntAsins(reuse!.asins)).size) * DETAIL_TOKENS_PER_ASIN : TERM_CHECK_TOKENS;
+  return { estimate, balance, reserve: TOKEN_RESERVE, fits: estimate === 0 || (balance != null && balance - TOKEN_RESERVE >= estimate), blocked, reusing };
 }
 
 /**
- * The incumbent check on a search term: the best sellers with its words in their titles (one finder
- * page), the top 10 detailed for their review counts (reusing snapshots under 7 days old), and the
- * shape they make: open (nobody over 1,000 reviews), contested (one), dominated (two, or one over
- * 5,000). One at a time, never over the estimate + 10%.
+ * The incumbent check on a search term, on-niche only: the finder's best 25 sellers in the niche's
+ * root category with the term's words in their titles, detailed for title, reviews and monthly sold
+ * (snapshots under 7 days old reused; a rerun reuses the finder's list too); then only titles with
+ * the term as a phrase and none of the off-niche words count, and the 10 best sellers among them by
+ * monthly sold (else sales rank) decide the shape: open (nobody over 1,000 reviews), contested (one),
+ * dominated (two, or one over 5,000). One at a time, never over the estimate + 10%.
  */
-export async function termIncumbentCheck(term: string) {
-  const plan = await termCheckPlan();
+export async function termIncumbentCheck(term: string, o: { rootCategoryIds?: number[]; rootNames?: string[]; pet?: boolean; offNiche?: string[]; reuse?: TermReuse | null } = {}) {
+  const plan = await termCheckPlan(o.reuse);
   if (plan.blocked) throw new Error(plan.blocked);
   if (!plan.fits) throw new Error(`The check needs up to ${plan.estimate} tokens: ${plan.balance ?? "?"} in the balance, ${plan.reserve} kept in reserve. Wait for the refill.`);
   const keepa = getKeepa() as Finder;
-  const cap = spendCap(plan.estimate);
+  const cap = spendCap(Math.max(plan.estimate, 1));
   termCheckRunning = true;
   let spent = 0;
   try {
-    const r = await keepa.productFinder({ ...termIncumbentSelection(term), perPage: DIRECT_PAGE, page: 0 });
-    spent += r.tokensUsed;
-    const top = r.asins.slice(0, INCUMBENT_TAKE).map((a) => a.toUpperCase());
-    const cached = await freshHuntAsins(top);
-    let need = top.filter((a) => !cached.has(a));
+    let candidates: string[], found: number, finderAt: string;
+    if (plan.reusing) {
+      candidates = o.reuse!.asins; found = o.reuse!.found ?? candidates.length; finderAt = o.reuse!.at;
+    } else {
+      const r = await keepa.productFinder({ ...termIncumbentSelection(term, o.rootCategoryIds), perPage: DIRECT_PAGE, page: 0 });
+      spent += r.tokensUsed;
+      candidates = r.asins.slice(0, TERM_CANDIDATES).map((a) => a.toUpperCase());
+      found = r.total; finderAt = new Date().toISOString();
+    }
+    const cached = await freshHuntAsins(candidates);
+    let need = candidates.filter((a) => !cached.has(a));
     const room = Math.max(0, Math.floor((cap - spent) / DETAIL_TOKENS_PER_ASIN));
     if (need.length > room) need = need.slice(0, room);
-    const fetched: KeepaProduct[] = [];
     if (need.length) {
+      const fetched: KeepaProduct[] = [];
       let detail = 0;
       try {
         const res = await keepa.lookupByAsins(need, (m) => { detail += m.tokensConsumed; }, { buyBox: false, rating: true });
@@ -843,12 +869,16 @@ export async function termIncumbentCheck(term: string) {
       const snaps = fetched.map((k) => huntSnapshot(k, names));
       if (snaps.length) must(await db().from("pl_hunt_asins").upsert(snaps, { onConflict: "asin" }), "save hunt snapshots");
     }
-    const fresh = await freshHuntAsins(top);
-    const incumbents = top.map((a) => fresh.get(a)).filter((x): x is HuntAsin => !!x)
-      .map((x) => ({ asin: x.asin, title: x.title, brand: x.brand, reviews: x.review_count, price: x.price, rank: x.rank }));
+    const fresh = await freshHuntAsins(candidates);
+    const products: IncumbentCandidate[] = candidates.map((a) => fresh.get(a)).filter((x): x is HuntAsin => !!x).map((x) => ({
+      asin: x.asin, title: x.title, brand: x.brand, reviews: x.review_count, price: x.price, rank: x.rank,
+      monthlySold: x.bought_past_month, category: x.leaf_category ?? x.root_category ?? null,
+    }));
+    const c = classifyIncumbents(products, term, { pet: o.pet, words: o.offNiche });
     return {
-      term, found: r.total, shape: shapeOf(incumbents.map((x) => x.reviews)), incumbents, tokensUsed: spent,
-      reused: top.filter((a) => cached.has(a)).length, checkedAt: new Date().toISOString(),
+      term, rootCategories: o.rootNames ?? [], found, shape: c.shape, onNiche: c.onNiche, incumbents: c.top,
+      excluded: c.excluded.slice(0, 15).map((x) => ({ asin: x.asin, title: x.title, why: x.why })), excludedCount: c.excluded.length,
+      candidates, finderAt, reusedFinder: plan.reusing, tokensUsed: spent, reused: candidates.filter((a) => cached.has(a)).length, checkedAt: new Date().toISOString(),
     };
   } finally {
     termCheckRunning = false;
