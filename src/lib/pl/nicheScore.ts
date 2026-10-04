@@ -84,9 +84,13 @@ export function scoreNiche(n: NicheFigures): NicheScore {
 
 /* ===================== flags ===================== */
 
-export const ELECTRICAL_TERMS = ["camera", "plug", "socket", "charger", "battery", "batteries", "led", "heater", "extension lead", "lamp", "light", "electric", "cordless", "drill", "fan", "smart", "wifi", "sensor", "doorbell", "alarm", "bulb", "radio"];
+export const ELECTRICAL_TERMS = ["camera", "plug", "socket", "charger", "battery", "batteries", "led", "heater", "extension lead", "lamp", "light", "electric", "cordless", "drill", "fan", "smart", "wifi", "sensor", "doorbell", "alarm", "bulb", "radio",
+  "steamer", "clippers", "toaster", "blender", "kettle", "air fryer", "hairdryer", "straightener", "trimmer", "shaver", "scales", "thermometer", "fountain"];
 export const REGULATED_TERMS = ["glasses", "safety", "ppe", "respirator", "mask", "medical", "baby", "food", "supplement", "fire", "gas", "smoke", "carbon monoxide", "paint", "aerosol", "resin", "adhesive"];
-export const HEAVY_BULKY_TERMS = ["shelves", "shelf", "ladder", "toilet", "bidet", "wardrobe", "mattress", "cabinet", "table", "desk", "bench", "door", "gate", "fence", "rack", "trolley", "workbench", "flooring", "wall panels", "step ladder"];
+export const HEAVY_BULKY_TERMS = ["shelves", "shelf", "ladder", "toilet", "bidet", "wardrobe", "mattress", "cabinet", "table", "desk", "bench", "door", "gate", "fence", "rack", "trolley", "workbench", "flooring", "wall panels", "step ladder",
+  "shelving", "unit", "cupboard", "drawers", "lounger", "hammock", "swing",
+  // "stand" only as one of these: a plant, TV, monitor or bike stand is furniture; a phone stand isn't.
+  "plant stand", "tv stand", "monitor stand", "bike stand"];
 
 /** Lower case, punctuation to spaces (hyphens kept: "wd-40", "evo-stik"), single spaces. */
 const norm = (s: string) => ` ${s.toLowerCase().replace(/[^\p{L}\p{N}-]+/gu, " ").replace(/\s+/g, " ").trim()} `;
@@ -96,6 +100,18 @@ const hits = (text: string, term: string) => {
   return text.includes(` ${t} `) || text.includes(` ${t}s `) || text.includes(` ${t}es `);
 };
 const anyHit = (texts: string[], list: string[]) => list.find((term) => texts.some((x) => hits(x, term))) ?? null;
+
+/**
+ * A brand in a search term, as a whole phrase: the term is the brand, starts with it ("tapo camera",
+ * "ring doorbell"), or has it after a space when the brand is 5+ characters ("cordless dewalt drill").
+ * A short brand later in a term is usually a word ("key ring" isn't Ring), so it doesn't count.
+ */
+export function brandHit(term: string, brand: string): boolean {
+  const t = norm(term).trim(), b = norm(brand).trim();
+  if (!t || !b) return false;
+  return t === b || t.startsWith(`${b} `) || (b.length >= 5 && ` ${t} `.includes(` ${b} `));
+}
+const brandOf = (texts: string[], brands: string[]) => brands.find((b) => texts.some((t) => brandHit(t, b))) ?? null;
 
 /** The flags a niche earns, from its figures and the words in its customer need and search terms. */
 export function nicheFlags(n: NicheFigures, brands: string[] = DEFAULT_BRAND_TERMS): NicheFlag[] {
@@ -107,7 +123,7 @@ export function nicheFlags(n: NicheFigures, brands: string[] = DEFAULT_BRAND_TER
   if (n.return_rate != null && n.return_rate >= 0.03) out.push("HIGH_RETURNS");
   if (anyHit(texts, ELECTRICAL_TERMS)) out.push("ELECTRICAL");
   if (anyHit(texts, REGULATED_TERMS)) out.push("REGULATED");
-  if (anyHit(texts, brands)) out.push("BIG_BRAND");
+  if (brandOf([n.customer_need, ...n.search_terms], brands)) out.push("BIG_BRAND");
   if (anyHit(texts, HEAVY_BULKY_TERMS)) out.push("HEAVY_BULKY");
   if (n.units_per_product_mid != null && n.units_per_product_mid < 200) out.push("LOW_UNITS");
   return out;
@@ -116,6 +132,7 @@ export function nicheFlags(n: NicheFigures, brands: string[] = DEFAULT_BRAND_TER
 /** Which word set a flag off, for its chip's tooltip. */
 export function flagReason(flag: NicheFlag, n: NicheFigures, brands: string[] = DEFAULT_BRAND_TERMS): string | null {
   const texts = [n.customer_need, ...n.search_terms].map(norm);
-  const list = flag === "ELECTRICAL" ? ELECTRICAL_TERMS : flag === "REGULATED" ? REGULATED_TERMS : flag === "HEAVY_BULKY" ? HEAVY_BULKY_TERMS : flag === "BIG_BRAND" ? brands : null;
+  if (flag === "BIG_BRAND") return brandOf([n.customer_need, ...n.search_terms], brands);
+  const list = flag === "ELECTRICAL" ? ELECTRICAL_TERMS : flag === "REGULATED" ? REGULATED_TERMS : flag === "HEAVY_BULKY" ? HEAVY_BULKY_TERMS : null;
   return list ? anyHit(texts, list) : null;
 }

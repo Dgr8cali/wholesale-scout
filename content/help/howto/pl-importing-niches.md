@@ -48,13 +48,13 @@ Flags never change the score: they're chips, and you can hide flagged niches. Th
 | **Fading** | Growing over 180 days but down more than 15% over 90 | The trend has turned |
 | **Low price** | Average price under £10 | Fees leave little margin |
 | **High returns** | Return rate 3% or more | Returns eat the margin and the rating |
-| **Electrical** | A word like camera, plug, charger, battery, LED, heater, extension lead, lamp, light, drill, smart, sensor, bulb… | Safety testing, certification and returns |
+| **Electrical** | A word like camera, plug, charger, battery, LED, heater, extension lead, lamp, light, drill, smart, sensor, bulb, steamer, clippers, toaster, kettle, air fryer, hairdryer, straightener, trimmer, shaver, scales, thermometer, fountain… | Safety testing, certification and returns |
 | **Regulated** | glasses, safety, PPE, mask, medical, baby, food, supplement, fire, gas, smoke, paint, aerosol, resin, adhesive… | Rules, testing or dangerous-goods handling |
-| **Big brand** | A brand in the customer need or search terms (Tapo, Ring, DeWalt, Bosch, Karcher, WD-40…) | Shoppers search for the brand, not the product. The list is editable in [Settings → Private label](/settings?tab=pl#brand-terms); saving re-flags every niche |
-| **Heavy/bulky** | shelves, ladder, toilet, wardrobe, mattress, desk, door, gate, fence, rack, trolley, flooring… | Oversize FBA fees and freight |
+| **Big brand** | A brand as a whole phrase in the customer need or a search term (Tapo, Ring, DeWalt, Bosch, Karcher, WD-40…): the term is the brand, starts with it ("tapo camera", "ring doorbell"), or has it after a space when the brand is 5+ characters ("cordless dewalt drill"). So "key ring" isn't Ring | Shoppers search for the brand, not the product. The list is editable in [Settings → Private label](/settings?tab=pl#brand-terms); saving re-flags every niche |
+| **Heavy/bulky** | shelves, shelving, unit, cupboard, drawers, ladder, toilet, wardrobe, mattress, desk, door, gate, fence, rack, trolley, flooring, lounger, hammock, swing, and a plant, TV, monitor or bike stand (not any stand)… | Oversize FBA fees and freight |
 | **Low units** | The average product sells under 200 a year | Too little volume to be worth a launch |
 
-Words match whole (so "led" isn't found in "sledge"), plurals included ("light" finds "lights"). A word can misfire ("ring" is a brand, and also "key ring"): open the niche to judge.
+Words match whole (so "led" isn't found in "sledge"), plurals included ("light" finds "lights"). A word can still misfire ("unit" in "air con unit", "scales" in "fish scales"): open the niche to judge.
 
 ## Acting on niches
 

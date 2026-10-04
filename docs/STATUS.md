@@ -136,7 +136,7 @@ StockPilot data is imported (3 items). Ads days of cover and the stock guard cou
 - **Ordered stock shows as "out" on Levels** until it's received (e.g. the Biotene and Lifeproof items made from their product-page purchases).
 - **Rule windows on range data**: search terms and keywords come in import ranges, not days, so a window shorter than an import counts that import in full (the rule says so). Exact windows need imports of about the window's length, or the Ads API.
 - **The pill box's keyword bank is thin** (1 harvested term): it has no linked private-label candidate (no Opportunity Explorer terms) and no rank checks yet.
-- **Niche Import's word flags** are whole-word matches on fixed lists: "ring" (a brand) also flags "key ring", and "shelving unit" isn't heavy/bulky (only "shelves"/"shelf" are listed). Open the niche to judge; the brand list is editable.
+- **Niche Import's word flags** are whole-word matches on fixed lists, so broad words can misfire ("unit" in "air con unit"). Brands match as whole phrases (the term is the brand, starts with it, or has a 5+ character brand after a space), so "key ring" isn't Ring but a short brand later in a term ("outdoor tapo") is missed. The brand list is editable.
 - **Opportunity Explorer growth** can be huge for one-off events: eclipse glasses read +56,382% over 180 days (the file's 563.8175 is a fraction, like the rest of the column). Anything over +150% is a spike.
 - **SP-API roles** (Brand Analytics, Finance): see above.
 

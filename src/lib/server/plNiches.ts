@@ -44,6 +44,12 @@ export async function saveBrandTerms(text: string | string[] | null): Promise<{ 
   const d = db();
   if (text == null) must(await d.from("pl_niche_settings").delete().eq("key", "brandTerms"), "reset brands");
   else must(await d.from("pl_niche_settings").upsert({ key: "brandTerms", value: parseBrandTerms(text), updated_at: now() }, { onConflict: "key" }), "save brands");
+  return { terms: await brandTerms(), reflagged: await reflagNiches() };
+}
+
+/** Every niche's flags worked out again (after the brand list or the flag rules change). */
+export async function reflagNiches(): Promise<number> {
+  const d = db();
   const terms = await brandTerms();
   const rows = (must(await d.from("pl_niches").select("*"), "niches") as Record<string, unknown>[]).map(toRow);
   let reflagged = 0;
@@ -51,7 +57,7 @@ export async function saveBrandTerms(text: string | string[] | null): Promise<{ 
     const flags = nicheFlags(n, terms);
     if (JSON.stringify(flags) !== JSON.stringify(n.flags)) { must(await d.from("pl_niches").update({ flags, updated_at: now() }).eq("id", n.id), "re-flag"); reflagged++; }
   }
-  return { terms, reflagged };
+  return reflagged;
 }
 
 /* ===================== import ===================== */

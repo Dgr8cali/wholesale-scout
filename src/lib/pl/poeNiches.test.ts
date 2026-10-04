@@ -49,6 +49,13 @@ describe("the Opportunity Explorer niche download", () => {
     expect(nicheFlags(niche("extension lead"))).toEqual(expect.arrayContaining(["ELECTRICAL", "LOW_PRICE"]));
     expect(scoreNiche(niche("eclipse glasses")).breakdown.growth.points).toBe(0);
   });
+  it("the added word lists, on real rows", () => {
+    expect(nicheFlags(niche("shelving unit"))).toContain("HEAVY_BULKY");
+    expect(nicheFlags(niche("plastic shelving unit"))).toContain("HEAVY_BULKY");
+    expect(nicheFlags(niche("teddy hammock"))).toContain("HEAVY_BULKY");
+    // "ring doorbell wired" starts with the brand Ring.
+    expect(nicheFlags(niche("tapo doorbell"))).toEqual(expect.arrayContaining(["BIG_BRAND", "ELECTRICAL"]));
+  });
   it("columns are matched by name, whatever the order, case and punctuation", () => {
     expect(headerKey("No. of top clicked products")).toBe("nooftopclickedproducts");
     const moved = "Customer Need,average price (gbp),TOP SEARCH TERM: 1,Search Volume (past 360 days),Extra Thing\nfoo,12.5,foo bar,200000,x\n";
@@ -99,6 +106,25 @@ describe("flags", () => {
     expect(nicheFlags({ ...base, avg_price: 9.99 })).toContain("LOW_PRICE");
     expect(nicheFlags({ ...base, return_rate: 0.03 })).toContain("HIGH_RETURNS");
     expect(nicheFlags({ ...base, units_per_product_mid: 199 })).toContain("LOW_UNITS");
+  });
+  it("brands as whole phrases: the term is the brand, starts with it, or has a 5+ character brand after a space", () => {
+    expect(nicheFlags({ ...base, search_terms: ["key ring"] })).not.toContain("BIG_BRAND");
+    expect(nicheFlags({ ...base, customer_need: "key rings", search_terms: ["key ring", "keyring holder"] })).not.toContain("BIG_BRAND");
+    expect(nicheFlags({ ...base, search_terms: ["tapo camera"] })).toContain("BIG_BRAND");
+    expect(nicheFlags({ ...base, search_terms: ["ring doorbell"] })).toContain("BIG_BRAND");
+    expect(nicheFlags({ ...base, search_terms: ["ring"] })).toContain("BIG_BRAND");
+    expect(nicheFlags({ ...base, search_terms: ["cordless dewalt"] })).toContain("BIG_BRAND"); // 6 characters, after a space
+    expect(nicheFlags({ ...base, search_terms: ["outdoor tapo"] })).not.toContain("BIG_BRAND"); // 4 characters, after a space
+    expect(nicheFlags({ ...base, search_terms: ["nested tables"] })).not.toContain("BIG_BRAND"); // "nest" isn't a word here
+  });
+  it("the added electrical and heavy/bulky words; stand only as furniture", () => {
+    for (const w of ["garment steamer", "dog clippers", "toaster", "kettle", "air fryer", "hairdryer", "hair straightener", "beard trimmer", "bathroom scales", "meat thermometer", "water fountain"]) {
+      expect(nicheFlags({ ...base, search_terms: [w] })).toContain("ELECTRICAL");
+    }
+    for (const w of ["kitchen cupboard", "chest of drawers", "sun lounger", "garden swing", "tv stand", "plant stands", "bike stand"]) {
+      expect(nicheFlags({ ...base, search_terms: [w] })).toContain("HEAVY_BULKY");
+    }
+    expect(nicheFlags({ ...base, search_terms: ["phone stand"] })).not.toContain("HEAVY_BULKY");
   });
   it("from the words: whole words, plurals, phrases; the brand list is editable", () => {
     expect(nicheFlags({ ...base, search_terms: ["led strip lights"] })).toContain("ELECTRICAL");
