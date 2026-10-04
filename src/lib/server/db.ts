@@ -100,6 +100,43 @@ export async function loadProfile(id?: string | null): Promise<{ id: string; nam
 }
 
 /** Split a list into chunks — PostgREST URLs get long with big `in` filters. */
+/** PostgREST returns at most this many rows a request (Supabase's max-rows), whatever the range asked for. */
+export const MAX_ROWS = 1000;
+
+/**
+ * Every row of a query, a page at a time: a single select stops at MAX_ROWS. The query must have a
+ * stable order (a unique column last, such as id) so pages don't overlap or skip rows.
+ */
+export async function allRows<T>(query: (from: number, to: number) => PromiseLike<{ data: unknown; error: { message: string } | null }>, what: string): Promise<T[]> {
+  // A page can come back shorter than asked (a lower max-rows setting): step on by what came, and
+  // stop only at an empty page, so a smaller cap never cuts the list short.
+  const out: T[] = [];
+  for (let from = 0; ; ) {
+    const page = must(await query(from, from + MAX_ROWS - 1), what) as T[];
+    if (!page.length) break;
+    out.push(...page);
+    from += page.length;
+  }
+  return out;
+}
+
+/** A select being built (PostgREST's builder; its generics are too deep to spell out here). */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Selected = any;
+
+/**
+ * Every row of a table (filtered by `where` when given), a page at a time, ordered by `order` (a
+ * unique key, last column unique: the table's primary key) so the pages line up.
+ */
+export function selectAll<T>(table: string, cols: string, order: string[], where?: (q: Selected) => Selected): Promise<T[]> {
+  return allRows<T>((a, b) => {
+    let q: Selected = db().from(table).select(cols);
+    if (where) q = where(q);
+    for (const o of order) q = q.order(o);
+    return q.range(a, b);
+  }, table);
+}
+
 export function chunks<T>(xs: T[], n = 200): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < xs.length; i += n) out.push(xs.slice(i, i + n));

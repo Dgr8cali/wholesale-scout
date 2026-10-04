@@ -1,7 +1,7 @@
 import "server-only";
 import { landedCost } from "../fees/engine";
 import { SUPPLIER_KINDS, supplierRow, webUrl, type NewSupplier, type SupplierKind } from "../stock/orders";
-import { chunks, db, loadProfile, must } from "./db";
+import { allRows, chunks, db, loadProfile, must } from "./db";
 
 /** One supplier's ledger record. */
 export interface SupplierRecord {
@@ -64,15 +64,7 @@ const EDITABLE = [
 type OfferRow = { id: string; product_id: string; supplier_id: string; unit_cost_gbp: number; cost_known?: boolean; seen_at: string };
 type BrandRow = { product_id: string; brand: string; ean: string; asin: string | null; title: string | null; verdict: string | null; priced: boolean; max_landed: number | null; buy_box: number | null };
 
-async function pageAll<T>(query: (from: number, to: number) => PromiseLike<{ data: unknown; error: { message: string } | null }>, what: string): Promise<T[]> {
-  const out: T[] = [];
-  for (let from = 0; ; from += 1000) {
-    const page = must(await query(from, from + 999), what) as T[];
-    out.push(...page);
-    if (page.length < 1000) break;
-  }
-  return out;
-}
+const pageAll = allRows;
 
 /** Everything the per-supplier figures are built from, loaded once. */
 async function ledgerData(supplierIds?: string[]) {

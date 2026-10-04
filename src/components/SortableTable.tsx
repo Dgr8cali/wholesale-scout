@@ -45,6 +45,20 @@ export function useSortable<T>(tableId: string, rows: T[], columns: Record<strin
   return { rows: sorted, sort, toggle, th: (key) => ({ sortKey: key, sort, onSort: toggle }) };
 }
 
+/**
+ * The same headers and remembered choice for a table sorted on the server (a paged table): it holds
+ * the sort and hands it back for the request; `numeric` columns start highest first.
+ */
+export function useServerSort(tableId: string, keys: string[], numeric: string[], initial: SortState) {
+  const [sort, setSort] = useState<SortState>(() => readStored(tableId, keys) ?? initial);
+  const toggle = (key: string) => {
+    const next = nextSort(sort, key, numeric.includes(key) ? "number" : "text");
+    setSort(next);
+    try { localStorage.setItem(sortStorageKey(tableId), JSON.stringify(next)); } catch { /* not remembered */ }
+  };
+  return { sort, toggle, th: (key: string) => ({ sortKey: key, sort, onSort: toggle }) };
+}
+
 /** A header cell that sorts its column on click, with an arrow on the active one. */
 export function SortTh({ sortKey, sort, onSort, children, className, numeric, ...rest }: {
   sortKey: string; sort: SortState | null; onSort: (key: string) => void; children: ReactNode; numeric?: boolean;

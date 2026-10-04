@@ -4,7 +4,7 @@ import { addDailyTokens, PL_KEEP_DAYS, type TokensByDay } from "../keepaLedger";
 import { DEFAULT_BRAND_TERMS, parseBrandTerms } from "../pl/brandTerms";
 import { nicheFlags, scoreNiche } from "../pl/nicheScore";
 import { parseNichesCsv, type ParsedNiche } from "../pl/poeNiches";
-import { activeRateCard, chunks, db, must } from "./db";
+import { activeRateCard, allRows, chunks, db, must } from "./db";
 import { createCandidate } from "./pl";
 import { termCheckPlan, termIncumbentCheck } from "./plHunt";
 
@@ -25,6 +25,19 @@ export interface NicheRow {
 
 const now = () => new Date().toISOString();
 const NUMS = ["top_clicked_products", "sv_360", "growth_180", "sv_90", "growth_90", "units_360_min", "units_360_max", "units_per_product_min", "units_per_product_max", "units_per_product_mid", "avg_price", "min_price", "max_price", "return_rate", "score"] as const;
+/**
+ * The columns the page filters and sorts by in SQL, worked out from the niche: its words for the
+ * search, its first search term, how many flags, and the shape's rank (open first).
+ */
+export function derivedCols(n: { customer_need: string; search_terms: string[]; flags: string[]; shape?: string | null; extra?: { aliases?: string[] } | null }) {
+  return {
+    search_text: [n.customer_need, ...n.search_terms, ...(n.extra?.aliases ?? [])].join(" ").toLowerCase(),
+    first_term: n.search_terms[0] ?? null,
+    flag_count: n.flags.length,
+    shape_rank: n.shape === "open" ? 0 : n.shape === "contested" ? 1 : n.shape === "dominated" ? 2 : null,
+  };
+}
+
 const toRow = (r: Record<string, unknown>): NicheRow => {
   const out = { ...r } as Record<string, unknown>;
   for (const k of NUMS) out[k] = r[k] == null ? null : Number(r[k]);
@@ -51,11 +64,12 @@ export async function saveBrandTerms(text: string | string[] | null): Promise<{ 
 export async function reflagNiches(): Promise<number> {
   const d = db();
   const terms = await brandTerms();
-  const rows = (must(await d.from("pl_niches").select("*"), "niches") as Record<string, unknown>[]).map(toRow);
+  // Every niche, a page at a time (one select returns at most 1,000).
+  const rows = (await allRows<Record<string, unknown>>((a, b) => d.from("pl_niches").select("*").order("id").range(a, b), "niches")).map(toRow);
   let reflagged = 0;
   for (const n of rows) {
     const flags = nicheFlags(n, terms);
-    if (JSON.stringify(flags) !== JSON.stringify(n.flags)) { must(await d.from("pl_niches").update({ flags, updated_at: now() }).eq("id", n.id), "re-flag"); reflagged++; }
+    if (JSON.stringify(flags) !== JSON.stringify(n.flags)) { must(await d.from("pl_niches").update({ flags, flag_count: flags.length, updated_at: now() }).eq("id", n.id), "re-flag"); reflagged++; }
   }
   return reflagged;
 }
@@ -101,7 +115,8 @@ export async function importNiches(x: { text: string; category: string; filename
   const old = await importsFor(category);
   const kept = new Map<string, Record<string, unknown>>();
   if (old.length) {
-    const rows = must(await d.from("pl_niches").select("customer_need, status, notes, shape, candidate_id, extra, keepa_by_day").in("import_id", old.map((o) => o.id)), "old niches") as Record<string, unknown>[];
+    const oldIds = old.map((o) => o.id);
+    const rows = await allRows<Record<string, unknown>>((a, b) => d.from("pl_niches").select("id, customer_need, status, notes, shape, candidate_id, extra, keepa_by_day").in("import_id", oldIds).order("id").range(a, b), "old niches");
     for (const r of rows) kept.set(String(r.customer_need).toLowerCase(), r);
   }
   const imp = must(await d.from("pl_niche_imports").insert({
@@ -120,6 +135,7 @@ export async function importNiches(x: { text: string; category: string; filename
       extra: { ...(prevExtra.incumbents ? { incumbents: prevExtra.incumbents } : {}), aliases: n.aliases }, raw_row: n.raw_row,
       ...scored(n, brands),
       status: (k?.status as string) ?? "new", notes: (k?.notes as string | null) ?? null, shape: (k?.shape as string | null) ?? null,
+      ...derivedCols({ ...n, flags: scored(n, brands).flags, shape: (k?.shape as string | null) ?? null, extra: { aliases: n.aliases } }),
       candidate_id: (k?.candidate_id as string | null) ?? null, keepa_by_day: (k?.keepa_by_day as TokensByDay) ?? {},
     };
   });
@@ -130,18 +146,77 @@ export async function importNiches(x: { text: string; category: string; filename
 
 /* ===================== reading and acting ===================== */
 
-export async function listNiches() {
-  const d = db();
-  const [imports, niches] = await Promise.all([
-    d.from("pl_niche_imports").select("id, category, marketplace, filename, imported_at, row_count, unmapped, duplicates").order("imported_at", { ascending: false }),
-    d.from("pl_niches").select("id, import_id, customer_need, search_terms, top_clicked_products, sv_360, growth_180, sv_90, growth_90, units_360_min, units_360_max, units_per_product_min, units_per_product_max, units_per_product_mid, avg_price, min_price, max_price, return_rate, extra, score, score_breakdown, flags, shape, status, notes, candidate_id, created_at, updated_at").range(0, 9999),
-  ]);
+/** The imports, each with the Opportunity Explorer category it matches and the fee category candidates from it use. */
+export async function listImports() {
   const card = await activeRateCard();
-  // Each import's category as typed, the Opportunity Explorer category it matches, and the fee category candidates from it use.
-  const imps = (must(imports, "imports") as { id: string; category: string; imported_at: string; row_count: number; filename: string | null; unmapped: string[]; duplicates: number; marketplace: string }[])
-    .map((i) => ({ ...i, poeCategory: matchPoeCategory(i.category), feeCategory: feeCategoryFor(i.category, card) }));
-  const cat = new Map(imps.map((i) => [i.id, i.category]));
-  return { imports: imps, feeCategories: card.referral.categories.map((c) => c.name), niches: (must(niches, "niches") as Record<string, unknown>[]).map(toRow).map((n) => ({ ...n, category: cat.get(n.import_id) ?? "" })) };
+  const imps = must(await db().from("pl_niche_imports").select("id, category, marketplace, filename, imported_at, row_count, unmapped, duplicates").order("imported_at", { ascending: false }), "imports") as
+    { id: string; category: string; imported_at: string; row_count: number; filename: string | null; unmapped: string[]; duplicates: number; marketplace: string }[];
+  return { imports: imps.map((i) => ({ ...i, poeCategory: matchPoeCategory(i.category), feeCategory: feeCategoryFor(i.category, card) })), feeCategories: card.referral.categories.map((c) => c.name) };
+}
+
+export const NICHE_SORTS = {
+  need: "customer_need", terms: "first_term", score: "score", sv: "sv_360", g180: "growth_180", g90: "growth_90", price: "avg_price", range: "max_price",
+  clicked: "top_clicked_products", units: "units_per_product_mid", returns: "return_rate", flags: "flag_count", shape: "shape_rank", status: "status",
+} as const;
+export type NicheSort = keyof typeof NICHE_SORTS;
+/** Average price bands: £15–40, £10–60, under £10, over £60. */
+export const PRICE_BANDS = { core: { gte: 15, lte: 40 }, mid: { gte: 10, lte: 60 }, low: { lt: 10 }, high: { gt: 60 } } as const;
+
+export interface NicheQuery {
+  category?: string | null; minScore?: number | null; price?: keyof typeof PRICE_BANDS | "" | null; status?: string | null; q?: string | null;
+  hideFlags?: string[]; sort?: NicheSort; dir?: "asc" | "desc"; page?: number; pageSize?: number;
+}
+
+const COLS = "id, import_id, customer_need, search_terms, top_clicked_products, sv_360, growth_180, sv_90, growth_90, units_360_min, units_360_max, units_per_product_min, units_per_product_max, units_per_product_mid, avg_price, min_price, max_price, return_rate, extra, score, score_breakdown, flags, shape, status, notes, candidate_id, created_at, updated_at";
+
+/** The niches matching the filters, sorted and paged in SQL, with the total that match. */
+export async function nichePage(x: NicheQuery) {
+  const d = db();
+  const { imports } = await listImports();
+  const cat = new Map(imports.map((i) => [i.id, i.category]));
+  const importIds = x.category ? imports.filter((i) => i.category === x.category).map((i) => i.id) : null;
+  const pageSize = Math.min(500, Math.max(10, Math.round(Number(x.pageSize) || 100)));
+  const page = Math.max(1, Math.round(Number(x.page) || 1));
+  let q = d.from("pl_niches").select(COLS, { count: "exact" });
+  if (importIds) q = q.in("import_id", importIds.length ? importIds : ["00000000-0000-0000-0000-000000000000"]);
+  if (x.minScore != null && Number.isFinite(Number(x.minScore)) && Number(x.minScore) > 0) q = q.gte("score", Number(x.minScore));
+  const band = x.price ? (PRICE_BANDS[x.price] as { gte?: number; lte?: number; lt?: number; gt?: number }) : null;
+  if (band?.gte != null) q = q.gte("avg_price", band.gte);
+  if (band?.lte != null) q = q.lte("avg_price", band.lte);
+  if (band?.lt != null) q = q.lt("avg_price", band.lt);
+  if (band?.gt != null) q = q.gt("avg_price", band.gt);
+  if (!x.status || x.status === "active") q = q.neq("status", "dismissed");
+  else if (x.status !== "all") q = q.eq("status", x.status);
+  const hide = (x.hideFlags ?? []).filter((f) => /^[A-Z_]+$/.test(f));
+  if (hide.length) q = q.not("flags", "ov", `{${hide.join(",")}}`);
+  const text = x.q?.trim().toLowerCase().replace(/[%_*,()]/g, " ").trim();
+  if (text) q = q.ilike("search_text", `%${text}%`);
+  const col = NICHE_SORTS[x.sort ?? "score"] ?? "score";
+  const asc = x.dir === "asc";
+  const from = (page - 1) * pageSize;
+  const res = await q.order(col, { ascending: asc, nullsFirst: false }).order("id", { ascending: true }).range(from, from + pageSize - 1);
+  const rows = (must(res, "niches") as Record<string, unknown>[]).map(toRow).map((n) => ({ ...n, category: cat.get(n.import_id) ?? "" }));
+  return { rows, total: res.count ?? rows.length, page, pageSize };
+}
+
+/**
+ * The summary strip, over every niche in scope (the category picked, else all), counted in SQL:
+ * imported, scoring 60+, hidden by the flags hidden now, shortlisted and incumbent-checked.
+ */
+export async function nicheStats(x: { category?: string | null; hideFlags?: string[] }) {
+  const d = db();
+  const { imports } = await listImports();
+  const ids = x.category ? imports.filter((i) => i.category === x.category).map((i) => i.id) : null;
+  const scope = () => {
+    const q = d.from("pl_niches").select("id", { count: "exact", head: true });
+    return ids ? q.in("import_id", ids.length ? ids : ["00000000-0000-0000-0000-000000000000"]) : q;
+  };
+  const hide = (x.hideFlags ?? []).filter((f) => /^[A-Z_]+$/.test(f));
+  const [total, scoring60, hidden, shortlisted, checked] = await Promise.all([
+    scope(), scope().gte("score", 60), hide.length ? scope().overlaps("flags", hide) : Promise.resolve({ count: 0, error: null }),
+    scope().eq("status", "shortlisted"), scope().not("shape", "is", null),
+  ]);
+  return { total: total.count ?? 0, scoring60: scoring60.count ?? 0, hiddenByFlags: hidden.count ?? 0, shortlisted: shortlisted.count ?? 0, checked: checked.count ?? 0 };
 }
 
 export async function updateNiche(id: string, patch: { status?: string; notes?: string | null }) {
@@ -197,14 +272,21 @@ export async function checkNicheIncumbents(id: string) {
   const term = n.search_terms[0] ?? n.customer_need;
   const r = await termIncumbentCheck(term);
   must(await d.from("pl_niches").update({
-    shape: r.shape, extra: { ...(n.extra ?? {}), incumbents: r }, keepa_by_day: addDailyTokens(n.keepa_by_day, r.tokensUsed, new Date(), PL_KEEP_DAYS), updated_at: now(),
+    shape: r.shape, shape_rank: derivedCols({ customer_need: "", search_terms: [], flags: [], shape: r.shape }).shape_rank,
+    extra: { ...(n.extra ?? {}), incumbents: r }, keepa_by_day: addDailyTokens(n.keepa_by_day, r.tokensUsed, new Date(), PL_KEEP_DAYS), updated_at: now(),
   }).eq("id", id), "save the check");
   return r;
 }
 
-/** For Home and the page's strip. */
+/** For Home: counted in SQL, so every niche counts (not the first 1,000). */
 export async function nicheSummary() {
-  const res = await db().from("pl_niches").select("status, shape, score, keepa_by_day");
-  const rows = (res.error ? [] : res.data) as { status: string; shape: string | null; score: number | null; keepa_by_day: TokensByDay | null }[];
-  return { total: rows.length, shortlisted: rows.filter((r) => r.status === "shortlisted").length, checked: rows.filter((r) => r.shape).length, scoring60: rows.filter((r) => Number(r.score) >= 60).length, ledgers: rows.map((r) => r.keepa_by_day) };
+  const s = await nicheStats({});
+  return { total: s.total, shortlisted: s.shortlisted, checked: s.checked, scoring60: s.scoring60 };
+}
+
+/** The Keepa ledgers of the niches that have spent tokens (incumbent checks), for Private label's monthly total. */
+export async function nicheLedgers(): Promise<TokensByDay[]> {
+  const d = db();
+  const rows = await allRows<{ keepa_by_day: TokensByDay | null }>((a, b) => d.from("pl_niches").select("id, keepa_by_day").not("shape", "is", null).order("id").range(a, b), "niche ledgers");
+  return rows.map((r) => r.keepa_by_day ?? {});
 }

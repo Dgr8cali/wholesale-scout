@@ -3,7 +3,7 @@ import { computeActuals, type Actuals, type SaleDay } from "../actuals";
 import { computeFees } from "../fees/engine";
 import { getSpApi } from "../spapi/client";
 import { salesFromOrdersReport, ukDay } from "../spapi/reports";
-import { activeRateCard, chunks, db, loadProfile, must } from "./db";
+import { activeRateCard, chunks, db, loadProfile, must, selectAll } from "./db";
 import type { Purchase } from "./purchases";
 
 /**
@@ -130,7 +130,7 @@ async function syncFees() {
   if (!purchases.length) return;
   const since = new Date(Date.now() - 30 * DAY).toLocaleDateString("en-CA", { timeZone: "Europe/London" });
   const asins = [...new Set(purchases.map((p) => p.asin))];
-  const sales = must(await d.from("amazon_sales").select("asin, units, revenue").in("asin", asins).eq("channel", "Amazon").gte("day", since), "sales") as { asin: string; units: number; revenue: number }[];
+  const sales = await selectAll<{ asin: string; units: number; revenue: number }>("amazon_sales", "asin, units, revenue", ["asin", "day", "channel"], (q) => q.in("asin", asins).eq("channel", "Amazon").gte("day", since));
   const items = asins.map((asin) => {
     const s = sales.filter((x) => x.asin === asin);
     const units = s.reduce((a, x) => a + x.units, 0);
@@ -154,7 +154,8 @@ export async function actualsFor(purchases: Purchase[]): Promise<Map<string, Act
   const asins = [...new Set(purchases.map((p) => p.asin))];
   const earliest = purchases.map((p) => p.ordered_on).sort()[0];
   const [sales, fees, stock, status, profile, card, products] = await Promise.all([
-    d.from("amazon_sales").select("asin, day, units, revenue").in("asin", asins).eq("channel", "Amazon").gte("day", earliest).then((r) => must(r, "sales") as { asin: string; day: string; units: number; revenue: number }[]),
+    // Daily rows for every tracked ASIN since the earliest purchase: past 1,000 at ~20 ASINs over 60 days, so a page at a time.
+    selectAll<{ asin: string; day: string; units: number; revenue: number }>("amazon_sales", "asin, day, units, revenue", ["asin", "day", "channel"], (q) => q.in("asin", asins).eq("channel", "Amazon").gte("day", earliest)),
     d.from("amazon_fee_estimates").select("*").in("asin", asins).then((r) => must(r, "fees") as { asin: string; referral: number | null; fba: number | null }[]),
     d.from("amazon_inventory").select("asin, fulfillable, inbound, reserved").in("asin", asins).then((r) => must(r, "stock") as { asin: string; fulfillable: number; inbound: number; reserved: number }[]),
     read(),

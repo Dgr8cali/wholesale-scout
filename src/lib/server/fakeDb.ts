@@ -31,6 +31,17 @@ function get(r: Row, c: string): unknown {
   return v == null ? undefined : String(v);
 }
 
+/** Numbers compare as numbers (a numeric column comes back as a number or a numeric string), else as text. */
+function cmp(a: unknown, b: unknown): number {
+  const x = Number(a), y = Number(b);
+  if (a !== "" && b !== "" && a != null && b != null && Number.isFinite(x) && Number.isFinite(y) && typeof a !== "boolean") return x < y ? -1 : x > y ? 1 : 0;
+  return String(a) < String(b) ? -1 : String(a) > String(b) ? 1 : 0;
+}
+/** A LIKE pattern (% and _; ilike's * as %) as a regular expression. */
+function likeRe(pattern: string, insensitive = false): RegExp {
+  return new RegExp(`^${pattern.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/[%*]/g, ".*").replace(/_/g, ".")}$`, insensitive ? "is" : "s");
+}
+
 let seq = 0;
 const uuid = () => `00000000-0000-4000-8000-${String(++seq).padStart(12, "0")}`;
 
@@ -40,6 +51,11 @@ export class FakeDb {
   failInserts = new Set<string>();
   /** Columns a table doesn't have yet (an unapplied migration), as PostgREST reports them. */
   missingColumns: Record<string, string[]> = {};
+  /**
+   * PostgREST's max-rows: a select returns at most this many rows (Supabase's default, 1,000),
+   * whatever its range; an exact count still counts them all. Code that needs more must page.
+   */
+  maxRows = 1000;
   from(table: string) {
     this.tables[table] ??= [];
     return new Query(this, table);
@@ -53,7 +69,7 @@ class Query implements PromiseLike<{ data: unknown; error: { message: string; co
   private opts: { onConflict?: string; ignoreDuplicates?: boolean; count?: string; head?: boolean } = {};
   private returning = false;
   private mode: "many" | "single" | "maybe" = "many";
-  private orderBy: { col: string; asc: boolean } | null = null;
+  private orderBy: { col: string; asc: boolean; nullsFirst: boolean }[] = [];
   private lim: number | null = null;
   private rng: [number, number] | null = null;
 
@@ -76,26 +92,41 @@ class Query implements PromiseLike<{ data: unknown; error: { message: string; co
       const v = r[col];
       if (op === "is") return v == null;
       if (op === "lt") return v != null && String(v) < rest.join(".");
+      if (op === "ilike") return v != null && likeRe(rest.join("."), true).test(String(v));
       return false;
     }));
     return this;
   }
-  not(c: string, op: "is", v: null) { void op; this.filters.push((r) => (r[c] ?? null) !== v); return this; }
+  not(c: string, op: "is" | "ov" | "eq", v: unknown) {
+    if (op === "ov") {
+      // A Postgres array literal: {a,b}.
+      const vs = String(v).replace(/^\{|\}$/g, "").split(",").map((x) => x.replace(/^"|"$/g, "")).filter(Boolean);
+      this.filters.push((r) => !(Array.isArray(r[c]) && vs.some((x) => (r[c] as unknown[]).includes(x))));
+    } else if (op === "eq") this.filters.push((r) => get(r, c) !== v);
+    else this.filters.push((r) => (r[c] ?? null) !== v);
+    return this;
+  }
   is(c: string, v: null) { this.filters.push((r) => (r[c] ?? null) === v); return this; }
   in(c: string, vs: unknown[]) { this.filters.push((r) => vs.includes(get(r, c))); return this; }
-  gte(c: string, v: string) { this.filters.push((r) => String(r[c]) >= v); return this; }
-  lte(c: string, v: string) { this.filters.push((r) => r[c] != null && String(r[c]) <= v); return this; }
+  gte(c: string, v: string | number) { this.filters.push((r) => r[c] != null && cmp(r[c], v) >= 0); return this; }
+  lte(c: string, v: string | number) { this.filters.push((r) => r[c] != null && cmp(r[c], v) <= 0); return this; }
+  ilike(c: string, pattern: string) { const re = likeRe(pattern, true); this.filters.push((r) => r[c] != null && re.test(String(r[c]))); return this; }
   like(c: string, pattern: string) {
     const re = new RegExp(`^${pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/%/g, ".*").replace(/_/g, ".")}$`);
     this.filters.push((r) => r[c] != null && re.test(String(r[c])));
     return this;
   }
-  gt(c: string, v: string) { this.filters.push((r) => r[c] != null && String(r[c]) > v); return this; }
-  lt(c: string, v: string) { this.filters.push((r) => r[c] != null && String(r[c]) < v); return this; }
+  gt(c: string, v: string | number) { this.filters.push((r) => r[c] != null && cmp(r[c], v) > 0); return this; }
+  lt(c: string, v: string | number) { this.filters.push((r) => r[c] != null && cmp(r[c], v) < 0); return this; }
   contains(c: string, vs: unknown[]) { this.filters.push((r) => Array.isArray(r[c]) && vs.every((v) => (r[c] as unknown[]).includes(v))); return this; }
   overlaps(c: string, vs: unknown[]) { this.filters.push((r) => Array.isArray(r[c]) && vs.some((v) => (r[c] as unknown[]).includes(v))); return this; }
   neq(c: string, v: unknown) { this.filters.push((r) => get(r, c) !== v); return this; }
-  order(col: string, o?: { ascending?: boolean }) { this.orderBy = { col, asc: o?.ascending ?? true }; return this; }
+  /** Several calls sort by each in turn; nulls go last ascending and first descending, as Postgres, unless nullsFirst says. */
+  order(col: string, o?: { ascending?: boolean; nullsFirst?: boolean }) {
+    const asc = o?.ascending ?? true;
+    this.orderBy.push({ col, asc, nullsFirst: o?.nullsFirst ?? !asc });
+    return this;
+  }
   limit(n: number) { this.lim = n; return this; }
   range(a: number, b: number) { this.rng = [a, b]; return this; }
   single() { this.mode = "single"; return this; }
@@ -145,12 +176,26 @@ class Query implements PromiseLike<{ data: unknown; error: { message: string; co
       if (this.op === "update") rows.forEach((r) => Object.assign(r, this.payload));
       if (this.op === "delete") this.db.tables[this.table] = this.rows().filter((r) => !rows.includes(r));
       if (this.op === "select" && this.opts.head) return { data: null, error: null, count: rows.length };
-      if (this.orderBy) {
-        const { col, asc } = this.orderBy;
-        rows = [...rows].sort((a, b) => ((a[col] as number) < (b[col] as number) ? -1 : (a[col] as number) > (b[col] as number) ? 1 : 0) * (asc ? 1 : -1));
+      const total = rows.length;
+      if (this.orderBy.length) {
+        rows = [...rows].sort((a, b) => {
+          for (const { col, asc, nullsFirst } of this.orderBy) {
+            const x = a[col] ?? null, y = b[col] ?? null;
+            if (x === null && y === null) continue;
+            if (x === null) return nullsFirst ? -1 : 1;
+            if (y === null) return nullsFirst ? 1 : -1;
+            const c = cmp(x, y);
+            if (c) return c * (asc ? 1 : -1);
+          }
+          return 0;
+        });
       }
       if (this.rng) rows = rows.slice(this.rng[0], this.rng[1] + 1);
       if (this.lim != null) rows = rows.slice(0, this.lim);
+      if (this.op === "select") rows = rows.slice(0, this.db.maxRows);
+      if (this.op === "select" && this.opts.count === "exact" && this.mode === "many") {
+        return { data: JSON.parse(JSON.stringify(rows)) as Row[], error: null, count: total };
+      }
       out = this.op === "select" || this.returning ? rows : [];
     }
     const copy = JSON.parse(JSON.stringify(out)) as Row[];

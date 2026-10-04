@@ -1,7 +1,8 @@
 # Wholesale Scout: status
 
 Read this first in a new session. Keep it current: every commit that changes a feature updates
-it (what's built, the backlog, the rough edges). Last updated: 4 Oct 2026 (Niche Import: category picker with fee categories).
+it (what's built, the backlog, the rough edges). Last updated: 5 Oct 2026 (Niche Import paged on the server; the 1,000-row cap fixed
+everywhere it bit).
 
 Wholesale Scout is a single-user Amazon UK seller's workbench: Next.js 16 (App Router, `proxy.ts`
 password gate), Supabase (Postgres, RLS on, service-role access from the server only), Vercel
@@ -40,7 +41,9 @@ regulated, big brand: an editable list in Settings → Private label, heavy/bulk
 shortlists, runs a one-at-a-time Keepa incumbent check on a niche's first search term (~31 tokens,
 open/contested/dominated) and creates candidates; re-importing a category keeps status, notes and
 shape. The category is picked from Opportunity Explorer's 25 top-level UK categories (or Other…),
-each mapped to the rate card category candidates use for fees. Home has a Niches tile. Quotes turns supplier quotes into
+each mapped to the rate card category candidates use for fees. Home has a Niches tile. The Niches table is filtered, flag-hidden,
+sorted and paged in SQL (100 a page, 50–500, "showing X–Y of N"), with the summary strip counted
+over every niche in scope. Quotes turns supplier quotes into
 a landed cost per unit and total cash (FX, freight, duty, import VAT, inspection), writes it into
 Gates 0 and 7, chooses a supplier and generates the RFQ. Gate 4's review miner takes pasted 1–3★ reviews per top-5 ASIN (`pl_review_dumps`), splits
 them, counts complaint phrases locally (stop words, bigrams/trigrams, an editable synonym list) into a
@@ -151,5 +154,6 @@ StockPilot data is imported (3 items). Ads days of cover and the stock guard cou
 - **Never commit `.env.local`** or any secret; never print `DATABASE_URL`, tokens or keys (names only).
 - **Report token costs**: estimate Keepa spend before a run and say what was spent after; don't spend tokens on checks the data already answers.
 - **Update `docs/STATUS.md`** in every commit that changes features.
+- **A select returns at most 1,000 rows** (Supabase's max-rows), whatever `.range()` or `.limit()` asks. Any query that could pass 1,000 rows reads through `selectAll(table, cols, order, where)` / `allRows()` (`src/lib/server/db.ts`: a page at a time, ordered by a unique key) or is paged for the user. The FakeDb applies the same cap (`maxRows`, 1,000; lower it in a test to prove paging).
 - **Every top-level page has a Help article** (the coverage test enforces it); new data tables sort through `useSortable`/`SortTh` (`src/components/SortableTable.tsx`).
 - **Don't touch `scripts/.b.mjs`** (the user's).

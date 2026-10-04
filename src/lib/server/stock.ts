@@ -5,7 +5,7 @@ import {
   type Bucket, type Levels, type Movement, type MovementKind,
 } from "../stock/levels";
 import { planItemsCsv, planStockPilotRaw, type AsinBySku, type ImportPlan } from "../stock/stockpilot";
-import { chunks, db, must } from "./db";
+import { allRows, chunks, db, must, selectAll } from "./db";
 import { getKeepa } from "../keepa/client";
 import { getSpApi } from "../spapi/client";
 
@@ -77,11 +77,12 @@ async function loadAll() {
   const since = new Date(Date.now() - 30 * DAY).toLocaleDateString("en-CA", { timeZone: "Europe/London" });
   const [items, moves, sales, listings, inv, amazon, suppliers] = await Promise.all([
     d.from("stock_items").select(ITEM_COLS).order("name"),
-    d.from("stock_movements").select("item_id, bucket, quantity, kind, date, sale_id"),
-    d.from("stock_sales").select("id, item_id, date, quantity").gte("date", since),
-    d.from("stock_listings").select("item_id"),
-    d.from("amazon_inventory").select("sku, asin, fulfillable, updated_at"),
-    d.from("amazon_sales").select("asin, day, units").gte("day", since),
+    // The ledger and the sales, a page at a time: a level summed from the first 1,000 movements is wrong.
+    selectAll("stock_movements", "item_id, bucket, quantity, kind, date, sale_id", ["id"]).then((data) => ({ data, error: null })),
+    selectAll("stock_sales", "id, item_id, date, quantity", ["id"], (q) => q.gte("date", since)).then((data) => ({ data, error: null })),
+    selectAll("stock_listings", "item_id", ["id"]).then((data) => ({ data, error: null })),
+    selectAll("amazon_inventory", "sku, asin, fulfillable, updated_at", ["sku"]).then((data) => ({ data, error: null })).catch(() => ({ data: [], error: null })),
+    selectAll("amazon_sales", "asin, day, units", ["asin", "day", "channel"], (q) => q.gte("day", since)).then((data) => ({ data, error: null })).catch(() => ({ data: [], error: null })),
     d.from("suppliers").select("id, name, delivery_days"),
   ]);
   return {
@@ -372,25 +373,32 @@ export async function returnSale(x: { saleId: string; quantity: number; bucket: 
 export async function listMovements(f: { itemId?: string | null; bucket?: string | null; kind?: string | null; from?: string | null; to?: string | null }) {
   const rows = await listMovementRows(f);
   const ids = [...new Set(rows.map((r) => r.item_id as string))];
-  const all = ids.length ? must(await db().from("stock_movements").select("id, item_id, bucket, quantity, kind, date, created_at").in("item_id", ids), "balances") as (Movement & { id: string; created_at: string })[] : [];
+  const all = ids.length ? await selectAll<Movement & { id: string; created_at: string }>("stock_movements", "id, item_id, bucket, quantity, kind, date, created_at", ["id"], (q) => q.in("item_id", ids)) : [];
   const neg = negativeAfter(all);
   return rows.map((r): Record<string, unknown> => ({ ...r, negative: neg.has(r.id as string) }));
 }
 
+/** Every movement matching the filters, newest first, a page at a time (the old limit of 2,000 was cut to 1,000 by PostgREST). */
 async function listMovementRows(f: { itemId?: string | null; bucket?: string | null; kind?: string | null; from?: string | null; to?: string | null }) {
-  let q = db().from("stock_movements").select("id, item_id, bucket, quantity, kind, date, reason, unit_cost, sale_id, purchase_id, transfer_id, note, created_at, order_id, order_url, tracking_carrier, tracking_number, currency, unit_cost_ccy, item:stock_items(sku, name), supplier:suppliers(id, name)").order("date", { ascending: false }).order("created_at", { ascending: false }).limit(2000);
-  if (f.itemId) q = q.eq("item_id", f.itemId);
-  if (f.bucket && bucketOk(f.bucket)) q = q.eq("bucket", f.bucket);
-  if (f.kind) q = q.eq("kind", f.kind);
-  if (isDate(f.from)) q = q.gte("date", f.from);
-  if (isDate(f.to)) q = q.lte("date", f.to);
-  return must(await q, "movements") as Record<string, unknown>[];
+  const d = db();
+  return allRows<Record<string, unknown>>((a, b) => {
+    let q = d.from("stock_movements").select("id, item_id, bucket, quantity, kind, date, reason, unit_cost, sale_id, purchase_id, transfer_id, note, created_at, order_id, order_url, tracking_carrier, tracking_number, currency, unit_cost_ccy, item:stock_items(sku, name), supplier:suppliers(id, name)")
+      .order("date", { ascending: false }).order("created_at", { ascending: false }).order("id");
+    if (f.itemId) q = q.eq("item_id", f.itemId);
+    if (f.bucket && bucketOk(f.bucket)) q = q.eq("bucket", f.bucket);
+    if (f.kind) q = q.eq("kind", f.kind);
+    if (isDate(f.from)) q = q.gte("date", f.from);
+    if (isDate(f.to)) q = q.lte("date", f.to);
+    return q.range(a, b);
+  }, "movements");
 }
 
+/** Every sale (the Sales page totals them), newest first, a page at a time. */
 export async function listSales(channel?: string | null) {
-  let q = db().from("stock_sales").select("*, item:stock_items(sku, name), listing:stock_listings(marketplace)").order("date", { ascending: false }).limit(1000);
-  if (channel) q = q.eq("channel", channel);
-  return must(await q, "sales") as Record<string, unknown>[];
+  return selectAll<Record<string, unknown>>("stock_sales", "*, item:stock_items(sku, name), listing:stock_listings(marketplace)", ["id"], (q) => {
+    const x = q.order("date", { ascending: false });
+    return channel ? x.eq("channel", channel) : x;
+  });
 }
 
 /* ===================== import ===================== */

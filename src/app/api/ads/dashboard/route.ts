@@ -1,7 +1,7 @@
 import { handle } from "@/lib/server/http";
 import { adsDashboard } from "@/lib/server/ads";
 import { launchPlans, rankHistory, stockByAsin } from "@/lib/server/adsOps";
-import { db, must } from "@/lib/server/db";
+import { selectAll } from "@/lib/server/db";
 
 /** Per ASIN, per campaign and per search term, with break-even ACoS and the status chips; plus stock, launch plans and each keyword's rank checks. */
 export const GET = handle(async () => {
@@ -14,7 +14,7 @@ export const GET = handle(async () => {
   const asins = [...new Set([...dash.asins.map((a) => a.asin), ...plans.map((p) => p.asin)])];
   const [stock, ranks, kws] = await Promise.all([
     stockByAsin(asins, adsUnits), rankHistory(),
-    db().from("ads_keywords").select("keyword_id, campaign, keyword_text, match_type, bid, state, impressions, clicks, cost, orders, sales").then((r) => must(r, "keywords") as Record<string, unknown>[]),
+    selectAll<Record<string, unknown>>("ads_keywords", "keyword_id, campaign, keyword_text, match_type, bid, state, impressions, clicks, cost, orders, sales", ["keyword_id"]),
   ]);
   const camp = new Map(dash.campaigns.map((c) => [c.id, c]));
   const keywords = kws.map((k) => {

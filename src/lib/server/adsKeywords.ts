@@ -6,7 +6,7 @@ import { conversionTxt, priorConversion, smoothedConversion } from "../ads/smoot
 import { adsDashboard, adsSettings, loadAll } from "./ads";
 import { rankHistory, setRankKeyword } from "./adsOps";
 import { ngramReport } from "./adsRules";
-import { db, must } from "./db";
+import { db, must, selectAll } from "./db";
 
 const isAsin = (s: string) => /^[A-Z0-9]{10}$/.test(s);
 const now = () => new Date().toISOString();
@@ -70,8 +70,9 @@ export async function keywordBank(asin: string): Promise<{ asin: string; rows: B
     ? (((await d.from("pl_poe_snapshots").select("search_terms").eq("candidate_id", candidate).order("captured_at", { ascending: false }).limit(1)).data ?? []) as { search_terms: { term: string; volume: number }[] | null }[])[0]?.search_terms ?? []
     : [];
   const myCampaigns = new Set(all.campaigns.filter((c) => c.asin === a).map((c) => c.id));
-  const kws = (must(await d.from("ads_keywords").select("campaign, keyword_text, match_type, state"), "keywords") as { campaign: string; keyword_text: string; match_type: string; state: string | null }[]).filter((k) => myCampaigns.has(k.campaign) && !/archived/i.test(k.state ?? ""));
-  const negs = (must(await d.from("ads_negative_keywords").select("campaign, keyword_text, match_type"), "negatives") as { campaign: string; keyword_text: string; match_type: string }[]).filter((n) => myCampaigns.has(n.campaign));
+  const mine = [...myCampaigns];
+  const kws = (mine.length ? await selectAll<{ campaign: string; keyword_text: string; match_type: string; state: string | null }>("ads_keywords", "campaign, keyword_text, match_type, state", ["keyword_id"], (q) => q.in("campaign", mine)) : []).filter((k) => !/archived/i.test(k.state ?? ""));
+  const negs = mine.length ? await selectAll<{ campaign: string; keyword_text: string; match_type: string }>("ads_negative_keywords", "campaign, keyword_text, match_type", ["keyword_id"], (q) => q.in("campaign", mine)) : [];
   const myRanks = ranks[a] ?? {};
   const sources: { text: string; source: BankSource; searches?: number | null }[] = [
     ...poe.map((t) => ({ text: t.term, source: "poe" as const, searches: t.volume })),
@@ -141,8 +142,9 @@ export async function bankAction(asin: string, action: "exact" | "negative" | "t
   const product = dash.asins.find((x) => x.asin === a);
   if (!product) throw new Error(`${a} has no ad campaigns yet: launch it on Ads → Launch first`);
   const camps = all.campaigns.filter((c) => c.asin === a && !/archived/i.test(c.state ?? ""));
-  const kws = must(await db().from("ads_keywords").select("campaign, ad_group_id, keyword_text, match_type, state"), "keywords") as { campaign: string; ad_group_id: string; keyword_text: string; match_type: string; state: string | null }[];
-  const negs = must(await db().from("ads_negative_keywords").select("campaign, keyword_text, match_type"), "negatives") as { campaign: string; keyword_text: string; match_type: string }[];
+  const campIds = camps.map((c) => c.id);
+  const kws = campIds.length ? await selectAll<{ campaign: string; ad_group_id: string; keyword_text: string; match_type: string; state: string | null }>("ads_keywords", "campaign, ad_group_id, keyword_text, match_type, state", ["keyword_id"], (q) => q.in("campaign", campIds)) : [];
+  const negs = campIds.length ? await selectAll<{ campaign: string; keyword_text: string; match_type: string }>("ads_negative_keywords", "campaign, keyword_text, match_type", ["keyword_id"], (q) => q.in("campaign", campIds)) : [];
   const kwIn = (cid: string) => kws.filter((k) => k.campaign === cid && !/archived/i.test(k.state ?? ""));
   const skipped: string[] = [];
   let done = 0;

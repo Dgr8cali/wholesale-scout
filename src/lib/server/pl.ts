@@ -1,4 +1,5 @@
 import "server-only";
+import { nicheLedgers, nicheSummary } from "./plNiches";
 import { LAUNCH_STEPS } from "../pl/launch";
 import { addDailyTokens, PL_KEEP_DAYS, ukDay, type TokensByDay } from "../keepaLedger";
 import { getKeepa, type KeepaProduct, type OnKeepaResponse, type Point } from "../keepa/client";
@@ -8,7 +9,7 @@ import { keepaFill, type Fill, type PlAsin, type PlHistory } from "../pl/fill";
 import { DEFAULT_SETTINGS, evaluate, FIELD_KEYS, GATES, SETTINGS_DEF, type Settings, type Waiver } from "../pl/gatekeeper";
 import { bbTrend, offerTrend, rankTrend } from "../pl/history";
 import { extractPoe, poeFill, unreadFields, type PoeExtract } from "../pl/poe";
-import { activeRateCard, db, must } from "./db";
+import { activeRateCard, db, must, selectAll } from "./db";
 import { adsSettings } from "./ads";
 import { withAdsDefaults } from "../pl/adsDefaults";
 import { saveSnapshot } from "./process";
@@ -79,8 +80,8 @@ export async function savePlSettings(input: Partial<Record<string, unknown>>): P
 async function fieldsOf(ids: string[]): Promise<Map<string, Record<string, PlField>>> {
   const out = new Map<string, Record<string, PlField>>(ids.map((id) => [id, {}]));
   if (!ids.length) return out;
-  const rows = must(await db().from("pl_candidate_fields").select("candidate_id, key, value, source, updated_at").in("candidate_id", ids), "fields") as
-    ({ candidate_id: string; key: string } & PlField)[];
+  // About 60 fields a candidate: past 1,000 with a few dozen candidates, so read a page at a time.
+  const rows = await selectAll<{ candidate_id: string; key: string } & PlField>("pl_candidate_fields", "candidate_id, key, value, source, updated_at", ["candidate_id", "key"], (q) => q.in("candidate_id", ids));
   for (const r of rows) if (r.value != null) out.get(r.candidate_id)![r.key] = { value: r.value, source: r.source, updated_at: r.updated_at };
   return out;
 }
@@ -90,9 +91,9 @@ const WAIVER_COLS = "id, candidate_id, gate_id, check_label, reason, created_at"
 async function waiversOf(ids: string[]): Promise<Map<string, Waiver[]>> {
   const out = new Map<string, Waiver[]>(ids.map((id) => [id, []]));
   if (!ids.length) return out;
-  const res = await db().from("pl_gate_waivers").select(WAIVER_COLS).in("candidate_id", ids).order("created_at");
-  if (res.error) return out; // before the migration
-  for (const w of res.data as (Waiver & { candidate_id: string })[]) out.get(w.candidate_id)?.push(w);
+  const rows = await selectAll<Waiver & { candidate_id: string }>("pl_gate_waivers", WAIVER_COLS, ["created_at", "id"], (q) => q.in("candidate_id", ids)).catch(() => null);
+  if (!rows) return out; // before the migration
+  for (const w of rows) out.get(w.candidate_id)?.push(w);
   return out;
 }
 
@@ -451,16 +452,16 @@ export async function plDashboard() {
   const month = ukDay().slice(0, 7);
   const inMonth = (l: TokensByDay | null | undefined) => Object.entries(l ?? {}).reduce((a, [day, t]) => a + (day.startsWith(month) ? t : 0), 0);
   const candidateLedgers = must(await db().from("pl_candidates").select("keepa_by_day"), "ledgers") as { keepa_by_day: TokensByDay | null }[];
-  const niches = await db().from("pl_niches").select("status, shape, keepa_by_day");
-  const nicheRows = (niches.error ? [] : niches.data) as { status: string; shape: string | null; keepa_by_day: TokensByDay | null }[];
+  // Counted in SQL and read a page at a time: there can be thousands of niches.
+  const [nicheCounts, nicheTokens] = await Promise.all([nicheSummary().catch(() => null), nicheLedgers().catch(() => [] as TokensByDay[])]);
   const last = huntRows[0] ?? null;
   return {
     candidates: candidates.length,
     verdicts,
     lastHunt: last ? { id: last.id, name: last.name, status: last.status, created_at: last.created_at, token_cost: last.token_cost } : null,
-    tokensThisMonth: candidateLedgers.reduce((a, r) => a + inMonth(r.keepa_by_day), 0) + huntRows.reduce((a, h) => a + inMonth(h.keepa_by_day), 0) + nicheRows.reduce((a, r) => a + inMonth(r.keepa_by_day), 0),
+    tokensThisMonth: candidateLedgers.reduce((a, r) => a + inMonth(r.keepa_by_day), 0) + huntRows.reduce((a, h) => a + inMonth(h.keepa_by_day), 0) + nicheTokens.reduce((a, l) => a + inMonth(l), 0),
     /** Niche Import: imported, shortlisted, incumbent-checked. */
-    niches: { total: nicheRows.length, shortlisted: nicheRows.filter((r) => r.status === "shortlisted").length, checked: nicheRows.filter((r) => r.shape).length },
+    niches: nicheCounts ? { total: nicheCounts.total, shortlisted: nicheCounts.shortlisted, checked: nicheCounts.checked } : { total: 0, shortlisted: 0, checked: 0 },
     month,
   };
 }

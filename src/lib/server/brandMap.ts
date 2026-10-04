@@ -4,7 +4,7 @@ import { aggregateBrands, type BrandProduct, type BrandSummary } from "../brandM
 import { brandKey, type BrandApproval } from "../brands";
 import { applyLinks } from "../spapi/parse";
 import { ipIndex } from "../ipRisk";
-import { chunks, db, loadIpRisk, loadProfile, must } from "./db";
+import { chunks, db, loadIpRisk, loadProfile, must, selectAll } from "./db";
 import { evaluateStored } from "./process";
 
 /** Products re-gated per batch; a refresh call stops starting batches near its budget. */
@@ -185,7 +185,7 @@ const num = (v: unknown) => (v == null ? null : Number(v));
 /** One brand's products from the map, each with its best (cheapest) offer across suppliers. */
 export async function brandDetail(key: string) {
   const d = db();
-  const rows = (must(await d.from("brand_products").select("*").eq("brand_key", key), "brand map") as BrandProduct[])
+  const rows = (await selectAll<BrandProduct>("brand_products", "*", ["product_id"], (q) => q.eq("brand_key", key)))
     .map((r) => ({ ...r, sell_price: num(r.sell_price), buy_box: num(r.buy_box), max_landed: num(r.max_landed) }));
   if (!rows.length) return null;
   const approvals = must(await d.from("brand_approvals").select("brand_key, brand, status, requirement, status_date").eq("brand_key", key), "approvals") as BrandApproval[];

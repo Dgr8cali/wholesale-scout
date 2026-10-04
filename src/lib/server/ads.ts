@@ -5,7 +5,7 @@ import { insightsFor, type Insights } from "./adsInsights";
 import { add, breakEvenAcos, campaignTotals, chooseRanges, marginBeforeAds, profitAfterAds, ratios, termStatus, ZERO, type Range, type Totals, type UnitEconomics } from "../ads/metrics";
 import { computeFees, DEFAULT_FEE_ASSUMPTIONS, referralCategoryFor } from "../fees/engine";
 import { getKeepa } from "../keepa/client";
-import { activeRateCard, chunks, db, must } from "./db";
+import { activeRateCard, chunks, db, must, selectAll } from "./db";
 import { saveSnapshot } from "./process";
 
 /* ===================== settings ===================== */
@@ -286,11 +286,12 @@ const toTotals = (r: Record<string, unknown>): Totals => ({ impressions: n(r.imp
 
 export async function loadAll() {
   const d = db();
+  // Every row, a page at a time: daily rows and search terms pass a select's 1,000 quickly.
   const [camps, ranges, daily, terms] = await Promise.all([
     d.from("ads_campaigns").select(CAMPAIGN_COLS),
-    d.from("ads_campaign_ranges").select("campaign, source, date_from, date_to, impressions, clicks, cost, orders, sales, units"),
-    d.from("ads_campaign_daily").select("campaign, date, impressions, clicks, cost, orders, sales, units"),
-    d.from("ads_search_terms").select("campaign, ad_group_id, ad_group_name, keyword_id, keyword_text, match_type, term, date_from, date_to, impressions, clicks, cost, orders, sales, units"),
+    selectAll<Record<string, unknown>>("ads_campaign_ranges", "campaign, source, date_from, date_to, impressions, clicks, cost, orders, sales, units", ["id"]),
+    selectAll<Record<string, unknown>>("ads_campaign_daily", "campaign, date, impressions, clicks, cost, orders, sales, units", ["campaign", "date"]),
+    selectAll<Record<string, unknown>>("ads_search_terms", "campaign, ad_group_id, ad_group_name, keyword_id, keyword_text, match_type, term, date_from, date_to, impressions, clicks, cost, orders, sales, units", ["id"]),
   ]);
   // Archived campaigns (old tests you don't care about) are left out of everything that reads this.
   const active = (must(camps, "campaigns") as CampaignRow[]).filter((c) => !c.archived);
@@ -298,9 +299,9 @@ export async function loadAll() {
   const mine = (rows: Record<string, unknown>[]) => rows.filter((r) => ids.has(r.campaign as string));
   return {
     campaigns: active,
-    ranges: mine(must(ranges, "ranges") as Record<string, unknown>[]),
-    daily: mine(must(daily, "daily") as Record<string, unknown>[]),
-    terms: countedTerms(mine(must(terms, "search terms") as Record<string, unknown>[])),
+    ranges: mine(ranges),
+    daily: mine(daily),
+    terms: countedTerms(mine(terms)),
   };
 }
 
@@ -417,15 +418,15 @@ export async function adsDashboard(lookAsins: string[] = []) {
   const [products, targets, placementsRes, adsRes, kwRes, negRes] = await Promise.all([
     db().from("ads_products").select("asin, title, image, price, landed_cost, referral_category, weight_g, dims, fba_fee, phase, pl_candidate_id, optimise, target_tacos"),
     db().from("ads_targets").select("asin, target_acos_launch, target_acos_steady"),
-    db().from("ads_placements").select("campaign, placement, percentage, date_from, date_to, impressions, clicks, cost, orders, sales, units"),
-    db().from("ads_product_ads").select("campaign, sku, asin, state"),
-    db().from("ads_keywords").select("campaign, state"),
-    db().from("ads_negative_keywords").select("campaign"),
+    selectAll<Record<string, unknown>>("ads_placements", "campaign, placement, percentage, date_from, date_to, impressions, clicks, cost, orders, sales, units", ["campaign", "placement"]),
+    selectAll<{ campaign: string; sku: string | null; asin: string | null; state: string | null }>("ads_product_ads", "campaign, sku, asin, state", ["ad_id"]),
+    selectAll<{ campaign: string; state: string | null }>("ads_keywords", "campaign, state", ["keyword_id"]),
+    selectAll<{ campaign: string }>("ads_negative_keywords", "campaign", ["keyword_id"]),
   ]);
-  const placementRows = must(placementsRes, "placements") as Record<string, unknown>[];
-  const productAds = must(adsRes, "product ads") as { campaign: string; sku: string | null; asin: string | null; state: string | null }[];
-  const keywordRows = must(kwRes, "keywords") as { campaign: string; state: string | null }[];
-  const negativeRows = must(negRes, "negative keywords") as { campaign: string }[];
+  const placementRows = placementsRes;
+  const productAds = adsRes;
+  const keywordRows = kwRes;
+  const negativeRows = negRes;
   const PLACEMENT_ORDER = ["top", "rest of search", "product page", "amazon business"];
   const prod = new Map((must(products, "ads products") as AdsProduct[]).map((p) => [p.asin, { ...p, price: n(p.price), landed_cost: n(p.landed_cost), fba_fee: n(p.fba_fee) }]));
   const tgt = new Map((must(targets, "ads targets") as { asin: string; target_acos_launch: number | null; target_acos_steady: number | null }[]).map((t) => [t.asin, t]));

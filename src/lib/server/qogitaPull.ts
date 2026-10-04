@@ -1,7 +1,7 @@
 import "server-only";
 import { applyMapping, CURRENCIES, headerFingerprint, MAX_ROWS, type Cell, type ColumnMapping } from "../ingest/mapping";
 import { getQogita, type QogitaCategory, type QogitaClient, type QogitaProduct } from "../qogita/client";
-import { chunks, db, must, schemaMissing } from "./db";
+import { chunks, db, must, schemaMissing, selectAll } from "./db";
 import { finishFromStored } from "./process";
 import { gbpRate } from "./fx";
 import { ingest } from "./ingest";
@@ -138,7 +138,8 @@ function productsToRows(products: QogitaProduct[], currency: string, fx: { rate:
 async function reuseRecent(runId: string, days: number): Promise<number> {
   const d = db();
   const since = new Date(Date.now() - days * 86_400_000).toISOString();
-  const mine = must(await d.from("results").select("id, product_id").eq("run_id", runId), "results") as { id: string; product_id: string }[];
+  // Every row of the run (a Qogita run passes 1,000), a page at a time.
+  const mine = await selectAll<{ id: string; product_id: string }>("results", "id, product_id", ["id"], (q) => q.eq("run_id", runId));
   const prior = new Map<string, { inputs: unknown; updated_at: string }>();
   for (const c of chunks(mine.map((r) => r.product_id), 200)) {
     const rows = must(

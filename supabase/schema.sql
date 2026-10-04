@@ -1,5 +1,5 @@
 -- Wholesale Scout schema, dumped by scripts/schema-backup.mjs. No data.
--- Dumped 2026-10-04T16:08:51.227Z. Safe to re-run. Restore: npm run schema:restore
+-- Dumped 2026-10-04T23:13:18.026Z. Safe to re-run. Restore: npm run schema:restore
 
 -- @section extensions
 create extension if not exists "pg_cron";
@@ -1465,7 +1465,11 @@ create table if not exists "pl_niches" (
   "candidate_id" uuid,
   "keepa_by_day" jsonb default '{}'::jsonb not null,
   "created_at" timestamp with time zone default now() not null,
-  "updated_at" timestamp with time zone default now() not null
+  "updated_at" timestamp with time zone default now() not null,
+  "search_text" text,
+  "first_term" text,
+  "flag_count" integer default 0 not null,
+  "shape_rank" integer
 );
 alter table "pl_niches" add column if not exists "id" uuid default gen_random_uuid();
 alter table "pl_niches" add column if not exists "import_id" uuid;
@@ -1498,6 +1502,10 @@ alter table "pl_niches" add column if not exists "candidate_id" uuid;
 alter table "pl_niches" add column if not exists "keepa_by_day" jsonb default '{}'::jsonb;
 alter table "pl_niches" add column if not exists "created_at" timestamp with time zone default now();
 alter table "pl_niches" add column if not exists "updated_at" timestamp with time zone default now();
+alter table "pl_niches" add column if not exists "search_text" text;
+alter table "pl_niches" add column if not exists "first_term" text;
+alter table "pl_niches" add column if not exists "flag_count" integer default 0;
+alter table "pl_niches" add column if not exists "shape_rank" integer;
 alter table "pl_niches" enable row level security;
 
 create table if not exists "pl_poe_snapshots" (
@@ -3398,6 +3406,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS pl_gate_waivers_key ON pl_gate_waivers USING b
 CREATE INDEX IF NOT EXISTS pl_niche_imports_category ON pl_niche_imports USING btree (lower(category));
 CREATE INDEX IF NOT EXISTS pl_niches_import ON pl_niches USING btree (import_id);
 CREATE INDEX IF NOT EXISTS pl_niches_need ON pl_niches USING btree (lower(customer_need));
+CREATE INDEX IF NOT EXISTS pl_niches_score ON pl_niches USING btree (score DESC NULLS LAST, id);
+CREATE INDEX IF NOT EXISTS pl_niches_status ON pl_niches USING btree (status);
 CREATE INDEX IF NOT EXISTS pl_poe_snapshots_candidate ON pl_poe_snapshots USING btree (candidate_id, captured_at DESC);
 CREATE INDEX IF NOT EXISTS pl_quotes_candidate ON pl_quotes USING btree (candidate_id);
 CREATE INDEX IF NOT EXISTS products_asin_idx ON products USING btree (asin);
@@ -3660,3 +3670,4 @@ insert into schema_migrations (name) values ('20261003000200_stock_corrections.s
 insert into schema_migrations (name) values ('20261003000300_purchase_items.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261003000500_ads_phase5.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261004000100_pl_niches.sql') on conflict do nothing;
+insert into schema_migrations (name) values ('20261005000100_pl_niches_paging.sql') on conflict do nothing;

@@ -4,7 +4,7 @@ import type { RunStats } from "../eta";
 import { landedCost, type FeeAssumptions } from "../fees/engine";
 import { withDefaults, type ProfileConfig } from "../screening/config";
 import { conditionLabel, conditionMet, type WatchCondition, type WatchFacts } from "../watch";
-import { chunks, db, must } from "./db";
+import { chunks, db, must, selectAll } from "./db";
 import { appUrl, escapeHtml, sendEmail } from "./email";
 import { addFavourite, favouritesWithLatest, listFavourites, rescreenFavourites, type Favourite } from "./favourites";
 
@@ -138,7 +138,7 @@ export async function finishWatchRun(runId: string): Promise<{ checked: number; 
   const cfg = withDefaults(run.profile_snapshot);
   const favs = must(await d.from("favourites").select("id, ean, asin, condition, no_supplier, last_check"), "favourites") as
     (Favourite & { last_check: LastCheck | null })[];
-  const results = must(await d.from("results").select("id, product_id, offer_id, status, verdict, sell_price, inputs").eq("run_id", runId), "results") as ResultRow[];
+  const results = await selectAll<ResultRow>("results", "id, product_id, offer_id, status, verdict, sell_price, inputs", ["id"], (q) => q.eq("run_id", runId));
   const products = new Map<string, { id: string; ean: string; asin: string | null; title: string | null; brand: string | null }>();
   for (const c of chunks(results.map((r) => r.product_id), 200)) {
     for (const p of must(await d.from("products").select("id, ean, asin, title, brand").in("id", c), "products") as { id: string; ean: string; asin: string | null; title: string | null; brand: string | null }[]) products.set(p.id, p);

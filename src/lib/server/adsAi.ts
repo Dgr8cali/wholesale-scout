@@ -11,7 +11,7 @@ import type { BulkChange } from "../ads/bulk";
 import { RULE_LABEL, type RuleId } from "../ads/rules";
 import { adsDashboard, adsSettings, loadAll } from "./ads";
 import { stockByAsin } from "./adsOps";
-import { db, must } from "./db";
+import { db, must, selectAll } from "./db";
 
 /* ===================== settings ===================== */
 
@@ -305,7 +305,7 @@ export async function latestAi(feature: AiFeature, subject: string) {
 }
 
 export async function aiSpend() {
-  const rows = must(await db().from("ads_ai_calls").select("feature, cost_gbp, created_at, trigger, error"), "AI spend") as { feature: string; cost_gbp: number; created_at: string; trigger: string; error: string | null }[];
+  const rows = await selectAll<{ feature: string; cost_gbp: number; created_at: string; trigger: string; error: string | null }>("ads_ai_calls", "feature, cost_gbp, created_at, trigger, error", ["id"]);
   const since30 = new Date(Date.now() - 30 * 86_400_000).toISOString();
   const last30 = rows.filter((r) => r.created_at >= since30);
   return { calls: rows.length, totalGbp: rows.reduce((a, r) => a + Number(r.cost_gbp), 0), last30Gbp: last30.reduce((a, r) => a + Number(r.cost_gbp), 0), last30Calls: last30.length };

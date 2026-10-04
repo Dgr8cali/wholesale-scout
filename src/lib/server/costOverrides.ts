@@ -1,6 +1,6 @@
 import "server-only";
 import { exVat, unitFromLanded, validCost, type CostInput } from "../costOverride";
-import { chunks, db, loadProfile, must } from "./db";
+import { chunks, db, loadProfile, must, selectAll } from "./db";
 import { rescoreProducts } from "./rescore";
 
 /**
@@ -74,7 +74,7 @@ export async function clearCostOverride(resultIds: string[], origin?: string): P
     const manual = must(await d.from("offers").select("id").in("product_id", c).eq("manual", true), "cost overrides") as { id: string }[];
     for (const m of manual) {
       // Rows scored on it go back to their sheet offer before it's deleted (the link would go null).
-      const using = must(await d.from("results").select("id, sheet_offer_id").eq("offer_id", m.id), "rows on the override") as { id: string; sheet_offer_id: string | null }[];
+      const using = await selectAll<{ id: string; sheet_offer_id: string | null }>("results", "id, sheet_offer_id", ["id"], (q) => q.eq("offer_id", m.id));
       for (const u of using) {
         if (u.sheet_offer_id) must(await d.from("results").update({ offer_id: u.sheet_offer_id, cost_override: null }).eq("id", u.id), "restore sheet offer");
       }

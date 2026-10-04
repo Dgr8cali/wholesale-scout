@@ -8,7 +8,7 @@ import { adsDashboard, adsSettings, saveAdsProduct } from "./ads";
 import { keywordBank, listsByAsin } from "./adsKeywords";
 import { stockByAsinAllBuckets } from "./stock";
 import { syncStock } from "./amazonSync";
-import { chunks, db, must } from "./db";
+import { chunks, db, must, selectAll } from "./db";
 
 const n = (v: unknown) => (v == null ? null : Number(v));
 const DAY = 86_400_000;
@@ -21,15 +21,16 @@ export async function entityState(): Promise<EntityState> {
   const d = db();
   const [camps, groups, kws, tgs, pls, negs] = await Promise.all([
     d.from("ads_campaigns").select("id, campaign_id, name, budget, state, bidding_strategy").not("campaign_id", "is", null),
-    d.from("ads_ad_groups").select("campaign, ad_group_id, default_bid, state"),
-    d.from("ads_keywords").select("campaign, ad_group_id, keyword_id, keyword_text, match_type, bid, state"),
-    d.from("ads_product_targets").select("campaign, ad_group_id, target_id, expression, bid, state"),
-    d.from("ads_placements").select("campaign, placement, percentage"),
-    d.from("ads_negative_keywords").select("campaign, ad_group_id, keyword_id, keyword_text, match_type, state"),
+    // Every entity, a page at a time: a snapshot or a revert that missed rows past 1,000 would be wrong.
+    selectAll<Record<string, unknown>>("ads_ad_groups", "campaign, ad_group_id, default_bid, state", ["ad_group_id"]),
+    selectAll<Record<string, unknown>>("ads_keywords", "campaign, ad_group_id, keyword_id, keyword_text, match_type, bid, state", ["keyword_id"]),
+    selectAll<Record<string, unknown>>("ads_product_targets", "campaign, ad_group_id, target_id, expression, bid, state", ["target_id"]),
+    selectAll<Record<string, unknown>>("ads_placements", "campaign, placement, percentage", ["campaign", "placement"]),
+    selectAll<Record<string, unknown>>("ads_negative_keywords", "campaign, ad_group_id, keyword_id, keyword_text, match_type, state", ["keyword_id"]),
   ]);
   const c = must(camps, "campaigns") as { id: string; campaign_id: string; name: string; budget: number | null; state: string | null; bidding_strategy: string | null }[];
   const cid = new Map(c.map((x) => [x.id, x.campaign_id]));
-  const rows = (r: { data: unknown; error: { message: string } | null }, what: string) => (must(r as never, what) as Record<string, unknown>[]).filter((x) => cid.has(x.campaign as string));
+  const rows = (r: Record<string, unknown>[], what: string) => { void what; return r.filter((x) => cid.has(x.campaign as string)); };
   return {
     campaigns: c.map((x) => ({ campaignId: x.campaign_id, name: x.name, budget: n(x.budget), state: x.state, biddingStrategy: x.bidding_strategy })),
     adGroups: rows(groups, "ad groups").map((x) => ({ campaignId: cid.get(x.campaign as string)!, adGroupId: x.ad_group_id as string, defaultBid: n(x.default_bid), state: x.state as string | null })),
@@ -152,9 +153,9 @@ export async function stockByAsin(asins: string[], adsUnitsPerDay: Map<string, n
 /** Units sold outside Amazon (Stock → Sales) per ASIN since a day. */
 async function stockSalesByAsin(asins: string[], since: string): Promise<Map<string, number>> {
   const out = new Map<string, number>();
-  const res = await db().from("stock_sales").select("quantity, returned_quantity, item:stock_items(asin)").gte("date", since);
-  if (res.error) return out;
-  for (const r of res.data as unknown as { quantity: number; returned_quantity: number; item: { asin: string | null } | null }[]) {
+  const rows = await selectAll<{ quantity: number; returned_quantity: number; item: { asin: string | null } | null }>("stock_sales", "quantity, returned_quantity, item:stock_items(asin)", ["id"], (q) => q.gte("date", since)).catch(() => null);
+  if (!rows) return out;
+  for (const r of rows) {
     const a = r.item?.asin;
     if (a && asins.includes(a)) out.set(a, (out.get(a) ?? 0) + r.quantity - r.returned_quantity);
   }
@@ -199,7 +200,7 @@ export async function rankTargets() {
   const d = db();
   const [camps, kws, extra, plans, prods] = await Promise.all([
     d.from("ads_campaigns").select("id, asin, state"),
-    d.from("ads_keywords").select("campaign, keyword_text, match_type, state"),
+    selectAll("ads_keywords", "campaign, keyword_text, match_type, state", ["keyword_id"]).then((data) => ({ data, error: null })),
     d.from("ads_rank_keywords").select("asin, keyword"),
     d.from("ads_launch_plans").select("asin, input"),
     d.from("ads_products").select("asin, title"),
@@ -237,10 +238,10 @@ export async function recordRanks(asin: string, runId: string | null, results: {
 /** Rank checks over the last 120 days: product → keyword → checks, oldest first. */
 export async function rankHistory(): Promise<Record<string, Record<string, { position: number | null; page: number | null; checkedAt: string }[]>>> {
   const since = new Date(Date.now() - 120 * DAY).toISOString();
-  const res = await db().from("ads_rank_checks").select("asin, keyword, position, page, checked_at").gte("checked_at", since).order("checked_at");
-  if (res.error) return {};
+  const rows = await selectAll<{ asin: string; keyword: string; position: number | null; page: number | null; checked_at: string }>("ads_rank_checks", "asin, keyword, position, page, checked_at", ["checked_at", "id"], (q) => q.gte("checked_at", since)).catch(() => null);
+  if (!rows) return {};
   const out: Record<string, Record<string, { position: number | null; page: number | null; checkedAt: string }[]>> = {};
-  for (const r of res.data as { asin: string; keyword: string; position: number | null; page: number | null; checked_at: string }[]) {
+  for (const r of rows) {
     ((out[r.asin] ??= {})[r.keyword] ??= []).push({ position: r.position, page: r.page, checkedAt: r.checked_at });
   }
   return out;

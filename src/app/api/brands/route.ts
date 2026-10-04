@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { brandsToChase } from "@/lib/brandMap";
 import { APPROVAL_STATUSES, brandKey } from "@/lib/brands";
 import { brandMapStale, brandSummaries } from "@/lib/server/brandMap";
-import { db, loadProfile, must } from "@/lib/server/db";
+import { db, loadProfile, must, selectAll } from "@/lib/server/db";
 import { handle } from "@/lib/server/http";
 import { forget, memo } from "@/lib/server/memo";
 import { scheduleCall } from "@/lib/server/kick";
@@ -46,7 +46,7 @@ export const PUT = handle(async (req: NextRequest) => {
     "save approval",
   );
   // Gating reads approvals: the brand's rows in every current run are re-scored from stored data.
-  const products = must(await db().from("brand_products").select("product_id").eq("brand_key", key), "brand's products") as { product_id: string }[];
+  const products = await selectAll<{ product_id: string }>("brand_products", "product_id", ["product_id"], (q) => q.eq("brand_key", key));
   const r = await rescoreProducts(products.map((p) => p.product_id), { origin: req.nextUrl.origin });
   forget("brands:");
   return Response.json({ ok: true, ...r });

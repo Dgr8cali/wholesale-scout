@@ -6,7 +6,7 @@ import { countByRule, DEFAULT_RULES, mergeRules, RULE_IDS, runRules, type Propos
 import { adsDashboard, adsSettings, loadAll } from "./ads";
 import { listsByAsin } from "./adsKeywords";
 import { createBatch, entityState, guardsByAsin, launchPlans, rankHistory, stockByAsin } from "./adsOps";
-import { chunks, db, must } from "./db";
+import { chunks, db, must, selectAll } from "./db";
 
 /* ===================== rule settings ===================== */
 
@@ -43,23 +43,24 @@ async function rulesInput(): Promise<RulesInput> {
   const [dash, all, lastBulk, ranges, daily, groups, kws, kwRanges, targets, placements, negatives, productAds] = await Promise.all([
     adsDashboard(), loadAll(),
     d.from("ads_imports").select("date_from, date_to").eq("report_type", "bulk").order("imported_at", { ascending: false }).limit(1),
-    d.from("ads_campaign_ranges").select("campaign, date_from, date_to, impressions, clicks, cost, orders, sales").eq("source", "bulk"),
-    d.from("ads_campaign_daily").select("campaign, date, impressions, clicks, cost, orders, sales"),
-    d.from("ads_ad_groups").select("ad_group_id, campaign, default_bid, state"),
-    d.from("ads_keywords").select("keyword_id, campaign, ad_group_id, keyword_text, match_type, bid, state, impressions, clicks, cost, orders, sales"),
-    d.from("ads_keyword_ranges").select("keyword_id, date_from, date_to, impressions, orders"),
-    d.from("ads_product_targets").select("target_id, campaign, ad_group_id, expression, bid, state, impressions, clicks, cost, orders, sales"),
-    d.from("ads_placements").select("campaign, placement, percentage, impressions, clicks, cost, orders, sales"),
-    d.from("ads_negative_keywords").select("campaign, ad_group_id, keyword_text, match_type"),
-    d.from("ads_product_ads").select("asin, sku, state"),
+    // Every row, a page at a time (a select returns at most 1,000).
+    selectAll("ads_campaign_ranges", "campaign, date_from, date_to, impressions, clicks, cost, orders, sales", ["id"], (q) => q.eq("source", "bulk")),
+    selectAll("ads_campaign_daily", "campaign, date, impressions, clicks, cost, orders, sales", ["campaign", "date"]),
+    selectAll("ads_ad_groups", "ad_group_id, campaign, default_bid, state", ["ad_group_id"]),
+    selectAll("ads_keywords", "keyword_id, campaign, ad_group_id, keyword_text, match_type, bid, state, impressions, clicks, cost, orders, sales", ["keyword_id"]),
+    selectAll("ads_keyword_ranges", "keyword_id, date_from, date_to, impressions, orders", ["keyword_id", "date_from", "date_to"]),
+    selectAll("ads_product_targets", "target_id, campaign, ad_group_id, expression, bid, state, impressions, clicks, cost, orders, sales", ["target_id"]),
+    selectAll("ads_placements", "campaign, placement, percentage, impressions, clicks, cost, orders, sales", ["campaign", "placement"]),
+    selectAll("ads_negative_keywords", "campaign, ad_group_id, keyword_text, match_type", ["keyword_id"]),
+    selectAll("ads_product_ads", "asin, sku, state", ["ad_id"]),
   ]);
   const last = (must(lastBulk, "imports") as { date_from: string | null; date_to: string | null }[])[0];
   const range = last?.date_from && last.date_to ? { from: last.date_from, to: last.date_to } : null;
-  const bulkRanges = must(ranges, "ranges") as Record<string, unknown>[];
-  const dailyRows = must(daily, "daily") as Record<string, unknown>[];
-  const ads = must(productAds, "product ads") as { asin: string | null; sku: string | null; state: string | null }[];
+  const bulkRanges = ranges as Record<string, unknown>[];
+  const dailyRows = daily as Record<string, unknown>[];
+  const ads = productAds as { asin: string | null; sku: string | null; state: string | null }[];
   const history = new Map<string, { from: string; to: string; impressions: number | null; orders: number }[]>();
-  for (const r of must(kwRanges, "keyword ranges") as Record<string, unknown>[]) {
+  for (const r of kwRanges as Record<string, unknown>[]) {
     const k = r.keyword_id as string;
     history.set(k, [...(history.get(k) ?? []), { from: r.date_from as string, to: r.date_to as string, impressions: n(r.impressions), orders: Number(r.orders) }]);
   }
@@ -108,17 +109,17 @@ async function rulesInput(): Promise<RulesInput> {
         daily: dailyRows.filter((r) => r.campaign === c.id).map((r) => ({ date: r.date as string, impressions: n(r.impressions), clicks: Number(r.clicks), cost: Number(r.cost), orders: Number(r.orders), sales: Number(r.sales) })),
       };
     }),
-    adGroups: (must(groups, "ad groups") as Record<string, unknown>[]).map((g) => ({ adGroupId: g.ad_group_id as string, campaign: g.campaign as string, defaultBid: n(g.default_bid), state: g.state as string | null })),
-    keywords: (must(kws, "keywords") as Record<string, unknown>[]).map((k) => ({
+    adGroups: (groups as Record<string, unknown>[]).map((g) => ({ adGroupId: g.ad_group_id as string, campaign: g.campaign as string, defaultBid: n(g.default_bid), state: g.state as string | null })),
+    keywords: (kws as Record<string, unknown>[]).map((k) => ({
       keywordId: k.keyword_id as string, campaign: k.campaign as string, adGroupId: k.ad_group_id as string, text: k.keyword_text as string, matchType: k.match_type as string,
       bid: n(k.bid), state: k.state as string | null, ...perf(k), history: history.get(k.keyword_id as string) ?? [],
     })),
-    targets: (must(targets, "product targets") as Record<string, unknown>[]).map((t) => ({
+    targets: (targets as Record<string, unknown>[]).map((t) => ({
       targetId: t.target_id as string, campaign: t.campaign as string, adGroupId: t.ad_group_id as string, expression: (t.expression as string) ?? "", bid: n(t.bid), state: t.state as string | null, ...perf(t),
     })),
-    placements: (must(placements, "placements") as Record<string, unknown>[]).map((p) => ({ campaign: p.campaign as string, placement: p.placement as string, percentage: n(p.percentage), ...perf(p) })),
+    placements: (placements as Record<string, unknown>[]).map((p) => ({ campaign: p.campaign as string, placement: p.placement as string, percentage: n(p.percentage), ...perf(p) })),
     terms: [...terms.values()],
-    negatives: (must(negatives, "negatives") as Record<string, unknown>[]).map((x) => ({ campaign: x.campaign as string, adGroupId: x.ad_group_id as string | null, text: x.keyword_text as string, matchType: x.match_type as string })),
+    negatives: (negatives as Record<string, unknown>[]).map((x) => ({ campaign: x.campaign as string, adGroupId: x.ad_group_id as string | null, text: x.keyword_text as string, matchType: x.match_type as string })),
     ranks: Object.fromEntries(Object.entries(ranks).map(([asin, ks]) => [asin, Object.fromEntries(Object.entries(ks).map(([k, hs]) => [k, hs.map((h) => ({ position: h.position, checkedAt: h.checkedAt }))]))])),
     range, today: new Date().toISOString().slice(0, 10),
     // Per import range, so each rule counts only the ranges in its window.
@@ -184,7 +185,8 @@ const fields = (p: Proposal) => ({
 export async function refreshProposals(): Promise<{ notes: Partial<Record<RuleId, string[]>> }> {
   const d = db();
   const result = runRules(await rulesInput(), await rulesConfig());
-  const existing = must(await d.from("ads_proposals").select("id, rule, entity_key, status, hold_until"), "proposals") as Pick<ProposalRow, "id" | "rule" | "entity_key" | "status" | "hold_until">[];
+  // Every proposal ever raised (they accumulate), a page at a time.
+  const existing = await selectAll<Pick<ProposalRow, "id" | "rule" | "entity_key" | "status" | "hold_until">>("ads_proposals", "id, rule, entity_key, status, hold_until", ["id"]);
   const now = Date.now();
   const byKey = new Map<string, typeof existing>();
   for (const e of existing) byKey.set(`${e.rule}|${e.entity_key}`, [...(byKey.get(`${e.rule}|${e.entity_key}`) ?? []), e]);
@@ -208,7 +210,7 @@ export async function refreshProposals(): Promise<{ notes: Partial<Record<RuleId
 
 export async function listProposals() {
   const { notes } = await refreshProposals();
-  const rows = must(await db().from("ads_proposals").select(COLS).in("status", ["open", "approved"]).order("created_at"), "proposals") as ProposalRow[];
+  const rows = await selectAll<ProposalRow>("ads_proposals", COLS, ["created_at", "id"], (q) => q.in("status", ["open", "approved"]));
   const held = must(await db().from("ads_proposals").select("status").in("status", ["skipped", "snoozed"]).gt("hold_until", new Date().toISOString()), "held") as { status: string }[];
   const pending = must(await db().from("ads_export_batches").select("id").is("uploaded_at", null), "batches") as { id: string }[];
   return { proposals: rows, notes, held: { skipped: held.filter((h) => h.status === "skipped").length, snoozed: held.filter((h) => h.status === "snoozed").length }, batchesAwaitingUpload: pending.length };

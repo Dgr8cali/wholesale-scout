@@ -7,7 +7,7 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { usePageCrumbs } from "@/components/Crumbs";
 import { useDialogs } from "@/components/Dialogs";
-import { SortTh, useSortable } from "@/components/SortableTable";
+import { SortTh, useServerSort } from "@/components/SortableTable";
 import { ErrorState } from "@/components/States";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,7 +21,10 @@ import { api } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
 
 interface Imp { id: string; category: string; imported_at: string; row_count: number; filename: string | null; unmapped: string[]; duplicates: number; poeCategory: string | null; feeCategory: string }
-interface Data { imports: Imp[]; niches: NicheRow[] }
+interface Stats { total: number; scoring60: number; hiddenByFlags: number; shortlisted: number; checked: number }
+/** One page from the server: the rows, how many match, the strip's counts over every niche in scope, and the imports. */
+interface Data { rows: NicheRow[]; total: number; page: number; pageSize: number; stats: Stats; imports: Imp[] }
+interface Filters { category: string; minScore: string; price: string; status: string; q: string }
 interface Preview {
   headerLine: number; mapped: Record<string, string | null>; unmapped: string[]; warnings: string[]; rows: number; niches: number; duplicates: number; replaces: number; feeCategory: string;
   sample: (NicheRow & { aliases: string[] })[];
@@ -33,10 +36,10 @@ const gbp = (v: number | null | undefined) => (v == null ? "—" : `£${v.toFixe
 const n0 = (v: number | null | undefined) => (v == null ? "—" : Math.round(v).toLocaleString("en-GB"));
 const SHAPE_CLS = { open: "bg-pass-soft text-pass", contested: "bg-warn-soft text-warn", dominated: "bg-fail-soft text-fail" } as const;
 const FLAG_CLS: Partial<Record<NicheFlag, string>> = { SPIKE: "bg-fail-soft text-fail", BIG_BRAND: "bg-fail-soft text-fail", REGULATED: "bg-warn-soft text-warn", ELECTRICAL: "bg-warn-soft text-warn", HEAVY_BULKY: "bg-warn-soft text-warn" };
-const PRICE_BANDS: [string, string, (p: number | null) => boolean][] = [
-  ["", "Any price", () => true], ["core", "£15–40", (p) => p != null && p >= 15 && p <= 40], ["mid", "£10–60", (p) => p != null && p >= 10 && p <= 60],
-  ["low", "Under £10", (p) => p != null && p < 10], ["high", "Over £60", (p) => p != null && p > 60],
-];
+const PRICE_BANDS: [string, string][] = [["", "Any price"], ["core", "£15–40"], ["mid", "£10–60"], ["low", "Under £10"], ["high", "Over £60"]];
+const SORT_KEYS = ["need", "terms", "score", "sv", "g180", "g90", "price", "range", "clicked", "units", "returns", "flags", "shape", "status"];
+const NUMERIC_SORTS = ["score", "sv", "g180", "g90", "price", "range", "clicked", "units", "returns", "flags"];
+const PAGE_SIZES = [50, 100, 200, 500];
 const OTHER = "__other";
 const scoreTone = (s: number | null) => (s == null ? "" : s >= 60 ? "text-pass font-semibold" : s >= 40 ? "text-warn" : "text-muted-foreground");
 
@@ -47,11 +50,31 @@ const scoreTone = (s: number | null) => (s == null ? "" : s >= 60 ? "text-pass f
  */
 export default function NichesPage() {
   usePageCrumbs([{ label: "Private label", href: "/pl/candidates" }, { label: "Niches" }]);
+  const [f, setF] = useState<Filters>({ category: "", minScore: "", price: "", status: "active", q: "" });
+  const [hide, setHide] = useState<Set<NicheFlag>>(new Set(DEFAULT_HIDDEN_FLAGS));
+  const sorting = useServerSort("pl.niches", SORT_KEYS, NUMERIC_SORTS, { key: "score", dir: "desc" });
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(100);
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const load = useCallback(() => { api<Data>("/api/pl/niches").then(setData).catch((e: Error) => setError(e.message)); }, []);
+  // The query whose page is on screen: while it differs from the one asked for, a page is loading.
+  const [shownQuery, setShownQuery] = useState<string | null>(null);
+  // The search waits for a pause in typing.
+  const [q, setQ] = useState("");
+  useEffect(() => { const t = setTimeout(() => setQ(f.q), 300); return () => clearTimeout(t); }, [f.q]);
+  const query = useMemo(() => new URLSearchParams({
+    ...(f.category ? { category: f.category } : {}), ...(f.minScore ? { minScore: f.minScore } : {}), ...(f.price ? { price: f.price } : {}),
+    status: f.status, ...(q.trim() ? { q: q.trim() } : {}), hide: [...hide].join(","),
+    sort: sorting.sort.key, dir: sorting.sort.dir, page: String(page), pageSize: String(pageSize),
+  }).toString(), [f.category, f.minScore, f.price, f.status, q, hide, sorting.sort, page, pageSize]);
+  const load = useCallback(() => {
+    api<Data>(`/api/pl/niches?${query}`).then((d) => { setData(d); setError(null); setShownQuery(query); }).catch((e: Error) => { setError(e.message); setShownQuery(query); });
+  }, [query]);
+  const loading = shownQuery !== query;
   useEffect(() => { load(); }, [load]);
-  if (error) return <ErrorState title="Couldn't load the niches" message={error} onRetry={load} />;
+  // Any change but the page itself goes back to page 1.
+  const change = (p: Partial<Filters>) => { setF((x) => ({ ...x, ...p })); setPage(1); };
+  if (error && !data) return <ErrorState title="Couldn't load the niches" message={error} onRetry={load} />;
   if (!data) return <Skeleton className="h-96 rounded-lg" />;
   return (
     <div className="space-y-5">
@@ -63,7 +86,11 @@ export default function NichesPage() {
         </p>
       </div>
       <ImportCard imports={data.imports} onImported={load} />
-      {data.niches.length > 0 && <NicheTable data={data} onChanged={load} />}
+      {data.stats.total > 0 || data.imports.length > 0 ? (
+        <NicheTable data={data} loading={loading} f={f} change={change} hide={hide}
+          setHide={(h) => { setHide(h); setPage(1); }} sorting={{ th: (k: string) => ({ ...sorting.th(k), onSort: (key: string) => { sorting.toggle(key); setPage(1); } }) }}
+          page={page} setPage={setPage} pageSize={pageSize} setPageSize={(n) => { setPageSize(n); setPage(1); }} onChanged={load} />
+      ) : null}
     </div>
   );
 }
@@ -159,32 +186,16 @@ function ImportCard({ imports, onImported }: { imports: Imp[]; onImported: () =>
   );
 }
 
-function NicheTable({ data, onChanged }: { data: Data; onChanged: () => void }) {
-  const [f, setF] = useState({ category: "", minScore: "", price: "", status: "active", q: "" });
-  const [hide, setHide] = useState<Set<NicheFlag>>(new Set(DEFAULT_HIDDEN_FLAGS));
+function NicheTable({ data, loading, f, change, hide, setHide, sorting, page, setPage, pageSize, setPageSize, onChanged }: {
+  data: Data; loading: boolean; f: Filters; change: (p: Partial<Filters>) => void; hide: Set<NicheFlag>; setHide: (h: Set<NicheFlag>) => void;
+  sorting: { th: (key: string) => { sortKey: string; sort: { key: string; dir: "asc" | "desc" } | null; onSort: (key: string) => void } };
+  page: number; setPage: (n: number) => void; pageSize: number; setPageSize: (n: number) => void; onChanged: () => void;
+}) {
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [open, setOpen] = useState<string | null>(null);
-  const [limit, setLimit] = useState(200);
-  const cats = [...new Set(data.niches.map((n) => n.category ?? ""))].filter(Boolean).sort();
-  const q = f.q.trim().toLowerCase();
-  const inScope = useMemo(() => data.niches.filter((n) => !f.category || n.category === f.category), [data.niches, f.category]);
-  const hiddenByFlags = inScope.filter((n) => n.flags.some((x) => hide.has(x as NicheFlag))).length;
-  const rows = useMemo(() => {
-    const priceOk = PRICE_BANDS.find((b) => b[0] === f.price)?.[2] ?? (() => true);
-    return inScope.filter((n) =>
-    !n.flags.some((x) => hide.has(x as NicheFlag)) && (!f.minScore || (n.score ?? 0) >= Number(f.minScore)) && priceOk(n.avg_price)
-    && (f.status === "all" || (f.status === "active" ? n.status !== "dismissed" : n.status === f.status))
-    && (!q || n.customer_need.toLowerCase().includes(q) || n.search_terms.some((t) => t.toLowerCase().includes(q)) || (n.extra.aliases ?? []).some((a) => a.toLowerCase().includes(q))));
-  }, [inScope, hide, f.minScore, f.price, f.status, q]);
-  const s = useSortable("pl.niches", rows, {
-    need: { value: (n) => n.customer_need }, terms: { value: (n) => n.search_terms[0] ?? "" }, score: { value: (n) => n.score, kind: "number" },
-    sv: { value: (n) => n.sv_360, kind: "number" }, g180: { value: (n) => n.growth_180, kind: "number" }, g90: { value: (n) => n.growth_90, kind: "number" },
-    price: { value: (n) => n.avg_price, kind: "number" }, range: { value: (n) => n.max_price, kind: "number" }, clicked: { value: (n) => n.top_clicked_products, kind: "number" },
-    units: { value: (n) => n.units_per_product_mid, kind: "number" }, returns: { value: (n) => n.return_rate, kind: "number" },
-    flags: { value: (n) => n.flags.length, kind: "number" }, shape: { value: (n) => (n.shape ? ["open", "contested", "dominated"].indexOf(n.shape) : null), kind: "number" }, status: { value: (n) => n.status },
-  }, { key: "score", dir: "desc" });
-  const shown = s.rows.slice(0, limit);
-  const allShown = shown.length > 0 && shown.every((n) => sel.has(n.id));
+  const cats = [...new Set(data.imports.map((i) => i.category))].sort();
+  const rows = data.rows;
+  const allShown = rows.length > 0 && rows.every((n) => sel.has(n.id));
   const toggle = (id: string) => setSel((x) => { const y = new Set(x); if (y.has(id)) y.delete(id); else y.add(id); return y; });
   const bulk = async (status: "shortlisted" | "dismissed") => {
     try {
@@ -196,53 +207,69 @@ function NicheTable({ data, onChanged }: { data: Data; onChanged: () => void }) 
       toast.error((e as Error).message);
     }
   };
-  const all = data.niches;
-  const set = (p: Partial<typeof f>) => setF((x) => ({ ...x, ...p }));
+  const s = sorting;
+  const pages = Math.max(1, Math.ceil(data.total / pageSize));
+  const first = data.total ? (page - 1) * pageSize + 1 : 0, last = Math.min(data.total, page * pageSize);
+  const pager = (
+    <div className="flex flex-wrap items-center gap-2 text-sm">
+      <span className="text-muted-foreground">Showing <b className="num text-foreground">{first.toLocaleString("en-GB")}–{last.toLocaleString("en-GB")}</b> of <b className="num text-foreground">{data.total.toLocaleString("en-GB")}</b>{loading && " …"}</span>
+      <span className="ml-auto flex items-center gap-1.5">
+        <Button size="xs" variant="outline" disabled={page <= 1} onClick={() => setPage(1)}>First</Button>
+        <Button size="xs" variant="outline" disabled={page <= 1} onClick={() => setPage(page - 1)}>Previous</Button>
+        <span className="num text-xs">Page {page} of {pages}</span>
+        <Button size="xs" variant="outline" disabled={page >= pages} onClick={() => setPage(page + 1)}>Next</Button>
+        <Button size="xs" variant="outline" disabled={page >= pages} onClick={() => setPage(pages)}>Last</Button>
+        <NativeSelect className="h-7 text-xs" value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))} aria-label="Rows a page">
+          {PAGE_SIZES.map((n) => <NativeSelectOption key={n} value={n}>{n} a page</NativeSelectOption>)}
+        </NativeSelect>
+      </span>
+    </div>
+  );
   return (
     <section className="space-y-3">
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-5" title={f.category ? `Over every niche in ${f.category}` : "Over every niche imported"}>
         {[
-          ["Niches imported", all.length],
-          ["Scoring 60+", all.filter((n) => (n.score ?? 0) >= 60).length],
-          ["Hidden by flags", hiddenByFlags],
-          ["Shortlisted", all.filter((n) => n.status === "shortlisted").length],
-          ["Incumbents checked", all.filter((n) => n.shape).length],
+          ["Niches imported", data.stats.total],
+          ["Scoring 60+", data.stats.scoring60],
+          ["Hidden by flags", data.stats.hiddenByFlags],
+          ["Shortlisted", data.stats.shortlisted],
+          ["Incumbents checked", data.stats.checked],
         ].map(([l, v]) => <div key={l} className="rounded-lg bg-surface-2 px-3 py-2"><div className="text-[10.5px] tracking-wide text-muted-foreground uppercase">{l}</div><div className="num text-lg font-semibold">{Number(v).toLocaleString("en-GB")}</div></div>)}
       </div>
       <div className="flex flex-wrap items-end gap-3">
         <label className="space-y-1"><span className="field-label">Category</span>
-          <NativeSelect value={f.category} onChange={(e) => set({ category: e.target.value })}>
+          <NativeSelect value={f.category} onChange={(e) => change({ category: e.target.value })}>
             <NativeSelectOption value="">All</NativeSelectOption>{cats.map((c) => <NativeSelectOption key={c} value={c}>{c}</NativeSelectOption>)}
           </NativeSelect></label>
-        <label className="space-y-1"><span className="field-label">Min score</span><Input className="num h-9 w-20" type="number" min={0} max={100} value={f.minScore} onChange={(e) => set({ minScore: e.target.value })} /></label>
+        <label className="space-y-1"><span className="field-label">Min score</span><Input className="num h-9 w-20" type="number" min={0} max={100} value={f.minScore} onChange={(e) => change({ minScore: e.target.value })} /></label>
         <label className="space-y-1"><span className="field-label">Price</span>
-          <NativeSelect value={f.price} onChange={(e) => set({ price: e.target.value })}>{PRICE_BANDS.map(([k, l]) => <NativeSelectOption key={k} value={k}>{l}</NativeSelectOption>)}</NativeSelect></label>
+          <NativeSelect value={f.price} onChange={(e) => change({ price: e.target.value })}>{PRICE_BANDS.map(([k, l]) => <NativeSelectOption key={k} value={k}>{l}</NativeSelectOption>)}</NativeSelect></label>
         <label className="space-y-1"><span className="field-label">Status</span>
-          <NativeSelect value={f.status} onChange={(e) => set({ status: e.target.value })}>
+          <NativeSelect value={f.status} onChange={(e) => change({ status: e.target.value })}>
             <NativeSelectOption value="active">Not dismissed</NativeSelectOption><NativeSelectOption value="all">All</NativeSelectOption>
             {["new", "shortlisted", "dismissed", "candidate"].map((x) => <NativeSelectOption key={x} value={x}>{x[0].toUpperCase() + x.slice(1)}</NativeSelectOption>)}
           </NativeSelect></label>
         <div className="relative"><SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input className="h-9 w-56 pl-8" placeholder="Search needs and terms" value={f.q} onChange={(e) => set({ q: e.target.value })} /></div>
+          <Input className="h-9 w-56 pl-8" placeholder="Search needs and terms" value={f.q} onChange={(e) => change({ q: e.target.value })} /></div>
       </div>
       <div className="flex flex-wrap items-center gap-1.5 text-xs">
         <span className="text-muted-foreground">Hide flagged:</span>
         {NICHE_FLAGS.map((x) => (
-          <button key={x} type="button" aria-pressed={hide.has(x)} onClick={() => setHide((h) => { const y = new Set(h); if (y.has(x)) y.delete(x); else y.add(x); return y; })}
+          <button key={x} type="button" aria-pressed={hide.has(x)} onClick={() => { const y = new Set(hide); if (y.has(x)) y.delete(x); else y.add(x); setHide(y); }}
             className={cn("rounded-full border px-2 py-0.5", hide.has(x) ? "border-ink-2 bg-ink-2 text-white" : "text-muted-foreground hover:text-foreground")}>{FLAG_LABEL[x]}</button>
         ))}
         <button type="button" className="ml-1 text-brand hover:underline" onClick={() => setHide(new Set(DEFAULT_HIDDEN_FLAGS))}>defaults</button>
-        <span className="ml-auto text-muted-foreground">{rows.length.toLocaleString("en-GB")} shown</span>
       </div>
       {sel.size > 0 && (
         <div className="flex items-center gap-2 text-sm"><span>{sel.size} selected</span>
           <Button size="sm" onClick={() => bulk("shortlisted")}>Shortlist</Button><Button size="sm" variant="outline" onClick={() => bulk("dismissed")}>Dismiss</Button>
           <button type="button" className="text-xs text-muted-foreground hover:underline" onClick={() => setSel(new Set())}>Clear</button></div>
       )}
-      <div className="overflow-x-auto rounded-lg border">
+      {pager}
+      <div className={cn("overflow-x-auto rounded-lg border", loading && "opacity-70")}>
         <table className="w-full text-sm">
           <thead><tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase">
-            <th className="w-8 px-2 py-1.5"><input type="checkbox" aria-label="Select all shown" checked={allShown} onChange={() => setSel(allShown ? new Set() : new Set(shown.map((n) => n.id)))} /></th>
+            <th className="w-8 px-2 py-1.5"><input type="checkbox" aria-label="Select all on this page" checked={allShown} onChange={() => setSel(allShown ? new Set() : new Set(rows.map((n) => n.id)))} /></th>
             <SortTh {...s.th("need")} className="px-2 py-1.5">Customer need</SortTh>
             <SortTh {...s.th("terms")} className="px-2 py-1.5">Search terms</SortTh>
             <SortTh {...s.th("score")} numeric className="px-2 py-1.5 text-right">Score</SortTh>
@@ -255,10 +282,10 @@ function NicheTable({ data, onChanged }: { data: Data; onChanged: () => void }) 
             <SortTh {...s.th("units")} numeric className="px-2 py-1.5 text-right" title="Units a product a year: the midpoint of the average product's range">Units/product/yr</SortTh>
             <SortTh {...s.th("returns")} numeric className="px-2 py-1.5 text-right">Returns</SortTh>
             <SortTh {...s.th("flags")} className="px-2 py-1.5">Flags</SortTh>
-            <SortTh {...s.th("shape")} className="px-2 py-1.5">Shape</SortTh>
+            <SortTh {...s.th("shape")} className="px-2 py-1.5" title="Open, then contested, then dominated">Shape</SortTh>
             <SortTh {...s.th("status")} className="px-2 py-1.5">Status</SortTh>
           </tr></thead>
-          <tbody>{shown.map((n) => (
+          <tbody>{rows.map((n) => (
             <Fragment key={n.id}>
               <tr className={cn("border-b align-top", sel.has(n.id) && "bg-brand-soft/30", n.status === "dismissed" && "opacity-60")}>
                 <td className="px-2 py-1.5"><input type="checkbox" aria-label="Select" checked={sel.has(n.id)} onChange={() => toggle(n.id)} /></td>
@@ -266,6 +293,7 @@ function NicheTable({ data, onChanged }: { data: Data; onChanged: () => void }) 
                   <button type="button" className="flex items-start gap-1 text-left font-medium hover:text-brand" onClick={() => setOpen(open === n.id ? null : n.id)}>
                     <ChevronRightIcon className={cn("mt-0.5 size-3.5 flex-none transition-transform", open === n.id && "rotate-90")} />{n.customer_need}
                   </button>
+                  {!f.category && <span className="block pl-4 text-2xs text-muted-foreground">{n.category}</span>}
                   {(n.extra.aliases?.length ?? 0) > 0 && <span className="block pl-4 text-2xs text-muted-foreground">also: {n.extra.aliases!.join(", ")}</span>}
                   {n.notes && <span className="block pl-4 text-2xs text-muted-foreground italic">{n.notes.slice(0, 80)}</span>}
                 </td>
@@ -287,8 +315,9 @@ function NicheTable({ data, onChanged }: { data: Data; onChanged: () => void }) 
             </Fragment>
           ))}</tbody>
         </table>
+        {!rows.length && <p className="p-4 text-sm text-muted-foreground">No niche matches these filters.</p>}
       </div>
-      {s.rows.length > limit && <Button variant="outline" size="sm" onClick={() => setLimit((l) => l + 300)}>Show more ({(s.rows.length - limit).toLocaleString("en-GB")} left)</Button>}
+      {data.total > pageSize && pager}
     </section>
   );
 }

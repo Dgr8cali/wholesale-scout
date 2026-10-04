@@ -5,7 +5,7 @@ import type { ColumnMapping, NormalizedRow } from "../ingest/mapping";
 import { getKeepa } from "../keepa/client";
 import { addDailyTokens } from "../keepaLedger";
 import { brandKey } from "../brands";
-import { chunks, db, loadProfile, must } from "./db";
+import { chunks, db, loadProfile, must, selectAll } from "./db";
 import { ingest } from "./ingest";
 
 const DAY = 86_400_000;
@@ -229,10 +229,7 @@ export async function scannedSellers(): Promise<ScannedSeller[]> {
   for (const s of sellers) {
     let results: ScannedSeller["results"] = null;
     if (s.last_scan_run_id) {
-      const rows = must(
-        await d.from("results").select("status, verdict, bb:inputs->market->>buyBoxSellerId").eq("run_id", s.last_scan_run_id),
-        "results",
-      ) as { status: string; verdict: string | null; bb: string | null }[];
+      const rows = await selectAll<{ status: string; verdict: string | null; bb: string | null }>("results", "status, verdict, bb:inputs->market->>buyBoxSellerId", ["id"], (q) => q.eq("run_id", s.last_scan_run_id));
       results = { pass: 0, warn: 0, fail: 0, pending: 0, holdsBuyBox: 0 };
       for (const r of rows) {
         if (r.status === "pending") results.pending++;
