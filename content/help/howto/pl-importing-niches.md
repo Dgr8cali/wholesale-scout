@@ -14,7 +14,7 @@ In Seller Central: **Growth → Product Opportunity Explorer**, the **Niche** vi
 
 ## Import
 
-On **Niches**, drop the CSV (or choose it), give the **category** (a guess from the file name, or one you've used before), and **Preview**. The preview shows:
+On **Niches**, drop the CSV (or choose it), pick its **Opportunity Explorer category** (guessed from the file name when it can be: diy-tools.csv is DIY & Tools), and **Preview**. The list is Opportunity Explorer's top-level UK categories; **Other…** takes a name of your own. Next to it is the **fee category**: the rate card category a candidate created from these niches uses for its referral fee (DIY & Tools → Tools and Home Improvement, Garden → Lawn and Garden, Kitchen & Home Appliances → Compact Appliances, Books → Everything else…). For an Other… name it comes from the rate card's own name list, else Everything else, and shows with the preview. Imports made before the list keep the name they were given, and get the fee category when the name matches one on it. The preview shows:
 
 - the line the header was found on, the rows read, and the niches after merging duplicates;
 - every field and the column it came from: columns are matched by name with case, spaces and punctuation ignored, so a future export with renamed or reordered columns still reads. Any column not recognised is listed, and kept with each row as its raw data;
@@ -63,7 +63,7 @@ Open a niche for its actions:
 - **Shortlist**, **Dismiss** (and **Reset**). Tick several rows for **Shortlist** or **Dismiss** in bulk.
 - **Notes**: saved when you click away.
 - **Check incumbents (Keepa)**: Keepa's best sellers whose titles hold the niche's first search term (one Product Finder page), the top 10 detailed for their review counts. Before it runs, it shows the cost (up to about 31 tokens; ASINs detailed in the last 7 days are reused) against your balance, with 100 kept in reserve. One check at a time, and never while a Niche Hunt is running. It writes the **shape** back: **open** (nobody over 1,000 reviews), **contested** (one), **dominated** (two or more, or one over 5,000), and lists the incumbents. The tokens count in Home's Private label tokens this month.
-- **Create candidate**: a Private label candidate named after the customer need, its first search term as the niche keyword, and the category's fee category (Opportunity Explorer's "DIY & Tools" is the rate card's "Tools and Home Improvement"), with the niche's figures in its notes. The niche shows as **candidate** and links to it.
+- **Create candidate**: a Private label candidate named after the customer need, its first search term as the niche keyword, and the category's fee category (shown next to the category picker), with the niche's figures in its notes. The niche shows as **candidate** and links to it.
 
 **Filters**: category, minimum score, price band, status (dismissed niches are hidden unless asked for), and a search over customer needs, search terms and aliases. Every column sorts, and the sort is remembered. The strip on top counts the niches imported, those scoring 60+, those hidden by the flags, the shortlist and the incumbent-checked.
 

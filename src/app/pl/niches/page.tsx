@@ -15,14 +15,15 @@ import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { DEFAULT_HIDDEN_FLAGS, FLAG_LABEL, NICHE_FLAGS, type NicheFlag } from "@/lib/pl/nicheScore";
+import { matchPoeCategory, POE_CATEGORIES } from "@/lib/pl/poeCategories";
 import type { NicheRow } from "@/lib/server/plNiches";
 import { api } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
 
-interface Imp { id: string; category: string; imported_at: string; row_count: number; filename: string | null; unmapped: string[]; duplicates: number }
+interface Imp { id: string; category: string; imported_at: string; row_count: number; filename: string | null; unmapped: string[]; duplicates: number; poeCategory: string | null; feeCategory: string }
 interface Data { imports: Imp[]; niches: NicheRow[] }
 interface Preview {
-  headerLine: number; mapped: Record<string, string | null>; unmapped: string[]; warnings: string[]; rows: number; niches: number; duplicates: number; replaces: number;
+  headerLine: number; mapped: Record<string, string | null>; unmapped: string[]; warnings: string[]; rows: number; niches: number; duplicates: number; replaces: number; feeCategory: string;
   sample: (NicheRow & { aliases: string[] })[];
 }
 interface Incumbents { term: string; found: number; shape: string; tokensUsed: number; reused: number; checkedAt: string; incumbents: { asin: string; title: string | null; brand: string | null; reviews: number | null; price: number | null }[] }
@@ -36,6 +37,7 @@ const PRICE_BANDS: [string, string, (p: number | null) => boolean][] = [
   ["", "Any price", () => true], ["core", "£15–40", (p) => p != null && p >= 15 && p <= 40], ["mid", "£10–60", (p) => p != null && p >= 10 && p <= 60],
   ["low", "Under £10", (p) => p != null && p < 10], ["high", "Over £60", (p) => p != null && p > 60],
 ];
+const OTHER = "__other";
 const scoreTone = (s: number | null) => (s == null ? "" : s >= 60 ? "text-pass font-semibold" : s >= 40 ? "text-warn" : "text-muted-foreground");
 
 /**
@@ -68,7 +70,11 @@ export default function NichesPage() {
 
 function ImportCard({ imports, onImported }: { imports: Imp[]; onImported: () => void }) {
   const [file, setFile] = useState<{ name: string; text: string } | null>(null);
-  const [category, setCategory] = useState("");
+  // One of Opportunity Explorer's categories, or "Other…" with your own name.
+  const [pick, setPick] = useState("");
+  const [other, setOther] = useState("");
+  const category = pick === OTHER ? other.trim() : pick;
+  const listedFee = POE_CATEGORIES.find((c) => c.name === pick)?.fee ?? null;
   const [preview, setPreview] = useState<Preview | null>(null);
   const [busy, setBusy] = useState(false);
   const recent = [...new Set(imports.map((i) => i.category))];
@@ -78,9 +84,10 @@ function ImportCard({ imports, onImported }: { imports: Imp[]; onImported: () =>
     setFile({ name: f.name, text });
     setPreview(null);
     if (!category) {
-      // "diy-tools.csv" → "DIY Tools" as a first guess; you can change it.
-      const guess = f.name.replace(/\.csv$/i, "").replace(/[-_]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-      setCategory(recent.find((r) => r.toLowerCase().replace(/[^a-z]/g, "") === guess.toLowerCase().replace(/[^a-z]/g, "")) ?? guess);
+      // "diy-tools.csv" → DIY & Tools as a first guess; you can change it.
+      const guess = f.name.replace(/\.csv$/i, "").replace(/[-_]+/g, " ");
+      const poe = matchPoeCategory(guess) ?? matchPoeCategory(recent.find((r) => r.toLowerCase().replace(/[^a-z]/g, "") === guess.toLowerCase().replace(/[^a-z]/g, "")));
+      if (poe) setPick(poe);
     }
   };
   const run = async (action: "preview" | "import") => {
@@ -109,13 +116,27 @@ function ImportCard({ imports, onImported }: { imports: Imp[]; onImported: () =>
           <UploadIcon className="size-4" /> {file ? file.name : "Drop the Opportunity Explorer CSV, or choose it"}
           <input type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => read(e.target.files?.[0])} />
         </label>
-        <label className="space-y-1"><span className="field-label">Category</span>
-          <Input className="w-56" list="niche-categories" value={category} onChange={(e) => { setCategory(e.target.value); setPreview(null); }} placeholder="e.g. DIY & Tools" />
-          <datalist id="niche-categories">{recent.map((c) => <option key={c} value={c} />)}</datalist></label>
+        <label className="space-y-1"><span className="field-label">Opportunity Explorer category</span>
+          <NativeSelect className="w-64" value={pick} onChange={(e) => { setPick(e.target.value); setPreview(null); }}>
+            <NativeSelectOption value="">Pick the category…</NativeSelectOption>
+            {POE_CATEGORIES.map((c) => <NativeSelectOption key={c.name} value={c.name}>{c.name}</NativeSelectOption>)}
+            <NativeSelectOption value={OTHER}>Other…</NativeSelectOption>
+          </NativeSelect></label>
+        {pick === OTHER && (
+          <label className="space-y-1"><span className="field-label">Category name</span>
+            <Input className="w-56" list="niche-categories" value={other} onChange={(e) => { setOther(e.target.value); setPreview(null); }} placeholder="e.g. Arts & Crafts" />
+            <datalist id="niche-categories">{recent.filter((r) => !matchPoeCategory(r)).map((c) => <option key={c} value={c} />)}</datalist></label>
+        )}
+        {(listedFee || (pick === OTHER && preview)) && (
+          <span className="pb-2 text-xs text-muted-foreground" title="The rate card category a candidate created from these niches uses for its referral fee">
+            Fee category: <b className="text-foreground">{listedFee ?? preview?.feeCategory}</b>
+          </span>
+        )}
+        {pick === OTHER && !preview && other.trim() && <span className="pb-2 text-xs text-muted-foreground">Fee category: shown with the preview</span>}
         <Button variant="outline" disabled={!file || !category.trim() || busy} onClick={() => run("preview")}>{busy && !preview && <LoaderIcon className="animate-spin" />} Preview</Button>
         {preview && <Button disabled={busy} onClick={() => run("import")}>{busy && <LoaderIcon className="animate-spin" />} Import {preview.niches} niches</Button>}
       </div>
-      {imports.length > 0 && <p className="text-xs text-muted-foreground">Imported: {imports.map((i) => `${i.category} (${i.row_count}, ${new Date(i.imported_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })})`).join(" · ")}. Importing a category again replaces it; niches keep their status, notes and shape.</p>}
+      {imports.length > 0 && <p className="text-xs text-muted-foreground">Imported: {imports.map((i) => `${i.category} (${i.row_count}, ${new Date(i.imported_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}; fees as ${i.feeCategory})`).join(" · ")}. Importing a category again replaces it; niches keep their status, notes and shape.</p>}
       {preview && (
         <div className="space-y-2 rounded-lg bg-surface-2 p-3 text-sm">
           <p>Header on line {preview.headerLine}: <b>{preview.rows}</b> rows read, <b>{preview.niches}</b> niches{preview.duplicates ? ` (${preview.duplicates} duplicates merged as aliases)` : ""}.{preview.replaces ? ` Replaces ${preview.replaces} niches already imported for "${category}".` : ""}</p>

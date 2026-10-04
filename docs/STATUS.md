@@ -1,7 +1,7 @@
 # Wholesale Scout: status
 
 Read this first in a new session. Keep it current: every commit that changes a feature updates
-it (what's built, the backlog, the rough edges). Last updated: 4 Oct 2026 (Private label: Niche Import).
+it (what's built, the backlog, the rough edges). Last updated: 4 Oct 2026 (Niche Import: category picker with fee categories).
 
 Wholesale Scout is a single-user Amazon UK seller's workbench: Next.js 16 (App Router, `proxy.ts`
 password gate), Supabase (Postgres, RLS on, service-role access from the server only), Vercel
@@ -39,7 +39,8 @@ fragmentation, units a product) with flags (spike, fading, low price, high retur
 regulated, big brand: an editable list in Settings → Private label, heavy/bulky, low units),
 shortlists, runs a one-at-a-time Keepa incumbent check on a niche's first search term (~31 tokens,
 open/contested/dominated) and creates candidates; re-importing a category keeps status, notes and
-shape. Home has a Niches tile. Quotes turns supplier quotes into
+shape. The category is picked from Opportunity Explorer's 25 top-level UK categories (or Other…),
+each mapped to the rate card category candidates use for fees. Home has a Niches tile. Quotes turns supplier quotes into
 a landed cost per unit and total cash (FX, freight, duty, import VAT, inspection), writes it into
 Gates 0 and 7, chooses a supplier and generates the RFQ. Gate 4's review miner takes pasted 1–3★ reviews per top-5 ASIN (`pl_review_dumps`), splits
 them, counts complaint phrases locally (stop words, bigrams/trigrams, an editable synonym list) into a

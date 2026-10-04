@@ -1,5 +1,5 @@
 import "server-only";
-import { referralCategoryFor } from "../fees/engine";
+import { feeCategoryFor, matchPoeCategory } from "../pl/poeCategories";
 import { addDailyTokens, PL_KEEP_DAYS, type TokensByDay } from "../keepaLedger";
 import { DEFAULT_BRAND_TERMS, parseBrandTerms } from "../pl/brandTerms";
 import { nicheFlags, scoreNiche } from "../pl/nicheScore";
@@ -77,6 +77,8 @@ export async function previewNicheImport(text: string, category: string) {
     headerLine: p.headerLine, mapped: p.mapped, unmapped: p.unmapped, warnings: p.warnings, rows: p.rows, niches: p.niches.length, duplicates: p.duplicates,
     sample: p.niches.slice(0, 5).map((n) => ({ ...n, raw_row: undefined, ...scored(n, brands) })),
     replaces: rowsThere,
+    /** The rate card category a candidate from this category gets. */
+    feeCategory: feeCategoryFor(category, await activeRateCard()),
   };
 }
 
@@ -134,9 +136,12 @@ export async function listNiches() {
     d.from("pl_niche_imports").select("id, category, marketplace, filename, imported_at, row_count, unmapped, duplicates").order("imported_at", { ascending: false }),
     d.from("pl_niches").select("id, import_id, customer_need, search_terms, top_clicked_products, sv_360, growth_180, sv_90, growth_90, units_360_min, units_360_max, units_per_product_min, units_per_product_max, units_per_product_mid, avg_price, min_price, max_price, return_rate, extra, score, score_breakdown, flags, shape, status, notes, candidate_id, created_at, updated_at").range(0, 9999),
   ]);
-  const imps = must(imports, "imports") as { id: string; category: string; imported_at: string; row_count: number; filename: string | null; unmapped: string[]; duplicates: number; marketplace: string }[];
+  const card = await activeRateCard();
+  // Each import's category as typed, the Opportunity Explorer category it matches, and the fee category candidates from it use.
+  const imps = (must(imports, "imports") as { id: string; category: string; imported_at: string; row_count: number; filename: string | null; unmapped: string[]; duplicates: number; marketplace: string }[])
+    .map((i) => ({ ...i, poeCategory: matchPoeCategory(i.category), feeCategory: feeCategoryFor(i.category, card) }));
   const cat = new Map(imps.map((i) => [i.id, i.category]));
-  return { imports: imps, niches: (must(niches, "niches") as Record<string, unknown>[]).map(toRow).map((n) => ({ ...n, category: cat.get(n.import_id) ?? "" })) };
+  return { imports: imps, feeCategories: card.referral.categories.map((c) => c.name), niches: (must(niches, "niches") as Record<string, unknown>[]).map(toRow).map((n) => ({ ...n, category: cat.get(n.import_id) ?? "" })) };
 }
 
 export async function updateNiche(id: string, patch: { status?: string; notes?: string | null }) {
@@ -171,7 +176,7 @@ export async function nicheToCandidate(id: string) {
   }
   const imp = must(await d.from("pl_niche_imports").select("category").eq("id", n.import_id).single(), "import") as { category: string };
   const card = await activeRateCard();
-  const category = referralCategoryFor(imp.category, card);
+  const category = feeCategoryFor(imp.category, card);
   const c = await createCandidate({ name: n.customer_need, niche_keyword: n.search_terms[0] ?? n.customer_need, category, asins: [] });
   const note = `From Opportunity Explorer (${imp.category}, Niche Import): search volume ${n.sv_360?.toLocaleString("en-GB") ?? "—"} a year, growth ${pct(n.growth_180)} over 180 days, average price £${n.avg_price?.toFixed(2) ?? "—"}, ${n.top_clicked_products ?? "—"} top-clicked products, ~${n.units_per_product_mid?.toLocaleString("en-GB") ?? "—"} units a product a year. Score ${n.score}${n.flags.length ? `, flags ${n.flags.join(", ")}` : ""}${n.shape ? `, incumbents ${n.shape}` : ""}. Search terms: ${n.search_terms.join(", ")}.`;
   must(await d.from("pl_candidates").update({ notes: note }).eq("id", c.id), "candidate notes");
