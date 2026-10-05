@@ -95,6 +95,8 @@ Gatekeeper's economics, using the app's rate card (Amazon UK FBA, July 2026: the
 
 **Peak rates** apply automatically in October, November and December, as in screening: the peak storage rate (£0.82 instead of £0.62 per cubic foot a month) and the small-parcel peak surcharge (£0.11). Gate 6 shows **Peak rates in effect (Oct–Dec)** while they do. A product priced at the low-price rate keeps it in the peak months.
 
+**The low-price rate** also has a weight limit per tier: envelopes up to their own limits, a **small parcel only up to 400 g** (shipping weight, so dimensional weight counts), and no low-price rate for standard parcels and above. When it applies, the FBA size tile shows a green **low-price rate** chip. When the price qualifies but the tier or weight doesn't, the tile says why, for example "not the low-price rate: ships at 450 g: the Small parcel low-price rate stops at 400 g", and the standard (or peak) rate is used.
+
 Without packed dimensions and weight there's no FBA fee: the tier says **Enter dimensions and weight in Gate 0** instead of assuming a size. Profit and margins stay blank until they're in.
 
 You type **landed cost** (Gate 0), or write it from a supplier quote (Quotes, chip **Quote**; a value you type yourself still wins). **Ads per unit** has a derived default until you type one (chip **Derived**, with the formula under the field): at launch, CPC ÷ conversion, where the CPC is Settings → Ads's (£0.60 to start, then the account's trailing CPC once [ads reports are imported](/help/howto/ads-importing-reports)) and the conversion is the candidate's Gate 3 search conversion, else 7%; at steady state, 40% of launch. Click **edit** to type your own. **FBA fee override** replaces the rate-card fee with Amazon's own figure.

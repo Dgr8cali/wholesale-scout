@@ -93,6 +93,33 @@ function randomCandidate(r: () => number): { f: Fields; S: Settings; cat: string
   return { f, S, cat: pick(ref.REFERRAL.map((x) => x[0])), date };
 }
 
+describe("Low-Price FBA on Gate 6", () => {
+  // The lens wipes candidate: Beauty (low-price at £10 or less), 17 × 12 × 9 cm, 450 g: a small parcel.
+  const wipes = { dimL: "17", dimW: "12", dimH: "9", weight: "450", landed: "1.80" };
+  const cat = "Beauty, Health and Personal Care";
+  const oct = new Date(Date.UTC(2026, 9, 5)), aug = new Date(Date.UTC(2026, 7, 5));
+  it("£9.99 qualifies on price, but 450 g is over the small-parcel low-price limit (400 g): the standard rate, said why", () => {
+    const e = econ({ ...wipes, sell: "9.99" }, DEFAULT_SETTINGS, cat, card, oct)!;
+    expect(e).toMatchObject({ lowPrice: true, lowThreshold: 10, fbaSource: "peak", fbaBase: 3.04 + 0.11 });
+    expect(e.fbaV!).toBeCloseTo(3.86, 2);
+    expect(e.lowMiss).toBe("ships at 450 g: the Small parcel low-price rate stops at 400 g");
+    // At £10.99 the price doesn't qualify either: the same fee, no low-price note.
+    const dear = econ({ ...wipes, sell: "10.99" }, DEFAULT_SETTINGS, cat, card, oct)!;
+    expect(dear).toMatchObject({ lowPrice: false, lowMiss: null, fbaBase: 3.15 });
+  });
+  it("at 400 g or under it takes the low-price rate (no peak surcharge)", () => {
+    const e = econ({ ...wipes, weight: "390", sell: "9.99" }, DEFAULT_SETTINGS, cat, card, oct)!;
+    expect(e).toMatchObject({ fbaSource: "low-price", fbaBase: 2.7, lowMiss: null });
+    // 140 g in this box ships at its dimensional weight (~367 g): the 400 g band. In a smaller parcel, the 150 g one.
+    expect(econ({ ...wipes, weight: "140", sell: "9.99" }, DEFAULT_SETTINGS, cat, card, aug)!).toMatchObject({ fbaSource: "low-price", fbaBase: 2.7 });
+    expect(econ({ ...wipes, dimL: "13", dimW: "8", dimH: "7", weight: "140", sell: "9.99" }, DEFAULT_SETTINGS, cat, card, aug)!).toMatchObject({ fbaSource: "low-price", fbaBase: 2.67 });
+    // 3 cm deep is a large envelope, with its own low-price rate.
+    expect(econ({ ...wipes, dimH: "3", weight: "140", sell: "9.99" }, DEFAULT_SETTINGS, cat, card, aug)!).toMatchObject({ fbaSource: "low-price", fbaBase: 2.42 });
+    // Home Products: low-price up to £20.
+    expect(econ({ ...wipes, weight: "390", sell: "14.99" }, DEFAULT_SETTINGS, "Home Products", card, aug)!).toMatchObject({ fbaSource: "low-price", lowThreshold: 20 });
+  });
+});
+
 describe("the target price band (the port's own field)", () => {
   const g0 = (f: Fields) => gateChecks("g0", f, DEFAULT_SETTINGS, "Home Products", card)[0];
   it("Gate 0's sell price check reads it; blank or upside-down is £18–35", () => {

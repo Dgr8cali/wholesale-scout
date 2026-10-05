@@ -159,6 +159,8 @@ export interface PlTier {
   useDim: boolean;
   fee: number | null;
   lowFee: number | null;
+  /** The heaviest a listing in this tier can be for the low-price rate (g); null when the tier has none. */
+  lowMaxG: number | null;
   peakAdd: number;
   oversize: boolean;
 }
@@ -178,6 +180,7 @@ export function sizeTier(f: Fields, card: RateCard): PlTier | null {
     useDim: std ? std.useDimWeight : !!t.id,
     fee: t.fee,
     lowFee: t.lowPriceFee,
+    lowMaxG: std?.lowPriceBands?.length ? std.lowPriceBands[std.lowPriceBands.length - 1][0] : null,
     peakAdd: t.peakSurcharge,
     oversize: t.oversize,
   };
@@ -204,6 +207,8 @@ export interface Econ {
   sell: number; landed: number | null; pct: number; referralBase: number; referral: number;
   tier: PlTier | null; lowPrice: boolean; lowThreshold: number;
   fbaBase: number | null; fbaSource: "" | "override" | "low-price" | "peak" | "standard"; fbaV: number | null;
+  /** The price qualifies for the low-price rate but the tier or weight doesn't: why the standard rate applies. */
+  lowMiss: string | null;
   /** The card's peak months (Oct–Dec): peak storage rate and small-parcel surcharge. */
   peak: boolean;
   /** Storage ex-VAT, and with VAT and DSF (what's charged; the figure the profit uses). */
@@ -229,6 +234,9 @@ export function econ(f: Fields, S: Settings, cat: string, card: RateCard, date: 
     else { fbaBase = tier.fee + (peak ? tier.peakAdd : 0); fbaSource = peak && tier.peakAdd ? "peak" : "standard"; }
   }
   const fbaV = fbaBase == null ? null : fbaBase * vat * dst;
+  const lowMiss = lowPrice && ov == null && tier && tier.fee != null && tier.lowFee == null
+    ? tier.lowMaxG != null ? `ships at ${Math.round(tier.shipG)} g: the ${tier.name} low-price rate stops at ${tier.lowMaxG} g` : `${tier.name} has no low-price rate`
+    : null;
   const storageBase = storagePerUnit(f, S, card, peak);
   const storage = storageBase == null ? null : storageBase * vat * dst;
   const inbound = S.inbound || 0, prep = S.prep || 0, returns = (sell * (S.returnsPct || 0)) / 100;
@@ -237,7 +245,7 @@ export function econ(f: Fields, S: Settings, cat: string, card: RateCard, date: 
   const pL = base == null || aL == null ? null : base - aL;
   const pS = base == null || aS == null ? null : base - aS;
   return {
-    sell, landed, pct: p, referralBase, referral, tier, lowPrice, lowThreshold, fbaBase, fbaSource, fbaV, peak, storageBase, storage, inbound, prep, returns, over, pL, pS,
+    sell, landed, pct: p, referralBase, referral, tier, lowPrice, lowThreshold, fbaBase, fbaSource, fbaV, lowMiss, peak, storageBase, storage, inbound, prep, returns, over, pL, pS,
     amazonTake: fbaV == null ? null : referral + fbaV,
     mL: pL == null ? null : (pL / sell) * 100, mS: pS == null ? null : (pS / sell) * 100,
     multiple: landed && landed > 0 ? sell / landed : null,

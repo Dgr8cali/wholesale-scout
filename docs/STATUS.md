@@ -1,7 +1,7 @@
 # Wholesale Scout: status
 
 Read this first in a new session. Keep it current: every commit that changes a feature updates
-it (what's built, the backlog, the rough edges). Last updated: 5 Oct 2026 (Gate 0's target price band; Gate 1's per-ASIN table).
+it (what's built, the backlog, the rough edges). Last updated: 5 Oct 2026 (Gate 6: low-price rate shown, and why it doesn't apply when the price qualifies).
 
 Wholesale Scout is a single-user Amazon UK seller's workbench: Next.js 16 (App Router, `proxy.ts`
 password gate), Supabase (Postgres, RLS on, service-role access from the server only), Vercel
