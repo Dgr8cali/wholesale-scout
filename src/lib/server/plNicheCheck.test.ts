@@ -8,7 +8,7 @@ import { checkNicheIncumbents, nicheCheckPlan } from "./plNiches";
 const k = vi.hoisted(() => ({ selections: [] as Record<string, unknown>[], lookups: [] as string[][] }));
 
 /** A fake Keepa response for "fishing rod": a kids' bath toy, a cat toy, and three real rods; for "fishing pole", a pole and a rod again. */
-const ITEMS: Record<string, { title: string; reviews: number; sold: number | null; rank: number; leaf: string }> = {
+const ITEMS: Record<string, { title: string; reviews: number; sold: number | null; rank: number; leaf: string; root?: string }> = {
   B0BATHTOY1: { title: "Magnetic Fishing Rod Bath Toy for Kids, 10 Floating Fish", reviews: 8_200, sold: 2_000, rank: 150, leaf: "Bath Toys" },
   B0CATTOY01: { title: "Interactive Cat Toy Fishing Rod with Feathers and Bell", reviews: 12_400, sold: 3_000, rank: 90, leaf: "Cat Teasers" },
   B0ROD00001: { title: "Shakespeare Ugly Stik Fishing Rod, 9ft Spinning", reviews: 1_600, sold: 400, rank: 2_100, leaf: "Fishing Rods" },
@@ -16,7 +16,15 @@ const ITEMS: Record<string, { title: string; reviews: number; sold: number | nul
   B0ROD00003: { title: "Carp Fishing Rods 12ft 3lb Test Curve (Pair)", reviews: 210, sold: null, rank: 9_500, leaf: "Fishing Rods" },
   B0POLE0001: { title: "Telescopic Fishing Pole 2.1m, Carbon", reviews: 300, sold: 800, rank: 1_200, leaf: "Fishing Rods" },
 };
+// Hedgehog houses: none in Garden, all filed under Pet Supplies or Garden → Wildlife elsewhere.
+Object.assign(ITEMS, {
+  B0HOG00001: { title: "Wooden Hedgehog House, Weatherproof", reviews: 2_300, sold: 500, rank: 900, leaf: "Wildlife Houses", root: "Pet Supplies" },
+  B0HOG00002: { title: "Hedgehog House with Tunnel Entrance", reviews: 450, sold: 300, rank: 1_500, leaf: "Small Animal Houses", root: "Pet Supplies" },
+  B0HOG00003: { title: "Hedgehog Houses for the Garden, Pack of 2", reviews: 120, sold: 100, rank: 4_000, leaf: "Bird & Wildlife Care", root: "Home & Kitchen" },
+  B0HOGTOY01: { title: "Hedgehog House Plush Toy for Kids", reviews: 80, sold: 50, rank: 8_000, leaf: "Soft Toys", root: "Toys & Games" },
+});
 const FINDER: Record<string, string[]> = {
+  "hedgehog house": ["B0HOG00001", "B0HOG00002", "B0HOG00003", "B0HOGTOY01"],
   "fishing rod": ["B0BATHTOY1", "B0CATTOY01", "B0ROD00001", "B0ROD00002", "B0ROD00003"],
   "fishing pole": ["B0POLE0001", "B0ROD00001"],
 };
@@ -27,7 +35,7 @@ vi.mock("../keepa/client", async (orig) => {
   const product = (asin: string): KeepaProduct => {
     const x = ITEMS[asin];
     return {
-      asin, eans: [], title: x.title, brand: "Brand", category: null, dimsCm: null, weightG: null, parentAsin: null, variationCount: null, imageUrl: null,
+      asin, eans: [], title: x.title, brand: "Brand", category: x.root ?? null, dimsCm: null, weightG: null, parentAsin: null, variationCount: null, imageUrl: null,
       reviewsNow: x.reviews, leafCategory: { id: 1, name: x.leaf }, summary: summary(x.rank, x.sold), buyBoxSellers: [],
       series: { rank: [], buyBox: [], newPrice: [[Date.now() - 86_400_000, 19.99]], offerCount: [], amazon: [], reviewCount: [] },
     } as unknown as KeepaProduct;
@@ -36,7 +44,8 @@ vi.mock("../keepa/client", async (orig) => {
     available: true,
     async productFinder(selection: Record<string, unknown>) {
       k.selections.push(selection);
-      const asins = FINDER[selection.title as string] ?? [];
+      // Nothing filed under Garden for the hedgehog house.
+      const asins = selection.title === "hedgehog house" && selection.rootCategory ? [] : FINDER[selection.title as string] ?? [];
       return { asins, total: asins.length, tokensUsed: 11, tokensLeft: 900 };
     },
     async lookupByAsins(asins: string[], onResponse?: (m: { tokensConsumed: number }) => void) {
@@ -82,5 +91,24 @@ describe("Niches incumbent check (fake Keepa)", () => {
     expect(k.selections).toHaveLength(2);
     expect(k.lookups).toHaveLength(1);
     expect(r).toMatchObject({ reusedFinder: true, tokensUsed: 0, reused: 6, shape: "contested" });
+  });
+
+  it("too few in the niche's category: the same search on all of Amazon, labelled, with where they're filed", async () => {
+    fake.tables.pl_niches.push({ id: "n2", customer_need: "hedgehog house", search_terms: ["hedgehog house"], categories: ["Garden"], extra: {}, keepa_by_day: null, shape: null });
+    const plan = await nicheCheckPlan("n2");
+    expect(plan).toMatchObject({ estimate: 11 + 50, fallback: 11 });
+    const r = await checkNicheIncumbents("n2");
+    expect(k.selections.map((x) => x.rootCategory ?? null)).toEqual([[11052671], null]);
+    expect(r).toMatchObject({ outside: true, rootCategories: ["Garden"], onNiche: 3, excludedCount: 1, shape: "contested", tokensUsed: 2 * 11 + 4 * 2 });
+    expect(r.incumbents.map((x) => x.asin)).toEqual(["B0HOG00001", "B0HOG00002", "B0HOG00003"]);
+    expect(r.onNicheCategories).toEqual([{ name: "Pet Supplies", count: 2 }, { name: "Home & Kitchen", count: 1 }]);
+    // A rerun keeps the label, and spends nothing.
+    const again = await checkNicheIncumbents("n2", true);
+    expect(again).toMatchObject({ outside: true, tokensUsed: 0, reusedFinder: true });
+  });
+
+  it("enough in the category: no search outside it", async () => {
+    await checkNicheIncumbents("n1");
+    expect(k.selections.every((x) => x.rootCategory)).toBe(true);
   });
 });

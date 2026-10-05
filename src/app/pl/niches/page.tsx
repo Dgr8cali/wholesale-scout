@@ -32,6 +32,7 @@ interface Preview {
 }
 interface Incumbents {
   term: string; terms?: string[]; finderTerms?: string[] | null; found: number; shape: string | null; tokensUsed: number; reused: number; checkedAt: string; rootCategories?: string[];
+  outside?: boolean; onNicheCategories?: { name: string; count: number }[];
   onNiche?: number; excludedCount?: number; excluded?: { asin: string; title: string | null; why: string }[]; candidates?: string[]; finderAt?: string; reusedFinder?: boolean;
   incumbents: { asin: string; title: string | null; brand: string | null; reviews: number | null; price: number | null; monthlySold?: number | null; rank?: number | null; category?: string | null; matchedTerm?: string | null }[];
 }
@@ -357,12 +358,12 @@ function NicheDetail({ n, onChanged }: { n: NicheRow; onChanged: () => void }) {
   };
   const status = (s: string) => act(s, async () => { await api(`/api/pl/niches/${n.id}`, { method: "PATCH", json: { status: s } }); toast.success(s === "new" ? "Reset" : `${s[0].toUpperCase()}${s.slice(1)}`); });
   const check = (rerun: boolean) => act(rerun ? "rerun" : "check", async () => {
-    const plan = await api<{ term: string; terms: string[]; finderTerms: string[]; categories: string[]; estimate: number; balance: number | null; reserve: number; fits: boolean; blocked: string | null; reusing: boolean }>(`/api/pl/niches/${n.id}${rerun ? "?rerun=1" : ""}`);
+    const plan = await api<{ term: string; terms: string[]; finderTerms: string[]; categories: string[]; estimate: number; fallback: number; balance: number | null; reserve: number; fits: boolean; blocked: string | null; reusing: boolean }>(`/api/pl/niches/${n.id}${rerun ? "?rerun=1" : ""}`);
     if (plan.blocked) throw new Error(plan.blocked);
     const where = plan.categories.length ? ` in ${plan.categories.join(", ")}` : " (no Keepa category for this niche: all of Amazon)";
     const q = (t: string[]) => t.map((x) => `"${x}"`).join(", ");
     const how = plan.reusing ? `the last check's products again (no Product Finder call), re-detailing only those not detailed in the last 7 days` : `${plan.finderTerms.length} Product Finder page${plan.finderTerms.length === 1 ? "" : "s"} (${q(plan.finderTerms)})${where}, then the top 25 detailed (ASINs detailed in the last 7 days are reused)`;
-    if (!(await confirm({ title: `${rerun ? "Rerun" : "Check"} incumbents for "${plan.term}"?`, description: `Up to ${plan.estimate} Keepa tokens: ${how}. Only titles with one of ${q(plan.terms)} as a phrase and none of the off-niche words count; the 10 best sellers among them decide the shape. Balance ${plan.balance ?? "?"}, ${plan.reserve} kept in reserve${plan.fits ? "" : ": not enough now, wait for the refill"}.`, confirmLabel: plan.fits ? "Run the check" : "Close" }))) return;
+    if (!(await confirm({ title: `${rerun ? "Rerun" : "Check"} incumbents for "${plan.term}"?`, description: `Up to ${plan.estimate} Keepa tokens: ${how}.${plan.fallback ? ` If fewer than 5 products turn up in ${plan.categories.join(", ")}, the same search runs on all of Amazon (+${plan.fallback} tokens).` : ""} Only titles with one of ${q(plan.terms)} as a phrase and none of the off-niche words count; the 10 best sellers among them decide the shape. Balance ${plan.balance ?? "?"}, ${plan.reserve} kept in reserve${plan.fits ? "" : ": not enough now, wait for the refill"}.`, confirmLabel: plan.fits ? "Run the check" : "Close" }))) return;
     if (!plan.fits) return;
     const r = await api<Incumbents>(`/api/pl/niches/${n.id}`, { method: "POST", json: { action: rerun ? "rerun" : "check" } });
     toast.success(`"${r.term}": ${r.shape ?? "no on-niche sellers"} (${r.tokensUsed} token${r.tokensUsed === 1 ? "" : "s"})`);
@@ -405,6 +406,9 @@ function NicheDetail({ n, onChanged }: { n: NicheRow; onChanged: () => void }) {
         {inc ? (
           <div className="text-xs">
             <p><b>Incumbents for {(inc.terms ?? [inc.term]).map((t) => `“${t}”`).join(", ")}</b>{inc.rootCategories?.length ? ` in ${inc.rootCategories.join(", ")}` : ""}: {inc.shape ? <span className={cn("rounded-full px-1.5 py-px font-semibold", SHAPE_CLS[inc.shape as keyof typeof SHAPE_CLS])}>{inc.shape}</span> : <span className="text-muted-foreground">no on-niche sellers</span>} · {inc.found.toLocaleString("en-GB")} products match{inc.onNiche != null ? `, ${inc.onNiche} on-niche of ${inc.candidates?.length ?? "?"} detailed` : ""} · {inc.tokensUsed} tokens{inc.reused ? `, ${inc.reused} reused` : ""}{inc.reusedFinder ? " (rerun)" : ""} · {new Date(inc.checkedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</p>
+            {inc.outside && <p className="mt-0.5"><span className="rounded-full bg-warn-soft px-1.5 py-px text-[10px] font-semibold text-warn uppercase" title="Fewer than 5 products in the niche's categories: the same search ran on all of Amazon, with the same off-niche rules">found outside {inc.rootCategories?.length ? inc.rootCategories.join(", ") : "its category"}</span></p>}
+            {(inc.onNicheCategories?.length ?? 0) > 0 && <p className="mt-1 flex flex-wrap items-center gap-1"><span className="text-muted-foreground">On-niche products filed under:</span>
+              {inc.onNicheCategories!.map((c) => <span key={c.name} className={cn("rounded-full px-1.5 py-px text-[10px]", inc.rootCategories?.includes(c.name) ? "bg-brand-soft text-brand" : "bg-surface-2 text-ink-2")}>{c.name} · {c.count}</span>)}</p>}
             {inc.onNiche == null && <p className="text-amber-700 dark:text-amber-400">An old check (any word, all of Amazon): rerun it.</p>}
             <table className="mt-1 text-xs"><tbody>{inc.incumbents.map((x) => (
               <tr key={x.asin} className="align-top">

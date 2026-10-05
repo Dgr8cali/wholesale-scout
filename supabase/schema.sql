@@ -1,5 +1,5 @@
 -- Wholesale Scout schema, dumped by scripts/schema-backup.mjs. No data.
--- Dumped 2026-10-05T00:34:10.341Z. Safe to re-run. Restore: npm run schema:restore
+-- Dumped 2026-10-05T00:41:25.686Z. Safe to re-run. Restore: npm run schema:restore
 
 -- @section extensions
 create extension if not exists "pg_cron";
@@ -3687,3 +3687,4 @@ insert into schema_migrations (name) values ('20261005000100_pl_niches_paging.sq
 insert into schema_migrations (name) values ('20261005000200_pl_niche_categories.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261005000300_pl_niches_reset_offniche_checks.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261005000400_pl_niches_term_conversion.sql') on conflict do nothing;
+insert into schema_migrations (name) values ('20261005000500_pl_niches_reset_hedgehog_house.sql') on conflict do nothing;

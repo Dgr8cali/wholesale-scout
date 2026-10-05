@@ -347,7 +347,7 @@ const CHECK_COLS = "search_terms, customer_need, categories, extra, keepa_by_day
 export async function nicheCheckPlan(id: string, rerun = false) {
   const n = must(await db().from("pl_niches").select(CHECK_COLS).eq("id", id).single(), "niche") as CheckNiche;
   const i = checkInputs(n, rerun);
-  return { term: i.term, terms: i.terms, categories: i.rootNames, ...(await termCheckPlan(i.reuse, i.terms)) };
+  return { term: i.term, terms: i.terms, categories: i.rootNames, ...(await termCheckPlan(i.reuse, i.terms, i.rootCategoryIds.length > 0)) };
 }
 
 /**

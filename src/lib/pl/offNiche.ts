@@ -115,6 +115,8 @@ export function finderTerms(terms: string[], max = 3): string[] {
 export interface IncumbentCandidate {
   asin: string; title: string | null; brand: string | null; reviews: number | null; price: number | null;
   rank: number | null; monthlySold: number | null; category: string | null;
+  /** Keepa's root category (where Amazon files it). */
+  rootCategory?: string | null;
   /** The search term its title matched (on-niche products). */
   matchedTerm?: string | null;
 }
@@ -140,7 +142,11 @@ export function classifyIncumbents(products: IncumbentCandidate[], terms: string
   const bySales = [...kept].sort((a, b) =>
     (b.monthlySold ?? -1) - (a.monthlySold ?? -1) || (a.rank ?? Number.MAX_SAFE_INTEGER) - (b.rank ?? Number.MAX_SAFE_INTEGER));
   const top = bySales.slice(0, take);
-  return { top, shape: top.length ? shapeOf(top.map((x) => x.reviews)) : null, onNiche: kept.length, excluded };
+  // Where Amazon files the on-niche products (root category, else leaf), most first.
+  const tally = new Map<string, number>();
+  for (const p of kept) { const c = p.rootCategory ?? p.category; if (c) tally.set(c, (tally.get(c) ?? 0) + 1); }
+  const categories = [...tally].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+  return { top, shape: top.length ? shapeOf(top.map((x) => x.reviews)) : null, onNiche: kept.length, excluded, categories };
 }
 
 /** One a line or comma, lower case, no repeats. */

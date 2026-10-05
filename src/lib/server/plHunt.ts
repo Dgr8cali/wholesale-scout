@@ -792,6 +792,8 @@ export const TERM_CANDIDATES = 25;
 export const TERM_FINDER_MAX = 3;
 /** The finder pages (one a distinct search term) and up to 25 details. */
 export const termCheckTokens = (finderQueries: number) => finderQueries * DIRECT_PAGE_TOKENS + TERM_CANDIDATES * DETAIL_TOKENS_PER_ASIN;
+/** Fewer than this many found in the niche's categories: the same search again with no category (Amazon files some niches elsewhere). */
+export const TERM_MIN_IN_CATEGORY = 5;
 /** A rerun within this long reuses the finder's list (and the 7-day snapshots): no finder call. */
 export const TERM_REUSE_MS = 7 * 86_400_000;
 let termCheckRunning = false;
@@ -807,20 +809,21 @@ export function termIncumbentSelection(term: string, rootCategoryIds: number[] =
   };
 }
 
-export interface TermReuse { asins: string[]; at: string; found?: number }
+export interface TermReuse { asins: string[]; at: string; found?: number; outside?: boolean }
 
 /** The previous check's finder list, when it's under 7 days old and was for the same terms. */
-export function reusable(prev: { candidates?: string[]; finderAt?: string; checkedAt?: string; found?: number; terms?: string[]; term?: string } | null | undefined, terms: string[]): TermReuse | null {
+export function reusable(prev: { candidates?: string[]; finderAt?: string; checkedAt?: string; found?: number; terms?: string[]; term?: string; outside?: boolean } | null | undefined, terms: string[]): TermReuse | null {
   if (!prev?.candidates?.length) return null;
   const same = (prev.terms ?? (prev.term ? [prev.term] : [])).join("|").toLowerCase() === terms.join("|").toLowerCase();
-  return same ? { asins: prev.candidates, at: prev.finderAt ?? prev.checkedAt ?? "", found: prev.found } : null;
+  return same ? { asins: prev.candidates, at: prev.finderAt ?? prev.checkedAt ?? "", found: prev.found, outside: prev.outside } : null;
 }
 
 /**
  * What a check would cost now, and whether it may run (balance, reserve, nothing else on Keepa). A
  * rerun with the finder's list from the last 7 days costs only the snapshots that have aged out.
+ * `fallback`: the extra finder pages if the niche's categories have too few (rooted checks only).
  */
-export async function termCheckPlan(reuse?: TermReuse | null, terms: string[] = []): Promise<{ estimate: number; balance: number | null; reserve: number; fits: boolean; blocked: string | null; reusing: boolean; finderTerms: string[] }> {
+export async function termCheckPlan(reuse?: TermReuse | null, terms: string[] = [], rooted = false): Promise<{ estimate: number; fallback: number; balance: number | null; reserve: number; fits: boolean; blocked: string | null; reusing: boolean; finderTerms: string[] }> {
   const keepa = getKeepa();
   const balance = keepa.available ? (await keepa.tokenStatus().catch(() => null))?.tokensLeft ?? null : null;
   let blocked: string | null = null;
@@ -833,7 +836,9 @@ export async function termCheckPlan(reuse?: TermReuse | null, terms: string[] = 
   const reusing = !!reuse && Date.now() - Date.parse(reuse.at) < TERM_REUSE_MS && reuse.asins.length > 0;
   const ft = finderTerms(terms, TERM_FINDER_MAX);
   const estimate = reusing ? (reuse!.asins.length - (await freshHuntAsins(reuse!.asins)).size) * DETAIL_TOKENS_PER_ASIN : termCheckTokens(Math.max(1, ft.length));
-  return { estimate, balance, reserve: TOKEN_RESERVE, fits: estimate === 0 || (balance != null && balance - TOKEN_RESERVE >= estimate), blocked, reusing, finderTerms: ft };
+  const fallback = !reusing && rooted ? Math.max(1, ft.length) * DIRECT_PAGE_TOKENS : 0;
+  const most = estimate + fallback;
+  return { estimate, fallback, balance, reserve: TOKEN_RESERVE, fits: most === 0 || (balance != null && balance - TOKEN_RESERVE >= most), blocked, reusing, finderTerms: ft };
 }
 
 /**
@@ -843,35 +848,49 @@ export async function termCheckPlan(reuse?: TermReuse | null, terms: string[] = 
  * rerun reuses the finder's list too); then only titles with one of the terms as a phrase and none
  * of the off-niche words count, and the 10 best sellers among them by monthly sold (else sales
  * rank) decide the shape: open (nobody over 1,000 reviews), contested (one), dominated (two, or one
- * over 5,000). One at a time, never over the estimate + 10%.
+ * over 5,000). When the niche's categories hold fewer than 5 products, the same search runs again
+ * with no category (Amazon files hedgehog houses under Pet Supplies, not Garden): the result says
+ * it was found outside them. One at a time, never over the estimate (and that fallback) + 10%.
  */
 export async function termIncumbentCheck(termOrTerms: string | string[], o: { rootCategoryIds?: number[]; rootNames?: string[]; pet?: boolean; offNiche?: string[]; reuse?: TermReuse | null } = {}) {
   const terms = [...new Set((Array.isArray(termOrTerms) ? termOrTerms : [termOrTerms]).map((t) => t.trim()).filter(Boolean))];
   const term = terms[0] ?? "";
-  const plan = await termCheckPlan(o.reuse, terms);
+  const rooted = (o.rootCategoryIds?.length ?? 0) > 0;
+  const plan = await termCheckPlan(o.reuse, terms, rooted);
   if (plan.blocked) throw new Error(plan.blocked);
-  if (!plan.fits) throw new Error(`The check needs up to ${plan.estimate} tokens: ${plan.balance ?? "?"} in the balance, ${plan.reserve} kept in reserve. Wait for the refill.`);
+  if (!plan.fits) throw new Error(`The check needs up to ${plan.estimate + plan.fallback} tokens: ${plan.balance ?? "?"} in the balance, ${plan.reserve} kept in reserve. Wait for the refill.`);
   const keepa = getKeepa() as Finder;
-  const cap = spendCap(Math.max(plan.estimate, 1));
+  const cap = spendCap(Math.max(plan.estimate + plan.fallback, 1));
   termCheckRunning = true;
   let spent = 0;
   try {
-    let candidates: string[], found: number, finderAt: string;
+    let candidates: string[], found: number, finderAt: string, outside = false;
     if (plan.reusing) {
-      candidates = o.reuse!.asins; found = o.reuse!.found ?? candidates.length; finderAt = o.reuse!.at;
+      candidates = o.reuse!.asins; found = o.reuse!.found ?? candidates.length; finderAt = o.reuse!.at; outside = !!o.reuse!.outside;
     } else {
-      const lists: string[][] = [];
       found = 0;
-      for (const t of plan.finderTerms) {
-        const r = await keepa.productFinder({ ...termIncumbentSelection(t, o.rootCategoryIds), perPage: DIRECT_PAGE, page: 0 });
-        spent += r.tokensUsed;
-        found += r.total;
-        lists.push(r.asins.map((a) => a.toUpperCase()));
-      }
+      const search = async (roots: number[]) => {
+        const lists: string[][] = [];
+        for (const t of plan.finderTerms) {
+          const r = await keepa.productFinder({ ...termIncumbentSelection(t, roots), perPage: DIRECT_PAGE, page: 0 });
+          spent += r.tokensUsed;
+          found += r.total;
+          lists.push(r.asins.map((a) => a.toUpperCase()));
+        }
+        return lists;
+      };
       // Each term's best sellers in turn, so every term gets its share of the 25.
       const seen = new Set<string>();
-      for (let i = 0; seen.size < TERM_CANDIDATES && lists.some((l) => i < l.length); i++) {
-        for (const l of lists) if (i < l.length && seen.size < TERM_CANDIDATES) seen.add(l[i]);
+      const take = (lists: string[][]) => {
+        for (let i = 0; seen.size < TERM_CANDIDATES && lists.some((l) => i < l.length); i++) {
+          for (const l of lists) if (i < l.length && seen.size < TERM_CANDIDATES) seen.add(l[i]);
+        }
+      };
+      take(await search(o.rootCategoryIds ?? []));
+      // Too few in the niche's categories: Amazon files it elsewhere. The same search on all of Amazon.
+      if (rooted && seen.size < TERM_MIN_IN_CATEGORY) {
+        outside = true;
+        take(await search([]));
       }
       candidates = [...seen]; finderAt = new Date().toISOString();
     }
@@ -895,11 +914,12 @@ export async function termIncumbentCheck(termOrTerms: string | string[], o: { ro
     const fresh = await freshHuntAsins(candidates);
     const products: IncumbentCandidate[] = candidates.map((a) => fresh.get(a)).filter((x): x is HuntAsin => !!x).map((x) => ({
       asin: x.asin, title: x.title, brand: x.brand, reviews: x.review_count, price: x.price, rank: x.rank,
-      monthlySold: x.bought_past_month, category: x.leaf_category ?? x.root_category ?? null,
+      monthlySold: x.bought_past_month, category: x.leaf_category ?? x.root_category ?? null, rootCategory: x.root_category ?? null,
     }));
     const c = classifyIncumbents(products, terms, { pet: o.pet, words: o.offNiche });
     return {
-      term, terms, finderTerms: plan.reusing ? null : plan.finderTerms, rootCategories: o.rootNames ?? [], found, shape: c.shape, onNiche: c.onNiche, incumbents: c.top,
+      term, terms, finderTerms: plan.reusing ? null : plan.finderTerms, rootCategories: o.rootNames ?? [], outside, onNicheCategories: c.categories,
+      found, shape: c.shape, onNiche: c.onNiche, incumbents: c.top,
       excluded: c.excluded.slice(0, 15).map((x) => ({ asin: x.asin, title: x.title, why: x.why })), excludedCount: c.excluded.length,
       candidates, finderAt, reusedFinder: plan.reusing, tokensUsed: spent, reused: candidates.filter((a) => cached.has(a)).length, checkedAt: new Date().toISOString(),
     };
