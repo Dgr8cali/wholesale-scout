@@ -9,6 +9,8 @@ export type FieldMap = Record<string, PlField>;
 
 export interface CandidateRow {
   id: string; name: string; niche_keyword: string | null; category: string; status: string; notes: string | null;
+  /** Parked: shelved with a reason, and when. */
+  park_reason?: string | null; parked_at?: string | null; parked_from?: string | null;
   token_cost: number; refreshed_at: string | null; created_at: string; updated_at: string; fields: FieldMap; waivers: Waiver[];
   /** The chosen quote's landed cost per unit, the listing once live, and the next launch step. */
   chosen_landed?: number | null; listing_asin?: string | null; launch?: { next: string | null; done: number };
@@ -25,7 +27,7 @@ export interface CandidateDetail {
 
 export interface ListResponse { candidates: CandidateRow[]; settings: Settings; card: RateCard; adsCpc: number }
 
-export const STATUSES = ["draft", "researching", "samples", "dropped", "launched"] as const;
+export const STATUSES = ["draft", "researching", "samples", "parked", "dropped", "launched"] as const;
 
 export const valuesOf = (m: FieldMap): Fields => Object.fromEntries(Object.entries(m).map(([k, v]) => [k, v.value]));
 

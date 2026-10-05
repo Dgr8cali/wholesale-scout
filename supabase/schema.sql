@@ -1,5 +1,5 @@
 -- Wholesale Scout schema, dumped by scripts/schema-backup.mjs. No data.
--- Dumped 2026-10-05T00:41:25.686Z. Safe to re-run. Restore: npm run schema:restore
+-- Dumped 2026-10-05T01:18:21.659Z. Safe to re-run. Restore: npm run schema:restore
 
 -- @section extensions
 create extension if not exists "pg_cron";
@@ -1196,7 +1196,10 @@ create table if not exists "pl_candidates" (
   "updated_at" timestamp with time zone default now() not null,
   "listing_asin" text,
   "chosen_quote" uuid,
-  "chosen_landed" numeric
+  "chosen_landed" numeric,
+  "park_reason" text,
+  "parked_at" timestamp with time zone,
+  "parked_from" text
 );
 alter table "pl_candidates" add column if not exists "id" uuid default gen_random_uuid();
 alter table "pl_candidates" add column if not exists "name" text;
@@ -1212,6 +1215,9 @@ alter table "pl_candidates" add column if not exists "updated_at" timestamp with
 alter table "pl_candidates" add column if not exists "listing_asin" text;
 alter table "pl_candidates" add column if not exists "chosen_quote" uuid;
 alter table "pl_candidates" add column if not exists "chosen_landed" numeric;
+alter table "pl_candidates" add column if not exists "park_reason" text;
+alter table "pl_candidates" add column if not exists "parked_at" timestamp with time zone;
+alter table "pl_candidates" add column if not exists "parked_from" text;
 alter table "pl_candidates" enable row level security;
 
 create table if not exists "pl_category_tree" (
@@ -2871,7 +2877,7 @@ do $$ begin
 end $$;
 do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'pl_candidates_status_check' and conrelid = '"pl_candidates"'::regclass) then
-    alter table "pl_candidates" add constraint "pl_candidates_status_check" CHECK ((status = ANY (ARRAY['draft'::text, 'researching'::text, 'samples'::text, 'dropped'::text, 'launched'::text])));
+    alter table "pl_candidates" add constraint "pl_candidates_status_check" CHECK ((status = ANY (ARRAY['draft'::text, 'researching'::text, 'samples'::text, 'dropped'::text, 'launched'::text, 'parked'::text])));
   end if;
 end $$;
 do $$ begin
@@ -3688,3 +3694,4 @@ insert into schema_migrations (name) values ('20261005000200_pl_niche_categories
 insert into schema_migrations (name) values ('20261005000300_pl_niches_reset_offniche_checks.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261005000400_pl_niches_term_conversion.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261005000500_pl_niches_reset_hedgehog_house.sql') on conflict do nothing;
+insert into schema_migrations (name) values ('20261005000600_pl_candidates_parked.sql') on conflict do nothing;

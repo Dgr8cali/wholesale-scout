@@ -42,10 +42,13 @@ function Candidates() {
   const select = useCallback((id: string | null) => router.replace(id ? `/pl/candidates?c=${id}` : "/pl/candidates", { scroll: false }), [router]);
 
   useEffect(() => {
-    if (list && !selected && list.candidates.length) select(list.candidates[0].id);
+    if (list && !selected && list.candidates.length) select((list.candidates.find((c) => c.status !== "parked") ?? list.candidates[0]).id);
   }, [list, selected, select]);
 
-  const scored = useMemo(() => (list ? list.candidates.map((c) => ({ c, ev: evaluate(withAdsDefaults(valuesOf(c.fields), list.adsCpc), c.category, list.settings, list.card, new Date(), c.waivers ?? []) })) : []), [list]);
+  const all = useMemo(() => (list ? list.candidates.map((c) => ({ c, ev: evaluate(withAdsDefaults(valuesOf(c.fields), list.adsCpc), c.category, list.settings, list.card, new Date(), c.waivers ?? []) })) : []), [list]);
+  // Parked candidates sit in their own collapsed section, newest parked first.
+  const scored = all.filter((x) => x.c.status !== "parked");
+  const parked = all.filter((x) => x.c.status === "parked").sort((a, b) => (b.c.parked_at ?? "").localeCompare(a.c.parked_at ?? ""));
 
   if (error) return <ErrorState title="Couldn't load Private label" message={error} onRetry={load} />;
   if (!list) return <div className="grid gap-5 lg:grid-cols-[260px_1fr]"><Skeleton className="h-80 rounded-xl" /><Skeleton className="h-[70vh] rounded-xl" /></div>;
@@ -63,7 +66,7 @@ function Candidates() {
           <div className="panel p-3">
             <h2 className="mb-2 text-sm font-bold">Candidates</h2>
             {!scored.length ? (
-              <p className="rounded-lg bg-surface-2 px-3 py-2.5 text-xs text-muted-foreground">No candidates yet. Add one to start scoring.</p>
+              <p className="rounded-lg bg-surface-2 px-3 py-2.5 text-xs text-muted-foreground">{parked.length ? "Every candidate is parked." : "No candidates yet. Add one to start scoring."}</p>
             ) : (
               <div className="flex max-h-[60vh] flex-col gap-1 overflow-auto">
                 {scored.map(({ c, ev }) => (
@@ -83,6 +86,20 @@ function Candidates() {
                   </button>
                 ))}
               </div>
+            )}
+            {parked.length > 0 && (
+              <details className="mt-2 border-t pt-2" open={parked.some((x) => x.c.id === selected) || undefined}>
+                <summary className="cursor-pointer text-xs font-semibold text-muted-foreground">Parked ({parked.length})</summary>
+                <div className="mt-1 flex max-h-[40vh] flex-col gap-1 overflow-auto">
+                  {parked.map(({ c }) => (
+                    <button key={c.id} type="button" onClick={() => select(c.id)}
+                      className={cn("flex w-full flex-col gap-0.5 rounded-lg border border-transparent px-2.5 py-1.5 text-left hover:bg-surface-2", c.id === selected && "border-brand bg-brand-soft hover:bg-brand-soft")}>
+                      <span className="truncate text-sm text-muted-foreground">{c.name}</span>
+                      <span className="line-clamp-2 text-[11px] text-muted-foreground italic">{c.park_reason ?? ""}{c.parked_at ? ` · ${new Date(c.parked_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : ""}</span>
+                    </button>
+                  ))}
+                </div>
+              </details>
             )}
             <Button className="mt-2 w-full" onClick={() => setAdding(true)}><PlusIcon /> New candidate</Button>
           </div>

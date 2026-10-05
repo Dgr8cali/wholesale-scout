@@ -26,15 +26,15 @@ export const STEP_KEYS = LAUNCH_STEPS.map((s) => s.key);
 
 export interface LaunchStep { step: string; done: boolean; done_on: string | null; note: string | null; spend: number | null }
 
-export type PlStatus = "draft" | "researching" | "samples" | "dropped" | "launched";
+export type PlStatus = "draft" | "researching" | "samples" | "parked" | "dropped" | "launched";
 const ORDER: PlStatus[] = ["draft", "researching", "samples", "launched"];
 
 /**
  * The status the checklist implies: listing live → launched; samples ordered → samples; anything
- * done → researching. It only moves forwards, and never off "dropped".
+ * done → researching. It only moves forwards, and never off "dropped" or "parked".
  */
 export function statusFromSteps(current: PlStatus, steps: LaunchStep[]): PlStatus {
-  if (current === "dropped") return current;
+  if (current === "dropped" || current === "parked") return current;
   const done = new Set(steps.filter((s) => s.done).map((s) => s.step));
   const implied: PlStatus = done.has("listing_live") ? "launched" : done.has("samples_ordered") ? "samples" : done.size ? "researching" : "draft";
   return ORDER.indexOf(implied) > ORDER.indexOf(current) ? implied : current;

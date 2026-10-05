@@ -1,7 +1,7 @@
 # Wholesale Scout: status
 
 Read this first in a new session. Keep it current: every commit that changes a feature updates
-it (what's built, the backlog, the rough edges). Last updated: 5 Oct 2026 (Niches → Create candidate: seeded with the check's ASINs, the best-converting term and the average price).
+it (what's built, the backlog, the rough edges). Last updated: 5 Oct 2026 (Candidates: notes at the top, and a Parked status with a reason).
 
 Wholesale Scout is a single-user Amazon UK seller's workbench: Next.js 16 (App Router, `proxy.ts`
 password gate), Supabase (Postgres, RLS on, service-role access from the server only), Vercel
@@ -29,7 +29,8 @@ Opportunity Explorer niches and runs manual rank checks.
 **Private label: launch your own product.** Candidates are scored through Gatekeeper's eight gates,
 a 10-line scorecard and a verdict, with Keepa filling Gates 0–2, Opportunity Explorer captures
 (via the extension) filling Gates 3 and 5, the fee engine Gate 6, ads-per-unit derived from the
-Ads CPC, and waivers per check or gate. Niche Hunt finds niches that already pass Gates 0–1: Direct
+Ads CPC, and waivers per check or gate; each has autosaved notes at the top and can be parked
+(shelved with a reason, in a collapsed Parked section; unpark restores its status). Niche Hunt finds niches that already pass Gates 0–1: Direct
 mode (one filtered Product Finder query per category, then detail grouped by leaf, an incumbent
 check per niche with 3+ qualifying, off-niche incumbents by Keepa category) and Leaf mode (size
 each leaf, then detail), with a hard token cap (estimate + 10%). Niche Import (Private label → Niches) reads Opportunity Explorer category

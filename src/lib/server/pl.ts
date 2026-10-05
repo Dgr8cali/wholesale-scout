@@ -24,7 +24,7 @@ const DAY = 86_400_000;
 /** A snapshot this recent is reused instead of asking Keepa again (the wholesale default). */
 const REUSE_MS = 7 * DAY;
 
-export const STATUSES = ["draft", "researching", "samples", "dropped", "launched"] as const;
+export const STATUSES = ["draft", "researching", "samples", "parked", "dropped", "launched"] as const;
 export type PlStatus = (typeof STATUSES)[number];
 /** poe_derived: worked out from a capture rather than read off it ("POE (derived)"). */
 export type FieldSource = "keepa" | "poe" | "poe_derived" | "manual" | "fees" | "quote";
@@ -33,6 +33,8 @@ export interface PlCandidate {
   id: string; name: string; niche_keyword: string | null; category: string; status: PlStatus; notes: string | null;
   token_cost: number; keepa_by_day: TokensByDay; refreshed_at: string | null; created_at: string; updated_at: string;
   listing_asin?: string | null; chosen_quote?: string | null; chosen_landed?: number | null;
+  /** Parked: shelved with a reason (and the status to go back to). */
+  park_reason?: string | null; parked_at?: string | null; parked_from?: string | null;
 }
 export interface PlField { value: string; source: FieldSource; updated_at: string }
 export interface PoeSnapshot extends Omit<PoeExtract, "niche_id" | "niche_title"> { id: string; candidate_id: string | null; niche_id: string | null; niche_title: string | null; captured_at: string }
@@ -178,7 +180,11 @@ export async function createCandidate(input: { name: string; niche_keyword?: str
   return row;
 }
 
-export async function updateCandidate(id: string, patch: Partial<Pick<PlCandidate, "name" | "niche_keyword" | "category" | "status" | "notes">>) {
+/**
+ * Name, niche keyword, category, status, notes, park reason. Parking needs a reason and remembers
+ * the status it left; any other status clears the parking ("unpark" goes back to that status).
+ */
+export async function updateCandidate(id: string, patch: Partial<Pick<PlCandidate, "name" | "niche_keyword" | "category" | "status" | "notes" | "park_reason">> & { unpark?: boolean }) {
   const upd: Record<string, unknown> = { updated_at: now() };
   if (patch.name != null) upd.name = String(patch.name).trim().slice(0, 120) || "Untitled";
   if (patch.niche_keyword !== undefined) upd.niche_keyword = patch.niche_keyword?.trim() || null;
@@ -186,6 +192,23 @@ export async function updateCandidate(id: string, patch: Partial<Pick<PlCandidat
   if (patch.status != null) {
     if (!STATUSES.includes(patch.status)) throw new Error(`Status must be one of ${STATUSES.join(", ")}`);
     upd.status = patch.status;
+  }
+  const cur = patch.status != null || patch.unpark || patch.park_reason !== undefined
+    ? must(await db().from("pl_candidates").select("status, parked_from").eq("id", id).single(), "candidate") as { status: PlStatus; parked_from: string | null }
+    : null;
+  if (patch.unpark && cur?.status === "parked") {
+    upd.status = STATUSES.includes(cur.parked_from as PlStatus) && cur.parked_from !== "parked" ? cur.parked_from : "researching";
+  }
+  if (upd.status === "parked") {
+    const reason = patch.park_reason?.trim();
+    if (cur?.status !== "parked") {
+      if (!reason) throw new Error("Give a reason to park it");
+      Object.assign(upd, { park_reason: reason.slice(0, 500), parked_at: now(), parked_from: cur?.status ?? null });
+    } else if (reason) upd.park_reason = reason.slice(0, 500);
+  } else if (upd.status != null) {
+    Object.assign(upd, { park_reason: null, parked_at: null, parked_from: null });
+  } else if (patch.park_reason !== undefined && cur?.status === "parked" && patch.park_reason?.trim()) {
+    upd.park_reason = patch.park_reason.trim().slice(0, 500);
   }
   if (patch.notes !== undefined) upd.notes = patch.notes || null;
   must(await db().from("pl_candidates").update(upd).eq("id", id), "update candidate");

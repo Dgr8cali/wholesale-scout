@@ -15,7 +15,7 @@ import { CandidateExtras } from "./Extras";
 import { valuesOf, type ListResponse } from "./types";
 
 const MULT_CLS = { pass: "text-pass", warn: "text-warn", fail: "text-fail" } as const;
-const STATUS_RANK: Record<string, number> = { draft: 0, researching: 1, samples: 2, launched: 3, dropped: 4 };
+const STATUS_RANK: Record<string, number> = { draft: 0, researching: 1, samples: 2, launched: 3, parked: 4, dropped: 5 };
 
 /**
  * Private label → Quotes or Launch: every candidate with its status, verdict, quotes, chosen landed
@@ -39,7 +39,7 @@ export function PlOverview({ mode }: { mode: "quotes" | "launch" }) {
     const landed = c.chosen_landed ?? (c.fields.landed?.value ? Number(c.fields.landed.value) : null);
     const inLaunch = ev.v.title === "Order samples" || c.status === "samples" || c.status === "launched";
     return { c, ev, sell, landed, m: priceMultiple(sell, landed), quotes: counts[c.id] ?? 0, inLaunch };
-  }).filter((r) => (mode === "launch" && !all ? r.inLaunch : all || r.c.status !== "dropped")), [list, counts, mode, all]);
+  }).filter((r) => (mode === "launch" && !all ? r.inLaunch : all || (r.c.status !== "dropped" && r.c.status !== "parked"))), [list, counts, mode, all]);
   const s = useSortable(`pl.${mode}`, rows, {
     name: { value: (r) => r.c.name }, status: { value: (r) => STATUS_RANK[r.c.status] ?? 9, kind: "number" }, verdict: { value: (r) => r.ev.sc.total, kind: "number" },
     quotes: { value: (r) => r.quotes, kind: "number" }, landed: { value: (r) => r.landed, kind: "number" }, multiple: { value: (r) => r.m?.multiple ?? null, kind: "number" },

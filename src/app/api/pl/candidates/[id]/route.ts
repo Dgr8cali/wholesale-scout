@@ -9,11 +9,15 @@ export const GET = handle(async (_req: NextRequest, ctx: Ctx) => {
   return c ? Response.json(c) : Response.json({ error: "No such candidate" }, { status: 404 });
 });
 
-/** Name, niche keyword, category, status, notes; or a new ASIN list (refresh to fetch them). */
+/** Name, niche keyword, category, status, notes, park_reason (parking needs one), unpark; or a new ASIN list (refresh to fetch them). */
 export const PATCH = handle(async (req: NextRequest, ctx: Ctx) => {
   const { id } = await ctx.params;
-  const b = (await req.json().catch(() => ({}))) as { name?: string; niche_keyword?: string | null; category?: string; status?: PlStatus; notes?: string | null; asins?: string };
-  await updateCandidate(id, b);
+  const b = (await req.json().catch(() => ({}))) as { name?: string; niche_keyword?: string | null; category?: string; status?: PlStatus; notes?: string | null; park_reason?: string | null; unpark?: boolean; asins?: string };
+  try {
+    await updateCandidate(id, b);
+  } catch (e) {
+    return Response.json({ error: (e as Error).message }, { status: 400 });
+  }
   if (b.asins != null) await setAsins(id, parseAsins(b.asins));
   return Response.json({ ok: true });
 });

@@ -36,7 +36,7 @@ export function Workspace({ id, settings, card, adsCpc, onChanged, onDeleted }: 
   /** The CPC the ads-per-unit defaults use (Settings → Ads). */
   adsCpc: number;
   /** The list re-scores as you type. */
-  onChanged: (id: string, patch: { fields?: FieldMap; name?: string; status?: string; refreshed_at?: string | null; category?: string; waivers?: Waiver[] }) => void;
+  onChanged: (id: string, patch: { fields?: FieldMap; name?: string; status?: string; refreshed_at?: string | null; category?: string; waivers?: Waiver[]; notes?: string | null; park_reason?: string | null; parked_at?: string | null }) => void;
   onDeleted: (id: string) => void;
 }) {
   const [data, setData] = useState<CandidateDetail | null>(null);
@@ -91,8 +91,16 @@ export function Workspace({ id, settings, card, adsCpc, onChanged, onDeleted }: 
   const patch = async (p: Record<string, unknown>, msg?: string) => {
     try {
       await api(`/api/pl/candidates/${id}`, { method: "PATCH", json: p });
-      setData((d) => d && { ...d, candidate: { ...d.candidate, ...(p as object) } });
-      onChanged(id, p as { name?: string });
+      if (p.status != null || p.unpark || p.park_reason !== undefined) {
+        // Parking and unparking are decided on the server (the reason, the status to go back to).
+        const d = await api<CandidateDetail>(`/api/pl/candidates/${id}`);
+        setData((x) => x && { ...x, candidate: d.candidate });
+        const { status, park_reason, parked_at } = d.candidate;
+        onChanged(id, { status, park_reason, parked_at });
+      } else {
+        setData((d) => d && { ...d, candidate: { ...d.candidate, ...(p as object) } });
+        onChanged(id, p as { name?: string });
+      }
       if (msg) toast.success(msg);
     } catch (e) {
       toast.error((e as Error).message);
@@ -199,6 +207,15 @@ function Header({ data, ev, card, busy, onRefresh, onPatch }: {
   data: CandidateDetail; ev: Evaluation; card: RateCard; busy: boolean; onRefresh: () => void; onPatch: (p: Record<string, unknown>, msg?: string) => Promise<void>;
 }) {
   const c = data.candidate;
+  const { prompt } = useDialogs();
+  const park = async (current?: string | null) => {
+    const reason = await prompt({
+      title: current ? "Change the reason it's parked" : `Park "${c.name}"?`,
+      description: "Shelved, not deleted: it moves to Parked on the list, keeps every gate, quote and note, and Unpark puts it back where it was.",
+      label: "Why (e.g. waiting for Q1 prices; supplier MOQ too high for now)", defaultValue: current ?? "", confirmLabel: current ? "Save" : "Park it",
+    });
+    if (reason) await onPatch(current ? { park_reason: reason } : { status: "parked", park_reason: reason }, current ? "Reason saved" : "Parked");
+  };
   const [name, setName] = useState(c.name);
   const [niche, setNiche] = useState(c.niche_keyword ?? "");
   const [asinText, setAsinText] = useState(data.asins.map((a) => a.asin).join("\n"));
@@ -207,6 +224,15 @@ function Header({ data, ev, card, busy, onRefresh, onPatch }: {
   const sc = ev.sc;
   return (
     <div className="panel flex flex-col gap-3 p-4">
+      {c.status === "parked" && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-warn bg-warn-soft px-3 py-2 text-sm">
+          <b className="text-warn">Parked</b>
+          <span className="min-w-0 flex-1">{c.park_reason || "No reason given"}{c.parked_at && <span className="text-muted-foreground"> · since {new Date(c.parked_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>}</span>
+          <Button size="xs" variant="ghost" onClick={() => park(c.park_reason ?? "")}>Edit reason</Button>
+          <Button size="xs" variant="outline" onClick={() => onPatch({ unpark: true }, "Unparked")}>Unpark</Button>
+        </div>
+      )}
+      <NotesBox key={c.id} initial={c.notes ?? ""} onSave={(notes) => onPatch({ notes })} />
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-baseline gap-4">
           <div className="flex flex-col items-end leading-tight"><span className="num font-heading text-2xl font-bold">{ev.passed}<small className="text-sm font-medium text-muted-foreground">/8</small></span><span className="text-[10.5px] tracking-wide text-muted-foreground uppercase">gates clear</span></div>
@@ -228,7 +254,7 @@ function Header({ data, ev, card, busy, onRefresh, onPatch }: {
             {cats.map((o) => <NativeSelectOption key={o.name} value={o.name}>{o.name} — {o.rates}</NativeSelectOption>)}
           </NativeSelect></label>
         <label className="space-y-1.5"><span className="field-label">Status</span>
-          <NativeSelect className="w-full" value={c.status} onChange={(e) => onPatch({ status: e.target.value })}>
+          <NativeSelect className="w-full" value={c.status} onChange={(e) => (e.target.value === "parked" ? park() : onPatch({ status: e.target.value }))}>
             {STATUSES.map((s) => <NativeSelectOption key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</NativeSelectOption>)}
           </NativeSelect></label>
       </div>
@@ -245,6 +271,32 @@ function Header({ data, ev, card, busy, onRefresh, onPatch }: {
         ) : <AsinTable data={data} />}
       </div>
     </div>
+  );
+}
+
+/** Free-text notes at the top of the candidate: saved a moment after you stop typing, and on leaving the box. */
+function NotesBox({ initial, onSave }: { initial: string; onSave: (notes: string | null) => Promise<void> }) {
+  const [text, setText] = useState(initial);
+  const [state, setState] = useState<"saved" | "typing" | "saving">("saved");
+  const saved = useRef(initial);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flush = async (v: string) => {
+    if (timer.current) clearTimeout(timer.current);
+    if (v === saved.current) { setState("saved"); return; }
+    setState("saving");
+    await onSave(v.trim() ? v : null);
+    saved.current = v;
+    setState("saved");
+  };
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+  return (
+    <label className="block space-y-1">
+      <span className="flex items-center gap-2"><span className="field-label">Notes</span>
+        <span className="text-[11px] text-muted-foreground">{state === "saving" ? "Saving…" : state === "typing" ? "Editing" : text ? "Saved" : ""}</span></span>
+      <Textarea rows={2} className="text-sm" value={text} placeholder="Anything worth remembering about this candidate: supplier leads, doubts, what to check next"
+        onChange={(e) => { const v = e.target.value; setText(v); setState("typing"); if (timer.current) clearTimeout(timer.current); timer.current = setTimeout(() => { void flush(v); }, 1000); }}
+        onBlur={() => { void flush(text); }} />
+    </label>
   );
 }
 

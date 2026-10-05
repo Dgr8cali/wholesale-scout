@@ -6,6 +6,7 @@ const done = (step: string, spend: number | null = null): LaunchStep => ({ step,
 describe("launch checklist", () => {
   it("status follows the steps, forwards only, never off dropped", () => {
     expect(statusFromSteps("draft", [])).toBe("draft");
+    expect(statusFromSteps("parked", [done("trademark_filed")])).toBe("parked");
     expect(statusFromSteps("draft", [done("trademark_filed")])).toBe("researching");
     expect(statusFromSteps("researching", [done("samples_ordered")])).toBe("samples");
     expect(statusFromSteps("samples", [done("samples_ordered"), done("listing_live")])).toBe("launched");
