@@ -64,12 +64,12 @@ Open a niche for its actions:
 
 - **Shortlist**, **Dismiss** (and **Reset**). Tick several rows for **Shortlist** or **Dismiss** in bulk.
 - **Notes**: saved when you click away.
-- **Check incumbents (Keepa)**: who already sells the niche's first search term, on-niche only.
-  - **In the niche's category.** One Product Finder page of best sellers in the Keepa root category of each category the niche came from (Sports & Outdoors, Pet Supplies and so on), with the term's words in their titles. The top 25 are detailed for title, reviews and monthly sales.
-  - **On-niche titles only.** A product counts only when its title has the whole term as a phrase (its words in order, plurals allowed), none of the **off-niche words** (toy, kids, baby, game, cat, dog, card, gift, tube, tubing, sleeve, spare, replacement, part and so on; edit them in Settings → Private label), and isn't an accessory ("bag for fishing rod"). Cat and dog are allowed in a pet niche (Pet Supplies, or a pet word in the term), and a word the term itself uses never excludes. What was left out, and why, is listed under the check.
+- **Check incumbents (Keepa)**: who already sells the niche's search terms, on-niche only.
+  - **In the niche's category.** One Product Finder page of best sellers for each of the niche's search terms, in the Keepa root category of each category the niche came from (Sports & Outdoors, Pet Supplies and so on). A term that contains another is skipped, since the shorter one's search already finds it ("tackle box" covers "fishing tackle box"), and at most 3 pages are run. The terms' best sellers are taken in turn up to 25, which are detailed for title, reviews and monthly sales.
+  - **On-niche titles only.** A product counts only when its title has **any** of the niche's search terms as a phrase (its words in order, plurals allowed; the term it matched is shown beside it), none of the **off-niche words** (toy, kids, baby, game, cat, dog, card, gift, tube, tubing, sleeve, spare, replacement, part and so on; edit them in Settings → Private label), and isn't an accessory ("bag for fishing rod"). Cat and dog are allowed in a pet niche (Pet Supplies, or a pet word in the term), and a word the term itself uses never excludes. What was left out, and why, is listed under the check.
   - **The top 10 by sales.** The on-niche products are ranked by monthly sold (sales rank for those without one), and the 10 best decide the **shape**: **open** (nobody over 1,000 reviews), **contested** (one), **dominated** (two or more, or one over 5,000). Each shows its reviews, monthly sold, price and Keepa category, so you can see they're the real thing.
-  - **Cost.** Up to about 61 tokens; ASINs detailed in the last 7 days are reused. Before it runs, it shows the cost against your balance, with 100 kept in reserve. One check at a time, and never while a Niche Hunt is running. The tokens count in Home's Private label tokens this month.
-  - **Rerun check** (once a niche has been checked) runs the classification again on the same 25 products: no Product Finder call within 7 days, and only the products not detailed in the last 7 days are fetched again, so it's often free. Use it after editing the off-niche words.
+  - **Cost.** Up to about 83 tokens (11 a finder page, about 2 a product detailed), less when the terms overlap; ASINs detailed in the last 7 days are reused. Before it runs, it shows the cost against your balance, with 100 kept in reserve. One check at a time, and never while a Niche Hunt is running. The tokens count in Home's Private label tokens this month.
+  - **Rerun check** (once a niche has been checked) runs the classification again on the same products: no Product Finder call within 7 days, and only the products not detailed in the last 7 days are fetched again, so it's often free. Use it after editing the off-niche words.
 - **Create candidate**: a Private label candidate named after the customer need, its first search term as the niche keyword, and the category's fee category (shown next to the category picker), with the niche's figures in its notes. The niche shows as **candidate** and links to it.
 
 **Filters**: category, minimum score, price band, status (dismissed niches are hidden unless asked for), and a search over customer needs, search terms and aliases. Every column sorts, and the sort is remembered. The strip on top counts the niches imported, those scoring 60+, those hidden by the flags, the shortlist and the incumbent-checked.
@@ -79,6 +79,6 @@ Open a niche for its actions:
 1. Import several categories.
 2. Sort by score with the default flags hidden.
 3. Shortlist about 10.
-4. Run the incumbent check on the shortlist only (up to about 61 tokens each).
+4. Run the incumbent check on the shortlist only (up to about 83 tokens each).
 5. Create candidates for the **open** and **contested** ones.
 6. Open each niche in Opportunity Explorer with the extension loaded and **Send to Private label**: its capture fills the candidate's Gates 3 and 5 (search volume, click share, conversion, search terms). See [Private label](/help/pages/private-label).

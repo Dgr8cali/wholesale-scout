@@ -8,7 +8,7 @@ import { parseNichesCsv, type ParsedNiche } from "../pl/poeNiches";
 import { mergeGroup, nicheKey, type MergeRow } from "../pl/nicheMerge";
 import { activeRateCard, allRows, chunks, db, must } from "./db";
 import { createCandidate } from "./pl";
-import { termCheckPlan, termIncumbentCheck } from "./plHunt";
+import { reusable, termCheckPlan, termIncumbentCheck } from "./plHunt";
 
 export type NicheStatus = "new" | "shortlisted" | "dismissed" | "candidate";
 export const NICHE_STATUSES: NicheStatus[] = ["new", "shortlisted", "dismissed", "candidate"];
@@ -324,28 +324,27 @@ export async function nicheToCandidate(id: string) {
 type CheckNiche = { search_terms: string[]; customer_need: string; categories: string[] | null; extra: Record<string, unknown> | null; keepa_by_day: TokensByDay | null };
 const PET_TERM = /\b(cat|cats|kitten|dog|dogs|puppy|pet|pets)\b/i;
 
-/** What the check on a niche runs on: its first search term, its categories' Keepa roots, pet or not, and a rerun's finder list. */
+/** What the check on a niche runs on: its search terms, its categories' Keepa roots, pet or not, and a rerun's finder list. */
 function checkInputs(n: CheckNiche, rerun: boolean) {
-  const term = n.search_terms[0] ?? n.customer_need;
+  const terms = n.search_terms.length ? n.search_terms : [n.customer_need];
   const cats = n.categories ?? [];
-  const prev = n.extra?.incumbents as { candidates?: string[]; finderAt?: string; checkedAt?: string; found?: number; term?: string } | undefined;
-  const reuse = rerun && prev?.candidates?.length && prev.term === term ? { asins: prev.candidates, at: prev.finderAt ?? prev.checkedAt ?? "", found: prev.found } : null;
+  const reuse = rerun ? reusable(n.extra?.incumbents as Parameters<typeof reusable>[0], terms) : null;
   return {
-    term, reuse, rootCategoryIds: keepaRootsFor(cats), rootNames: cats.filter((c) => keepaRootsFor([c]).length),
-    pet: cats.some((c) => matchPoeCategory(c) === "Pet Supplies") || PET_TERM.test(term),
+    term: terms[0], terms, reuse, rootCategoryIds: keepaRootsFor(cats), rootNames: cats.filter((c) => keepaRootsFor([c]).length),
+    pet: cats.some((c) => matchPoeCategory(c) === "Pet Supplies") || terms.some((t) => PET_TERM.test(t)),
   };
 }
 const CHECK_COLS = "search_terms, customer_need, categories, extra, keepa_by_day";
 
-/** What an incumbent check (or a rerun) on this niche would cost, and whether it can run now. */
+/** What an incumbent check (or a rerun) on this niche's search terms would cost, and whether it can run now. */
 export async function nicheCheckPlan(id: string, rerun = false) {
   const n = must(await db().from("pl_niches").select(CHECK_COLS).eq("id", id).single(), "niche") as CheckNiche;
   const i = checkInputs(n, rerun);
-  return { term: i.term, categories: i.rootNames, ...(await termCheckPlan(i.reuse)) };
+  return { term: i.term, terms: i.terms, categories: i.rootNames, ...(await termCheckPlan(i.reuse, i.terms)) };
 }
 
 /**
- * Run the incumbent check on the niche's first search term, in its categories, on-niche titles only;
+ * Run the incumbent check on the niche's search terms (a title matching any of them), in its categories, on-niche titles only;
  * the shape and the 10 best-selling incumbents go on the row. A rerun reuses the last check's finder
  * list (within 7 days) and the 7-day snapshots.
  */
@@ -353,7 +352,7 @@ export async function checkNicheIncumbents(id: string, rerun = false) {
   const d = db();
   const n = must(await d.from("pl_niches").select(CHECK_COLS).eq("id", id).single(), "niche") as CheckNiche;
   const i = checkInputs(n, rerun);
-  const r = await termIncumbentCheck(i.term, { rootCategoryIds: i.rootCategoryIds, rootNames: i.rootNames, pet: i.pet, offNiche: await offNicheWords(), reuse: i.reuse });
+  const r = await termIncumbentCheck(i.terms, { rootCategoryIds: i.rootCategoryIds, rootNames: i.rootNames, pet: i.pet, offNiche: await offNicheWords(), reuse: i.reuse });
   must(await d.from("pl_niches").update({
     shape: r.shape, shape_rank: derivedCols({ customer_need: "", search_terms: [], flags: [], shape: r.shape }).shape_rank,
     extra: { ...(n.extra ?? {}), incumbents: r }, keepa_by_day: addDailyTokens(n.keepa_by_day, r.tokensUsed, new Date(), PL_KEEP_DAYS), updated_at: now(),

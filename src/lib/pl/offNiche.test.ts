@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyIncumbents, offNicheReason, phraseAt } from "./offNiche";
+import { classifyIncumbents, finderTerms, judgeTitle, offNicheReason, phraseAt } from "./offNiche";
 import { keepaRootsFor } from "./poeCategories";
 
 describe("off-niche titles", () => {
@@ -18,6 +18,20 @@ describe("off-niche titles", () => {
     expect(offNicheReason("Cat Scratching Post with Dog Bed", "scratching post", { pet: true })).toBeNull();
     expect(offNicheReason("Cat Scratching Post", "scratching post")).toBe('"cat" in the title');
     expect(offNicheReason("Fishing Rod Kids", "fishing rod", { words: ["bath"] })).toBeNull();
+  });
+
+  it("any of the niche's terms: the first that passes is the match", () => {
+    const terms = ["fishing bag", "fishing backpack", "fishing tackle bag"];
+    expect(judgeTitle("Waterproof Fishing Backpack 35L", terms)).toEqual({ term: "fishing backpack", why: null });
+    expect(judgeTitle("Large Fishing Tackle Bag with 4 Boxes", terms)).toEqual({ term: "fishing tackle bag", why: null });
+    expect(judgeTitle("Dry Bag 20L for Kayaking and Fishing", terms)).toEqual({ term: null, why: "title has none of the search terms" });
+    expect(judgeTitle("Kids Fishing Backpack Toy", terms).why).toBe('"toy" in the title');
+  });
+
+  it("finder terms: one containing another is covered by it, at most 3", () => {
+    expect(finderTerms(["fishing tackle box", "tackle box", "fishing box"])).toEqual(["tackle box", "fishing box"]);
+    expect(finderTerms(["fishing rod", "fishing accessories", "fishing"])).toEqual(["fishing"]);
+    expect(finderTerms(["fishing rod", "Fishing Rods", "a", "b", "c"])).toEqual(["fishing rod", "a", "b"]);
   });
 
   it("the top 10 by monthly sold, then sales rank", () => {

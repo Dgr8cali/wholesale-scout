@@ -30,9 +30,9 @@ interface Preview {
   sample: (NicheRow & { aliases: string[] })[];
 }
 interface Incumbents {
-  term: string; found: number; shape: string | null; tokensUsed: number; reused: number; checkedAt: string; rootCategories?: string[];
+  term: string; terms?: string[]; finderTerms?: string[] | null; found: number; shape: string | null; tokensUsed: number; reused: number; checkedAt: string; rootCategories?: string[];
   onNiche?: number; excludedCount?: number; excluded?: { asin: string; title: string | null; why: string }[]; candidates?: string[]; finderAt?: string; reusedFinder?: boolean;
-  incumbents: { asin: string; title: string | null; brand: string | null; reviews: number | null; price: number | null; monthlySold?: number | null; rank?: number | null; category?: string | null }[];
+  incumbents: { asin: string; title: string | null; brand: string | null; reviews: number | null; price: number | null; monthlySold?: number | null; rank?: number | null; category?: string | null; matchedTerm?: string | null }[];
 }
 
 const pct = (g: number | null | undefined, dp = 1) => (g == null ? "—" : `${g >= 0 ? "+" : ""}${(g * 100).toLocaleString("en-GB", { maximumFractionDigits: dp, minimumFractionDigits: dp })}%`);
@@ -344,11 +344,12 @@ function NicheDetail({ n, onChanged }: { n: NicheRow; onChanged: () => void }) {
   };
   const status = (s: string) => act(s, async () => { await api(`/api/pl/niches/${n.id}`, { method: "PATCH", json: { status: s } }); toast.success(s === "new" ? "Reset" : `${s[0].toUpperCase()}${s.slice(1)}`); });
   const check = (rerun: boolean) => act(rerun ? "rerun" : "check", async () => {
-    const plan = await api<{ term: string; categories: string[]; estimate: number; balance: number | null; reserve: number; fits: boolean; blocked: string | null; reusing: boolean }>(`/api/pl/niches/${n.id}${rerun ? "?rerun=1" : ""}`);
+    const plan = await api<{ term: string; terms: string[]; finderTerms: string[]; categories: string[]; estimate: number; balance: number | null; reserve: number; fits: boolean; blocked: string | null; reusing: boolean }>(`/api/pl/niches/${n.id}${rerun ? "?rerun=1" : ""}`);
     if (plan.blocked) throw new Error(plan.blocked);
     const where = plan.categories.length ? ` in ${plan.categories.join(", ")}` : " (no Keepa category for this niche: all of Amazon)";
-    const how = plan.reusing ? `the last check's 25 products again (no Product Finder call), re-detailing only those not detailed in the last 7 days` : `one Product Finder page${where}, then the top 25 detailed (ASINs detailed in the last 7 days are reused)`;
-    if (!(await confirm({ title: `${rerun ? "Rerun" : "Check"} incumbents for "${plan.term}"?`, description: `Up to ${plan.estimate} Keepa tokens: ${how}. Only titles with "${plan.term}" as a phrase and none of the off-niche words count; the 10 best sellers among them decide the shape. Balance ${plan.balance ?? "?"}, ${plan.reserve} kept in reserve${plan.fits ? "" : ": not enough now, wait for the refill"}.`, confirmLabel: plan.fits ? "Run the check" : "Close" }))) return;
+    const q = (t: string[]) => t.map((x) => `"${x}"`).join(", ");
+    const how = plan.reusing ? `the last check's products again (no Product Finder call), re-detailing only those not detailed in the last 7 days` : `${plan.finderTerms.length} Product Finder page${plan.finderTerms.length === 1 ? "" : "s"} (${q(plan.finderTerms)})${where}, then the top 25 detailed (ASINs detailed in the last 7 days are reused)`;
+    if (!(await confirm({ title: `${rerun ? "Rerun" : "Check"} incumbents for "${plan.term}"?`, description: `Up to ${plan.estimate} Keepa tokens: ${how}. Only titles with one of ${q(plan.terms)} as a phrase and none of the off-niche words count; the 10 best sellers among them decide the shape. Balance ${plan.balance ?? "?"}, ${plan.reserve} kept in reserve${plan.fits ? "" : ": not enough now, wait for the refill"}.`, confirmLabel: plan.fits ? "Run the check" : "Close" }))) return;
     if (!plan.fits) return;
     const r = await api<Incumbents>(`/api/pl/niches/${n.id}`, { method: "POST", json: { action: rerun ? "rerun" : "check" } });
     toast.success(`"${r.term}": ${r.shape ?? "no on-niche sellers"} (${r.tokensUsed} token${r.tokensUsed === 1 ? "" : "s"})`);
@@ -380,7 +381,7 @@ function NicheDetail({ n, onChanged }: { n: NicheRow; onChanged: () => void }) {
           <Textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} onBlur={() => notes !== (n.notes ?? "") && act("notes", () => api(`/api/pl/niches/${n.id}`, { method: "PATCH", json: { notes } }))} /></label>
         {inc ? (
           <div className="text-xs">
-            <p><b>Incumbents for &ldquo;{inc.term}&rdquo;</b>{inc.rootCategories?.length ? ` in ${inc.rootCategories.join(", ")}` : ""}: {inc.shape ? <span className={cn("rounded-full px-1.5 py-px font-semibold", SHAPE_CLS[inc.shape as keyof typeof SHAPE_CLS])}>{inc.shape}</span> : <span className="text-muted-foreground">no on-niche sellers</span>} · {inc.found.toLocaleString("en-GB")} products match{inc.onNiche != null ? `, ${inc.onNiche} on-niche of ${inc.candidates?.length ?? "?"} detailed` : ""} · {inc.tokensUsed} tokens{inc.reused ? `, ${inc.reused} reused` : ""}{inc.reusedFinder ? " (rerun)" : ""} · {new Date(inc.checkedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</p>
+            <p><b>Incumbents for {(inc.terms ?? [inc.term]).map((t) => `“${t}”`).join(", ")}</b>{inc.rootCategories?.length ? ` in ${inc.rootCategories.join(", ")}` : ""}: {inc.shape ? <span className={cn("rounded-full px-1.5 py-px font-semibold", SHAPE_CLS[inc.shape as keyof typeof SHAPE_CLS])}>{inc.shape}</span> : <span className="text-muted-foreground">no on-niche sellers</span>} · {inc.found.toLocaleString("en-GB")} products match{inc.onNiche != null ? `, ${inc.onNiche} on-niche of ${inc.candidates?.length ?? "?"} detailed` : ""} · {inc.tokensUsed} tokens{inc.reused ? `, ${inc.reused} reused` : ""}{inc.reusedFinder ? " (rerun)" : ""} · {new Date(inc.checkedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</p>
             {inc.onNiche == null && <p className="text-amber-700 dark:text-amber-400">An old check (any word, all of Amazon): rerun it.</p>}
             <table className="mt-1 text-xs"><tbody>{inc.incumbents.map((x) => (
               <tr key={x.asin} className="align-top">
@@ -389,6 +390,7 @@ function NicheDetail({ n, onChanged }: { n: NicheRow; onChanged: () => void }) {
                 <td className="num pr-2 text-right">{x.monthlySold != null ? `${x.monthlySold.toLocaleString("en-GB")}+/mo` : x.rank != null ? `#${x.rank.toLocaleString("en-GB")}` : "—"}</td>
                 <td className="num pr-2 text-right">{gbp(x.price)}</td>
                 <td className="pr-2 text-muted-foreground">{x.category ?? ""}</td>
+                <td className="whitespace-nowrap pr-2">{x.matchedTerm && <span className="rounded-full bg-muted px-1.5 py-px" title="The search term its title matched">{x.matchedTerm}</span>}</td>
                 <td className="text-muted-foreground">{(x.title ?? "").slice(0, 80)}</td>
               </tr>
             ))}</tbody></table>
@@ -396,7 +398,7 @@ function NicheDetail({ n, onChanged }: { n: NicheRow; onChanged: () => void }) {
               <ul className="mt-0.5 space-y-0.5">{inc.excluded?.map((x) => <li key={x.asin}><span className="num">{x.asin}</span> · <i>{x.why}</i> · <span className="text-muted-foreground">{(x.title ?? "").slice(0, 70)}</span></li>)}</ul></details>}
             <p className="mt-1 text-muted-foreground">Open: nobody over 1,000 reviews. Contested: one. Dominated: two or more, or one over 5,000.</p>
           </div>
-        ) : <p className="text-xs text-muted-foreground">No incumbent check yet: it looks at the best sellers for &ldquo;{n.search_terms[0] ?? n.customer_need}&rdquo; in the niche&rsquo;s category, on-niche titles only, and their review counts (Keepa, up to ~61 tokens).</p>}
+        ) : <p className="text-xs text-muted-foreground">No incumbent check yet: it looks at the best sellers for {(n.search_terms.length ? n.search_terms : [n.customer_need]).map((t) => `“${t}”`).join(", ")} in the niche&rsquo;s category, titles matching any of them and on-niche only, and their review counts (Keepa, up to ~83 tokens).</p>}
       </div>
     </div>
   );
