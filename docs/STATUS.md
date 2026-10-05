@@ -1,7 +1,7 @@
 # Wholesale Scout: status
 
 Read this first in a new session. Keep it current: every commit that changes a feature updates
-it (what's built, the backlog, the rough edges). Last updated: 5 Oct 2026 (Candidates: notes at the top, and a Parked status with a reason).
+it (what's built, the backlog, the rough edges). Last updated: 5 Oct 2026 (Niches incumbent check: terms match within a 4-word window; pet, baby and toy niches exempt their own words).
 
 Wholesale Scout is a single-user Amazon UK seller's workbench: Next.js 16 (App Router, `proxy.ts`
 password gate), Supabase (Postgres, RLS on, service-role access from the server only), Vercel
@@ -41,8 +41,10 @@ regulated, big brand: an editable list in Settings → Private label, heavy/bulk
 shortlists, runs a one-at-a-time Keepa incumbent check on a niche's search terms (up to ~83 tokens: one
 Product Finder page a distinct term, up to 3, a term containing another skipped, restricted to the
 niche's categories' Keepa roots, merged in turn to 25 detailed; only titles with any of the terms
-as a phrase (the matched term shown), none of the off-niche words (editable in Settings → Private label,
-`src/lib/pl/offNiche.ts`; pet words allowed for pet niches) not an accessory for any of the terms ("for", "fits", "compatible with" just before one) and, for a bag/box niche, not in Keepa's Locking Carabiners or Bait Storage count; the 10 best
+as a phrase, else all its words within a 4-word window in any order (the matched term shown, phrase
+preferred), none of the off-niche words (editable in Settings → Private label,
+`src/lib/pl/offNiche.ts`; cat/dog/toy/game allowed for pet niches, kids/children for Baby Products and Toys & Games,
+toy/game for Toys & Games; a term's own words and plurals never exclude) not an accessory for any of the terms ("for", "fits", "compatible with" just before one) and, for a bag/box niche, not in Keepa's Locking Carabiners or Bait Storage count; the 10 best
 sellers among them by monthly sold, else sales rank, decide open/contested/dominated; under 5 found
 in the category, the same search runs on all of Amazon ("found outside <category>", +11 tokens a
 term) and the on-niche products' Keepa categories show as chips; Rerun reuses

@@ -356,6 +356,8 @@ function checkInputs(n: CheckNiche, rerun: boolean) {
   return {
     term: terms[0], terms, reuse, rootCategoryIds: keepaRootsFor(cats), rootNames: cats.filter((c) => keepaRootsFor([c]).length),
     pet: cats.some((c) => matchPoeCategory(c) === "Pet Supplies") || terms.some((t) => PET_TERM.test(t)),
+    kids: cats.some((c) => ["Baby Products", "Toys & Games"].includes(matchPoeCategory(c) ?? "")),
+    toys: cats.some((c) => matchPoeCategory(c) === "Toys & Games"),
   };
 }
 const CHECK_COLS = "search_terms, customer_need, categories, extra, keepa_by_day";
@@ -376,7 +378,7 @@ export async function checkNicheIncumbents(id: string, rerun = false) {
   const d = db();
   const n = must(await d.from("pl_niches").select(CHECK_COLS).eq("id", id).single(), "niche") as CheckNiche;
   const i = checkInputs(n, rerun);
-  const r = await termIncumbentCheck(i.terms, { rootCategoryIds: i.rootCategoryIds, rootNames: i.rootNames, pet: i.pet, offNiche: await offNicheWords(), reuse: i.reuse });
+  const r = await termIncumbentCheck(i.terms, { rootCategoryIds: i.rootCategoryIds, rootNames: i.rootNames, pet: i.pet, kids: i.kids, toys: i.toys, offNiche: await offNicheWords(), reuse: i.reuse });
   must(await d.from("pl_niches").update({
     shape: r.shape, shape_rank: derivedCols({ customer_need: "", search_terms: [], flags: [], shape: r.shape }).shape_rank,
     extra: { ...(n.extra ?? {}), incumbents: r }, keepa_by_day: addDailyTokens(n.keepa_by_day, r.tokensUsed, new Date(), PL_KEEP_DAYS), updated_at: now(),

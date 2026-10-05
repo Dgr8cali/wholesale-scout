@@ -34,7 +34,7 @@ interface Incumbents {
   term: string; terms?: string[]; finderTerms?: string[] | null; found: number; shape: string | null; tokensUsed: number; reused: number; checkedAt: string; rootCategories?: string[];
   outside?: boolean; onNicheCategories?: { name: string; count: number }[];
   onNiche?: number; excludedCount?: number; excluded?: { asin: string; title: string | null; why: string }[]; candidates?: string[]; finderAt?: string; reusedFinder?: boolean;
-  incumbents: { asin: string; title: string | null; brand: string | null; reviews: number | null; price: number | null; monthlySold?: number | null; rank?: number | null; category?: string | null; matchedTerm?: string | null }[];
+  incumbents: { asin: string; title: string | null; brand: string | null; reviews: number | null; price: number | null; monthlySold?: number | null; rank?: number | null; category?: string | null; matchedTerm?: string | null; matchedHow?: "phrase" | "words" | null }[];
 }
 
 const pct = (g: number | null | undefined, dp = 1) => (g == null ? "—" : `${g >= 0 ? "+" : ""}${(g * 100).toLocaleString("en-GB", { maximumFractionDigits: dp, minimumFractionDigits: dp })}%`);
@@ -419,7 +419,7 @@ function NicheDetail({ n, onChanged }: { n: NicheRow; onChanged: () => void }) {
                 <td className="num pr-2 text-right">{x.monthlySold != null ? `${x.monthlySold.toLocaleString("en-GB")}+/mo` : x.rank != null ? `#${x.rank.toLocaleString("en-GB")}` : "—"}</td>
                 <td className="num pr-2 text-right">{gbp(x.price)}</td>
                 <td className="pr-2 text-muted-foreground">{x.category ?? ""}</td>
-                <td className="whitespace-nowrap pr-2">{x.matchedTerm && <span className="rounded-full bg-muted px-1.5 py-px" title="The search term its title matched">{x.matchedTerm}</span>}</td>
+                <td className="whitespace-nowrap pr-2">{x.matchedTerm && <span className={cn("rounded-full px-1.5 py-px", x.matchedHow === "words" ? "border border-dashed" : "bg-muted")} title={x.matchedHow === "words" ? "Its title has every word of this search term within 4 words, in another order" : "Its title has this search term as a phrase"}>{x.matchedTerm}{x.matchedHow === "words" ? " (any order)" : ""}</span>}</td>
                 <td className="text-muted-foreground">{(x.title ?? "").slice(0, 80)}</td>
               </tr>
             ))}</tbody></table>

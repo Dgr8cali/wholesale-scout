@@ -1,7 +1,8 @@
 /**
  * The Niches incumbent check, on-niche only: a product counts when its title holds one of the niche's
- * search terms as a phrase (its words, in order, plurals allowed), isn't for a child or a pet (unless the
- * niche is), isn't a card, a gift, a part or a spare, isn't an accessory for any of the niche's terms
+ * search terms as a phrase (its words, in order, plurals allowed) or, failing that, has all its words
+ * within a 4-word window in any order ("Ball Launcher Dog Toy" for "dog ball launcher"); isn't a
+ * toy or for a child or a pet (unless the niche is), isn't a card, a gift, a part or a spare, isn't an accessory for any of the niche's terms
  * ("bag for fishing rod", "fits tackle box", "compatible with fishing reels"), and, for a bag or box
  * niche, isn't filed by Keepa under a category that only looks like one (locking carabiners, bait storage). The 10 best sellers among those (monthly sold, else sales rank) decide the shape.
  * Pure.
@@ -15,6 +16,10 @@ export const DEFAULT_OFF_NICHE = [
 ];
 /** Pet words: off-niche unless the niche is a pet one. */
 const PET_WORDS = new Set(["cat", "cats", "kitten", "dog", "dogs", "puppy"]);
+/** Toy words: a pet niche's products are toys too (a dog ball launcher is a dog toy), as are a Toys & Games niche's. */
+const TOY_WORDS = new Set(["toy", "toys", "game", "games"]);
+/** Child words: on-niche in Baby Products and Toys & Games. */
+const KID_WORDS = new Set(["kids", "kid", "children", "childrens", "child"]);
 
 const words = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim().split(" ").filter(Boolean);
 /** "rod" matches "rod", "rods", "rodes"? — just the plural forms: +s, +es. */
@@ -33,6 +38,35 @@ export function phraseAt(title: string, term: string): number {
   return phraseStarts(words(title), words(term))[0] ?? -1;
 }
 
+/** The window the term's words must all fall in when they're not a phrase: 4 words (or the term's length, if longer). */
+export const MATCH_WINDOW = 4;
+
+/** Where windows start that hold every one of the term's words, in any order (each title word used once). */
+function windowStarts(tw: string[], pw: string[]): number[] {
+  const out: number[] = [];
+  if (!pw.length) return out;
+  const w = Math.max(MATCH_WINDOW, pw.length);
+  for (let i = 0; i < tw.length; i++) {
+    if (!pw.some((p) => sameWord(tw[i], p))) continue;
+    const used = new Set<number>();
+    const ok = pw.every((p) => {
+      for (let j = i; j < Math.min(tw.length, i + w); j++) if (!used.has(j) && sameWord(tw[j], p)) { used.add(j); return true; }
+      return false;
+    });
+    if (ok) out.push(i);
+  }
+  return out;
+}
+
+/** How a title holds a term: "phrase" (in order, side by side), "words" (all within the window, any order), or null. */
+export function termMatch(title: string, term: string): { how: "phrase" | "words"; at: number[] } | null {
+  const tw = words(title), pw = words(term);
+  const ph = phraseStarts(tw, pw);
+  if (ph.length) return { how: "phrase", at: ph };
+  const win = windowStarts(tw, pw);
+  return win.length ? { how: "words", at: win } : null;
+}
+
 /** What makes the term after it the thing a product goes with, not the product: "for", "fits", "compatible with". */
 const ACCESSORY_CUES = [["for"], ["fits"], ["fit"], ["fitting"], ["compatible", "with"]];
 /** Words allowed between the cue and the term ("for your fishing rod", "fits most tackle boxes"); two at most. */
@@ -42,7 +76,7 @@ const FILLERS = new Set(["a", "an", "the", "your", "my", "all", "most", "any", "
 export function accessoryFor(title: string, terms: string[]): string | null {
   const tw = words(title);
   for (const t of terms) {
-    for (const at of phraseStarts(tw, words(t))) {
+    for (const at of termMatch(title, t)?.at ?? []) {
       let i = at;
       while (i > 0 && at - i < 2 && FILLERS.has(tw[i - 1])) i--;
       for (let k = at; k >= i; k--) {
@@ -62,40 +96,51 @@ export const isBagOrBox = (terms: string[]) => terms.some((t) => BAG_BOX.has(wor
 export interface OffNicheOpts {
   /** The off-niche words in use. */
   words?: string[];
-  /** A pet niche (Pet Supplies, or a pet word in the term): cat and dog products are on-niche. */
+  /** A pet niche (Pet Supplies, or a pet word in a term): cat, dog, toy and game products are on-niche. */
   pet?: boolean;
+  /** A Baby Products or Toys & Games niche: kids and children products are on-niche. */
+  kids?: boolean;
+  /** A Toys & Games niche: toy and game products are on-niche. */
+  toys?: boolean;
 }
 
-/** Why a title is off-niche for one term, or null: not the phrase, or an excluded word. */
+/** A word on the off-niche list that this niche allows. */
+const exempt = (w: string, o: OffNicheOpts) =>
+  (o.pet && (PET_WORDS.has(w) || TOY_WORDS.has(w))) || (o.kids && KID_WORDS.has(w)) || (o.toys && TOY_WORDS.has(w));
+
+/** Why a title is off-niche for one term, or null: not the term (phrase or window), or an excluded word. */
 function reasonFor(title: string, term: string, o: OffNicheOpts): string | null {
-  const at = phraseAt(title, term);
-  if (at < 0) return `title doesn't have "${term}"`;
-  const tw = words(title), pw = new Set(words(term));
+  if (!termMatch(title, term)) return `title doesn't have "${term}"`;
+  const tw = words(title), pw = words(term);
   const list = (o.words ?? DEFAULT_OFF_NICHE).map((w) => w.toLowerCase().trim()).filter(Boolean);
-  const hit = list.find((w) => !pw.has(w) && !(o.pet && PET_WORDS.has(w)) && (w.includes(" ") ? ` ${tw.join(" ")} `.includes(` ${w} `) : tw.includes(w)));
+  // The term's own words (and their plurals) never exclude: "dogs" in a "dog ball launcher" title.
+  const hit = list.find((w) => !pw.some((p) => sameWord(w, p)) && !exempt(w, o) && (w.includes(" ") ? ` ${tw.join(" ")} `.includes(` ${w} `) : tw.includes(w)));
   if (hit) return `"${hit}" in the title`;
   return null;
 }
 
 /**
- * Which of the niche's search terms a title is on-niche for (the first that passes), or why it's
- * off-niche: an accessory for any of the terms ("for", "fits" or "compatible with" just before
- * one), none of the terms as a phrase, or an excluded word (one the matched term itself uses
- * doesn't count: "cat tree" is about cats). The reason given is the one for the first term the
- * title has as a phrase.
+ * Which of the niche's search terms a title is on-niche for, or why it's off-niche: an accessory for
+ * any of the terms ("for", "fits" or "compatible with" just before one), none of the terms (as a
+ * phrase or within the window), or an excluded word (one the matched term itself uses doesn't
+ * count: "cat tree" is about cats). A term held as a phrase is preferred over one held only within
+ * the window. The reason given is the one for the first term the title holds.
  */
-export function judgeTitle(title: string | null, terms: string | string[], o: OffNicheOpts = {}): { term: string | null; why: string | null } {
+export function judgeTitle(title: string | null, terms: string | string[], o: OffNicheOpts = {}): { term: string | null; how: "phrase" | "words" | null; why: string | null } {
   const list = (Array.isArray(terms) ? terms : [terms]).map((t) => t.trim()).filter(Boolean);
-  if (!title) return { term: null, why: "no title" };
+  if (!title) return { term: null, how: null, why: "no title" };
   const acc = accessoryFor(title, list);
-  if (acc) return { term: null, why: `an accessory for ${acc}` };
+  if (acc) return { term: null, how: null, why: `an accessory for ${acc}` };
   let first: string | null = null;
-  for (const t of list) {
-    const why = reasonFor(title, t, o);
-    if (!why) return { term: t, why: null };
-    if (!first && phraseAt(title, t) >= 0) first = why;
+  for (const how of ["phrase", "words"] as const) {
+    for (const t of list) {
+      if (termMatch(title, t)?.how !== how) continue;
+      const why = reasonFor(title, t, o);
+      if (!why) return { term: t, how, why: null };
+      first ??= why;
+    }
   }
-  return { term: null, why: first ?? (list.length === 1 ? `title doesn't have "${list[0]}"` : "title has none of the search terms") };
+  return { term: null, how: null, why: first ?? (list.length === 1 ? `title doesn't have "${list[0]}"` : "title has none of the search terms") };
 }
 
 /** Why a product is off-niche for these terms, or null when it's on-niche. */
@@ -117,8 +162,8 @@ export interface IncumbentCandidate {
   rank: number | null; monthlySold: number | null; category: string | null;
   /** Keepa's root category (where Amazon files it). */
   rootCategory?: string | null;
-  /** The search term its title matched (on-niche products). */
-  matchedTerm?: string | null;
+  /** The search term its title matched (on-niche products), and how: as a phrase, or its words within the window. */
+  matchedTerm?: string | null; matchedHow?: "phrase" | "words" | null;
 }
 
 /**
@@ -137,7 +182,7 @@ export function classifyIncumbents(products: IncumbentCandidate[], terms: string
     }
     const j = judgeTitle(p.title, terms, o);
     if (j.why) excluded.push({ ...p, why: j.why });
-    else kept.push({ ...p, matchedTerm: j.term });
+    else kept.push({ ...p, matchedTerm: j.term, matchedHow: j.how });
   }
   const bySales = [...kept].sort((a, b) =>
     (b.monthlySold ?? -1) - (a.monthlySold ?? -1) || (a.rank ?? Number.MAX_SAFE_INTEGER) - (b.rank ?? Number.MAX_SAFE_INTEGER));

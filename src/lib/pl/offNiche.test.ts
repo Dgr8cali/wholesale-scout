@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { accessoryFor, classifyIncumbents, finderTerms, isBagOrBox, judgeTitle, offNicheReason, phraseAt } from "./offNiche";
+import { accessoryFor, classifyIncumbents, finderTerms, isBagOrBox, judgeTitle, offNicheReason, phraseAt, termMatch } from "./offNiche";
 import { keepaRootsFor } from "./poeCategories";
 
 describe("off-niche titles", () => {
@@ -23,15 +23,15 @@ describe("off-niche titles", () => {
 
   it("any of the niche's terms: the first that passes is the match", () => {
     const terms = ["fishing bag", "fishing backpack", "fishing tackle bag"];
-    expect(judgeTitle("Waterproof Fishing Backpack 35L", terms)).toEqual({ term: "fishing backpack", why: null });
-    expect(judgeTitle("Large Fishing Tackle Bag with 4 Boxes", terms)).toEqual({ term: "fishing tackle bag", why: null });
-    expect(judgeTitle("Dry Bag 20L for Kayaking and Fishing", terms)).toEqual({ term: null, why: "title has none of the search terms" });
+    expect(judgeTitle("Waterproof Fishing Backpack 35L", terms)).toEqual({ term: "fishing backpack", how: "phrase", why: null });
+    expect(judgeTitle("Large Fishing Tackle Bag with 4 Boxes", terms)).toEqual({ term: "fishing tackle bag", how: "phrase", why: null });
+    expect(judgeTitle("Dry Bag 20L for Kayaking and Fishing", terms)).toEqual({ term: null, how: null, why: "title has none of the search terms" });
     expect(judgeTitle("Kids Fishing Backpack Toy", terms).why).toBe('"toy" in the title');
   });
 
   it("an accessory for any of the niche's terms: for, fits, compatible with (two filler words at most)", () => {
     const terms = ["fishing bag", "fishing rod", "tackle box"];
-    expect(judgeTitle("Fishing Bag with Rod Holder for Fishing Rod", terms)).toEqual({ term: null, why: "an accessory for fishing rod" });
+    expect(judgeTitle("Fishing Bag with Rod Holder for Fishing Rod", terms)).toEqual({ term: null, how: null, why: "an accessory for fishing rod" });
     expect(accessoryFor("Foam Inserts, Fits Most Tackle Boxes", terms)).toBe("tackle box");
     expect(accessoryFor("Shoulder Strap Compatible with All Fishing Bags", terms)).toBe("fishing bag");
     expect(accessoryFor("Rod Sleeve Suitable for Your Fishing Rod", terms)).toBe("fishing rod");
@@ -51,6 +51,28 @@ describe("off-niche titles", () => {
     expect(r.top.map((x) => x.asin)).toEqual(["C"]);
     expect(r.excluded.map((x) => x.why)).toEqual(["Keepa category Locking Carabiners (not a bag or box)", "Keepa category Bait Storage (not a bag or box)"]);
     expect(classifyIncumbents(items.map((x) => ({ ...x, title: "Fishing Rod" })), ["fishing rod"]).top).toHaveLength(3);
+  });
+
+  it("a term's words within 4 words, any order, when it isn't a phrase; the phrase preferred", () => {
+    expect(termMatch("Ball Launcher Dog Toy", "dog ball launcher")).toEqual({ how: "words", at: [0] });
+    expect(termMatch("Automatic Dog Ball Launcher", "dog ball launcher")).toEqual({ how: "phrase", at: [1] });
+    // Spread over more than 4 words: no match.
+    expect(termMatch("Dog Bed with Ball and Launcher", "dog ball launcher")).toBeNull();
+    expect(termMatch("Launcher for Balls, Dog", "dog ball launcher")).toEqual({ how: "words", at: [0] });
+    expect(judgeTitle("Dog Ball Launcher, Automatic", ["ball launcher dog", "dog ball launcher"])).toEqual({ term: "dog ball launcher", how: "phrase", why: null });
+    expect(judgeTitle("Ball Launcher for Dogs", ["dog ball launcher"])).toEqual({ term: "dog ball launcher", how: "words", why: null });
+  });
+
+  it("pet niches allow toy and game; Baby Products and Toys & Games allow kids and children", () => {
+    const t = "Ball Launcher Dog Toy, Interactive Game";
+    expect(offNicheReason(t, "dog ball launcher")).toBe('"toy" in the title');
+    expect(offNicheReason(t, "dog ball launcher", { pet: true })).toBeNull();
+    expect(offNicheReason("Kids Bath Thermometer", "bath thermometer")).toBe('"kids" in the title');
+    expect(offNicheReason("Kids Bath Thermometer for Children", "bath thermometer", { kids: true })).toBeNull();
+    expect(offNicheReason("Kids Bath Thermometer Toy", "bath thermometer", { kids: true })).toBe('"toy" in the title');
+    expect(offNicheReason("Fidget Spinner Toy for Kids", "fidget spinner", { kids: true, toys: true })).toBeNull();
+    // A pet niche still drops a children's product.
+    expect(offNicheReason("Dog Ball Launcher Toy for Kids", "dog ball launcher", { pet: true })).toBe('"kids" in the title');
   });
 
   it("finder terms: one containing another is covered by it, at most 3", () => {
