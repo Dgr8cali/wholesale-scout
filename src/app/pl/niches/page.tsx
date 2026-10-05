@@ -369,8 +369,10 @@ function NicheDetail({ n, onChanged }: { n: NicheRow; onChanged: () => void }) {
     toast.success(`"${r.term}": ${r.shape ?? "no on-niche sellers"} (${r.tokensUsed} token${r.tokensUsed === 1 ? "" : "s"})`);
   });
   const candidate = () => act("candidate", async () => {
-    const r = await api<{ candidateId: string; existed: boolean; category?: string }>(`/api/pl/niches/${n.id}`, { method: "POST", json: { action: "candidate" } });
-    toast.success(r.existed ? "Already a candidate" : `Candidate created${r.category ? ` (fee category ${r.category})` : ""}`);
+    const r = await api<{ candidateId: string; existed: boolean; category?: string; asins?: number; keyword?: string; keywordFrom?: string; sell?: number | null }>(`/api/pl/niches/${n.id}`, { method: "POST", json: { action: "candidate" } });
+    toast.success(r.existed ? "Already a candidate" : `Candidate created${r.category ? ` (fee category ${r.category})` : ""}`, r.existed ? undefined : {
+      description: [`Keyword "${r.keyword}" (${r.keywordFrom === "conversion" ? "best-converting term" : "first term"})`, r.asins ? `${r.asins} page-one ASINs from the incumbent check` : "no incumbent check: add the page-one ASINs", r.sell != null ? `sell price £${r.sell.toFixed(2)} (niche average)` : null].filter(Boolean).join(" · "),
+    });
     router.push(`/pl/candidates?c=${r.candidateId}`);
   });
   return (

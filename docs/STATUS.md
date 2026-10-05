@@ -1,7 +1,7 @@
 # Wholesale Scout: status
 
 Read this first in a new session. Keep it current: every commit that changes a feature updates
-it (what's built, the backlog, the rough edges). Last updated: 5 Oct 2026 (Niches incumbent check: searches all of Amazon when the category has under 5).
+it (what's built, the backlog, the rough edges). Last updated: 5 Oct 2026 (Niches → Create candidate: seeded with the check's ASINs, the best-converting term and the average price).
 
 Wholesale Scout is a single-user Amazon UK seller's workbench: Next.js 16 (App Router, `proxy.ts`
 password gate), Supabase (Postgres, RLS on, service-role access from the server only), Vercel
@@ -45,7 +45,9 @@ as a phrase (the matched term shown), none of the off-niche words (editable in S
 sellers among them by monthly sold, else sales rank, decide open/contested/dominated; under 5 found
 in the category, the same search runs on all of Amazon ("found outside <category>", +11 tokens a
 term) and the on-niche products' Keepa categories show as chips; Rerun reuses
-the finder list and 7-day snapshots, often 0 tokens) and creates candidates; re-importing a category keeps status, notes and
+the finder list and 7-day snapshots, often 0 tokens) and creates candidates (seeded with the check's
+on-niche top 10 as page-one ASINs, the best-converting captured term else the first as niche
+keyword, and the average price as sell price); re-importing a category keeps status, notes and
 shape. The category is picked from Opportunity Explorer's 25 top-level UK categories (or Other…),
 each mapped to the rate card category candidates use for fees. Home has a Niches tile. The Niches table is filtered, flag-hidden,
 sorted and paged in SQL (100 a page, 50–500, "showing X–Y of N"), with the summary strip counted

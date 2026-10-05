@@ -1,9 +1,9 @@
 /** The Niches incumbent check: in the niche's Keepa category, on-niche titles only, the best sellers decide. */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { KeepaProduct, KeepaSummary } from "../keepa/types";
-import { __setDbForTests } from "./db";
+import { __setDbForTests, ensureSeed } from "./db";
 import { FakeDb } from "./fakeDb";
-import { checkNicheIncumbents, nicheCheckPlan } from "./plNiches";
+import { candidateSeed, checkNicheIncumbents, nicheCheckPlan, nicheToCandidate } from "./plNiches";
 
 const k = vi.hoisted(() => ({ selections: [] as Record<string, unknown>[], lookups: [] as string[][] }));
 
@@ -110,5 +110,25 @@ describe("Niches incumbent check (fake Keepa)", () => {
   it("enough in the category: no search outside it", async () => {
     await checkNicheIncumbents("n1");
     expect(k.selections.every((x) => x.rootCategory)).toBe(true);
+  });
+
+  it("Create candidate carries the on-niche ASINs, the best-converting term and the average price", async () => {
+    await ensureSeed();
+    fake.tables.pl_niche_imports = [{ id: "imp1", category: "Sports & Outdoors" }];
+    Object.assign(fake.tables.pl_niches[0], { import_id: "imp1", status: "new", flags: [], avg_price: 24.5, sv_360: 100000, candidate_id: null });
+    // Before a check or a capture: no ASINs, the first term.
+    expect(candidateSeed(fake.tables.pl_niches[0] as never)).toEqual({ asins: [], keyword: "fishing rod", keywordFrom: "first term" });
+    await checkNicheIncumbents("n1");
+    const n = fake.tables.pl_niches[0] as { extra: Record<string, unknown> };
+    n.extra = { ...n.extra, poe: { snapshotId: "s1", capturedAt: "2026-10-01", terms: [{ term: "fishing rod", conversion: 2.2 }, { term: "sea fishing rod", conversion: 6.1 }, { term: "fishing pole", conversion: null }] } };
+    const r = await nicheToCandidate("n1");
+    expect(r).toMatchObject({ existed: false, asins: 4, keyword: "sea fishing rod", keywordFrom: "conversion", sell: 24.5 });
+    const cand = fake.tables.pl_candidates.find((c) => c.id === r.candidateId)!;
+    expect(cand).toMatchObject({ niche_keyword: "sea fishing rod", status: "researching" });
+    // Gate 0's page-one ASINs: the check's top by sales, in that order (the first the reference).
+    const asins = fake.tables.pl_candidate_asins.filter((a) => a.candidate_id === r.candidateId).sort((a, b) => Number(a.position) - Number(b.position));
+    expect(asins.map((a) => a.asin)).toEqual(["B0POLE0001", "B0ROD00002", "B0ROD00001", "B0ROD00003"]);
+    expect(asins[0].is_reference).toBe(true);
+    expect(fake.tables.pl_candidate_fields.find((f) => f.candidate_id === r.candidateId && f.key === "sell")).toMatchObject({ value: "24.50", source: "poe" });
   });
 });

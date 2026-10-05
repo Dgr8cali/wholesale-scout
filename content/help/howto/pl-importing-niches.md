@@ -81,7 +81,12 @@ Open a niche for its actions:
   - **The top 10 by sales.** The on-niche products are ranked by monthly sold (sales rank for those without one), and the 10 best decide the **shape**: **open** (nobody over 1,000 reviews), **contested** (one), **dominated** (two or more, or one over 5,000). Each shows its reviews, monthly sold, price and Keepa category, so you can see they're the real thing.
   - **Cost.** Up to about 83 tokens (11 a finder page, about 2 a product detailed), less when the terms overlap; ASINs detailed in the last 7 days are reused. Before it runs, it shows the cost against your balance, with 100 kept in reserve. One check at a time, and never while a Niche Hunt is running. The tokens count in Home's Private label tokens this month.
   - **Rerun check** (once a niche has been checked) runs the classification again on the same products: no Product Finder call within 7 days, and only the products not detailed in the last 7 days are fetched again, so it's often free. Use it after editing the off-niche words.
-- **Create candidate**: a Private label candidate named after the customer need, its first search term as the niche keyword, and the category's fee category (shown next to the category picker), with the niche's figures in its notes. The niche shows as **candidate** and links to it.
+- **Create candidate**: a Private label candidate named after the customer need, in the category's fee category (shown next to the category picker), with the niche's figures in its notes. It starts with what the niche already knows:
+  - **Page-one ASINs (Gate 0)**: the incumbent check's on-niche top 10 by sales, best seller first (the reference). No check yet: add them yourself.
+  - **Niche keyword**: the captured search term converting best, when the niche was sent from Opportunity Explorer; else its first search term.
+  - **Sell price (Gate 0)**: the niche's average price, until a Keepa refresh fills the Buy Box price (a value you type is never overwritten).
+
+  The niche shows as **candidate** and links to it. A niche that already has a candidate opens it unchanged.
 
 **Filters**: category, minimum score, price band, status (dismissed niches are hidden unless asked for), and a search over customer needs, search terms and aliases. Every column sorts, and the sort is remembered. The strip on top counts the niches imported, those scoring 60+, those hidden by the flags, the shortlist and the incumbent-checked.
 

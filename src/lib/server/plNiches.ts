@@ -8,7 +8,7 @@ import { nicheFlags, scoreNiche } from "../pl/nicheScore";
 import { parseNichesCsv, type ParsedNiche } from "../pl/poeNiches";
 import { mergeGroup, nicheKey, type MergeRow } from "../pl/nicheMerge";
 import { activeRateCard, allRows, chunks, db, must } from "./db";
-import { createCandidate } from "./pl";
+import { applyAuto, createCandidate } from "./pl";
 import { reusable, termCheckPlan, termIncumbentCheck } from "./plHunt";
 
 export type NicheStatus = "new" | "shortlisted" | "dismissed" | "candidate";
@@ -321,11 +321,28 @@ export async function nicheToCandidate(id: string) {
   const imp = must(await d.from("pl_niche_imports").select("category").eq("id", n.import_id).single(), "import") as { category: string };
   const card = await activeRateCard();
   const category = feeCategoryFor(imp.category, card);
-  const c = await createCandidate({ name: n.customer_need, niche_keyword: n.search_terms[0] ?? n.customer_need, category, asins: [] });
-  const note = `From Opportunity Explorer (${imp.category}, Niche Import): search volume ${n.sv_360?.toLocaleString("en-GB") ?? "—"} a year, growth ${pct(n.growth_180)} over 180 days, average price £${n.avg_price?.toFixed(2) ?? "—"}, ${n.top_clicked_products ?? "—"} top-clicked products, ~${n.units_per_product_mid?.toLocaleString("en-GB") ?? "—"} units a product a year. Score ${n.score}${n.flags.length ? `, flags ${n.flags.join(", ")}` : ""}${n.shape ? `, incumbents ${n.shape}` : ""}. Search terms: ${n.search_terms.join(", ")}.`;
+  const seed = candidateSeed(n);
+  const c = await createCandidate({ name: n.customer_need, niche_keyword: seed.keyword, category, asins: seed.asins });
+  // The niche's average price as Gate 0's sell price until Keepa's Buy Box (or you) says otherwise.
+  if (n.avg_price != null) await applyAuto(c.id, { sell: { value: n.avg_price.toFixed(2), why: "The niche's average price (Opportunity Explorer)" } }, "poe");
+  const note = `From Opportunity Explorer (${imp.category}, Niche Import): search volume ${n.sv_360?.toLocaleString("en-GB") ?? "—"} a year, growth ${pct(n.growth_180)} over 180 days, average price £${n.avg_price?.toFixed(2) ?? "—"}, ${n.top_clicked_products ?? "—"} top-clicked products, ~${n.units_per_product_mid?.toLocaleString("en-GB") ?? "—"} units a product a year. Score ${n.score}${n.flags.length ? `, flags ${n.flags.join(", ")}` : ""}${n.shape ? `, incumbents ${n.shape}` : ""}. Search terms: ${n.search_terms.join(", ")}.${seed.asins.length ? ` Page-one ASINs: the incumbent check's ${seed.asins.length} on-niche best sellers.` : ""} Niche keyword: "${seed.keyword}" (${seed.keywordFrom === "conversion" ? "the captured search term converting best" : "the first search term"}).`;
   must(await d.from("pl_candidates").update({ notes: note }).eq("id", c.id), "candidate notes");
   must(await d.from("pl_niches").update({ status: "candidate", candidate_id: c.id, updated_at: now() }).eq("id", id), "link candidate");
-  return { candidateId: c.id, existed: false, category };
+  return { candidateId: c.id, existed: false, category, asins: seed.asins.length, keyword: seed.keyword, keywordFrom: seed.keywordFrom, sell: n.avg_price };
+}
+
+/**
+ * What a niche hands its candidate: the incumbent check's on-niche ASINs (its top 10 by sales) as
+ * Gate 0's page-one ASINs, and as niche keyword the captured search term converting best (an
+ * Opportunity Explorer capture), else the first search term.
+ */
+export function candidateSeed(n: Pick<NicheRow, "search_terms" | "customer_need" | "extra">) {
+  const inc = n.extra?.incumbents as { incumbents?: { asin: string }[] } | undefined;
+  const asins = [...new Set((inc?.incumbents ?? []).map((x) => x.asin.toUpperCase()))].slice(0, 10);
+  const best = bestTermConversion(n.extra?.poe?.terms);
+  return best
+    ? { asins, keyword: best.term, keywordFrom: "conversion" as const }
+    : { asins, keyword: n.search_terms[0] ?? n.customer_need, keywordFrom: "first term" as const };
 }
 
 type CheckNiche = { search_terms: string[]; customer_need: string; categories: string[] | null; extra: Record<string, unknown> | null; keepa_by_day: TokensByDay | null };
