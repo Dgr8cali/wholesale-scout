@@ -90,6 +90,8 @@ export function accessoryFor(title: string, terms: string[]): string | null {
 /** Keepa categories that only look like a bag or a box: left out when the niche is one. */
 export const BAG_BOX_OFF_CATEGORIES = ["Locking Carabiners", "Bait Storage"];
 const BAG_BOX = new Set(["bag", "bags", "box", "boxes"]);
+/** Off-niche words for bag or box niches only, on top of the list in use: a dry bag isn't a fishing bag. */
+export const BAG_BOX_OFF_WORDS = ["dry"];
 /** A bag or box niche: one of its terms is a bag or a box ("fishing bag", "tackle box"). */
 export const isBagOrBox = (terms: string[]) => terms.some((t) => BAG_BOX.has(words(t).at(-1) ?? ""));
 
@@ -100,13 +102,15 @@ export interface OffNicheOpts {
   pet?: boolean;
   /** A Baby Products or Toys & Games niche: kids and children products are on-niche. */
   kids?: boolean;
+  /** A Baby Products niche: baby products are on-niche. */
+  baby?: boolean;
   /** A Toys & Games niche: toy and game products are on-niche. */
   toys?: boolean;
 }
 
 /** A word on the off-niche list that this niche allows. */
 const exempt = (w: string, o: OffNicheOpts) =>
-  (o.pet && (PET_WORDS.has(w) || TOY_WORDS.has(w))) || (o.kids && KID_WORDS.has(w)) || (o.toys && TOY_WORDS.has(w));
+  (o.pet && (PET_WORDS.has(w) || TOY_WORDS.has(w))) || (o.kids && KID_WORDS.has(w)) || (o.baby && w === "baby") || (o.toys && TOY_WORDS.has(w));
 
 /** Why a title is off-niche for one term, or null: not the term (phrase or window), or an excluded word. */
 function reasonFor(title: string, term: string, o: OffNicheOpts): string | null {
@@ -174,7 +178,9 @@ export function classifyIncumbents(products: IncumbentCandidate[], terms: string
   const kept: IncumbentCandidate[] = [];
   const excluded: (IncumbentCandidate & { why: string })[] = [];
   const list = Array.isArray(terms) ? terms : [terms];
-  const offCats = isBagOrBox(list) ? new Set(BAG_BOX_OFF_CATEGORIES.map((c) => c.toLowerCase())) : null;
+  const bagBox = isBagOrBox(list);
+  const offCats = bagBox ? new Set(BAG_BOX_OFF_CATEGORIES.map((c) => c.toLowerCase())) : null;
+  if (bagBox) o = { ...o, words: [...(o.words ?? DEFAULT_OFF_NICHE), ...BAG_BOX_OFF_WORDS] };
   for (const p of products) {
     if (offCats && p.category && offCats.has(p.category.trim().toLowerCase())) {
       excluded.push({ ...p, why: `Keepa category ${p.category} (not a bag or box)` });

@@ -852,7 +852,7 @@ export async function termCheckPlan(reuse?: TermReuse | null, terms: string[] = 
  * with no category (Amazon files hedgehog houses under Pet Supplies, not Garden): the result says
  * it was found outside them. One at a time, never over the estimate (and that fallback) + 10%.
  */
-export async function termIncumbentCheck(termOrTerms: string | string[], o: { rootCategoryIds?: number[]; rootNames?: string[]; pet?: boolean; kids?: boolean; toys?: boolean; offNiche?: string[]; reuse?: TermReuse | null } = {}) {
+export async function termIncumbentCheck(termOrTerms: string | string[], o: { rootCategoryIds?: number[]; rootNames?: string[]; pet?: boolean; kids?: boolean; toys?: boolean; baby?: boolean; offNiche?: string[]; reuse?: TermReuse | null } = {}) {
   const terms = [...new Set((Array.isArray(termOrTerms) ? termOrTerms : [termOrTerms]).map((t) => t.trim()).filter(Boolean))];
   const term = terms[0] ?? "";
   const rooted = (o.rootCategoryIds?.length ?? 0) > 0;
@@ -916,7 +916,7 @@ export async function termIncumbentCheck(termOrTerms: string | string[], o: { ro
       asin: x.asin, title: x.title, brand: x.brand, reviews: x.review_count, price: x.price, rank: x.rank,
       monthlySold: x.bought_past_month, category: x.leaf_category ?? x.root_category ?? null, rootCategory: x.root_category ?? null,
     }));
-    const c = classifyIncumbents(products, terms, { pet: o.pet, kids: o.kids, toys: o.toys, words: o.offNiche });
+    const c = classifyIncumbents(products, terms, { pet: o.pet, kids: o.kids, toys: o.toys, baby: o.baby, words: o.offNiche });
     return {
       term, terms, finderTerms: plan.reusing ? null : plan.finderTerms, rootCategories: o.rootNames ?? [], outside, onNicheCategories: c.categories,
       found, shape: c.shape, onNiche: c.onNiche, incumbents: c.top,

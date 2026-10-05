@@ -51,6 +51,11 @@ describe("off-niche titles", () => {
     expect(r.top.map((x) => x.asin)).toEqual(["C"]);
     expect(r.excluded.map((x) => x.why)).toEqual(["Keepa category Locking Carabiners (not a bag or box)", "Keepa category Bait Storage (not a bag or box)"]);
     expect(classifyIncumbents(items.map((x) => ({ ...x, title: "Fishing Rod" })), ["fishing rod"]).top).toHaveLength(3);
+    // "dry" is off-niche for bag or box niches only (and never when the term has it).
+    const dry = [{ ...p("D", "Fishing Bags"), title: "Waterproof Dry Bag Fishing Kayaking" }, { ...p("E", "Fishing Bags"), title: "Fishing Bag with Dry Compartment" }];
+    expect(classifyIncumbents(dry, ["fishing bag"]).excluded.map((x) => [x.asin, x.why])).toEqual([["D", '"dry" in the title'], ["E", '"dry" in the title']]);
+    expect(classifyIncumbents(dry, ["dry bag"]).top.map((x) => x.asin)).toEqual(["D", "E"]);
+    expect(classifyIncumbents([{ ...p("F", "Rods"), title: "Dry Fly Fishing Rod" }], ["fishing rod"]).top).toHaveLength(1);
   });
 
   it("a term's words within 4 words, any order, when it isn't a phrase; the phrase preferred", () => {
@@ -71,6 +76,8 @@ describe("off-niche titles", () => {
     expect(offNicheReason("Kids Bath Thermometer for Children", "bath thermometer", { kids: true })).toBeNull();
     expect(offNicheReason("Kids Bath Thermometer Toy", "bath thermometer", { kids: true })).toBe('"toy" in the title');
     expect(offNicheReason("Fidget Spinner Toy for Kids", "fidget spinner", { kids: true, toys: true })).toBeNull();
+    expect(offNicheReason("Baby Bath Thermometer", "bath thermometer", { kids: true })).toBe('"baby" in the title');
+    expect(offNicheReason("Baby Bath Thermometer for Kids", "bath thermometer", { kids: true, baby: true })).toBeNull();
     // A pet niche still drops a children's product.
     expect(offNicheReason("Dog Ball Launcher Toy for Kids", "dog ball launcher", { pet: true })).toBe('"kids" in the title');
   });
