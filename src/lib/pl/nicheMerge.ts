@@ -13,7 +13,7 @@ export function nicheKey(terms: string[], sv: number | null): string | null {
 
 export interface MergeRow {
   id: string; customer_need: string; categories: string[]; status: string; notes: string | null; shape: string | null;
-  candidate_id: string | null; extra: { aliases?: string[]; incumbents?: unknown } | null; keepa_by_day: TokensByDay | null; created_at: string;
+  candidate_id: string | null; extra: { aliases?: string[]; incumbents?: unknown; poe?: unknown } | null; keepa_by_day: TokensByDay | null; created_at: string;
 }
 
 /** How far along a status is: a candidate outranks a shortlist, which outranks new, then dismissed. */

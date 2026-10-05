@@ -9,6 +9,7 @@
  * shares and rates given as fractions become percentages, and volumes over 90 or 360 days become
  * a month's. The raw payload is kept on the snapshot, so a later fix here can re-read it.
  */
+import { bestTermConversion } from "./termConversion";
 
 export interface PoeTerm { term: string; volume: number; click_share: number | null; conversion: number | null }
 
@@ -316,6 +317,8 @@ export function poeFill(x: PoeExtract): Record<string, PoeFilled> {
   if (x.search_terms.length) {
     const lt = x.search_terms.filter((t) => t.volume >= 300 && t.volume <= 2000);
     out.longtail = { value: String(lt.length), why: `${lt.length} of ${x.search_terms.length} search terms with 300–2,000 searches a month` };
+    const bt = bestTermConversion(x.search_terms);
+    if (bt) out.bestTermConv = { value: String(bt.conversion), why: `"${bt.term}", the best of ${x.search_terms.length} search terms' 360-day conversion (Opportunity Explorer)` };
     const head = x.search_terms[0];
     out.headVol = { value: String(head.volume), why: `"${head.term}", the niche's top search term` };
   }

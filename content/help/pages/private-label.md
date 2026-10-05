@@ -98,7 +98,7 @@ First order units, samples, inspection, photography, trademark and launch ads. A
 
 Each check in a gate is **pass**, **warn**, **fail** or empty (not answered yet). A gate takes its worst check. It passes only when every check passes. The thresholds are Gatekeeper's. For example, the sell price passes at £18–35 and warns at £15–40; landed cost passes at 30% of the sell price or less and warns at up to 35%.
 
-The **scorecard** has 10 lines worth 0–3 points each, 30 in all: review depth, demand (rank drops), demand stability, Opportunity Explorer volume, review-driven differentiation, long-tail keywords, price multiple, steady-state margin, launch fits capital and competitive risk. Four lines are **structural**: review depth, demand stability, price multiple and competitive risk. Trying harder can't fix them.
+The **scorecard** has 10 lines worth 0–3 points each, 30 in all: review depth, demand (rank drops), demand stability, Opportunity Explorer volume, review-driven differentiation, long-tail keywords, price multiple, steady-state margin, launch fits capital and competitive risk. Four lines are **structural**: review depth, demand stability, price multiple and competitive risk. Trying harder can't fix them. An eleventh line, **Search-term conversion (unscored)**, reads Gate 3's best search-term conversion (filled from an Opportunity Explorer capture): **Buying** at 4%+, **Browse-only** under 2.5%. It's outside the 30 points and the ten lines the verdict needs.
 
 The **verdict** appears once all ten lines are scored:
 

@@ -16,6 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { DEFAULT_HIDDEN_FLAGS, FLAG_LABEL, NICHE_FLAGS, type NicheFlag } from "@/lib/pl/nicheScore";
 import { matchPoeCategory, POE_CATEGORIES } from "@/lib/pl/poeCategories";
+import { TERM_SIGNAL_LABEL, termSignalText, type TermSignal } from "@/lib/pl/termConversion";
 import type { NicheRow } from "@/lib/server/plNiches";
 import { api } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
@@ -39,6 +40,11 @@ const pct = (g: number | null | undefined, dp = 1) => (g == null ? "—" : `${g 
 const gbp = (v: number | null | undefined) => (v == null ? "—" : `£${v.toFixed(2)}`);
 const n0 = (v: number | null | undefined) => (v == null ? "—" : Math.round(v).toLocaleString("en-GB"));
 const SHAPE_CLS = { open: "bg-pass-soft text-pass", contested: "bg-warn-soft text-warn", dominated: "bg-fail-soft text-fail" } as const;
+const SIGNAL_CLS: Record<TermSignal, string> = { BUYING: "bg-pass-soft text-pass", BROWSE_ONLY: "bg-fail-soft text-fail" };
+/** The BUYING / BROWSE-ONLY chip from a niche's best search-term conversion. */
+function SignalChip({ s }: { s: TermSignal | null | undefined }) {
+  return s ? <span className={cn("rounded-full px-1.5 py-px text-[10px] font-semibold whitespace-nowrap uppercase", SIGNAL_CLS[s])}>{TERM_SIGNAL_LABEL[s]}</span> : null;
+}
 const FLAG_CLS: Partial<Record<NicheFlag, string>> = { SPIKE: "bg-fail-soft text-fail", BIG_BRAND: "bg-fail-soft text-fail", REGULATED: "bg-warn-soft text-warn", ELECTRICAL: "bg-warn-soft text-warn", HEAVY_BULKY: "bg-warn-soft text-warn" };
 const PRICE_BANDS: [string, string][] = [["", "Any price"], ["core", "£15–40"], ["mid", "£10–60"], ["low", "Under £10"], ["high", "Over £60"]];
 const SORT_KEYS = ["need", "terms", "score", "sv", "g180", "g90", "price", "range", "clicked", "units", "returns", "flags", "shape", "status"];
@@ -283,6 +289,7 @@ function NicheTable({ data, loading, f, change, hide, setHide, sorting, page, se
             <SortTh {...s.th("price")} numeric className="px-2 py-1.5 text-right">Avg price</SortTh>
             <SortTh {...s.th("range")} numeric className="px-2 py-1.5 text-right">Min–max</SortTh>
             <SortTh {...s.th("clicked")} numeric className="px-2 py-1.5 text-right" title="Products sharing the clicks: more = less dominated">Top-clicked</SortTh>
+            <SortTh {...s.th("conv")} numeric className="px-2 py-1.5 text-right" title="The best 360-day conversion among its search terms, from an Opportunity Explorer capture (the extension's Send to Private label). Buying: a term at 4%+; browse-only: none at 2.5%+">Best term conv.</SortTh>
             <SortTh {...s.th("units")} numeric className="px-2 py-1.5 text-right" title="Units a product a year: the midpoint of the average product's range">Units/product/yr</SortTh>
             <SortTh {...s.th("returns")} numeric className="px-2 py-1.5 text-right">Returns</SortTh>
             <SortTh {...s.th("flags")} className="px-2 py-1.5">Flags</SortTh>
@@ -313,13 +320,16 @@ function NicheTable({ data, loading, f, change, hide, setHide, sorting, page, se
                 <td className="num px-2 py-1.5 text-right">{gbp(n.avg_price)}</td>
                 <td className="num px-2 py-1.5 text-right text-xs text-muted-foreground whitespace-nowrap">{gbp(n.min_price)}–{gbp(n.max_price)}</td>
                 <td className="num px-2 py-1.5 text-right">{n.top_clicked_products ?? "—"}</td>
+                <td className="px-2 py-1.5 text-right">{n.best_term_conversion != null
+                  ? <span className="inline-flex flex-col items-end gap-0.5" title={termSignalText(n.best_term_conversion)}><span className="num">{n.best_term_conversion}%</span><SignalChip s={n.term_signal} /></span>
+                  : <span className="text-xs text-muted-foreground" title="Not sent from Opportunity Explorer yet">—</span>}</td>
                 <td className="num px-2 py-1.5 text-right">{n0(n.units_per_product_mid)}</td>
                 <td className="num px-2 py-1.5 text-right">{pct(n.return_rate, 2).replace("+", "")}</td>
                 <td className="px-2 py-1.5"><span className="flex flex-wrap gap-1">{n.flags.map((x) => <span key={x} className={cn("rounded-full px-1.5 py-px text-[10px] font-semibold uppercase", FLAG_CLS[x as NicheFlag] ?? "bg-empty-soft text-ink-2")}>{FLAG_LABEL[x as NicheFlag] ?? x}</span>)}</span></td>
                 <td className="px-2 py-1.5">{n.shape ? <span className={cn("rounded-full px-2 py-0.5 text-xs font-semibold", SHAPE_CLS[n.shape])}>{n.shape}</span> : <span className="text-xs text-muted-foreground">—</span>}</td>
                 <td className="px-2 py-1.5 text-xs">{n.status === "candidate" && n.candidate_id ? <Link className="text-brand underline" href={`/pl/candidates?c=${n.candidate_id}`}>candidate</Link> : n.status}</td>
               </tr>
-              {open === n.id && <tr className="border-b bg-surface-2/50"><td /><td colSpan={14} className="px-2 py-3"><NicheDetail n={n} onChanged={onChanged} /></td></tr>}
+              {open === n.id && <tr className="border-b bg-surface-2/50"><td /><td colSpan={15} className="px-2 py-3"><NicheDetail n={n} onChanged={onChanged} /></td></tr>}
             </Fragment>
           ))}</tbody>
         </table>
@@ -329,6 +339,9 @@ function NicheTable({ data, loading, f, change, hide, setHide, sorting, page, se
     </section>
   );
 }
+
+/** The term converting best on a niche's capture. */
+const bestTerm = (n: NicheRow) => n.extra.poe?.terms.reduce<{ term: string; conversion: number | null } | null>((a, t) => (t.conversion != null && (a?.conversion == null || t.conversion > a.conversion) ? t : a), null)?.term ?? null;
 
 /** A niche opened: its score's parts, actions, notes, and the incumbent check. */
 function NicheDetail({ n, onChanged }: { n: NicheRow; onChanged: () => void }) {
@@ -365,7 +378,17 @@ function NicheDetail({ n, onChanged }: { n: NicheRow; onChanged: () => void }) {
         <p className="text-xs font-semibold">Score {n.score} of 100</p>
         {bd && <table className="w-full text-xs"><tbody>{Object.entries(bd).map(([k, c]) => (
           <tr key={k} title={c.note}><td className="py-0.5 pr-2 capitalize">{k}</td><td className="num pr-2 text-right">{c.points} / {c.max}</td><td className="text-muted-foreground">{c.note}</td></tr>
-        ))}</tbody></table>}
+        ))}
+          <tr title="From an Opportunity Explorer capture; not part of the 0–100 score" className="border-t">
+            <td className="py-0.5 pr-2">Term conversion</td>
+            <td className="pr-2 text-right"><SignalChip s={n.term_signal} />{n.best_term_conversion != null && !n.term_signal && <span className="num">{n.best_term_conversion}%</span>}</td>
+            <td className="text-muted-foreground">{n.best_term_conversion != null ? termSignalText(n.best_term_conversion, bestTerm(n)) : "Send the niche from Opportunity Explorer (the extension) to read its search terms' conversion"}</td>
+          </tr>
+        </tbody></table>}
+        {n.extra.poe && <details className="text-xs"><summary className="cursor-pointer text-muted-foreground">Search terms from Opportunity Explorer ({n.extra.poe.terms.length}, {new Date(n.extra.poe.capturedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })})</summary>
+          <table className="mt-1"><tbody>{[...n.extra.poe.terms].sort((a, b) => (b.conversion ?? -1) - (a.conversion ?? -1)).map((t) => (
+            <tr key={t.term}><td className="pr-2">{t.term}</td><td className="num pr-2 text-right">{t.conversion != null ? `${t.conversion}%` : "—"}</td><td className="num text-right text-muted-foreground">{t.volume != null ? `${t.volume.toLocaleString("en-GB")}/mo` : ""}</td></tr>
+          ))}</tbody></table></details>}
         <div className="flex flex-wrap gap-1.5 pt-1">
           {n.status !== "shortlisted" && n.status !== "candidate" && <Button size="xs" disabled={!!busy} onClick={() => status("shortlisted")}>Shortlist</Button>}
           {n.status !== "dismissed" && n.status !== "candidate" && <Button size="xs" variant="outline" disabled={!!busy} onClick={() => status("dismissed")}>Dismiss</Button>}

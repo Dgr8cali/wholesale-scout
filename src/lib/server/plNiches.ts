@@ -1,6 +1,7 @@
 import "server-only";
 import { feeCategoryFor, keepaRootsFor, matchPoeCategory } from "../pl/poeCategories";
 import { DEFAULT_OFF_NICHE, parseWordList } from "../pl/offNiche";
+import { bestTermConversion, termSignal, type ConvTerm, type TermSignal } from "../pl/termConversion";
 import { addDailyTokens, PL_KEEP_DAYS, type TokensByDay } from "../keepaLedger";
 import { DEFAULT_BRAND_TERMS, parseBrandTerms } from "../pl/brandTerms";
 import { nicheFlags, scoreNiche } from "../pl/nicheScore";
@@ -18,17 +19,22 @@ export interface NicheRow {
   sv_360: number | null; growth_180: number | null; sv_90: number | null; growth_90: number | null;
   units_360_min: number | null; units_360_max: number | null; units_per_product_min: number | null; units_per_product_max: number | null; units_per_product_mid: number | null;
   avg_price: number | null; min_price: number | null; max_price: number | null; return_rate: number | null;
-  extra: { aliases?: string[]; incumbents?: unknown }; score: number | null; score_breakdown: unknown; flags: string[];
+  extra: { aliases?: string[]; incumbents?: unknown; poe?: NichePoe }; score: number | null; score_breakdown: unknown; flags: string[];
   shape: "open" | "contested" | "dominated" | null; status: NicheStatus; notes: string | null; candidate_id: string | null;
   /** Every category whose download had it (the same niche in two categories is one row). */
   categories: string[];
+  /** Its best search term's conversion (%), from an Opportunity Explorer capture; and the signal it gives. */
+  best_term_conversion: number | null; term_signal: TermSignal | null;
   created_at: string; updated_at: string;
   /** From its import. */
   category?: string;
 }
 
+/** The Opportunity Explorer capture linked to a niche: its search terms with their conversion. */
+export interface NichePoe { snapshotId: string; capturedAt: string; terms: ConvTerm[] }
+
 const now = () => new Date().toISOString();
-const NUMS = ["top_clicked_products", "sv_360", "growth_180", "sv_90", "growth_90", "units_360_min", "units_360_max", "units_per_product_min", "units_per_product_max", "units_per_product_mid", "avg_price", "min_price", "max_price", "return_rate", "score"] as const;
+const NUMS = ["best_term_conversion", "top_clicked_products", "sv_360", "growth_180", "sv_90", "growth_90", "units_360_min", "units_360_max", "units_per_product_min", "units_per_product_max", "units_per_product_mid", "avg_price", "min_price", "max_price", "return_rate", "score"] as const;
 /**
  * The columns the page filters and sorts by in SQL, worked out from the niche: its words for the
  * search, its first search term, how many flags, and the shape's rank (open first).
@@ -175,6 +181,7 @@ export async function importNiches(x: { text: string; category: string; filename
   if (old.length) must(await d.from("pl_niche_imports").delete().in("id", oldIds), "replace the old import");
   // The same niche downloaded in another category: one row, every category on it.
   const merged = await mergeDuplicateNiches();
+  await linkPoeCaptures();
   return { importId: imp.id, category, niches: rows.length, duplicates: p.duplicates, preserved, replaced: old.length > 0, unmapped: p.unmapped, mergedAcrossCategories: merged.merged };
 }
 
@@ -219,7 +226,7 @@ export async function listImports() {
 
 export const NICHE_SORTS = {
   need: "customer_need", terms: "first_term", score: "score", sv: "sv_360", g180: "growth_180", g90: "growth_90", price: "avg_price", range: "max_price",
-  clicked: "top_clicked_products", units: "units_per_product_mid", returns: "return_rate", flags: "flag_count", shape: "shape_rank", status: "status",
+  clicked: "top_clicked_products", conv: "best_term_conversion", units: "units_per_product_mid", returns: "return_rate", flags: "flag_count", shape: "shape_rank", status: "status",
 } as const;
 export type NicheSort = keyof typeof NICHE_SORTS;
 /** Average price bands: £15–40, £10–60, under £10, over £60. */
@@ -230,7 +237,7 @@ export interface NicheQuery {
   hideFlags?: string[]; sort?: NicheSort; dir?: "asc" | "desc"; page?: number; pageSize?: number;
 }
 
-const COLS = "id, import_id, categories, customer_need, search_terms, top_clicked_products, sv_360, growth_180, sv_90, growth_90, units_360_min, units_360_max, units_per_product_min, units_per_product_max, units_per_product_mid, avg_price, min_price, max_price, return_rate, extra, score, score_breakdown, flags, shape, status, notes, candidate_id, created_at, updated_at";
+const COLS = "id, import_id, categories, customer_need, search_terms, top_clicked_products, sv_360, growth_180, sv_90, growth_90, units_360_min, units_360_max, units_per_product_min, units_per_product_max, units_per_product_mid, avg_price, min_price, max_price, return_rate, extra, score, score_breakdown, flags, shape, status, notes, candidate_id, best_term_conversion, term_signal, created_at, updated_at";
 
 /** The niches matching the filters, sorted and paged in SQL, with the total that match. */
 export async function nichePage(x: NicheQuery) {
@@ -358,6 +365,49 @@ export async function checkNicheIncumbents(id: string, rerun = false) {
     extra: { ...(n.extra ?? {}), incumbents: r }, keepa_by_day: addDailyTokens(n.keepa_by_day, r.tokensUsed, new Date(), PL_KEEP_DAYS), updated_at: now(),
   }).eq("id", id), "save the check");
   return r;
+}
+
+/* ===================== Opportunity Explorer captures ===================== */
+
+const likeSafe = (s: string) => s.replace(/[\\%_]/g, (c) => `\\${c}`);
+
+/**
+ * Link Opportunity Explorer captures (the extension's "Send to Private label") to the niches they're
+ * for: the latest capture with search terms whose niche title is a niche's customer need or one of
+ * its aliases (any case). Each gets its best term conversion, the BUYING / BROWSE_ONLY signal and the
+ * terms. One capture (after it arrives) or every capture (after an import, a merge or a re-read).
+ */
+export async function linkPoeCaptures(snapshotId?: string): Promise<{ linked: number }> {
+  const d = db();
+  let q = d.from("pl_poe_snapshots").select("id, niche_title, captured_at, search_terms").not("niche_title", "is", null).order("captured_at", { ascending: false });
+  if (snapshotId) q = q.eq("id", snapshotId);
+  const caps = must(await q, "captures") as { id: string; niche_title: string; captured_at: string; search_terms: ConvTerm[] | null }[];
+  const latest = new Map<string, (typeof caps)[number]>();
+  for (const c of caps) {
+    const k = c.niche_title.trim().toLowerCase();
+    if (k && (c.search_terms?.length ?? 0) > 0 && !latest.has(k)) latest.set(k, c);
+  }
+  let linked = 0;
+  for (const [title, c] of latest) {
+    const best = bestTermConversion(c.search_terms);
+    if (!best) continue;
+    // Its name or an alias holds the title (a short title can match many: every page read).
+    const near = await allRows<{ id: string; customer_need: string; extra: Record<string, unknown> | null }>((a, b) =>
+      d.from("pl_niches").select("id, customer_need, extra").ilike("search_text", `%${likeSafe(title)}%`).order("id").range(a, b), "niches for a capture");
+    for (const n of near) {
+      const names = [n.customer_need, ...(((n.extra?.aliases as string[] | undefined) ?? []))].map((x) => x.trim().toLowerCase());
+      if (!names.includes(title)) continue;
+      const prev = n.extra?.poe as NichePoe | undefined;
+      // A single capture never replaces a newer one already on the niche.
+      if (prev && prev.snapshotId !== c.id && prev.capturedAt > c.captured_at) continue;
+      const poe: NichePoe = { snapshotId: c.id, capturedAt: c.captured_at, terms: (c.search_terms ?? []).map((t) => ({ term: t.term, volume: t.volume ?? null, conversion: t.conversion })) };
+      must(await d.from("pl_niches").update({
+        best_term_conversion: best.conversion, term_signal: termSignal(best.conversion), extra: { ...(n.extra ?? {}), poe }, updated_at: now(),
+      }).eq("id", n.id), "link a capture");
+      linked++;
+    }
+  }
+  return { linked };
 }
 
 /** For Home: counted in SQL, so every niche counts (not the first 1,000). */

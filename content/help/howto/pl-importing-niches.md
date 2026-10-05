@@ -58,6 +58,16 @@ Flags never change the score: they're chips, and you can hide flagged niches. Th
 
 Words match whole (so "led" isn't found in "sledge"), plurals included ("light" finds "lights"). A word can still misfire ("unit" in "air con unit", "scales" in "fish scales"): open the niche to judge.
 
+## Search-term conversion (from the extension)
+
+The category download has no conversion figures. Open a niche on Opportunity Explorer and click the extension's **Send to Private label**: the capture holds every search term's 360-day conversion. The niche whose customer need (or an alias) is the captured niche's title gets:
+
+- a **Best term conv.** column: the highest conversion among its search terms (sortable);
+- a chip: **Buying** when a term converts at 4% or more (people search it to buy), **Browse-only** when no term reaches 2.5% (people look but don't buy). Between 2.5% and 4%, no chip;
+- a **Term conversion** line under the score in the opened niche, with every captured term's conversion and volume. It reads only: the 0–100 score doesn't change.
+
+The latest capture wins. A capture sent before the import is linked when you import. A candidate filled from the same capture gets a **Best search-term conversion** field in Gate 3 and a reads-only line on its scorecard.
+
 ## Acting on niches
 
 Open a niche for its actions:

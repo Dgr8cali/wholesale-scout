@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { handle } from "@/lib/server/http";
-import { importNiches, listImports, mergeDuplicateNiches, nichePage, nicheStats, previewNicheImport, type NicheSort } from "@/lib/server/plNiches";
+import { importNiches, linkPoeCaptures, listImports, mergeDuplicateNiches, nichePage, nicheStats, previewNicheImport, type NicheSort } from "@/lib/server/plNiches";
 
 export const maxDuration = 60;
 
@@ -30,7 +30,7 @@ export const GET = handle(async (req: NextRequest) => {
  */
 export const POST = handle(async (req: NextRequest) => {
   const b = (await req.json().catch(() => ({}))) as { action?: string; text?: string; category?: string; filename?: string };
-  if (b.action === "merge") return Response.json(await mergeDuplicateNiches());
+  if (b.action === "merge") return Response.json({ ...(await mergeDuplicateNiches()), poeLinked: (await linkPoeCaptures()).linked });
   if (!b.text) return Response.json({ error: "No file" }, { status: 400 });
   try {
     if (b.action === "import") return Response.json(await importNiches({ text: b.text, category: b.category ?? "", filename: b.filename ?? null }));

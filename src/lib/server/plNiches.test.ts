@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
 import { __setDbForTests } from "./db";
 import { FakeDb } from "./fakeDb";
-import { bulkNicheStatus, importNiches, mergeDuplicateNiches, nichePage, nicheStats, previewNicheImport, reflagNiches, saveBrandTerms, updateNiche } from "./plNiches";
+import { bulkNicheStatus, importNiches, linkPoeCaptures, mergeDuplicateNiches, nichePage, nicheStats, previewNicheImport, reflagNiches, saveBrandTerms, updateNiche } from "./plNiches";
 
 const csv = readFileSync(join(__dirname, "../../../docs/samples/poe/diy-tools.csv"), "utf8");
 
@@ -12,7 +12,7 @@ describe("Niche Import (FakeDb)", () => {
   beforeEach(() => {
     fake = new FakeDb();
     __setDbForTests(fake);
-    for (const t of ["pl_niche_imports", "pl_niches", "pl_niche_settings"]) fake.tables[t] ??= [];
+    for (const t of ["pl_niche_imports", "pl_niches", "pl_niche_settings", "pl_poe_snapshots"]) fake.tables[t] ??= [];
   });
 
   it("preview, import, and a re-import that keeps status, notes and shape", async () => {
@@ -116,5 +116,26 @@ describe("Niche Import (FakeDb)", () => {
     expect(fake.tables.pl_niches).toHaveLength(496);
     // Nothing left to merge.
     expect(await mergeDuplicateNiches()).toEqual({ groups: 0, merged: 0 });
+  });
+  it("a capture from Opportunity Explorer gives the niche (by name or alias) its best term conversion and signal", async () => {
+    await importNiches({ text: csv, category: "DIY & Tools" });
+    const terms = (c: number[]) => c.map((conversion, i) => ({ term: `t${i}`, volume: 1000, click_share: null, conversion }));
+    fake.tables.pl_poe_snapshots.push(
+      { id: "s-old", niche_title: "Window Cleaner", captured_at: "2026-09-01T00:00:00Z", search_terms: terms([9]) },
+      { id: "s-new", niche_title: "window cleaner", captured_at: "2026-10-01T00:00:00Z", search_terms: terms([3]) },
+      // An alias of window cleaner's row, captured later: it's the one the niche keeps (the newest wins).
+      { id: "s-alias", niche_title: "Window Cleaning Equipment", captured_at: "2026-10-03T00:00:00Z", search_terms: terms([1.2, 2.1]) },
+      { id: "s-none", niche_title: "not a niche here", captured_at: "2026-10-02T00:00:00Z", search_terms: terms([7]) },
+    );
+    expect(await linkPoeCaptures()).toEqual({ linked: 1 });
+    const wc = (await nichePage({ q: "window cleaner", status: "all" })).rows.find((n) => n.customer_need === "window cleaner")!;
+    expect(wc).toMatchObject({ best_term_conversion: 2.1, term_signal: "BROWSE_ONLY", extra: { poe: { snapshotId: "s-alias" } } });
+    // The niche's page sorts by it.
+    const top = (await nichePage({ sort: "conv", dir: "desc", status: "all", pageSize: 1 })).rows[0];
+    expect(top.id).toBe(wc.id);
+    // One capture arriving: linked on its own, a BUYING one.
+    fake.tables.pl_poe_snapshots.push({ id: "s-buy", niche_title: "window cleaner", captured_at: "2026-10-05T00:00:00Z", search_terms: terms([4.4, 0.5]) });
+    await linkPoeCaptures("s-buy");
+    expect(fake.tables.pl_niches.find((n) => n.id === wc.id)).toMatchObject({ best_term_conversion: 4.4, term_signal: "BUYING" });
   });
 });

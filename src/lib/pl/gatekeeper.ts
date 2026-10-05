@@ -14,6 +14,7 @@
  *
  * Pure: browser and server.
  */
+import { termSignal, termSignalText, type TermSignal } from "./termConversion";
 import { inPeakMonths, sizeTier as cardSizeTier, referralPct as cardReferralPct } from "../fees/engine";
 import type { RateCard } from "../fees/rateCard";
 
@@ -67,6 +68,7 @@ export const GATES: GateDef[] = [
       { k: "products", label: "Products in niche", type: "num" },
       { k: "clickShare", label: "Click share, top 3", type: "num", unit: "%" },
       { k: "conv", label: "Search conversion rate", type: "num", unit: "%" },
+      { k: "bestTermConv", label: "Best search-term conversion", type: "num", unit: "%", hint: "The best term's 360-day conversion: 4%+ buying, under 2.5% browse-only" },
       { k: "unitsPer", label: "Avg units sold per product", type: "num", unit: "/mo" },
     ] },
   { id: "g4", n: "4", title: "Mine the reviews", tool: "Paste the reviews · mined here",
@@ -342,7 +344,11 @@ export function gateStatus(rows: Check[]): Status {
 
 /* ===================== scorecard and verdict ===================== */
 
-export interface ScoreRow { n: number; label: string; pts: number | null; why: string[]; structural?: boolean }
+export interface ScoreRow {
+  n: number; label: string; pts: number | null; why: string[]; structural?: boolean;
+  /** A line that reads, not scores: outside the /30 and the 10 lines the verdict needs. */
+  info?: { text: string; signal: TermSignal | null; answered: boolean };
+}
 export interface Scorecard { rows: ScoreRow[]; total: number; answered: number }
 
 export function scorecard(f: Fields, S: Settings, cat: string, card: RateCard, date: Date = new Date()): Scorecard {
@@ -370,8 +376,11 @@ export function scorecard(f: Fields, S: Settings, cat: string, card: RateCard, d
     rp = major ? 0 : minors >= 2 ? 1 : minors === 1 ? 2 : 3;
   }
   rows.push({ n: 10, label: "Competitive risk", pts: rp, why: ["Amazon present or dominant seller", "Two concerns", "One concern", "None"], structural: true });
-  const answered = rows.filter((r) => r.pts != null).length;
-  const total = rows.reduce((a, r) => a + (r.pts || 0), 0);
+  const bt = num(f.bestTermConv);
+  rows.push({ n: 11, label: "Search-term conversion (unscored)", pts: null, why: [], info: { text: termSignalText(bt), signal: termSignal(bt), answered: bt != null } });
+  const scored = rows.filter((r) => !r.info);
+  const answered = scored.filter((r) => r.pts != null).length;
+  const total = scored.reduce((a, r) => a + (r.pts || 0), 0);
   return { rows, total, answered };
 }
 

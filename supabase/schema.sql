@@ -1,5 +1,5 @@
 -- Wholesale Scout schema, dumped by scripts/schema-backup.mjs. No data.
--- Dumped 2026-10-04T23:48:19.646Z. Safe to re-run. Restore: npm run schema:restore
+-- Dumped 2026-10-05T00:34:10.341Z. Safe to re-run. Restore: npm run schema:restore
 
 -- @section extensions
 create extension if not exists "pg_cron";
@@ -1470,7 +1470,9 @@ create table if not exists "pl_niches" (
   "first_term" text,
   "flag_count" integer default 0 not null,
   "shape_rank" integer,
-  "categories" text[] default '{}'::text[] not null
+  "categories" text[] default '{}'::text[] not null,
+  "best_term_conversion" numeric,
+  "term_signal" text
 );
 alter table "pl_niches" add column if not exists "id" uuid default gen_random_uuid();
 alter table "pl_niches" add column if not exists "import_id" uuid;
@@ -1508,6 +1510,8 @@ alter table "pl_niches" add column if not exists "first_term" text;
 alter table "pl_niches" add column if not exists "flag_count" integer default 0;
 alter table "pl_niches" add column if not exists "shape_rank" integer;
 alter table "pl_niches" add column if not exists "categories" text[] default '{}'::text[];
+alter table "pl_niches" add column if not exists "best_term_conversion" numeric;
+alter table "pl_niches" add column if not exists "term_signal" text;
 alter table "pl_niches" enable row level security;
 
 create table if not exists "pl_poe_snapshots" (
@@ -2896,6 +2900,11 @@ do $$ begin
   end if;
 end $$;
 do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'pl_niches_term_signal_check' and conrelid = '"pl_niches"'::regclass) then
+    alter table "pl_niches" add constraint "pl_niches_term_signal_check" CHECK ((term_signal = ANY (ARRAY['BUYING'::text, 'BROWSE_ONLY'::text])));
+  end if;
+end $$;
+do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'pl_poe_snapshots_search_conversion_source_check' and conrelid = '"pl_poe_snapshots"'::regclass) then
     alter table "pl_poe_snapshots" add constraint "pl_poe_snapshots_search_conversion_source_check" CHECK ((search_conversion_source = ANY (ARRAY['niche'::text, 'trends'::text, 'terms'::text])));
   end if;
@@ -3406,6 +3415,7 @@ CREATE INDEX IF NOT EXISTS pl_candidate_asins_asin ON pl_candidate_asins USING b
 CREATE INDEX IF NOT EXISTS pl_category_tree_root ON pl_category_tree USING btree (root_id);
 CREATE UNIQUE INDEX IF NOT EXISTS pl_gate_waivers_key ON pl_gate_waivers USING btree (candidate_id, gate_id, COALESCE(check_label, ''::text));
 CREATE INDEX IF NOT EXISTS pl_niche_imports_category ON pl_niche_imports USING btree (lower(category));
+CREATE INDEX IF NOT EXISTS pl_niches_best_term_conversion ON pl_niches USING btree (best_term_conversion DESC NULLS LAST, id);
 CREATE INDEX IF NOT EXISTS pl_niches_categories ON pl_niches USING gin (categories);
 CREATE INDEX IF NOT EXISTS pl_niches_import ON pl_niches USING btree (import_id);
 CREATE INDEX IF NOT EXISTS pl_niches_need ON pl_niches USING btree (lower(customer_need));
@@ -3676,3 +3686,4 @@ insert into schema_migrations (name) values ('20261004000100_pl_niches.sql') on 
 insert into schema_migrations (name) values ('20261005000100_pl_niches_paging.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261005000200_pl_niche_categories.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261005000300_pl_niches_reset_offniche_checks.sql') on conflict do nothing;
+insert into schema_migrations (name) values ('20261005000400_pl_niches_term_conversion.sql') on conflict do nothing;

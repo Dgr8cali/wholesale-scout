@@ -18,6 +18,7 @@ import { adsDefaults, withAdsDefaults } from "@/lib/pl/adsDefaults";
 import { budget, econ, evaluate, money, pct, referralOptions, type Evaluation, type FieldDef, type GateDef, type GateResult, type Settings, type Status, type Waiver } from "@/lib/pl/gatekeeper";
 import { api } from "@/lib/ui/client";
 import { ago } from "@/lib/ui/when";
+import { TERM_SIGNAL_LABEL } from "@/lib/pl/termConversion";
 import { cn } from "@/lib/utils";
 import { Readout, SourceChip, StatusPill } from "./bits";
 import { STATUSES, TONE, valuesOf, type CandidateDetail, type FieldMap } from "./types";
@@ -445,7 +446,7 @@ function ScorecardPanel({ ev }: { ev: Evaluation }) {
     n: { value: (r) => r.n, kind: "number" },
     label: { value: (r) => r.label, kind: "text" },
     pts: { value: (r) => r.pts, kind: "number" },
-    why: { value: (r) => (r.pts == null ? null : r.why[r.pts]), kind: "text" },
+    why: { value: (r) => (r.info ? r.info.text : r.pts == null ? null : r.why[r.pts]), kind: "text" },
     structural: { value: (r) => (r.structural ? "structural" : null), kind: "text" },
   });
   const PTS = ["bg-fail-soft text-fail", "bg-warn-soft text-warn", "bg-brand-soft text-brand", "bg-pass-soft text-pass"];
@@ -470,9 +471,11 @@ function ScorecardPanel({ ev }: { ev: Evaluation }) {
             <tr key={r.n} className="border-b">
               <td className="num px-2 py-2 text-muted-foreground">{r.n}</td>
               <td className="px-2 py-2">{r.label}</td>
-              <td className="px-2 py-2 text-center"><b className={cn("num inline-flex size-7 items-center justify-center rounded-md font-semibold", r.pts == null ? "bg-empty-soft text-empty" : PTS[r.pts])}>{r.pts ?? "–"}</b></td>
-              <td className="px-2 py-2 text-xs text-muted-foreground">{r.pts == null ? "Not scored" : r.why[r.pts]}</td>
-              <td className="px-2 py-2 text-[11px] whitespace-nowrap text-muted-foreground">{r.structural ? "structural" : ""}</td>
+              <td className="px-2 py-2 text-center">{r.info
+                ? (r.info.signal ? <span className={cn("rounded-full px-1.5 py-px text-[10px] font-semibold whitespace-nowrap uppercase", r.info.signal === "BUYING" ? "bg-pass-soft text-pass" : "bg-fail-soft text-fail")}>{TERM_SIGNAL_LABEL[r.info.signal]}</span> : <span className="text-xs text-muted-foreground">–</span>)
+                : <b className={cn("num inline-flex size-7 items-center justify-center rounded-md font-semibold", r.pts == null ? "bg-empty-soft text-empty" : PTS[r.pts])}>{r.pts ?? "–"}</b>}</td>
+              <td className="px-2 py-2 text-xs text-muted-foreground">{r.info ? (r.info.answered ? r.info.text : "Not captured: send the niche from Opportunity Explorer") : r.pts == null ? "Not scored" : r.why[r.pts]}</td>
+              <td className="px-2 py-2 text-[11px] whitespace-nowrap text-muted-foreground">{r.info ? "reads only" : r.structural ? "structural" : ""}</td>
             </tr>
           ))}</tbody>
         </table>

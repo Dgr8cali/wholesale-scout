@@ -1,7 +1,7 @@
 # Wholesale Scout: status
 
 Read this first in a new session. Keep it current: every commit that changes a feature updates
-it (what's built, the backlog, the rough edges). Last updated: 5 Oct 2026 (Niches incumbent check: accessories for any term left out; bag/box niches drop carabiners and bait storage).
+it (what's built, the backlog, the rough edges). Last updated: 5 Oct 2026 (Niches: best search-term conversion from Opportunity Explorer captures, Buying / Browse-only).
 
 Wholesale Scout is a single-user Amazon UK seller's workbench: Next.js 16 (App Router, `proxy.ts`
 password gate), Supabase (Postgres, RLS on, service-role access from the server only), Vercel
@@ -47,7 +47,11 @@ the finder list and 7-day snapshots, often 0 tokens) and creates candidates; re-
 shape. The category is picked from Opportunity Explorer's 25 top-level UK categories (or Other…),
 each mapped to the rate card category candidates use for fees. Home has a Niches tile. The Niches table is filtered, flag-hidden,
 sorted and paged in SQL (100 a page, 50–500, "showing X–Y of N"), with the summary strip counted
-over every niche in scope. A niche in several categories' downloads (identical search terms and search volume) is
+over every niche in scope. A niche sent from Opportunity Explorer (the extension's capture, linked by title = customer need or
+alias, latest wins, relinked on every import, merge and re-read) gets a sortable best search-term
+conversion column and a BUYING (a term ≥ 4%) / BROWSE-ONLY (none ≥ 2.5%) chip, plus a reads-only
+line under its score; candidates get Gate 3's "best search-term conversion" field and an unscored
+eleventh scorecard line (outside the /30 and the verdict). A niche in several categories' downloads (identical search terms and search volume) is
 one row with every category (`categories`, shown as chips), its status, notes, shape and ledgers merged,
 on every import; the existing data was merged (233 niches across categories, 242 rows folded in). Quotes turns supplier quotes into
 a landed cost per unit and total cash (FX, freight, duty, import VAT, inspection), writes it into
