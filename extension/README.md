@@ -8,6 +8,7 @@ Wholesale Scout's verdict on Amazon UK, where you browse:
 - **Dangerous goods**: "Look up" opens Seller Central for the ASIN; a bar there reads the classification and, when you confirm it, saves it to the product in the app. Hazmat counts in the compliance gate the next time the product is screened.
 - **Opportunity Explorer → Private label** (on request, per click): send a Product Opportunity Explorer niche to the app's Private label workspace for Gates 3 and 5. See below.
 - **Rank checks** (on request, per click, 0.3.0): where an Ads product sits in amazon.co.uk's organic results for its keywords. See below.
+- **Reviews → Private label** (on request, per click, 0.4.0): send a listing's reviews from amazon.co.uk's review pages to a candidate's Gate 4. See below.
 
 ## Install (load unpacked)
 
@@ -62,6 +63,13 @@ Seller Central's pages can't be read reliably, so the bar suggests hazmat / not 
 - **Where it goes**: at the end or on Stop, `POST /api/ads/ranks` with `{ asin, runId, results: [{ keyword, position, page, checkedAt }] }`, through `background.js` with your password.
 - **Limits**: one run at a time, started only by your click, never scheduled. Amazon's Conditions of Use prohibit automated data gathering: keep it to a few runs a week.
 
+## Reviews to Private label: per click
+
+- **Where**: any `amazon.co.uk/product-reviews/<ASIN>` page (Amazon's "See more reviews"; filter to critical reviews for Gate 4). A panel at the bottom right.
+- **What it reads**: each review on the page (`[data-hook="review"]`): star rating, the "Reviewed in … on …" date, title, body, variant ("Colour: … | Size: …") and helpful votes, with Amazon's review id. Every review page you open, or that Amazon loads in place, is added to the capture for that ASIN, kept in the extension's storage (`chrome.storage.local`) until you **Clear** it. The panel counts them by star.
+- **Where it goes**: only when you click **Send reviews to Private label**: `POST /api/pl/reviews/capture` with `{ asin, reviews }` and your password. The app puts them in the Gate 4 reviews of the candidate with that ASIN among its page-one ASINs; with several (or none), the panel asks which. Sending again adds only new reviews (matched by review id). Reviews you pasted by hand for that ASIN aren't touched until you choose **Add to them** or **Replace them**.
+- **What Gate 4 mines**: the 1–3★ ones. 4–5★ reviews, and any whose stars couldn't be read (the panel counts them), are kept but left out of the miner.
+
 ## Limits
 
 The app allows the extension 60 checks and 120 other requests a minute from one address; past that it answers 429 with the time to try again. Ten wrong passwords in 15 minutes block the address for 15 minutes.
@@ -77,6 +85,7 @@ The app allows the extension 60 checks and 120 other requests a minute from one 
 | `sellercentral.js` | The DG reading bar on Seller Central |
 | `poe-page.js` | Opportunity Explorer, page world: observes every GraphQL and insights response the page receives |
 | `poe.js` | Opportunity Explorer panel: merges the niche page's responses, Send to Private label, the candidate picker, what was and wasn't read |
+| `reviews.js` | Review pages: reads each page's reviews into a capture per ASIN, Send reviews to Private label, the candidate picker |
 | `popup.html`, `popup.js` | Settings, the connection test, and Check ranks |
 | `ranks.js` | Rank checks (background): the run, one keyword at a time, and posting the results |
 | `rankread.js` | Rank checks (in the search tab): reads the organic results and draws the progress panel |

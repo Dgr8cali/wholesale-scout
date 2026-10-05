@@ -47,6 +47,7 @@ The password is kept on this computer only and is sent only to your app.
 
 1. Open any product page on amazon.co.uk. The panel appears on the right and checks the product. The first check of an ASIN is a check run in the app and can use a few Keepa tokens. See [Keepa tokens](/help/concepts/keepa-tokens).
 2. Search for something on amazon.co.uk. Each result gets a badge: a verdict for products the app already knows, and a grey "?" for the rest.
+3. Open a listing's reviews ("See more reviews"). A panel counts the reviews on each page you open; **Send reviews to Private label** puts them in a candidate's Gate 4. See [Private label: mining reviews](/help/howto/pl-mining-reviews).
 
 ## Choose how it behaves
 

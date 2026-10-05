@@ -15,6 +15,8 @@ Gate 4 asks for one complaint that repeats across the top listings, that a facto
 
 **Paste all** takes several listings at once: start each listing's reviews with a line `ASIN: B0…`. Each listing's paste replaces what was saved for it, and a listing that isn't in the top five gets its own box.
 
+**Or send them with the extension** (version 0.4.0 or later). On a listing's reviews page on amazon.co.uk, a panel at the bottom right counts the reviews it has read, by star. Click through as many pages as you want (filter to critical reviews first): each page is added. Click **Send reviews to Private label** and they go into the Gate 4 box of the candidate with that ASIN among its page-one ASINs. If several candidates have it, or none, the panel asks which. Sending again adds only reviews it hasn't seen (Amazon's review id). Reviews you pasted by hand for that listing stay until you choose **Add to them** or **Replace them**. Only the 1–3★ reviews go into the box; 4–5★ ones, and any whose stars couldn't be read, are kept but not mined. The box says **from the extension** with the count; editing its text by hand makes it your paste.
+
 The raw text is kept with the candidate. Everything after that happens in your browser, with no API call.
 
 ## How the reviews are read

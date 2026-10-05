@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { __setAnthropicForTests } from "./adsAi";
 import { __setDbForTests } from "./db";
 import { FakeDb } from "./fakeDb";
-import { reviewData, saveReviewDump, saveReviewSynonyms, savePasteAll, setReviewMark, summariseReviews } from "./plReviews";
+import { candidatesWithAsin, reviewData, saveCapturedReviews, saveReviewDump, saveReviewSynonyms, savePasteAll, setReviewMark, summariseReviews } from "./plReviews";
 
 const fx = (f: string) => readFileSync(join(__dirname, "..", "pl", "__fixtures__", f), "utf8");
 const CAND = "c1";
@@ -18,6 +18,38 @@ describe("Gate 4 review dumps (FakeDb, API mocked)", () => {
     process.env.ANTHROPIC_API_KEY = "test";
   });
   afterEach(() => { __setAnthropicForTests(null); __setDbForTests(null); });
+
+  it("the extension's capture: matched by ASIN, a hand paste kept until you choose, resends merged by review id", async () => {
+    db.tables.pl_candidates.push({ id: "c2", name: "Pill case", status: "dropped" }, { id: "c3", name: "Pill organiser", status: "draft" });
+    db.tables.pl_candidate_asins = [{ candidate_id: CAND, asin: "B0FAKE0001" }, { candidate_id: "c2", asin: "B0FAKE0001" }, { candidate_id: "c3", asin: "B0OTHER001" }];
+    expect((await candidatesWithAsin("b0fake0001")).map((c) => c.id)).toEqual([CAND]);
+    const rv = (id: string, stars: number, body: string) => ({ id, stars, title: `T ${id}`, body, date: "Reviewed in the United Kingdom on 1 September 2026", variant: "Colour: Blue", helpful: 2 });
+    const first = [rv("R1AAAAAAAA", 1, "The lid snapped off."), rv("R2BBBBBBBB", 5, "Great."), rv("R3CCCCCCCC", 2, "Too small for tablets.")];
+
+    // A paste by hand is there: nothing changes until you say how.
+    await saveReviewDump(CAND, "B0FAKE0001", "Lid broke after a week.");
+    expect(await saveCapturedReviews(CAND, "B0FAKE0001", first)).toEqual({ conflict: "pasted", pastedChars: 23 });
+    expect(db.tables.pl_review_dumps[0].text).toBe("Lid broke after a week.");
+
+    const r = await saveCapturedReviews(CAND, "B0FAKE0001", first, "append");
+    expect(r).toMatchObject({ conflict: null, added: 3, total: 3, inDump: 2, keptPaste: true, stars: { 1: 1, 2: 1, 5: 1 } });
+    const text = db.tables.pl_review_dumps[0].text as string;
+    expect(text.startsWith("Lid broke after a week.\n\n1.0 out of 5 stars T R1AAAAAAAA")).toBe(true);
+    expect(text).not.toContain("Great.");
+
+    // Sent again with one new review: only that one is added; the paste stays on top.
+    const again = await saveCapturedReviews(CAND, "B0FAKE0001", [first[0], rv("R4DDDDDDDD", 3, "Hinge cracked.")]);
+    expect(again).toMatchObject({ added: 1, total: 4, inDump: 3, keptPaste: true });
+    const d = await reviewData(CAND);
+    expect(d.dumps[0].captured).toMatchObject({ total: 4, inDump: 3 });
+
+    // Replace drops a hand paste; editing the text by hand makes it all yours.
+    await saveReviewDump(CAND, "B0FAKE0001", "Mine now.");
+    expect((await reviewData(CAND)).dumps[0].captured).toBeNull();
+    await saveCapturedReviews(CAND, "B0FAKE0001", first, "replace");
+    expect(db.tables.pl_review_dumps[0].text).not.toContain("Mine now.");
+    await expect(saveCapturedReviews(CAND, "B0FAKE0001", [{ body: " " }])).rejects.toThrow("No reviews");
+  });
 
   it("stores the raw text per ASIN; a new paste replaces it; empty clears", async () => {
     await saveReviewDump(CAND, "b0fake0001", fx("reviews-amazon.txt"));

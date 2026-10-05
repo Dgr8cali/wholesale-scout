@@ -4,11 +4,16 @@ import {
   type ReviewSummary, type SynonymGroup,
 } from "../pl/reviews";
 import { uncitedNumbers } from "../ads/ai";
+import { cleanCaptured, forGate4, mergeCaptured, renderCaptured, starCounts, type CapturedReview } from "../pl/capturedReviews";
 import { askModel, latestAi } from "./adsAi";
 import { db, must } from "./db";
 
 export type ReviewMark = "chosen" | "not fixable" | "ignore";
-export interface ReviewDump { asin: string; text: string; pasted_at: string }
+export interface ReviewDump {
+  asin: string; text: string; pasted_at: string;
+  /** Sent by the extension: how many reviews (all stars), how many in the dump (1–3★), when. */
+  captured?: { total: number; inDump: number; at: string | null } | null;
+}
 
 const now = () => new Date().toISOString();
 const isAsin = (s: unknown): s is string => typeof s === "string" && /^[A-Z0-9]{10}$/.test(s);
@@ -40,12 +45,15 @@ export async function saveReviewSynonyms(groups: unknown): Promise<SynonymGroup[
 export async function reviewData(candidateId: string) {
   const d = db();
   const [dumps, marks, synonyms] = await Promise.all([
-    d.from("pl_review_dumps").select("asin, text, pasted_at").eq("candidate_id", candidateId).order("asin"),
+    d.from("pl_review_dumps").select("asin, text, pasted_at, captured, captured_at").eq("candidate_id", candidateId).order("asin"),
     d.from("pl_review_marks").select("theme, mark").eq("candidate_id", candidateId),
     reviewSynonyms(),
   ]);
   return {
-    dumps: must(dumps, "review dumps") as ReviewDump[],
+    dumps: (must(dumps, "review dumps") as (ReviewDump & { captured: CapturedReview[] | null; captured_at: string | null })[]).map((x) => ({
+      asin: x.asin, text: x.text, pasted_at: x.pasted_at,
+      captured: x.captured?.length ? { total: x.captured.length, inDump: x.captured.filter(forGate4).length, at: x.captured_at } : null,
+    })),
     marks: Object.fromEntries((must(marks, "review marks") as { theme: string; mark: ReviewMark }[]).map((m) => [m.theme, m.mark])) as Record<string, ReviewMark>,
     synonyms,
     summary: await latestAi("pl_reviews", candidateId),
@@ -61,7 +69,46 @@ export async function saveReviewDump(candidateId: string, asin: string, text: st
     return;
   }
   if (text.length > 500_000) throw new Error("That paste is over 500,000 characters: paste fewer pages at a time");
-  must(await db().from("pl_review_dumps").upsert({ candidate_id: candidateId, asin: a, text, pasted_at: now() }, { onConflict: "candidate_id,asin" }), "save reviews");
+  // Your text is the dump now: whatever the extension sent before is in it, as text.
+  must(await db().from("pl_review_dumps").upsert({ candidate_id: candidateId, asin: a, text, pasted_at: now(), captured: null, captured_at: null, manual_text: null }, { onConflict: "candidate_id,asin" }), "save reviews");
+}
+
+/** The candidates (not dropped) with this ASIN among their page-one ASINs, newest first. */
+export async function candidatesWithAsin(asin: string) {
+  const d = db();
+  const rows = must(await d.from("pl_candidate_asins").select("candidate_id").eq("asin", asin.toUpperCase()), "candidate ASINs") as { candidate_id: string }[];
+  const ids = [...new Set(rows.map((r) => r.candidate_id))];
+  if (!ids.length) return [];
+  const cands = must(await d.from("pl_candidates").select("id, name, niche_keyword, status, updated_at").in("id", ids).order("updated_at", { ascending: false }), "candidates") as { id: string; name: string; niche_keyword: string | null; status: string }[];
+  return cands.filter((c) => c.status !== "dropped").map((c) => ({ id: c.id, name: c.name, niche_keyword: c.niche_keyword, status: c.status }));
+}
+
+/**
+ * Reviews the extension captured for one ASIN, into the candidate's Gate 4 dump: merged with what it
+ * sent before (by review id) and rendered in Amazon's layout (1–3★). A dump you pasted by hand isn't
+ * touched until you say: "replace" drops it, "append" keeps it above the captured reviews.
+ */
+export async function saveCapturedReviews(candidateId: string, asin: string, input: unknown, mode?: "replace" | "append") {
+  const a = asin.trim().toUpperCase();
+  if (!isAsin(a)) throw new Error("An ASIN (10 characters)");
+  const now_ = cleanCaptured(input);
+  if (!now_.length) throw new Error("No reviews in the capture");
+  const d = db();
+  const cur = (await d.from("pl_review_dumps").select("text, captured, manual_text").eq("candidate_id", candidateId).eq("asin", a).maybeSingle()).data as
+    { text: string; captured: CapturedReview[] | null; manual_text: string | null } | null;
+  const pasted = cur && !cur.captured?.length && cur.text.trim() ? cur.text : null;
+  if (pasted && !mode) return { conflict: "pasted" as const, pastedChars: pasted.length };
+  const manual = pasted ? (mode === "append" ? pasted : null) : cur?.manual_text ?? null;
+  const merged = mergeCaptured(cur?.captured ?? [], now_);
+  const text = [manual, renderCaptured(merged.reviews)].filter((x) => x && x.trim()).join("\n\n");
+  if (text.length > 500_000) throw new Error("Over 500,000 characters of reviews for one ASIN: clear some first");
+  const at = now();
+  must(await d.from("pl_review_dumps").upsert({ candidate_id: candidateId, asin: a, text, pasted_at: at, captured: merged.reviews, captured_at: at, manual_text: manual }, { onConflict: "candidate_id,asin" }), "save captured reviews");
+  must(await d.from("pl_candidates").update({ updated_at: at }).eq("id", candidateId), "touch candidate");
+  return {
+    conflict: null, asin: a, sent: now_.length, added: merged.added, total: merged.reviews.length,
+    inDump: merged.reviews.filter(forGate4).length, stars: starCounts(merged.reviews), keptPaste: !!manual,
+  };
 }
 
 /** "Paste all": a section per "ASIN: B0…" line, each replacing that ASIN's paste. */

@@ -1,5 +1,5 @@
 -- Wholesale Scout schema, dumped by scripts/schema-backup.mjs. No data.
--- Dumped 2026-10-05T01:18:21.659Z. Safe to re-run. Restore: npm run schema:restore
+-- Dumped 2026-10-05T21:24:40.299Z. Safe to re-run. Restore: npm run schema:restore
 
 -- @section extensions
 create extension if not exists "pg_cron";
@@ -1599,13 +1599,19 @@ create table if not exists "pl_review_dumps" (
   "candidate_id" uuid not null,
   "asin" text not null,
   "text" text not null,
-  "pasted_at" timestamp with time zone default now() not null
+  "pasted_at" timestamp with time zone default now() not null,
+  "captured" jsonb,
+  "captured_at" timestamp with time zone,
+  "manual_text" text
 );
 alter table "pl_review_dumps" add column if not exists "id" uuid default gen_random_uuid();
 alter table "pl_review_dumps" add column if not exists "candidate_id" uuid;
 alter table "pl_review_dumps" add column if not exists "asin" text;
 alter table "pl_review_dumps" add column if not exists "text" text;
 alter table "pl_review_dumps" add column if not exists "pasted_at" timestamp with time zone default now();
+alter table "pl_review_dumps" add column if not exists "captured" jsonb;
+alter table "pl_review_dumps" add column if not exists "captured_at" timestamp with time zone;
+alter table "pl_review_dumps" add column if not exists "manual_text" text;
 alter table "pl_review_dumps" enable row level security;
 
 create table if not exists "pl_review_marks" (
@@ -3695,3 +3701,4 @@ insert into schema_migrations (name) values ('20261005000300_pl_niches_reset_off
 insert into schema_migrations (name) values ('20261005000400_pl_niches_term_conversion.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261005000500_pl_niches_reset_hedgehog_house.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261005000600_pl_candidates_parked.sql') on conflict do nothing;
+insert into schema_migrations (name) values ('20261005000700_pl_review_dumps_captured.sql') on conflict do nothing;

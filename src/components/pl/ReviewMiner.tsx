@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
 import type { FieldMap } from "./types";
 
 type Mark = "chosen" | "not fixable" | "ignore";
-interface Data { dumps: { asin: string; text: string; pasted_at: string }[]; marks: Record<string, Mark>; synonyms: SynonymGroup[]; summary: Run<ReviewSummary> | null }
+interface Data { dumps: { asin: string; text: string; pasted_at: string; captured?: { total: number; inDump: number; at: string | null } | null }[]; marks: Record<string, Mark>; synonyms: SynonymGroup[]; summary: Run<ReviewSummary> | null }
 
 const criticalUrl = (asin: string) => `https://www.amazon.co.uk/product-reviews/${asin}/?filterByStar=critical&sortBy=recent&reviewerType=all_reviews`;
 
@@ -94,7 +94,7 @@ export function ReviewMiner({ candidateId, asins, product, fields, onSave }: {
       <div>
         <h3 className="text-sm font-semibold">Mine the reviews</h3>
         <p className="max-w-[75ch] text-xs text-muted-foreground">
-          Open each listing&apos;s critical reviews, select the page&apos;s text (Ctrl+A, Ctrl+C) and paste it below; more pages can follow in the same box. The reviews are split and the complaint phrases counted here, in your browser: nothing is sent anywhere.
+          Open each listing&apos;s critical reviews, select the page&apos;s text (Ctrl+A, Ctrl+C) and paste it below; more pages can follow in the same box. Or, with the extension (0.4.0+), click through the review pages and press <b>Send reviews to Private label</b>: they land here on their own. The reviews are split and the complaint phrases counted here, in your browser: nothing is sent anywhere.
         </p>
       </div>
 
@@ -102,12 +102,14 @@ export function ReviewMiner({ candidateId, asins, product, fields, onSave }: {
         {[...asins.map((a) => ({ asin: a.asin, brand: a.brand })), ...others.map((d) => ({ asin: d.asin, brand: null as string | null }))].map((a) => {
           const text = drafts[a.asin] ?? "";
           const n = text.trim() ? splitReviews(a.asin, text).length : 0;
+          const cap = data.dumps.find((d) => d.asin === a.asin)?.captured;
           return (
             <label key={a.asin} className="block space-y-1">
               <span className="flex flex-wrap items-center gap-2 text-xs">
                 <span className="num font-medium">{a.asin}</span>
                 {a.brand && <span className="text-muted-foreground">{a.brand}</span>}
                 <a className="inline-flex items-center gap-1 text-brand hover:underline" target="_blank" rel="noreferrer" href={criticalUrl(a.asin)}>1–3★ reviews <ExternalLinkIcon className="size-3" /></a>
+                {cap && <span className="rounded-full bg-brand-soft px-1.5 py-px text-[10px] text-brand" title={`Sent by the extension from Amazon's review pages${cap.at ? `, last ${new Date(cap.at).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}` : ""}. ${cap.total - cap.inDump} at 4–5★ kept out of the miner. Editing the text here makes it your paste.`}>from the extension: {cap.total} ({cap.inDump} at 1–3★)</span>}
                 <span className="ml-auto text-muted-foreground">{n ? `${n} review${n === 1 ? "" : "s"}${pasted.has(a.asin) ? "" : " (not saved)"}` : "none yet"}</span>
               </span>
               <Textarea rows={4} className="text-xs" placeholder="Paste the critical reviews page here" value={text}

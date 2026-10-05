@@ -1,7 +1,7 @@
 # Wholesale Scout: status
 
 Read this first in a new session. Keep it current: every commit that changes a feature updates
-it (what's built, the backlog, the rough edges). Last updated: 5 Oct 2026 (Niches incumbent check: a Not on-niche toggle per product; any-order matches guarded).
+it (what's built, the backlog, the rough edges). Last updated: 5 Oct 2026 (Extension 0.4.0: Send reviews to Private label from amazon.co.uk review pages).
 
 Wholesale Scout is a single-user Amazon UK seller's workbench: Next.js 16 (App Router, `proxy.ts`
 password gate), Supabase (Postgres, RLS on, service-role access from the server only), Vercel
@@ -64,7 +64,10 @@ eleventh scorecard line (outside the /30 and the verdict). A niche in several ca
 one row with every category (`categories`, shown as chips), its status, notes, shape and ledgers merged,
 on every import; the existing data was merged (233 niches across categories, 242 rows folded in). Quotes turns supplier quotes into
 a landed cost per unit and total cash (FX, freight, duty, import VAT, inspection), writes it into
-Gates 0 and 7, chooses a supplier and generates the RFQ. Gate 4's review miner takes pasted 1–3★ reviews per top-5 ASIN (`pl_review_dumps`), splits
+Gates 0 and 7, chooses a supplier and generates the RFQ. Gate 4's review miner takes pasted 1–3★ reviews per top-5 ASIN (`pl_review_dumps`), or the extension's
+capture from amazon.co.uk review pages (0.4.0: stars, date, title, body, variant, helpful votes over the
+pages you click through, sent per click to the candidate with that ASIN, merged by review id, a hand
+paste kept until you choose; rendered 1–3★ in Amazon's layout), splits
 them, counts complaint phrases locally (stop words, bigrams/trigrams, an editable synonym list) into a
 sortable Themes table, and the theme you pick fills the gate's share and a draft six words; an
 optional Claude summary runs only on a click. Launch is a 12-step checklist (samples to
