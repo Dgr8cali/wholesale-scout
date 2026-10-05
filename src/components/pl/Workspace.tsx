@@ -19,6 +19,7 @@ import { budget, econ, evaluate, money, pct, referralOptions, type Evaluation, t
 import { api } from "@/lib/ui/client";
 import { ago } from "@/lib/ui/when";
 import { TERM_SIGNAL_LABEL } from "@/lib/pl/termConversion";
+import { targetExworks } from "@/lib/pl/supplierScore";
 import { cn } from "@/lib/utils";
 import { Readout, SourceChip, StatusPill } from "./bits";
 import { STATUSES, TONE, valuesOf, type CandidateDetail, type FieldMap } from "./types";
@@ -68,6 +69,10 @@ export function Workspace({ id, settings, card, adsCpc, onChanged, onDeleted }: 
   const waivers = data?.waivers;
   const ev: Evaluation | null = useMemo(() => (data ? evaluate(withAdsDefaults(valuesOf(fields), adsCpc), category, settings, card, new Date(), waivers) : null), [data, fields, category, settings, card, waivers, adsCpc]);
   const derived = useMemo(() => adsDefaults(valuesOf(fields), adsCpc), [fields, adsCpc]);
+  const exworksDerived = useMemo(() => {
+    const t = targetExworks(valuesOf(fields));
+    return t.derived && t.value != null ? { value: t.value, why: `Gate 0's landed cost £${Number(fields.landed?.value).toFixed(2)} ÷ 1.4` } : undefined;
+  }, [fields]);
 
   if (error) return <ErrorState title="Couldn't load the candidate" message={error} onRetry={load} />;
   if (!data || !ev) return <div className="space-y-3"><Skeleton className="h-28 rounded-xl" /><Skeleton className="h-64 rounded-xl" /><Skeleton className="h-64 rounded-xl" /></div>;
@@ -177,7 +182,7 @@ export function Workspace({ id, settings, card, adsCpc, onChanged, onDeleted }: 
               <div className="grid grid-cols-1 gap-x-3.5 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
                 {g.fields.map((fd) => (
                   <FieldRow key={fd.k} def={fd} field={fields[fd.k]} why={data.why[fd.k]} onSave={saveField}
-                    derived={fd.k === "adsLaunch" || fd.k === "adsSteady" ? derived[fd.k] : undefined}
+                    derived={fd.k === "adsLaunch" || fd.k === "adsSteady" ? derived[fd.k] : fd.k === "targetExworks" ? exworksDerived : undefined}
                     manualOnly={g.id === "g5" && ["headBid", "ltBid", "sponsored"].includes(fd.k)} />
                 ))}
               </div>
@@ -369,7 +374,7 @@ function FieldRow({ def, field, why, onSave, manualOnly, derived }: {
       <div className="flex min-w-0 flex-col gap-1">
         <div className="flex items-center gap-1.5">
           <span className="text-xs font-medium text-ink-2">{def.label}</span>
-          <span title="Worked out from Settings → Ads's CPC and the conversion: type a value to use your own" className="rounded bg-brand-soft px-1.5 py-px text-[10px] font-semibold tracking-wide text-brand uppercase">Derived</span>
+          <span title="Worked out from other figures (shown below): type a value to use your own" className="rounded bg-brand-soft px-1.5 py-px text-[10px] font-semibold tracking-wide text-brand uppercase">Derived</span>
         </div>
         <div className="flex min-h-9 items-center gap-2 rounded-lg border border-dashed bg-surface-2 px-2.5 py-1.5">
           <span className="num flex-1 text-sm">£{derived.value.toFixed(2)}</span>
@@ -402,6 +407,8 @@ function FieldRow({ def, field, why, onSave, manualOnly, derived }: {
         {def.unit && def.unit !== "£" && <span className="num self-stretch border-l bg-surface-2 px-2 py-1.5 text-xs text-muted-foreground">{def.unit}</span>}
       </div>
     );
+  } else if (def.type === "area") {
+    control = <Textarea id={id} rows={4} maxLength={4000} className="text-sm" value={value} onChange={(e) => onSave(def.k, e.target.value)} />;
   } else if (def.type === "text") {
     control = <input id={id} type="text" maxLength={200} className="min-h-9 rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring/40" value={value} onChange={(e) => onSave(def.k, e.target.value)} />;
   } else if (def.type === "sel") {

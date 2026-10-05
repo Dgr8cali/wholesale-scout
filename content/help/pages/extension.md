@@ -139,6 +139,14 @@ On Seller Central's **Product Opportunity Explorer**, the extension can send a n
 
 **Check ranks** in the popup records where an Ads product sits in amazon.co.uk's organic results for its tracked keywords (its exact keywords, its launch head terms, and any you add): one keyword every 3–6 seconds in a tab you can see, at most 30 a run, with a progress panel and **Stop**. It runs only when you click. See [Ads: rank checks](/help/howto/ads-rank-checks).
 
+## Review pages (0.4.0)
+
+On an amazon.co.uk review page, a panel counts the reviews on each page you open; **Send reviews to Private label** puts them in a candidate's Gate 4. See [Private label: mining reviews](/help/howto/pl-mining-reviews).
+
+## Alibaba suppliers (0.5.0)
+
+On an alibaba.com search results page, a panel counts the supplier listings; **Send suppliers to Private label** saves them as a candidate's supplier leads, scored against its targets. Send each results page you want: they add up. It reads only the page you're on. See [Private label: finding suppliers](/help/howto/pl-finding-suppliers).
+
 ## Updating the extension
 
 After you pull a new version of the app's code, open `chrome://extensions` and click the reload arrow on the Wholesale Scout card.

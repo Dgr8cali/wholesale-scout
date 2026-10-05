@@ -1,7 +1,7 @@
 # Wholesale Scout: status
 
 Read this first in a new session. Keep it current: every commit that changes a feature updates
-it (what's built, the backlog, the rough edges). Last updated: 5 Oct 2026 (Gate 6: low-price rate shown, and why it doesn't apply when the price qualifies).
+it (what's built, the backlog, the rough edges). Last updated: 5 Oct 2026 (Supplier Scout: Alibaba results from the extension, scored, with an RFQ).
 
 Wholesale Scout is a single-user Amazon UK seller's workbench: Next.js 16 (App Router, `proxy.ts`
 password gate), Supabase (Postgres, RLS on, service-role access from the server only), Vercel
@@ -70,7 +70,15 @@ eleventh scorecard line (outside the /30 and the verdict). A niche in several ca
 one row with every category (`categories`, shown as chips), its status, notes, shape and ledgers merged,
 on every import; the existing data was merged (233 niches across categories, 242 rows folded in). Quotes turns supplier quotes into
 a landed cost per unit and total cash (FX, freight, duty, import VAT, inspection), writes it into
-Gates 0 and 7, chooses a supplier and generates the RFQ. Gate 4's review miner takes pasted 1–3★ reviews per top-5 ASIN (`pl_review_dumps`), or the extension's
+Gates 0 and 7, chooses a supplier and generates the RFQ. Supplier Scout (Private label → Suppliers, and a Suppliers section on each candidate): the extension
+(0.5.0, `alibaba-parse.js`, selectors in one config, tested on a saved 60-card page) sends an alibaba.com
+results page's listings, per click, to a candidate's `pl_supplier_leads` (one per listing URL; a
+re-capture updates price/MOQ/sold and keeps status and notes); each is scored 0–100 by
+`supplierScore.ts` (price per our unit vs Gate 6's target ex-works, default landed ÷ 1.4, 35; MOQ vs
+max, default 1,000, 20; trust 25; relevance 20) with flags (not a factory, unit unclear, MOQ too high,
+off product hidden by default, high price) and rescored when the targets change; Copy RFQ fills an
+editable template (Settings → Private label, `pl_text_settings`); Add quote starts a prefilled quote;
+Home counts the ones to contact. Gate 4's review miner takes pasted 1–3★ reviews per top-5 ASIN (`pl_review_dumps`), or the extension's
 capture from amazon.co.uk review pages (0.4.0: stars, date, title, body, variant, helpful votes over the
 pages you click through, sent per click to the candidate with that ASIN, merged by review id, a hand
 paste kept until you choose; rendered 1–3★ in Amazon's layout), splits
@@ -168,6 +176,7 @@ StockPilot data is imported (3 items). Ads days of cover and the stock guard cou
 - **Ordered stock shows as "out" on Levels** until it's received (e.g. the Biotene and Lifeproof items made from their product-page purchases).
 - **Rule windows on range data**: search terms and keywords come in import ranges, not days, so a window shorter than an import counts that import in full (the rule says so). Exact windows need imports of about the window's length, or the Ads API.
 - **The pill box's keyword bank is thin** (1 harvested term): it has no linked private-label candidate (no Opportunity Explorer terms) and no rank checks yet.
+- **Supplier Scout** reads Alibaba's markup as of Oct 2026 (`ALIBABA_SELECTORS` in `extension/alibaba-parse.js`): a markup change shows as unread cards in the panel and the console. Trade Assurance and Verified Pro aren't marked per card on that page (Trade Assurance comes from the page's filter); a price in another currency than the page's £ isn't converted (Unit unclear, half the price points); the price per our unit needs one count in the title when the units differ.
 - **Niches' any-term match**: a broad one-word search term ("fishing") accepts any title with that word in the category, so off-niche words carry more weight for such niches.
 - **Niches' off-niche filter** is word-based: a real product whose title happens to say "kids" or "replacement" is left out, and an off-niche one without those words (a dry bag titled "fishing bag") still counts. Excluded products are listed under the check with the reason.
 - **Niche Import's word flags** are whole-word matches on fixed lists, so broad words can misfire ("unit" in "air con unit"). Brands match as whole phrases (the term is the brand, starts with it, or has a 5+ character brand after a space), so "key ring" isn't Ring but a short brand later in a term ("outdoor tapo") is missed. The brand list is editable.

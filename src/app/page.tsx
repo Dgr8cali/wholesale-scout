@@ -30,6 +30,7 @@ interface PlDash {
   lastHunt: { id: string; name: string; status: string; created_at: string; token_cost: number } | null;
   tokensThisMonth: number; month: string;
   niches?: { total: number; shortlisted: number; checked: number };
+  suppliers?: { captured: number; toContact: number; contacted: number; quoted: number } | null;
 }
 
 /** A workspace's heading on Home. */
@@ -169,6 +170,12 @@ export default function HomePage() {
           {(p) => (
             <Stat icon={<TelescopeIcon />} label="Niches" href="/pl/niches" value={`${(p.niches?.shortlisted ?? 0).toLocaleString("en-GB")} shortlisted`}
               hint={p.niches?.total ? `of ${p.niches.total.toLocaleString("en-GB")} imported from Opportunity Explorer · ${p.niches.checked} incumbent-checked` : "import an Opportunity Explorer category download"} />
+          )}
+        </Section>
+        <Section load={pl} skeleton={<StatSkeleton />}>
+          {(p) => (
+            <Stat icon={<TagIcon />} label="Suppliers" href="/pl/suppliers" value={`${(p.suppliers?.toContact ?? 0).toLocaleString("en-GB")} to contact`}
+              hint={p.suppliers?.captured ? `scoring 60+ and not messaged yet, of ${p.suppliers.captured.toLocaleString("en-GB")} Alibaba listings · ${p.suppliers.contacted} contacted · ${p.suppliers.quoted} quoted` : "send Alibaba search results with the extension"} />
           )}
         </Section>
         <Section load={pl} skeleton={<StatSkeleton />}>

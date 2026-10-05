@@ -7,11 +7,12 @@ import type { Quote } from "@/lib/pl/quotes";
 import { api } from "@/lib/ui/client";
 import { LaunchSection, type AdsSummary } from "./Launch";
 import { QuotesSection, type QuotesCandidate } from "./Quotes";
+import { SuppliersSection } from "./Suppliers";
 
 interface Extras { quotes: Quote[]; steps: LaunchStep[]; listingAsin: string | null; chosenQuote: string | null; chosenLanded: number | null; ads: AdsSummary | null }
 
 /**
- * A candidate's Quotes and Launch sections. Launch shows once the verdict is "Order samples" or
+ * A candidate's Suppliers, Quotes and Launch sections. Launch shows once the verdict is "Order samples" or
  * the candidate is at samples or launched (always on the Launch page).
  */
 export function CandidateExtras({ c, status, verdictTitle, budget, show = "both", onFieldsChanged, onStatus }: {
@@ -31,6 +32,7 @@ export function CandidateExtras({ c, status, verdictTitle, budget, show = "both"
   const launchOn = show === "launch" || (show === "both" && (verdictTitle === "Order samples" || status === "samples" || status === "launched"));
   return (
     <>
+      {show !== "launch" && <SuppliersSection candidateId={c.id} onQuoted={load} />}
       {show !== "launch" && <QuotesSection key={`q${v}`} c={c} quotes={x.quotes} chosenQuote={x.chosenQuote} onChanged={load} onFieldsChanged={() => { onFieldsChanged(); load(); }} />}
       {launchOn && (
         <LaunchSection key={`l${v}`} candidateId={c.id} status={status} steps={x.steps} listingAsin={x.listingAsin} ads={x.ads} plan={plan} budget={budget}

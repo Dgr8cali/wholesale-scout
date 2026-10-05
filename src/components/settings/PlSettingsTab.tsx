@@ -53,6 +53,7 @@ export function PlSettingsTab() {
       {bad.length > 0 && <p className="text-sm text-fail">Needs a number: {bad.join(", ")}</p>}
       <BrandTermsEditor />
       <OffNicheEditor />
+      <RfqTemplateEditor />
     </section>
   );
 }
@@ -125,6 +126,44 @@ function OffNicheEditor() {
         </span>
       </div>
       <textarea className="min-h-40 w-full max-w-xl rounded-md border bg-transparent px-2 py-1.5 font-mono text-xs" value={text} onChange={(e) => setText(e.target.value)} />
+    </div>
+  );
+}
+
+/** Supplier Scout's RFQ: the template Copy RFQ fills from the candidate. */
+function RfqTemplateEditor() {
+  const [text, setText] = useState<string | null>(null);
+  const [saved, setSaved] = useState("");
+  const [vars, setVars] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { api<{ template: string; placeholders: Record<string, string> }>("/api/pl/rfq-template").then((r) => { setText(r.template); setSaved(r.template); setVars(r.placeholders); }).catch(() => {}); }, []);
+  if (text == null) return null;
+  const save = async (reset = false) => {
+    setBusy(true);
+    try {
+      const r = await api<{ template: string }>("/api/pl/rfq-template", { method: "PUT", json: { template: reset ? null : text } });
+      setText(r.template); setSaved(r.template);
+      toast.success(reset ? "RFQ template back to the default" : "RFQ template saved");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="space-y-2 border-t pt-4" id="rfq-template">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="space-y-1">
+          <h3 className="text-sm font-semibold">Supplier Scout: RFQ template</h3>
+          <p className="max-w-3xl text-sm text-muted-foreground">What <b>Copy RFQ</b> on a candidate puts on the clipboard. Placeholders are filled from the candidate; a line with an empty one (no six words yet, no spec) is left out.</p>
+          <p className="max-w-3xl text-xs text-muted-foreground">{Object.entries(vars).map(([k, v]) => <span key={k} className="mr-3 inline-block"><code>{`{{${k}}}`}</code> {v}</span>)}</p>
+        </div>
+        <span className="flex gap-1.5">
+          <Button variant="ghost" size="sm" disabled={busy} onClick={() => save(true)}>Reset to default</Button>
+          <Button variant="outline" size="sm" disabled={busy || text === saved} onClick={() => save()}>Save template</Button>
+        </span>
+      </div>
+      <textarea className="min-h-72 w-full max-w-3xl rounded-md border bg-transparent px-2 py-1.5 font-mono text-xs" value={text} onChange={(e) => setText(e.target.value)} />
     </div>
   );
 }

@@ -1,17 +1,18 @@
 {
   "manifest_version": 3,
   "name": "Wholesale Scout",
-  "version": "0.4.0",
-  "description": "Wholesale Scout's verdict on Amazon UK product and search pages, competitor stock on request, and Seller Central DG look-ups, Opportunity Explorer niches sent to Private label when you click, manual organic rank checks for Ads, and review pages sent to Private label's Gate 4 when you click.",
+  "version": "0.5.0",
+  "description": "Wholesale Scout's verdict on Amazon UK product and search pages, competitor stock on request, and Seller Central DG look-ups, Opportunity Explorer niches sent to Private label when you click, manual organic rank checks for Ads, review pages sent to Private label's Gate 4, and Alibaba search results sent to Supplier Scout when you click.",
   "action": { "default_popup": "popup.html", "default_title": "Wholesale Scout settings" },
   "background": { "service_worker": "background.js" },
   "permissions": ["storage", "scripting"],
-  "host_permissions": ["https://www.amazon.co.uk/*", "https://sellercentral.amazon.co.uk/*"],
+  "host_permissions": ["https://www.amazon.co.uk/*", "https://sellercentral.amazon.co.uk/*", "https://www.alibaba.com/*"],
   "optional_host_permissions": ["https://*/*", "http://localhost/*", "http://127.0.0.1/*", "https://sellercentral.amazon.com/*", "https://sellercentral.amazon.de/*"],
   "content_scripts": [
     { "matches": ["https://www.amazon.co.uk/*"], "js": ["shared.js", "product.js", "search.js"], "run_at": "document_idle" },
     { "matches": ["https://www.amazon.co.uk/product-reviews/*", "https://www.amazon.co.uk/*/product-reviews/*"], "js": ["shared.js", "reviews.js"], "run_at": "document_idle" },
     { "matches": ["https://sellercentral.amazon.co.uk/*"], "js": ["shared.js", "sellercentral.js"], "run_at": "document_idle" },
+    { "matches": ["https://www.alibaba.com/*"], "js": ["shared.js", "alibaba-parse.js", "alibaba.js"], "run_at": "document_idle" },
     { "matches": ["https://sellercentral.amazon.co.uk/opportunity-explorer/*"], "js": ["poe-page.js"], "world": "MAIN", "run_at": "document_start" },
     { "matches": ["https://sellercentral.amazon.co.uk/opportunity-explorer/*"], "js": ["shared.js", "poe.js"], "run_at": "document_start" }
   ]

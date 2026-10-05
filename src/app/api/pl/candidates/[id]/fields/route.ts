@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { handle } from "@/lib/server/http";
 import { refreshPriceTight, setField } from "@/lib/server/pl";
+import { rescoreLeads, SCORING_KEYS } from "@/lib/server/plSuppliers";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -12,5 +13,7 @@ export const PUT = handle(async (req: NextRequest, ctx: Ctx) => {
   await setField(id, b.key, b.value ?? null);
   // A new target price band: Gate 1's price spread is read again against it.
   const refilled = b.key === "bandMin" || b.key === "bandMax" ? await refreshPriceTight(id) : [];
-  return Response.json({ ok: true, refilled });
+  // A new target (price, MOQ, unit) or landed cost: the supplier leads are scored again.
+  const rescored = SCORING_KEYS.has(b.key) ? await rescoreLeads(id) : 0;
+  return Response.json({ ok: true, refilled, rescored });
 });

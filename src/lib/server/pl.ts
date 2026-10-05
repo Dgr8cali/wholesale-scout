@@ -1,5 +1,6 @@
 import "server-only";
 import { nicheLedgers, nicheSummary } from "./plNiches";
+import { supplierSummary } from "./plSuppliers";
 import { LAUNCH_STEPS } from "../pl/launch";
 import { addDailyTokens, PL_KEEP_DAYS, ukDay, type TokensByDay } from "../keepaLedger";
 import { getKeepa, type KeepaProduct, type OnKeepaResponse, type Point } from "../keepa/client";
@@ -277,7 +278,7 @@ export async function setField(id: string, key: string, value: string | null) {
   if (!FIELD_KEYS.has(key)) throw new Error(`Unknown field ${key}`);
   const d = db();
   if (value == null || String(value).trim() === "") must(await d.from("pl_candidate_fields").delete().eq("candidate_id", id).eq("key", key), "clear field");
-  else must(await d.from("pl_candidate_fields").upsert({ candidate_id: id, key, value: String(value).slice(0, 200), source: "manual", updated_at: now() }, { onConflict: "candidate_id,key" }), "save field");
+  else must(await d.from("pl_candidate_fields").upsert({ candidate_id: id, key, value: String(value).slice(0, key === "spec" ? 4000 : 200), source: "manual", updated_at: now() }, { onConflict: "candidate_id,key" }), "save field");
   must(await d.from("pl_candidates").update({ updated_at: now() }).eq("id", id), "touch candidate");
 }
 
@@ -622,7 +623,7 @@ export async function plDashboard() {
   const inMonth = (l: TokensByDay | null | undefined) => Object.entries(l ?? {}).reduce((a, [day, t]) => a + (day.startsWith(month) ? t : 0), 0);
   const candidateLedgers = must(await db().from("pl_candidates").select("keepa_by_day"), "ledgers") as { keepa_by_day: TokensByDay | null }[];
   // Counted in SQL and read a page at a time: there can be thousands of niches.
-  const [nicheCounts, nicheTokens] = await Promise.all([nicheSummary().catch(() => null), nicheLedgers().catch(() => [] as TokensByDay[])]);
+  const [nicheCounts, nicheTokens, suppliers] = await Promise.all([nicheSummary().catch(() => null), nicheLedgers().catch(() => [] as TokensByDay[]), supplierSummary().catch(() => null)]);
   const last = huntRows[0] ?? null;
   return {
     candidates: candidates.length,
@@ -631,6 +632,7 @@ export async function plDashboard() {
     tokensThisMonth: candidateLedgers.reduce((a, r) => a + inMonth(r.keepa_by_day), 0) + huntRows.reduce((a, h) => a + inMonth(h.keepa_by_day), 0) + nicheTokens.reduce((a, l) => a + inMonth(l), 0),
     /** Niche Import: imported, shortlisted, incumbent-checked. */
     niches: nicheCounts ? { total: nicheCounts.total, shortlisted: nicheCounts.shortlisted, checked: nicheCounts.checked } : { total: 0, shortlisted: 0, checked: 0 },
+    suppliers: suppliers ? { captured: suppliers.captured, toContact: suppliers.toContact, contacted: suppliers.contacted, quoted: suppliers.quoted } : null,
     month,
   };
 }

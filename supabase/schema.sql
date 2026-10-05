@@ -1,5 +1,5 @@
 -- Wholesale Scout schema, dumped by scripts/schema-backup.mjs. No data.
--- Dumped 2026-10-05T21:36:49.832Z. Safe to re-run. Restore: npm run schema:restore
+-- Dumped 2026-10-05T22:45:14.154Z. Safe to re-run. Restore: npm run schema:restore
 
 -- @section extensions
 create extension if not exists "pg_cron";
@@ -1648,6 +1648,82 @@ alter table "pl_settings" add column if not exists "value" numeric;
 alter table "pl_settings" add column if not exists "updated_at" timestamp with time zone default now();
 alter table "pl_settings" enable row level security;
 
+create table if not exists "pl_supplier_leads" (
+  "id" uuid default gen_random_uuid() not null,
+  "user_id" uuid,
+  "candidate_id" uuid not null,
+  "source" text default 'alibaba'::text not null,
+  "listing_url" text not null,
+  "store_url" text,
+  "title" text,
+  "price_min" numeric,
+  "price_max" numeric,
+  "currency" text,
+  "price_unit" text,
+  "moq" integer,
+  "moq_unit" text,
+  "supplier_name" text,
+  "supplier_years" integer,
+  "country" text,
+  "rating" numeric,
+  "review_count" integer,
+  "badges" text[] default '{}'::text[] not null,
+  "sold_count" integer,
+  "delivery_estimate" text,
+  "captured_at" timestamp with time zone default now() not null,
+  "score" numeric,
+  "score_breakdown" jsonb,
+  "flags" text[] default '{}'::text[] not null,
+  "status" text default 'new'::text not null,
+  "notes" text,
+  "raw" jsonb,
+  "created_at" timestamp with time zone default now() not null,
+  "updated_at" timestamp with time zone default now() not null,
+  "reject_reason" text
+);
+alter table "pl_supplier_leads" add column if not exists "id" uuid default gen_random_uuid();
+alter table "pl_supplier_leads" add column if not exists "user_id" uuid;
+alter table "pl_supplier_leads" add column if not exists "candidate_id" uuid;
+alter table "pl_supplier_leads" add column if not exists "source" text default 'alibaba'::text;
+alter table "pl_supplier_leads" add column if not exists "listing_url" text;
+alter table "pl_supplier_leads" add column if not exists "store_url" text;
+alter table "pl_supplier_leads" add column if not exists "title" text;
+alter table "pl_supplier_leads" add column if not exists "price_min" numeric;
+alter table "pl_supplier_leads" add column if not exists "price_max" numeric;
+alter table "pl_supplier_leads" add column if not exists "currency" text;
+alter table "pl_supplier_leads" add column if not exists "price_unit" text;
+alter table "pl_supplier_leads" add column if not exists "moq" integer;
+alter table "pl_supplier_leads" add column if not exists "moq_unit" text;
+alter table "pl_supplier_leads" add column if not exists "supplier_name" text;
+alter table "pl_supplier_leads" add column if not exists "supplier_years" integer;
+alter table "pl_supplier_leads" add column if not exists "country" text;
+alter table "pl_supplier_leads" add column if not exists "rating" numeric;
+alter table "pl_supplier_leads" add column if not exists "review_count" integer;
+alter table "pl_supplier_leads" add column if not exists "badges" text[] default '{}'::text[];
+alter table "pl_supplier_leads" add column if not exists "sold_count" integer;
+alter table "pl_supplier_leads" add column if not exists "delivery_estimate" text;
+alter table "pl_supplier_leads" add column if not exists "captured_at" timestamp with time zone default now();
+alter table "pl_supplier_leads" add column if not exists "score" numeric;
+alter table "pl_supplier_leads" add column if not exists "score_breakdown" jsonb;
+alter table "pl_supplier_leads" add column if not exists "flags" text[] default '{}'::text[];
+alter table "pl_supplier_leads" add column if not exists "status" text default 'new'::text;
+alter table "pl_supplier_leads" add column if not exists "notes" text;
+alter table "pl_supplier_leads" add column if not exists "raw" jsonb;
+alter table "pl_supplier_leads" add column if not exists "created_at" timestamp with time zone default now();
+alter table "pl_supplier_leads" add column if not exists "updated_at" timestamp with time zone default now();
+alter table "pl_supplier_leads" add column if not exists "reject_reason" text;
+alter table "pl_supplier_leads" enable row level security;
+
+create table if not exists "pl_text_settings" (
+  "key" text not null,
+  "value" text not null,
+  "updated_at" timestamp with time zone default now() not null
+);
+alter table "pl_text_settings" add column if not exists "key" text;
+alter table "pl_text_settings" add column if not exists "value" text;
+alter table "pl_text_settings" add column if not exists "updated_at" timestamp with time zone default now();
+alter table "pl_text_settings" enable row level security;
+
 create table if not exists "products" (
   "id" uuid default gen_random_uuid() not null,
   "ean" text not null,
@@ -2569,6 +2645,16 @@ do $$ begin
   end if;
 end $$;
 do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'pl_supplier_leads_pkey' and conrelid = '"pl_supplier_leads"'::regclass) then
+    alter table "pl_supplier_leads" add constraint "pl_supplier_leads_pkey" PRIMARY KEY (id);
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'pl_text_settings_pkey' and conrelid = '"pl_text_settings"'::regclass) then
+    alter table "pl_text_settings" add constraint "pl_text_settings_pkey" PRIMARY KEY (key);
+  end if;
+end $$;
+do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'products_pkey' and conrelid = '"products"'::regclass) then
     alter table "products" add constraint "products_pkey" PRIMARY KEY (id);
   end if;
@@ -2721,6 +2807,11 @@ end $$;
 do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'pl_review_dumps_candidate_id_asin_key' and conrelid = '"pl_review_dumps"'::regclass) then
     alter table "pl_review_dumps" add constraint "pl_review_dumps_candidate_id_asin_key" UNIQUE (candidate_id, asin);
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'pl_supplier_leads_candidate_id_listing_url_key' and conrelid = '"pl_supplier_leads"'::regclass) then
+    alter table "pl_supplier_leads" add constraint "pl_supplier_leads_candidate_id_listing_url_key" UNIQUE (candidate_id, listing_url);
   end if;
 end $$;
 do $$ begin
@@ -2946,6 +3037,11 @@ end $$;
 do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'pl_review_marks_mark_check' and conrelid = '"pl_review_marks"'::regclass) then
     alter table "pl_review_marks" add constraint "pl_review_marks_mark_check" CHECK ((mark = ANY (ARRAY['chosen'::text, 'not fixable'::text, 'ignore'::text])));
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'pl_supplier_leads_status_check' and conrelid = '"pl_supplier_leads"'::regclass) then
+    alter table "pl_supplier_leads" add constraint "pl_supplier_leads_status_check" CHECK ((status = ANY (ARRAY['new'::text, 'contacted'::text, 'quoted'::text, 'rejected'::text])));
   end if;
 end $$;
 do $$ begin
@@ -3284,6 +3380,11 @@ do $$ begin
   end if;
 end $$;
 do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'pl_supplier_leads_candidate_id_fkey' and conrelid = '"pl_supplier_leads"'::regclass) then
+    alter table "pl_supplier_leads" add constraint "pl_supplier_leads_candidate_id_fkey" FOREIGN KEY (candidate_id) REFERENCES pl_candidates(id) ON DELETE CASCADE;
+  end if;
+end $$;
+do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'purchases_product_id_fkey' and conrelid = '"purchases"'::regclass) then
     alter table "purchases" add constraint "purchases_product_id_fkey" FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE SET NULL;
   end if;
@@ -3437,6 +3538,7 @@ CREATE INDEX IF NOT EXISTS pl_niches_score ON pl_niches USING btree (score DESC 
 CREATE INDEX IF NOT EXISTS pl_niches_status ON pl_niches USING btree (status);
 CREATE INDEX IF NOT EXISTS pl_poe_snapshots_candidate ON pl_poe_snapshots USING btree (candidate_id, captured_at DESC);
 CREATE INDEX IF NOT EXISTS pl_quotes_candidate ON pl_quotes USING btree (candidate_id);
+CREATE INDEX IF NOT EXISTS pl_supplier_leads_candidate ON pl_supplier_leads USING btree (candidate_id, score DESC NULLS LAST);
 CREATE INDEX IF NOT EXISTS products_asin_idx ON products USING btree (asin);
 CREATE INDEX IF NOT EXISTS products_ean ON products USING btree (ean);
 CREATE UNIQUE INDEX IF NOT EXISTS products_ean_asin_key ON products USING btree (ean, COALESCE(asin, ''::text));
@@ -3705,3 +3807,4 @@ insert into schema_migrations (name) values ('20261005000500_pl_niches_reset_hed
 insert into schema_migrations (name) values ('20261005000600_pl_candidates_parked.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261005000700_pl_review_dumps_captured.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261005000800_pl_candidates_reference_pinned.sql') on conflict do nothing;
+insert into schema_migrations (name) values ('20261005000900_pl_supplier_leads.sql') on conflict do nothing;

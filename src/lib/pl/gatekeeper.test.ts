@@ -157,7 +157,7 @@ describe("demand from bought in past month (the port's own rule)", () => {
 describe("Gatekeeper port", () => {
   it("has the same gates, fields and settings", () => {
     // The app's own additions (not in the reference): Gate 4's six words as text, for the RFQ.
-    const APP_ONLY = new Set(["sixWordsText", "bestTermConv", "bandMin", "bandMax"]);
+    const APP_ONLY = new Set(["sixWordsText", "bestTermConv", "bandMin", "bandMax", "targetExworks", "maxMoq", "productUnit", "spec"]);
     expect(GATES.map((g) => [g.id, g.fields.filter((f) => !APP_ONLY.has(f.k)).map((f) => [f.k, f.type, f.opts ?? null])]))
       .toEqual(ref.GATES.map((g) => [g.id, g.fields.map((f) => [f.k, f.type, f.opts ?? null])]));
     // Every setting but the Q4 switch (peak rates now follow the date).

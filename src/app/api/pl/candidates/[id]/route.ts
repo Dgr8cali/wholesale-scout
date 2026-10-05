@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { handle } from "@/lib/server/http";
 import { deleteCandidate, getCandidate, parseAsins, setAsins, switchReference, updateCandidate, type PlStatus } from "@/lib/server/pl";
+import { rescoreLeads } from "@/lib/server/plSuppliers";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -27,6 +28,8 @@ export const PATCH = handle(async (req: NextRequest, ctx: Ctx) => {
     return Response.json({ error: (e as Error).message }, { status: 400 });
   }
   if (b.asins != null) await setAsins(id, parseAsins(b.asins));
+  // The product words come from the name and niche keyword: the supplier leads are scored again.
+  if (b.name != null || b.niche_keyword !== undefined) await rescoreLeads(id);
   return Response.json({ ok: true });
 });
 

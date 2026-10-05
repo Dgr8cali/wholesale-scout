@@ -19,7 +19,7 @@ import { inPeakMonths, sizeTier as cardSizeTier, referralPct as cardReferralPct 
 import type { RateCard } from "../fees/rateCard";
 
 export type Fields = Record<string, string | undefined>;
-export type FieldType = "num" | "sel" | "yn" | "text";
+export type FieldType = "num" | "sel" | "yn" | "text" | "area";
 export interface FieldDef { k: string; label: string; type: FieldType; unit?: string; step?: string; hint?: string; opts?: [string, string][] }
 export interface GateDef { id: GateId; n: string; title: string; tool: string; blurb: string; fields: FieldDef[] }
 export type GateId = "g0" | "g1" | "g2" | "g3" | "g4" | "g5" | "g6" | "g7";
@@ -97,6 +97,10 @@ export const GATES: GateDef[] = [
       { k: "fbaOverride", label: "FBA fee override (ex-VAT)", type: "num", unit: "£", step: "0.01", hint: "Leave blank to use the rate card. Enter Amazon's own figure if you have it" },
       { k: "adsLaunch", label: "Ads per unit, launch", type: "num", unit: "£", step: "0.01", hint: "Default: CPC ÷ conversion (Settings → Ads, Gate 3)" },
       { k: "adsSteady", label: "Ads per unit, steady state", type: "num", unit: "£", step: "0.01", hint: "Default: launch × 0.4" },
+      { k: "targetExworks", label: "Target ex-works price", type: "num", unit: "£", step: "0.01", hint: "Per unit of our product. Blank: Gate 0's landed cost ÷ 1.4. Supplier Scout scores listings against it" },
+      { k: "maxMoq", label: "Most you'd order first (max MOQ)", type: "num", hint: "Blank: 1,000" },
+      { k: "productUnit", label: "One unit of our product is a", type: "sel", opts: [["", "— (box)"], ["box", "Box"], ["piece", "Piece"], ["set", "Set"], ["pack", "Pack"], ["bag", "Bag"]] },
+      { k: "spec", label: "Spec for suppliers", type: "area", hint: "What the RFQ asks for: size, count, material, packaging, printing" },
     ] },
   { id: "g7", n: "7", title: "Launch budget", tool: "The whole cost, not the stock",
     blurb: "Stock is about 60% of a launch. A 10% buffer is added automatically.",
