@@ -117,7 +117,7 @@ function OffNicheEditor() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
           <h3 className="text-sm font-semibold">Niche Import: off-niche words</h3>
-          <p className="max-w-3xl text-sm text-muted-foreground">The incumbent check leaves out a product whose title has one of these (a whole word or phrase): toys, kids&rsquo; and pet products, cards, gifts, parts and spares. A word the search term itself uses doesn&rsquo;t count, pet words don&rsquo;t count for a pet niche, and &ldquo;for &lt;term&gt;&rdquo; (an accessory) is always left out. One a line. The next check uses them; rerun a niche to apply.</p>
+          <p className="max-w-3xl text-sm text-muted-foreground">The incumbent check leaves out a product whose title has one of these (a whole word or phrase): toys, kids&rsquo; and pet products, cards, gifts, parts and spares. A word the search term itself uses doesn&rsquo;t count, pet words don&rsquo;t count for a pet niche, and an accessory for any of the niche&rsquo;s terms (&ldquo;for&rdquo;, &ldquo;fits&rdquo; or &ldquo;compatible with&rdquo; just before one) is always left out. One a line. The next check uses them; rerun a niche to apply.</p>
         </div>
         <span className="flex gap-1.5">
           <Button variant="ghost" size="sm" disabled={busy} onClick={() => save(true)}>Reset to defaults</Button>

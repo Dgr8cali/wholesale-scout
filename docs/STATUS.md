@@ -1,7 +1,7 @@
 # Wholesale Scout: status
 
 Read this first in a new session. Keep it current: every commit that changes a feature updates
-it (what's built, the backlog, the rough edges). Last updated: 5 Oct 2026 (Niches incumbent check: a title matching any of the niche's search terms counts).
+it (what's built, the backlog, the rough edges). Last updated: 5 Oct 2026 (Niches incumbent check: accessories for any term left out; bag/box niches drop carabiners and bait storage).
 
 Wholesale Scout is a single-user Amazon UK seller's workbench: Next.js 16 (App Router, `proxy.ts`
 password gate), Supabase (Postgres, RLS on, service-role access from the server only), Vercel
@@ -41,7 +41,7 @@ shortlists, runs a one-at-a-time Keepa incumbent check on a niche's search terms
 Product Finder page a distinct term, up to 3, a term containing another skipped, restricted to the
 niche's categories' Keepa roots, merged in turn to 25 detailed; only titles with any of the terms
 as a phrase (the matched term shown), none of the off-niche words (editable in Settings → Private label,
-`src/lib/pl/offNiche.ts`; pet words allowed for pet niches) and not "for <term>" count; the 10 best
+`src/lib/pl/offNiche.ts`; pet words allowed for pet niches) not an accessory for any of the terms ("for", "fits", "compatible with" just before one) and, for a bag/box niche, not in Keepa's Locking Carabiners or Bait Storage count; the 10 best
 sellers among them by monthly sold, else sales rank, decide open/contested/dominated; Rerun reuses
 the finder list and 7-day snapshots, often 0 tokens) and creates candidates; re-importing a category keeps status, notes and
 shape. The category is picked from Opportunity Explorer's 25 top-level UK categories (or Other…),
