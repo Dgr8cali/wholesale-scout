@@ -87,6 +87,29 @@ export function reviewsBand(asins: PlAsin[]): Filled | null {
   return { value: "2", why: `Most under 500 (${dist})` };
 }
 
+/** The fields Gate 2 takes from the reference listing (what changing the reference re-runs). */
+export const GATE2_KEYS = ["rankTrend", "rankDrops", "bought", "offerTrend", "bbTrend", "amazonSeller"] as const;
+
+/**
+ * The default reference listing: the one with the longest Keepa history (earliest first seen), so a
+ * young listing's launch isn't read as the niche's 12 months; ties and unknowns by position.
+ */
+export function defaultReference(asins: Pick<PlAsin, "asin" | "position" | "first_seen">[]): string | null {
+  if (!asins.length) return null;
+  const t = (a: Pick<PlAsin, "first_seen">) => (a.first_seen ? Date.parse(a.first_seen) : Number.POSITIVE_INFINITY);
+  return [...asins].sort((a, b) => t(a) - t(b) || a.position - b.position)[0].asin;
+}
+
+/** "3 yrs 2 mths", "7 mths", "3 wks": how long Keepa has seen the listing. */
+export function listingAge(firstSeen: string | null, now = Date.now()): { months: number; text: string } | null {
+  if (!firstSeen) return null;
+  const days = Math.max(0, (now - Date.parse(firstSeen)) / 86_400_000);
+  const months = days / 30.44;
+  const y = Math.floor(months / 12), m = Math.floor(months % 12);
+  const text = months < 1 ? `${Math.max(1, Math.round(days / 7))} wk${Math.round(days / 7) === 1 ? "" : "s"}` : y ? `${y} yr${y === 1 ? "" : "s"}${m ? ` ${m} mth${m === 1 ? "" : "s"}` : ""}` : `${m} mth${m === 1 ? "" : "s"}`;
+  return { months, text };
+}
+
 /** Gate 0 defaults and Gates 1 and 2, from the page-one ASINs and the reference among them. */
 export function keepaFill(asins: PlAsin[]): Fill {
   const out: Fill = {};

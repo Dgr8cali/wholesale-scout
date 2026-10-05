@@ -93,6 +93,25 @@ function randomCandidate(r: () => number): { f: Fields; S: Settings; cat: string
   return { f, S, cat: pick(ref.REFERRAL.map((x) => x[0])), date };
 }
 
+describe("demand from bought in past month (the port's own rule)", () => {
+  const line2 = (f: Fields) => scorecard(f, DEFAULT_SETTINGS, "Home Products", card).rows.find((r) => r.n === 2)!;
+  const g2 = (f: Fields) => gateChecks("g2", f, DEFAULT_SETTINGS, "Home Products", card).map((c) => [c.label, c.status]);
+
+  it("scorecard line 2: 0 under 50, 1 for 50–199, 2 for 200–499, 3 for 500+; rank drops only without it", () => {
+    expect([49, 50, 199, 200, 499, 500].map((b) => line2({ bought: String(b), rankDrops: "250" }).pts)).toEqual([0, 1, 1, 2, 2, 3]);
+    expect(line2({ bought: "300" }).label).toBe("Demand (bought in past month)");
+    expect(line2({ rankDrops: "250" })).toMatchObject({ label: "Demand (Keepa rank drops)", pts: 3 });
+    expect(line2({ bought: "", rankDrops: "50" })).toMatchObject({ label: "Demand (Keepa rank drops)", pts: 1 });
+  });
+
+  it("Gate 2: the rank-drop check becomes a bought-in-past-month one when Amazon shows it", () => {
+    expect(g2({ bought: "120", rankDrops: "10" })).toContainEqual(["100+ bought in past month (demand)", "pass"]);
+    expect(g2({ bought: "60" })).toContainEqual(["100+ bought in past month (demand)", "warn"]);
+    expect(g2({ bought: "60" }).some(([l]) => l === "100+ rank drops / month")).toBe(false);
+    expect(g2({ rankDrops: "30" })).toContainEqual(["100+ rank drops / month", "fail"]);
+  });
+});
+
 describe("Gatekeeper port", () => {
   it("has the same gates, fields and settings", () => {
     // The app's own additions (not in the reference): Gate 4's six words as text, for the RFQ.
@@ -122,6 +141,10 @@ describe("Gatekeeper port", () => {
     const r = rng(20260701);
     for (let i = 0; i < 3000; i++) {
       const { f, S: ours_S, cat, date } = randomCandidate(r);
+      // The third deliberate difference: with bought-in-past-month, the port judges demand on it
+      // (scorecard line 2 and Gate 2's demand check); Gatekeeper always used rank drops. Parity is
+      // checked without it; the bought rules have their own test below.
+      delete f.bought;
       const S = refSettings(ours_S, date) as Settings;
       const ours = evaluate(f, cat, ours_S, card, date);
       const theirsGates = ref.GATES.map((g) => {

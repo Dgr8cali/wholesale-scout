@@ -11,6 +11,8 @@ export interface CandidateRow {
   id: string; name: string; niche_keyword: string | null; category: string; status: string; notes: string | null;
   /** Parked: shelved with a reason, and when. */
   park_reason?: string | null; parked_at?: string | null; parked_from?: string | null;
+  /** You picked Gate 2's reference listing. */
+  reference_pinned?: boolean;
   token_cost: number; refreshed_at: string | null; created_at: string; updated_at: string; fields: FieldMap; waivers: Waiver[];
   /** The chosen quote's landed cost per unit, the listing once live, and the next launch step. */
   chosen_landed?: number | null; listing_asin?: string | null; launch?: { next: string | null; done: number };
@@ -23,6 +25,8 @@ export interface CandidateDetail {
   asins: PlAsin[];
   poe: { id: string; niche_title: string | null; captured_at: string; search_terms: PoeTerm[]; search_volume_360: number | null } | null;
   why: Record<string, string>;
+  /** The reference listing's sales rank over 12 months, weekly (stored Keepa series). */
+  refRank?: { asin: string; points: [number, number][]; fetchedAt: string } | null;
 }
 
 export interface ListResponse { candidates: CandidateRow[]; settings: Settings; card: RateCard; adsCpc: number }

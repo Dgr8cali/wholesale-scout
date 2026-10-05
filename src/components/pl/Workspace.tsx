@@ -13,7 +13,7 @@ import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import type { RateCard } from "@/lib/fees/rateCard";
-import { monthlySales, priceOf } from "@/lib/pl/fill";
+import { defaultReference, listingAge, monthlySales, priceOf } from "@/lib/pl/fill";
 import { adsDefaults, withAdsDefaults } from "@/lib/pl/adsDefaults";
 import { budget, econ, evaluate, money, pct, referralOptions, type Evaluation, type FieldDef, type GateDef, type GateResult, type Settings, type Status, type Waiver } from "@/lib/pl/gatekeeper";
 import { api } from "@/lib/ui/client";
@@ -178,6 +178,7 @@ export function Workspace({ id, settings, card, adsCpc, onChanged, onDeleted }: 
                     manualOnly={g.id === "g5" && ["headBid", "ltBid", "sponsored"].includes(fd.k)} />
                 ))}
               </div>
+              {g.id === "g2" && <ReferencePanel data={data} onChanged={async () => { const d = await load(); if (d) onChanged(id, { fields: d.fields }); }} />}
               <GateExtras g={g} data={data} fields={fields} settings={settings} card={card} onSave={saveField} />
               <div className="overflow-hidden rounded-lg border">
                 {rows.map((r, i) => (
@@ -427,6 +428,84 @@ function FieldRow({ def, field, why, onSave, manualOnly, derived }: {
         : manualOnly && !field ? <span className="text-[11.5px] text-muted-foreground">Type it: Opportunity Explorer has no bids or sponsored slots</span>
         : def.hint ? <span className="text-[11.5px] text-muted-foreground">{def.hint}</span> : null}
     </div>
+  );
+}
+
+/**
+ * Gate 2's reference listing: pick which page-one ASIN its 12-month figures come from (by default
+ * the longest Keepa history), its listing age beside the 12-month verdict, and its rank sparkline.
+ */
+function ReferencePanel({ data, onChanged }: { data: CandidateDetail; onChanged: () => Promise<void> }) {
+  const [busy, setBusy] = useState(false);
+  const { confirm } = useDialogs();
+  const ref = data.asins.find((a) => a.is_reference) ?? data.asins[0];
+  if (!ref) return null;
+  const longest = defaultReference(data.asins.filter((a) => a.snapshot_at));
+  const age = listingAge(ref.first_seen);
+  const young = age != null && age.months < 12;
+  const pick = async (asin: string) => {
+    if (asin === ref.asin) return;
+    const a = data.asins.find((x) => x.asin === asin);
+    const hasBb = !!a?.history?.buyBoxFetched && !!a.snapshot_at && Date.now() - Date.parse(a.snapshot_at) < 7 * 86_400_000;
+    if (!hasBb && !(await confirm({ title: `Make ${asin} the reference?`, description: "Gate 2 runs again from it. Its Buy Box history isn't stored from the last 7 days, so Keepa fetches it: about 3 tokens.", confirmLabel: "Switch (≈3 tokens)" }))) return;
+    setBusy(true);
+    try {
+      const r = await api<{ tokensUsed: number; buyBox: string }>(`/api/pl/candidates/${data.candidate.id}`, { method: "PATCH", json: { reference: asin } });
+      toast.success(`Gate 2 now reads ${asin}${r.tokensUsed ? ` (${r.tokensUsed} Keepa token${r.tokensUsed === 1 ? "" : "s"})` : " (no Keepa tokens: stored data)"}${r.buyBox === "missing" ? ". No Buy Box history yet: refresh to read it" : ""}`);
+      await onChanged();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const seen = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("en-GB", { month: "short", year: "numeric" }) : "first seen unknown");
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border bg-surface-2/50 px-3 py-2.5 text-sm">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="field-label">Reference listing</span>
+        <NativeSelect className="max-w-full min-w-0 flex-1 sm:flex-none" value={ref.asin} disabled={busy} onChange={(e) => pick(e.target.value)}>
+          {data.asins.map((a) => (
+            <NativeSelectOption key={a.asin} value={a.asin}>
+              {a.asin} · {a.review_count != null ? `${a.review_count.toLocaleString("en-GB")} reviews` : "reviews ?"} · since {seen(a.first_seen)}{a.asin === longest ? " · longest history" : ""}
+            </NativeSelectOption>
+          ))}
+        </NativeSelect>
+        {busy && <LoaderIcon className="size-4 animate-spin" />}
+        <span className="text-xs text-muted-foreground">{data.candidate.reference_pinned ? "Your pick" : "Default: the longest Keepa history"}</span>
+      </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="text-xs">
+          12-month verdict: <b>{RANK_TREND_LABEL[String(ref.history?.rankTrend ?? "")] ?? "—"}</b>
+          {age && <> · listing age <b className={cn(young && "text-warn")}>{age.text}</b>{young && <span className="text-warn"> (under a year: the trend may be its launch, not the niche&apos;s demand)</span>}</>}
+        </span>
+        {data.refRank && data.refRank.asin === ref.asin ? <RankSparkline points={data.refRank.points} /> : <span className="text-xs text-muted-foreground">No stored 12-month rank for {ref.asin}: refresh from Keepa.</span>}
+      </div>
+    </div>
+  );
+}
+
+const RANK_TREND_LABEL: Record<string, string> = { "0": "Spike or decline", "1": "Seasonal", "2": "Flat", "3": "Growing" };
+
+/** Sales rank over 12 months, a point a week; higher on the chart is better (a lower rank). */
+function RankSparkline({ points }: { points: [number, number][] }) {
+  if (points.length < 2) return null;
+  const W = 180, H = 36;
+  const t0 = points[0][0], t1 = points[points.length - 1][0];
+  const logs = points.map(([, v]) => Math.log10(v));
+  const lo = Math.min(...logs), hi = Math.max(...logs);
+  const x = (t: number) => ((t - t0) / Math.max(1, t1 - t0)) * (W - 2) + 1;
+  const y = (v: number) => (hi === lo ? H / 2 : ((Math.log10(v) - lo) / (hi - lo)) * (H - 4) + 2);
+  const d = points.map(([t, v], i) => `${i ? "L" : "M"}${x(t).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+  const best = Math.min(...points.map((p) => p[1])), worst = Math.max(...points.map((p) => p[1]));
+  const fmt = (t: number) => new Date(t).toLocaleDateString("en-GB", { month: "short", year: "2-digit" });
+  return (
+    <span className="inline-flex items-center gap-2 text-[11px] text-muted-foreground" title={`Sales rank, ${fmt(t0)}–${fmt(t1)}, weekly (log scale; up is better). Best #${best.toLocaleString("en-GB")}, worst #${worst.toLocaleString("en-GB")}.`}>
+      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="overflow-visible" aria-label="Sales rank, 12 months">
+        <path d={d} fill="none" stroke="currentColor" strokeWidth={1.5} className="text-brand" />
+      </svg>
+      <span className="num">#{points[points.length - 1][1].toLocaleString("en-GB")} now</span>
+    </span>
   );
 }
 

@@ -15,7 +15,7 @@ Private label is one of the app's three workspaces (switch at the top of the sid
 
 - **Candidates** (left): each candidate with a dot in its verdict colour, its score (or how many of the 10 lines are scored, e.g. `6/10`), its status (draft, researching, samples, parked, dropped, launched) and when Keepa last refreshed it; once there's a landed cost, the cost per unit (from the chosen quote when there is one), the price multiple in its band colour, and the next launch step.
 - **The workspace** (right): the selected candidate's header, the eight gates in order, the scorecard and the verdict.
-- **New candidate** asks for a name, a niche keyword, a referral category and up to ten ASINs from page one of the niche. Paste them one per line or comma-separated. The first is the **reference listing**. Keepa is fetched when you save.
+- **New candidate** asks for a name, a niche keyword, a referral category and up to ten ASINs from page one of the niche. Paste them one per line or comma-separated. Keepa is fetched when you save, and the one with the longest Keepa history becomes the **reference listing** (see Gate 2).
 
 **Notes** sit at the top of the candidate: free text for supplier leads, doubts and what to check next, saved a second after you stop typing (and when you leave the box).
 
@@ -56,11 +56,13 @@ An automatic field is read-only, with the figures it came from underneath it. Cl
 
 ### Gate 2: Validate history (Keepa, the reference listing)
 
+**Reference listing.** Gate 2 reads one listing: by default the page-one ASIN Keepa has seen longest, so a young listing's launch climb isn't read as the niche's demand. The dropdown lists every page-one ASIN with its review count and when Keepa first saw it; picking another runs Gate 2 again from it, and only Gate 2 (a snapshot under 7 days old with its Buy Box history is reused; otherwise Keepa fetches it, about 3 tokens, and asks first). Your pick stays through refreshes; editing the ASIN list without it goes back to the default. Beside the 12-month verdict it shows the **listing age** (amber under a year: the trend may be the listing's launch, not the niche) and a sparkline of its sales rank over the year, a point a week (up is better), from the stored Keepa data.
+
 | Field | How it's filled |
 |---|---|
 | Sales rank, 12 months | The year's rank in twelve 30-day months. A month over 5× the median is left out (out of stock, or before it sold). One month far better than the rest is a **spike**. Months that swing widely with no straight-line trend are **seasonal**. A last-three-months rank over 1.5× the first three's is a **decline**; under 0.67× is **growing**. Anything else is **flat**. The figures show under the field. |
-| Rank drops / month | Keepa's 90-day rank-drop count ÷ 3. |
-| Bought in past month | Amazon's figure, via Keepa. Blank when Amazon doesn't show one. |
+| Rank drops / month | Keepa's 90-day rank-drop count ÷ 3. Judges demand only when bought in past month is blank. |
+| Bought in past month | Amazon's figure, via Keepa. Blank when Amazon doesn't show one. When it's there, the demand check is **100+ bought in past month** (warn from 40) instead of 100+ rank drops: rank drops undercount fast sellers. |
 | New offer count | **Climbing** when the last 90 days average 1.5× the first 90 days of the year and at least two more offers. Otherwise **steady**. |
 | Buy Box price | **Sliding** when the last 90 days' median is under 90% of the first 90 days' median. Otherwise **holds**. |
 | Amazon ever a seller | Yes when Keepa's Amazon price history has any offer. |
@@ -102,7 +104,7 @@ First order units, samples, inspection, photography, trademark and launch ads. A
 
 Each check in a gate is **pass**, **warn**, **fail** or empty (not answered yet). A gate takes its worst check. It passes only when every check passes. The thresholds are Gatekeeper's. For example, the sell price passes at £18–35 and warns at £15–40; landed cost passes at 30% of the sell price or less and warns at up to 35%.
 
-The **scorecard** has 10 lines worth 0–3 points each, 30 in all: review depth, demand (rank drops), demand stability, Opportunity Explorer volume, review-driven differentiation, long-tail keywords, price multiple, steady-state margin, launch fits capital and competitive risk. Four lines are **structural**: review depth, demand stability, price multiple and competitive risk. Trying harder can't fix them. An eleventh line, **Search-term conversion (unscored)**, reads Gate 3's best search-term conversion (filled from an Opportunity Explorer capture): **Buying** at 4%+, **Browse-only** under 2.5%. It's outside the 30 points and the ten lines the verdict needs.
+The **scorecard** has 10 lines worth 0–3 points each, 30 in all: review depth, demand (bought in past month: 0 under 50, 1 for 50–199, 2 for 200–499, 3 for 500+; Keepa rank drops only when Amazon shows no bought figure), demand stability, Opportunity Explorer volume, review-driven differentiation, long-tail keywords, price multiple, steady-state margin, launch fits capital and competitive risk. Four lines are **structural**: review depth, demand stability, price multiple and competitive risk. Trying harder can't fix them. An eleventh line, **Search-term conversion (unscored)**, reads Gate 3's best search-term conversion (filled from an Opportunity Explorer capture): **Buying** at 4%+, **Browse-only** under 2.5%. It's outside the 30 points and the ten lines the verdict needs.
 
 The **verdict** appears once all ten lines are scored:
 

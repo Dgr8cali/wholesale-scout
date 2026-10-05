@@ -5,7 +5,7 @@ import { addDailyTokens, PL_KEEP_DAYS, ukDay, type TokensByDay } from "../keepaL
 import { getKeepa, type KeepaProduct, type OnKeepaResponse, type Point } from "../keepa/client";
 import { rankDrops } from "../keepa/summarize";
 import { isAmazonBrand } from "../pl/amazon-brands";
-import { keepaFill, type Fill, type PlAsin, type PlHistory } from "../pl/fill";
+import { defaultReference, GATE2_KEYS, keepaFill, type Fill, type PlAsin, type PlHistory } from "../pl/fill";
 import { DEFAULT_SETTINGS, evaluate, FIELD_KEYS, GATES, SETTINGS_DEF, type Settings, type Waiver } from "../pl/gatekeeper";
 import { bbTrend, offerTrend, rankTrend } from "../pl/history";
 import { extractPoe, poeFill, unreadFields, type PoeExtract } from "../pl/poe";
@@ -33,6 +33,8 @@ export interface PlCandidate {
   id: string; name: string; niche_keyword: string | null; category: string; status: PlStatus; notes: string | null;
   token_cost: number; keepa_by_day: TokensByDay; refreshed_at: string | null; created_at: string; updated_at: string;
   listing_asin?: string | null; chosen_quote?: string | null; chosen_landed?: number | null;
+  /** You picked Gate 2's reference listing: refreshes keep it (else the longest Keepa history wins). */
+  reference_pinned?: boolean;
   /** Parked: shelved with a reason (and the status to go back to). */
   park_reason?: string | null; parked_at?: string | null; parked_from?: string | null;
 }
@@ -157,7 +159,22 @@ export async function getCandidate(id: string) {
   const why: Record<string, string> = {};
   for (const [k, v] of Object.entries(keepaFill(list))) why[k] = v.why;
   if (latestPoe) for (const [k, v] of Object.entries(poeFill(latestPoe as unknown as PoeExtract))) why[k] = v.why;
-  return { candidate, fields, asins: list, poe: latestPoe, why, waivers };
+  const ref = list.find((a) => a.is_reference) ?? list[0];
+  return { candidate, fields, asins: list, poe: latestPoe, why, waivers, refRank: ref ? await rankYear(ref.asin) : null };
+}
+
+/**
+ * The reference listing's sales rank over the last 12 months, for Gate 2's sparkline: from the
+ * newest stored Keepa series (no Keepa call), one point a week (the week's last reading).
+ */
+async function rankYear(asin: string): Promise<{ asin: string; points: Point[]; fetchedAt: string } | null> {
+  const r = (await db().from("keepa_snapshots").select("rank_series, fetched_at").eq("asin", asin).order("fetched_at", { ascending: false }).limit(1).maybeSingle()).data as { rank_series: Point[] | null; fetched_at: string } | null;
+  if (!r?.rank_series?.length) return null;
+  const since = Date.now() - 365 * DAY;
+  const week = new Map<number, Point>();
+  for (const [t, v] of r.rank_series) if (t >= since && Number.isFinite(v) && v > 0) week.set(Math.floor(t / (7 * DAY)), [t, v]);
+  const points = [...week.values()].sort((a, b) => a[0] - b[0]);
+  return points.length ? { asin, points, fetchedAt: r.fetched_at } : null;
 }
 
 /* ===================== writes ===================== */
@@ -214,16 +231,23 @@ export async function updateCandidate(id: string, patch: Partial<Pick<PlCandidat
   must(await db().from("pl_candidates").update(upd).eq("id", id), "update candidate");
 }
 
-/** Replace the candidate's ASIN list (the first is the reference); snapshots of kept ASINs stay. */
+/**
+ * Replace the candidate's ASIN list; snapshots of kept ASINs stay. The reference you picked stays
+ * when it's still in the list; otherwise the first is the reference until the next refresh picks
+ * the one with the longest Keepa history.
+ */
 export async function setAsins(id: string, asins: string[]) {
   const list = asins.filter(isAsin).slice(0, 10);
   const d = db();
-  const cur = must(await d.from("pl_candidate_asins").select("asin").eq("candidate_id", id), "asins") as { asin: string }[];
+  const cur = must(await d.from("pl_candidate_asins").select("asin, is_reference").eq("candidate_id", id), "asins") as { asin: string; is_reference: boolean }[];
+  const pinned = ((await d.from("pl_candidates").select("reference_pinned").eq("id", id).maybeSingle()).data as { reference_pinned?: boolean } | null)?.reference_pinned ?? false;
+  const keep = pinned ? cur.find((r) => r.is_reference && list.includes(r.asin))?.asin ?? null : null;
+  if (pinned && !keep) must(await d.from("pl_candidates").update({ reference_pinned: false }).eq("id", id), "unpin reference");
   const drop = cur.map((r) => r.asin).filter((a) => !list.includes(a));
   if (drop.length) must(await d.from("pl_candidate_asins").delete().eq("candidate_id", id).in("asin", drop), "remove ASINs");
   if (list.length) {
     // Positions are unique per candidate only by convention; upsert by (candidate, asin).
-    must(await d.from("pl_candidate_asins").upsert(list.map((asin, i) => ({ candidate_id: id, asin, position: i + 1, is_reference: i === 0 })), { onConflict: "candidate_id,asin" }), "save ASINs");
+    must(await d.from("pl_candidate_asins").upsert(list.map((asin, i) => ({ candidate_id: id, asin, position: i + 1, is_reference: keep ? asin === keep : i === 0 })), { onConflict: "candidate_id,asin" }), "save ASINs");
   }
 }
 
@@ -333,7 +357,17 @@ export interface RefreshResult { tokensUsed: number; fetched: string[]; reused: 
  */
 export async function refreshCandidate(id: string, opts: { force?: boolean } = {}): Promise<RefreshResult> {
   const d = db();
-  const rows = (must(await d.from("pl_candidate_asins").select("asin, is_reference").eq("candidate_id", id).order("position"), "asins") as { asin: string; is_reference: boolean }[]);
+  const pinned = ((await d.from("pl_candidates").select("reference_pinned").eq("id", id).maybeSingle()).data as { reference_pinned?: boolean } | null)?.reference_pinned ?? false;
+  let rows = (must(await d.from("pl_candidate_asins").select("asin, is_reference, position, first_seen").eq("candidate_id", id).order("position"), "asins") as { asin: string; is_reference: boolean; position: number; first_seen: string | null }[]);
+  // The longest Keepa history known so far is the reference (unless you picked one), so it's the
+  // listing fetched with its Buy Box history.
+  if (!pinned && rows.some((r) => r.first_seen)) {
+    const want = defaultReference(rows);
+    if (want && !rows.find((r) => r.asin === want)?.is_reference) {
+      await markReference(id, want);
+      rows = rows.map((r) => ({ ...r, is_reference: r.asin === want }));
+    }
+  }
   const keepa = getKeepa();
   const result: RefreshResult = { tokensUsed: 0, fetched: [], reused: [], missing: [], filled: [], skippedManual: [], exhausted: false, keepa: keepa.available };
   const recent = opts.force ? new Map<string, Snapshot>() : await recentSnapshots(rows.map((r) => r.asin));
@@ -373,12 +407,107 @@ export async function refreshCandidate(id: string, opts: { force?: boolean } = {
   for (const r of rows) if (!snaps.has(r.asin)) result.missing.push(r.asin);
   for (const [asin, s] of snaps) must(await d.from("pl_candidate_asins").update(s).eq("candidate_id", id).eq("asin", asin), "save snapshot");
 
-  const asins = (must(await d.from("pl_candidate_asins").select(ASIN_COLS).eq("candidate_id", id).order("position"), "asins") as Record<string, unknown>[]).map(asinRow);
+  let asins = (must(await d.from("pl_candidate_asins").select(ASIN_COLS).eq("candidate_id", id).order("position"), "asins") as Record<string, unknown>[]).map(asinRow);
+  // First seen only known now (a new candidate): the longest history becomes the reference, with
+  // its Buy Box history fetched (3 tokens) unless a 7-day snapshot has it.
+  const want = pinned ? null : defaultReference(asins.filter((a) => a.snapshot_at));
+  if (want && !asins.find((a) => a.asin === want)?.is_reference) {
+    const sw = await switchReference(id, want, { pinned: false, fetch: keepa.available });
+    result.tokensUsed += sw.tokensUsed;
+    asins = (must(await d.from("pl_candidate_asins").select(ASIN_COLS).eq("candidate_id", id).order("position"), "asins") as Record<string, unknown>[]).map(asinRow);
+  }
   const fill = keepaFill(asins);
   result.filled = await applyAuto(id, fill, "keepa");
   result.skippedManual = Object.keys(fill).filter((k) => !result.filled.includes(k));
   must(await d.from("pl_candidates").update({ refreshed_at: now(), updated_at: now() }).eq("id", id), "refreshed");
   return result;
+}
+
+/* ===================== Gate 2's reference listing ===================== */
+
+async function markReference(id: string, asin: string) {
+  const d = db();
+  must(await d.from("pl_candidate_asins").update({ is_reference: false }).eq("candidate_id", id).neq("asin", asin), "reference");
+  must(await d.from("pl_candidate_asins").update({ is_reference: true }).eq("candidate_id", id).eq("asin", asin), "reference");
+}
+
+/**
+ * Gate 2 again from the reference listing: its fields refilled (never over yours), and those the
+ * new reference can't say (no Buy Box history yet) cleared rather than left from the old one.
+ */
+async function applyGate2(id: string): Promise<string[]> {
+  const d = db();
+  const asins = (must(await d.from("pl_candidate_asins").select(ASIN_COLS).eq("candidate_id", id).order("position"), "asins") as Record<string, unknown>[]).map(asinRow);
+  const fill = keepaFill(asins);
+  const g2: Fill = Object.fromEntries(GATE2_KEYS.filter((k) => fill[k]).map((k) => [k, fill[k]]));
+  const filled = await applyAuto(id, g2, "keepa");
+  const gone = GATE2_KEYS.filter((k) => !fill[k]);
+  if (gone.length) must(await d.from("pl_candidate_fields").delete().eq("candidate_id", id).eq("source", "keepa").in("key", gone), "clear Gate 2");
+  return filled;
+}
+
+/**
+ * Make an ASIN Gate 2's reference and run Gate 2 again (Gate 2 only). Its Buy Box history comes
+ * from a snapshot under 7 days old when there is one; else, with `fetch`, from Keepa (about 3
+ * tokens, on the candidate's ledger); else Gate 2 goes without it until the next refresh.
+ */
+export async function switchReference(id: string, asin: string, o: { pinned: boolean; fetch: boolean }) {
+  const d = db();
+  const a = asin.trim().toUpperCase();
+  const row = (await d.from("pl_candidate_asins").select(ASIN_COLS).eq("candidate_id", id).eq("asin", a).maybeSingle()).data as Record<string, unknown> | null;
+  if (!row) throw new Error(`${a} isn't one of this candidate's page-one ASINs`);
+  await markReference(id, a);
+  if (o.pinned) must(await d.from("pl_candidates").update({ reference_pinned: true, updated_at: now() }).eq("id", id), "pin reference");
+  const out = { asin: a, tokensUsed: 0, buyBox: "had" as "had" | "reused" | "fetched" | "missing" };
+  const cur = asinRow(row);
+  const fresh = cur.snapshot_at && Date.now() - Date.parse(cur.snapshot_at) < REUSE_MS;
+  if (!(fresh && cur.history?.buyBoxFetched)) {
+    const recent = (await recentSnapshots([a])).get(a);
+    if (recent?.history.buyBoxFetched) {
+      must(await d.from("pl_candidate_asins").update(recent).eq("candidate_id", id).eq("asin", a), "save snapshot");
+      out.buyBox = "reused";
+    } else if (o.fetch && getKeepa().available) {
+      let spent = 0;
+      try {
+        const res = await getKeepa().lookupByAsins([a], (m) => { spent += m.tokensConsumed; }, { buyBox: true, rating: true });
+        const k = res.byAsin.get(a);
+        if (k) {
+          must(await d.from("pl_candidate_asins").update(snapshotOf(k)).eq("candidate_id", id).eq("asin", a), "save snapshot");
+          await saveSnapshot(k).catch((e) => console.error(`[pl] keepa snapshot for ${a} not stored: ${(e as Error).message}`));
+          out.buyBox = "fetched";
+        } else out.buyBox = "missing";
+      } finally {
+        if (spent) {
+          const c = must(await d.from("pl_candidates").select("token_cost, keepa_by_day").eq("id", id).single(), "ledger") as { token_cost: number; keepa_by_day: TokensByDay };
+          must(await d.from("pl_candidates").update({ token_cost: (c.token_cost ?? 0) + spent, keepa_by_day: addDailyTokens(c.keepa_by_day, spent, new Date(), PL_KEEP_DAYS) }).eq("id", id), "ledger");
+        }
+        out.tokensUsed = spent;
+      }
+    } else out.buyBox = "missing";
+  }
+  const filled = await applyGate2(id);
+  return { ...out, filled };
+}
+
+/**
+ * Existing candidates onto the default reference (the longest Keepa history) where you haven't
+ * picked one, from what's stored: no Keepa tokens. A new reference without Buy Box history leaves
+ * that check empty until the next refresh. Returns what moved.
+ */
+export async function rescoreReferences(): Promise<{ id: string; name: string; from: string | null; to: string; buyBox: string }[]> {
+  const d = db();
+  const cands = must(await d.from("pl_candidates").select("id, name, reference_pinned"), "candidates") as { id: string; name: string; reference_pinned: boolean | null }[];
+  const out = [];
+  for (const c of cands) {
+    if (c.reference_pinned) continue;
+    const rows = must(await d.from("pl_candidate_asins").select("asin, position, first_seen, is_reference, snapshot_at").eq("candidate_id", c.id), "asins") as { asin: string; position: number; first_seen: string | null; is_reference: boolean; snapshot_at: string | null }[];
+    const want = defaultReference(rows.filter((r) => r.snapshot_at));
+    const from = rows.find((r) => r.is_reference)?.asin ?? null;
+    if (!want || want === from) continue;
+    const r = await switchReference(c.id, want, { pinned: false, fetch: false });
+    out.push({ id: c.id, name: c.name, from, to: want, buyBox: r.buyBox });
+  }
+  return out;
 }
 
 /* ===================== Opportunity Explorer ===================== */

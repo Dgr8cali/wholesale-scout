@@ -281,7 +281,10 @@ export function gateChecks(g: GateId, f: Fields, S: Settings, cat: string, card:
     case "g2": {
       const rt = f.rankTrend === "" || f.rankTrend == null ? null : +f.rankTrend, rd = num(f.rankDrops), bo = num(f.bought);
       R("Rank flat or improving over 12 months", rt == null ? E : st(rt >= 2, rt === 1), "");
-      R("100+ rank drops / month", rd == null ? E : st(rd >= 100, rd >= 40), rd == null ? "" : fmt(rd));
+      // Amazon's bought-in-past-month, when the reference listing shows it, judges demand: rank drops
+      // undercount fast sellers. Rank drops only when it's missing.
+      if (bo != null) R("100+ bought in past month (demand)", st(bo >= 100, bo >= 40), fmt(bo));
+      else R("100+ rank drops / month", rd == null ? E : st(rd >= 100, rd >= 40), rd == null ? "" : fmt(rd));
       R("200+ bought in past month", bo == null ? E : st(bo >= 200, true), bo == null ? "" : fmt(bo));
       R("Offer count steady", !f.offerTrend ? E : st(f.offerTrend === "steady"), "");
       R("Buy Box price holds", !f.bbTrend ? E : st(f.bbTrend === "holds"), "");
@@ -359,7 +362,10 @@ export function scorecard(f: Fields, S: Settings, cat: string, card: RateCard, d
   const band = (v: number | null, cuts: number[]) => (v == null ? null : v < cuts[0] ? 0 : v < cuts[1] ? 1 : v < cuts[2] ? 2 : 3);
   const rows: ScoreRow[] = [];
   rows.push({ n: 1, label: "Page-one review depth", pts: rb, why: ["Most over 1,000", "Most 500–1,000", "Most 200–500", "Several under 200 selling well"], structural: true });
-  rows.push({ n: 2, label: "Demand (Keepa rank drops)", pts: band(rd, [40, 100, 200]), why: ["Under 40/mo", "40–100", "100–200", "200+"] });
+  const bought = num(f.bought);
+  rows.push(bought != null
+    ? { n: 2, label: "Demand (bought in past month)", pts: band(bought, [50, 200, 500]), why: ["Under 50/mo", "50–199", "200–499", "500+"] }
+    : { n: 2, label: "Demand (Keepa rank drops)", pts: band(rd, [40, 100, 200]), why: ["Under 40/mo", "40–100", "100–200", "200+"] });
   rows.push({ n: 3, label: "Demand stability (12-month Keepa)", pts: rt, why: ["Spike or decline", "Seasonal", "Flat", "Growing"], structural: true });
   rows.push({ n: 4, label: "Opportunity Explorer volume", pts: sv == null ? null : sv <= 0 ? 0 : sv < 15000 ? 1 : sv < 30000 ? 2 : 3, why: ["Not listed", "Under 15k", "15–30k", "30k+"] });
   let dp: number | null = null;
