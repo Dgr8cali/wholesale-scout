@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { KeepaProduct, KeepaSummary } from "../keepa/types";
 import { __setDbForTests } from "./db";
 import { FakeDb } from "./fakeDb";
-import { createCandidate, getCandidate, refreshCandidate, rescoreReferences, switchReference } from "./pl";
+import { createCandidate, getCandidate, refreshCandidate, refreshPriceTight, rescoreReferences, setField, switchReference } from "./pl";
 
 const k = vi.hoisted(() => ({ calls: [] as { asins: string[]; buyBox: boolean }[] }));
 const DAY = 86_400_000;
@@ -100,5 +100,21 @@ describe("Gate 2's reference listing", () => {
     expect(moved).toEqual([{ id: a.id, name: "A", from: "B0NEW00001", to: "B0OLD00001", buyBox: "had" }]);
     expect(k.calls).toEqual([]);
     expect(ref(b.id)).toBe("B0NEW00001");
+  });
+
+  it("a target price band of the candidate's own re-reads Gate 1's price spread (no Keepa)", async () => {
+    const c = await createCandidate({ name: "Wipes", asins: ["B0NEW00001", "B0OLD00001", "B0MID00001"] });
+    await refreshCandidate(c.id);
+    expect(field(c.id, "priceTight")).toMatchObject({ value: "yes" }); // ~£20 in £14.40–£42
+    k.calls.length = 0;
+    await setField(c.id, "bandMin", "8");
+    await setField(c.id, "bandMax", "15");
+    expect(await refreshPriceTight(c.id)).toEqual(["priceTight"]);
+    expect(field(c.id, "priceTight")).toMatchObject({ value: "no", source: "keepa" }); // £20 outside £6.40–£18
+    expect(k.calls).toEqual([]);
+    // Your own answer stays.
+    await setField(c.id, "priceTight", "yes");
+    expect(await refreshPriceTight(c.id)).toEqual([]);
+    expect(field(c.id, "priceTight")).toMatchObject({ value: "yes", source: "manual" });
   });
 });

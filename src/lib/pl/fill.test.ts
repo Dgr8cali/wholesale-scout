@@ -85,6 +85,14 @@ describe("Keepa fill", () => {
     expect(f.top3Share.value).toBe("95"); // 300 + 150 + 150 of 630
     expect([f.rankTrend.value, f.rankDrops.value, f.bought.value, f.offerTrend.value, f.bbTrend.value, f.amazonSeller.value]).toEqual(["2", "150", "300", "steady", "holds", "yes"]);
   });
+
+  it("price spread reads the candidate's own target band", () => {
+    const list = [asin({ asin: "B0A", price: 9 }), asin({ asin: "B0B", price: 11 }), asin({ asin: "B0C", price: 14 }), asin({ asin: "B0D", price: 26 })];
+    expect(keepaFill(list).priceTight.value).toBe("no"); // 1 of 4 in £14.40–£42
+    const own = keepaFill(list, { min: 8, max: 15 }).priceTight;
+    expect(own.value).toBe("yes"); // 3 of 4 in £6.40–£18
+    expect(own.why).toContain("the £8.00–£15.00 target band");
+  });
 });
 
 describe("Opportunity Explorer", () => {

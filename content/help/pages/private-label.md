@@ -41,6 +41,7 @@ An automatic field is read-only, with the figures it came from underneath it. Cl
 
 - **Sell price**: the median page-one price. A listing's price is its Buy Box price, or its lowest new offer when the Buy Box wasn't fetched.
 - **Packed weight, length, width, height**: the reference listing's package from Keepa. Overwrite them with your own product's if they differ.
+- **Target price band**: blank is Gatekeeper's £18–35. Set your own when the product is meant to sit elsewhere, such as £8–15 for a consumable: the **Sell price** check reads it (warning just outside it, Gatekeeper's £15–40 margin scaled to your band), and so does Gate 1's **Price spread holds the band**, which is read again at once from the stored prices (no Keepa). No waiver needed.
 - **Landed cost** is yours to type. So are seasonal, avoid category, simple and differentiable.
 
 ### Gate 1: Find the market (Keepa, every ASIN)
@@ -52,7 +53,9 @@ An automatic field is read-only, with the figures it came from underneath it. Cl
 | Top-10 monthly sales, each | The median of the listings' sales a month. A listing's sales follow the wholesale rule: a fast seller (90-day average rank under 5,000) uses Amazon's bought-in-past-month, because rank drops undercount it. Otherwise it's the highest of rank drops (90-day ÷ 3), Keepa's 30-day drops and bought-in-past-month. |
 | Top 3 revenue share | The top three listings' share of the listings' summed monthly sales. With three ASINs or fewer this is always 100%, so add more. |
 | Amazon-brand in top 10 | Yes when any listing's brand is one of Amazon's own (Amazon Basics, Amazon Essentials, Solimo, Presto!, Umi, Eono, Amazon Aware, Happy Belly, Wag, Pinzon, Rivet, Stone & Beam). |
-| Price spread holds £18–35 | Yes when 70% or more of the prices sit within the band widened by 20% (£14.40–£42.00). |
+| Price spread holds the target band | Yes when 70% or more of the prices sit within the target band (Gate 0; £18–35 unless you set one) widened by 20% (£14.40–£42.00 for £18–35). |
+
+Under the fields, a table lists every page-one ASIN: brand, reviews, rating, bought in past month, price and the date Keepa first saw it. Every column sorts. The two youngest listings and the two with the fewest reviews are marked: young or thinly reviewed listings that sell are the proof a newcomer can break in.
 
 ### Gate 2: Validate history (Keepa, the reference listing)
 
@@ -122,7 +125,7 @@ Sometimes a check fails for a reason that doesn't apply to you. Every failed or 
 Waive only when you know why the rule doesn't fit this product. For example:
 
 - **Not in an avoid category**, when you already hold the compliance documents (test reports, a responsible person, the right labelling) for that category.
-- **Sell price £18–35**, when you're deliberately testing a higher-ticket product and have checked the economics in Gate 6.
+- **Sell price £18–35**, when you're deliberately testing a higher-ticket product and have checked the economics in Gate 6. (A product meant for another band is better served by setting Gate 0's target price band.)
 
 A waiver never hides anything. The verdict card always adds a line such as "2 checks waived: Sell price £18–35, Not in an avoid category". The candidate list shows a small waived count next to the score, and a **Waivers** section at the bottom of the candidate lists every waiver with its reason and date. **Remove waiver** on a row, a gate header or that list takes it back. Scorecard lines can't be waived: they're the score, not a gate. A waiver on a check follows it when you change a threshold in Settings (for example "Sell ÷ landed ≥ 3.5×" becoming 4×). It stops mattering once the check passes on its own; the Waivers list says when.
 

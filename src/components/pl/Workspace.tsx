@@ -85,7 +85,10 @@ export function Workspace({ id, settings, card, adsCpc, onChanged, onDeleted }: 
     setLocal(next);
     clearTimeout(timers.current[k]);
     timers.current[k] = setTimeout(() => {
-      api(`/api/pl/candidates/${id}/fields`, { method: "PUT", json: { key: k, value } }).catch((e) => toast.error(`Not saved: ${(e as Error).message}`));
+      api<{ refilled?: string[] }>(`/api/pl/candidates/${id}/fields`, { method: "PUT", json: { key: k, value } })
+        // A new target price band re-reads Gate 1's price spread on the server.
+        .then(async (r) => { if (r.refilled?.length) { const d = await load(); if (d) onChanged(id, { fields: d.fields }); } })
+        .catch((e) => toast.error(`Not saved: ${(e as Error).message}`));
     }, delay);
   };
   const patch = async (p: Record<string, unknown>, msg?: string) => {
@@ -432,6 +435,58 @@ function FieldRow({ def, field, why, onSave, manualOnly, derived }: {
 }
 
 /**
+ * Gate 1, listing by listing: who's on page one, how established each is, and what it sells. The two
+ * youngest listings and the two with the fewest reviews are marked: the ones proving a newcomer can
+ * break in.
+ */
+function PageOneTable({ asins }: { asins: CandidateDetail["asins"] }) {
+  const live = asins.filter((a) => a.snapshot_at);
+  const pickTwo = (xs: typeof live, key: (a: (typeof live)[number]) => number | null, asc: boolean) =>
+    new Set(xs.filter((a) => key(a) != null).sort((a, b) => (asc ? key(a)! - key(b)! : key(b)! - key(a)!)).slice(0, 2).map((a) => a.asin));
+  const young = pickTwo(live, (a) => (a.first_seen ? Date.parse(a.first_seen) : null), false);
+  const fewest = pickTwo(live, (a) => a.review_count, true);
+  const t = useSortable("pl.gate1", asins, {
+    asin: { value: (a) => a.asin, kind: "text" },
+    brand: { value: (a) => a.brand, kind: "text" },
+    reviews: { value: (a) => a.review_count, kind: "number" },
+    rating: { value: (a) => a.rating, kind: "number" },
+    bought: { value: (a) => a.bought_past_month, kind: "number" },
+    price: { value: (a) => priceOf(a), kind: "number" },
+    seen: { value: (a) => (a.first_seen ? Date.parse(a.first_seen) : null), kind: "number" },
+  });
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="overflow-x-auto rounded-lg border">
+        <table className="w-full text-xs">
+          <thead><tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase">
+            <SortTh {...t.th("asin")} className="px-2 py-1.5">ASIN</SortTh><SortTh {...t.th("brand")} className="px-2 py-1.5">Brand</SortTh>
+            <SortTh {...t.th("reviews")} numeric className="px-2 py-1.5 text-right">Reviews</SortTh><SortTh {...t.th("rating")} numeric className="px-2 py-1.5 text-right">Rating</SortTh>
+            <SortTh {...t.th("bought")} numeric className="px-2 py-1.5 text-right" title="Amazon's bought in past month">Bought / mo</SortTh><SortTh {...t.th("price")} numeric className="px-2 py-1.5 text-right">Price</SortTh>
+            <SortTh {...t.th("seen")} numeric className="px-2 py-1.5 text-right" title="When Keepa first saw the listing">First seen</SortTh>
+          </tr></thead>
+          <tbody>{t.rows.map((a) => {
+            const y = young.has(a.asin), f = fewest.has(a.asin);
+            return (
+              <tr key={a.asin} className={cn("border-b last:border-0", (y || f) && "bg-brand-soft/40")}>
+                <td className="num px-2 py-1.5"><a className="text-brand hover:underline" href={`https://www.amazon.co.uk/dp/${a.asin}`} target="_blank" rel="noreferrer">{a.asin}</a>{a.is_reference && <span className="ml-1 text-[10px] text-muted-foreground">ref</span>}</td>
+                <td className="max-w-40 truncate px-2 py-1.5" title={a.title ?? ""}>{a.brand ?? "—"}</td>
+                <td className={cn("num px-2 py-1.5 text-right", f && "font-semibold text-brand")}>{a.review_count?.toLocaleString("en-GB") ?? "—"}</td>
+                <td className="num px-2 py-1.5 text-right">{a.rating ?? "—"}</td>
+                <td className="num px-2 py-1.5 text-right">{a.bought_past_month != null ? `${a.bought_past_month.toLocaleString("en-GB")}+` : "—"}</td>
+                <td className="num px-2 py-1.5 text-right">{money(priceOf(a))}</td>
+                <td className={cn("num px-2 py-1.5 text-right whitespace-nowrap", y && "font-semibold text-brand")}>{a.first_seen ? new Date(a.first_seen).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "—"}
+                  {y && <span className="ml-1 text-[10px] font-normal">({listingAge(a.first_seen)?.text})</span>}</td>
+              </tr>
+            );
+          })}</tbody>
+        </table>
+      </div>
+      <p className="text-[11.5px] text-muted-foreground">Marked: the two youngest listings (first seen) and the two with the fewest reviews. Young or thinly reviewed listings selling well are the proof a newcomer can break in.</p>
+    </div>
+  );
+}
+
+/**
  * Gate 2's reference listing: pick which page-one ASIN its 12-month figures come from (by default
  * the longest Keepa history), its listing age beside the 12-month verdict, and its rank sparkline.
  */
@@ -518,6 +573,7 @@ function GateExtras({ g, data, fields, settings, card, onSave }: { g: GateDef; d
     const terms = p.search_terms.slice(0, 12);
     return terms.length ? <SearchTermsTable terms={terms} captured={p.search_terms.length} /> : null;
   }
+  if (g.id === "g1") return data.asins.length ? <PageOneTable asins={data.asins} /> : null;
   if (g.id === "g4") {
     const top = data.asins.slice(0, 5);
     return (

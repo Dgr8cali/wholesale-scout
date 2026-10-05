@@ -29,7 +29,9 @@ export const GATES: GateDef[] = [
   { id: "g0", n: "0", title: "Your filter", tool: "Written before you search",
     blurb: "The constraints you commit to before opening any tool. A product that fails here is dropped whatever the revenue looks like.",
     fields: [
-      { k: "sell", label: "Sell price", type: "num", unit: "£", step: "0.01", hint: "£18–35 band" },
+      { k: "sell", label: "Sell price", type: "num", unit: "£", step: "0.01", hint: "Inside the target band" },
+      { k: "bandMin", label: "Target price band, from", type: "num", unit: "£", step: "0.01", hint: "Blank: £18 (a consumable might be £8)" },
+      { k: "bandMax", label: "Target price band, to", type: "num", unit: "£", step: "0.01", hint: "Blank: £35 (a consumable might be £15)" },
       { k: "landed", label: "Landed cost per unit", type: "num", unit: "£", step: "0.01", hint: "Product + freight + duty + import VAT + inspection, per unit" },
       { k: "weight", label: "Packed weight", type: "num", unit: "g", hint: "As it ships to Amazon" },
       { k: "dimL", label: "Packed length", type: "num", unit: "cm", step: "0.1" },
@@ -48,7 +50,7 @@ export const GATES: GateDef[] = [
       { k: "top10Sales", label: "Top-10 monthly sales, each", type: "num", unit: "units", hint: "Median of the listings" },
       { k: "top3Share", label: "Top 3 revenue share", type: "num", unit: "%", hint: "Under 50%" },
       { k: "amazonBrand", label: "Amazon-brand in top 10?", type: "yn" },
-      { k: "priceTight", label: "Price spread holds £18–35?", type: "yn" },
+      { k: "priceTight", label: "Price spread holds the target band?", type: "yn" },
     ] },
   { id: "g2", n: "2", title: "Validate history", tool: "Keepa · reference listing",
     blurb: "Today's rank is a snapshot. Keepa shows whether today is normal: one year of the reference listing.",
@@ -127,6 +129,17 @@ export const SETTINGS_DEF = [
 export type SettingKey = (typeof SETTINGS_DEF)[number]["k"];
 export type Settings = Record<SettingKey, number>;
 export const DEFAULT_SETTINGS = Object.fromEntries(SETTINGS_DEF.map((s) => [s.k, s.d])) as Settings;
+
+/** Gatekeeper's sell-price band, unless the candidate sets its own in Gate 0. */
+export const DEFAULT_PRICE_BAND = { min: 18, max: 35 };
+
+/** The candidate's target price band: Gate 0's two fields, else £18–35 (an upside-down one is ignored). */
+export function priceBand(f: Fields): { min: number; max: number; own: boolean } {
+  const lo = num(f.bandMin), hi = num(f.bandMax);
+  const min = lo ?? DEFAULT_PRICE_BAND.min, max = hi ?? DEFAULT_PRICE_BAND.max;
+  if (min <= 0 || max <= min) return { ...DEFAULT_PRICE_BAND, own: false };
+  return { min, max, own: lo != null || hi != null };
+}
 
 export const num = (v: unknown): number | null => (v === "" || v == null || isNaN(+(v as number)) ? null : +(v as number));
 export const money = (v: number | null | undefined) => (v == null ? "—" : `£${(+v).toFixed(2)}`);
@@ -258,7 +271,10 @@ export function gateChecks(g: GateId, f: Fields, S: Settings, cat: string, card:
   switch (g) {
     case "g0": {
       const s = num(f.sell), l = num(f.landed), w = num(f.weight), t = sizeTier(f, card);
-      R("Sell price £18–35", s == null ? E : st(s >= 18 && s <= 35, s >= 15 && s <= 40), s == null ? "" : money(s));
+      // The band's warn margin is Gatekeeper's: £15–40 around £18–35, scaled for a band of your own.
+      const pb = priceBand(f), wLo = (pb.min * 15) / 18, wHi = (pb.max * 40) / 35;
+      const amt = (v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(2));
+      R(`Sell price £${amt(pb.min)}–${amt(pb.max)}`, s == null ? E : st(s >= pb.min && s <= pb.max, s >= wLo && s <= wHi), s == null ? "" : money(s));
       R("Landed cost ≤ 30% of sell", s == null || l == null ? E : st(l / s <= 0.30, l / s <= 0.35), s && l != null ? `${((l / s) * 100).toFixed(0)}%` : "");
       R("Packed weight under 500 g", w == null ? E : st(w <= 500, w <= 700), w == null ? "" : `${w} g`);
       R("Envelope or small parcel tier", t == null ? E : st(!!t.id && SMALL_TIERS.includes(t.id), t.id === "stdPcl"), t == null ? "" : t.name);

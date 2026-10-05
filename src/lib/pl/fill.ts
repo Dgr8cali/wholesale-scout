@@ -50,9 +50,8 @@ export interface PlHistory {
 export interface Filled { value: string; why: string; source?: "poe_derived" }
 export type Fill = Record<string, Filled>;
 
-/** Gatekeeper's Gate 0 band (£18–35), widened 20% each way for "the price spread holds". */
+/** Gatekeeper's Gate 0 band (£18–35) unless the candidate sets its own; widened 20% each way for "the price spread holds". */
 export const PRICE_BAND = { min: 18, max: 35 };
-const BAND_LO = PRICE_BAND.min * 0.8, BAND_HI = PRICE_BAND.max * 1.2;
 
 const round = (n: number, dp = 0) => Math.round(n * 10 ** dp) / 10 ** dp;
 const gbp = (n: number) => `£${n.toFixed(2)}`;
@@ -111,7 +110,8 @@ export function listingAge(firstSeen: string | null, now = Date.now()): { months
 }
 
 /** Gate 0 defaults and Gates 1 and 2, from the page-one ASINs and the reference among them. */
-export function keepaFill(asins: PlAsin[]): Fill {
+export function keepaFill(asins: PlAsin[], target: { min: number; max: number } = PRICE_BAND): Fill {
+  const BAND_LO = target.min * 0.8, BAND_HI = target.max * 1.2;
   const out: Fill = {};
   const live = asins.filter((a) => a.snapshot_at);
   if (!live.length) return out;
@@ -152,7 +152,7 @@ export function keepaFill(asins: PlAsin[]): Fill {
   out.amazonBrand = { value: amazonBrands.length ? "yes" : "no", why: amazonBrands.length ? `${amazonBrands.map((a) => `${a.brand} (${a.asin})`).join(", ")}` : `None of ${live.length} brands is an Amazon brand` };
   if (prices.length) {
     const inside = prices.filter((p) => p >= BAND_LO && p <= BAND_HI).length;
-    out.priceTight = { value: inside / prices.length >= 0.7 ? "yes" : "no", why: `${inside} of ${prices.length} prices inside ${gbp(BAND_LO)}–${gbp(BAND_HI)} (the £18–35 band ±20%; 70% needed)` };
+    out.priceTight = { value: inside / prices.length >= 0.7 ? "yes" : "no", why: `${inside} of ${prices.length} prices inside ${gbp(BAND_LO)}–${gbp(BAND_HI)} (the ${gbp(target.min)}–${gbp(target.max)} target band ±20%; 70% needed)` };
   }
 
   // Gate 2, from the reference listing.

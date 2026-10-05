@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { UK_RATE_CARD_2026_07 } from "../fees/rateCard";
-import { DEFAULT_SETTINGS, econ, evaluate, GATES, gateChecks, scorecard, SETTINGS_DEF, verdict, gateStatus, type Fields, type Settings } from "./gatekeeper";
+import { DEFAULT_SETTINGS, econ, evaluate, GATES, gateChecks, priceBand, scorecard, SETTINGS_DEF, verdict, gateStatus, type Fields, type Settings } from "./gatekeeper";
 
 /**
  * Gatekeeper's own functions, run from docs/gatekeeper-reference.html: everything from the schema
@@ -93,6 +93,21 @@ function randomCandidate(r: () => number): { f: Fields; S: Settings; cat: string
   return { f, S, cat: pick(ref.REFERRAL.map((x) => x[0])), date };
 }
 
+describe("the target price band (the port's own field)", () => {
+  const g0 = (f: Fields) => gateChecks("g0", f, DEFAULT_SETTINGS, "Home Products", card)[0];
+  it("Gate 0's sell price check reads it; blank or upside-down is £18–35", () => {
+    expect(priceBand({})).toEqual({ min: 18, max: 35, own: false });
+    expect(priceBand({ bandMin: "8", bandMax: "15" })).toEqual({ min: 8, max: 15, own: true });
+    expect(priceBand({ bandMin: "20", bandMax: "10" })).toMatchObject({ min: 18, max: 35, own: false });
+    expect(g0({ sell: "12" })).toMatchObject({ label: "Sell price £18–35", status: "fail" });
+    expect(g0({ sell: "12", bandMin: "8", bandMax: "15" })).toMatchObject({ label: "Sell price £8–15", status: "pass" });
+    // Gatekeeper's warn margin, scaled: £15–40 around £18–35 is £6.67–17.14 around £8–15.
+    expect(g0({ sell: "16.5", bandMin: "8", bandMax: "15" }).status).toBe("warn");
+    expect(g0({ sell: "18", bandMin: "8", bandMax: "15" }).status).toBe("fail");
+    expect(g0({ sell: "8.5", bandMin: "8.5", bandMax: "15" }).label).toBe("Sell price £8.50–15");
+  });
+});
+
 describe("demand from bought in past month (the port's own rule)", () => {
   const line2 = (f: Fields) => scorecard(f, DEFAULT_SETTINGS, "Home Products", card).rows.find((r) => r.n === 2)!;
   const g2 = (f: Fields) => gateChecks("g2", f, DEFAULT_SETTINGS, "Home Products", card).map((c) => [c.label, c.status]);
@@ -115,7 +130,7 @@ describe("demand from bought in past month (the port's own rule)", () => {
 describe("Gatekeeper port", () => {
   it("has the same gates, fields and settings", () => {
     // The app's own additions (not in the reference): Gate 4's six words as text, for the RFQ.
-    const APP_ONLY = new Set(["sixWordsText", "bestTermConv"]);
+    const APP_ONLY = new Set(["sixWordsText", "bestTermConv", "bandMin", "bandMax"]);
     expect(GATES.map((g) => [g.id, g.fields.filter((f) => !APP_ONLY.has(f.k)).map((f) => [f.k, f.type, f.opts ?? null])]))
       .toEqual(ref.GATES.map((g) => [g.id, g.fields.map((f) => [f.k, f.type, f.opts ?? null])]));
     // Every setting but the Q4 switch (peak rates now follow the date).

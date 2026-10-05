@@ -1,7 +1,7 @@
 # Wholesale Scout: status
 
 Read this first in a new session. Keep it current: every commit that changes a feature updates
-it (what's built, the backlog, the rough edges). Last updated: 5 Oct 2026 (Gate 2: demand from bought in past month, a reference picker defaulting to the longest history, a 12-month rank sparkline and listing age).
+it (what's built, the backlog, the rough edges). Last updated: 5 Oct 2026 (Gate 0's target price band; Gate 1's per-ASIN table).
 
 Wholesale Scout is a single-user Amazon UK seller's workbench: Next.js 16 (App Router, `proxy.ts`
 password gate), Supabase (Postgres, RLS on, service-role access from the server only), Vercel
@@ -33,7 +33,9 @@ Ads CPC, and waivers per check or gate. Demand (scorecard line 2 and Gate 2's de
 on Amazon's bought-in-past-month when the reference shows it, rank drops otherwise; Gate 2's reference
 is picked in a dropdown (default: the longest Keepa history, `reference_pinned` once you pick; a switch
 re-runs Gate 2 only, reusing a 7-day Buy Box snapshot) with listing age and a 12-month rank sparkline
-from stored series; each has autosaved notes at the top and can be parked
+from stored series; Gate 0 has a target price band (default £18–35) that its sell-price check and Gate
+1's price spread read; Gate 1 lists every page-one ASIN (brand, reviews, rating, bought, price, first
+seen) with the two youngest and two least-reviewed marked; each has autosaved notes at the top and can be parked
 (shelved with a reason, in a collapsed Parked section; unpark restores its status). Niche Hunt finds niches that already pass Gates 0–1: Direct
 mode (one filtered Product Finder query per category, then detail grouped by leaf, an incumbent
 check per niche with 3+ qualifying, off-niche incumbents by Keepa category) and Leaf mode (size

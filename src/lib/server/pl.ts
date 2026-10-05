@@ -6,7 +6,7 @@ import { getKeepa, type KeepaProduct, type OnKeepaResponse, type Point } from ".
 import { rankDrops } from "../keepa/summarize";
 import { isAmazonBrand } from "../pl/amazon-brands";
 import { defaultReference, GATE2_KEYS, keepaFill, type Fill, type PlAsin, type PlHistory } from "../pl/fill";
-import { DEFAULT_SETTINGS, evaluate, FIELD_KEYS, GATES, SETTINGS_DEF, type Settings, type Waiver } from "../pl/gatekeeper";
+import { DEFAULT_SETTINGS, evaluate, FIELD_KEYS, GATES, priceBand, SETTINGS_DEF, type Settings, type Waiver } from "../pl/gatekeeper";
 import { bbTrend, offerTrend, rankTrend } from "../pl/history";
 import { extractPoe, poeFill, unreadFields, type PoeExtract } from "../pl/poe";
 import { activeRateCard, db, must, selectAll } from "./db";
@@ -157,7 +157,7 @@ export async function getCandidate(id: string) {
   const waivers = (await waiversOf([id])).get(id) ?? [];
   // Why each automatic value is what it is, worked out again from the stored data.
   const why: Record<string, string> = {};
-  for (const [k, v] of Object.entries(keepaFill(list))) why[k] = v.why;
+  for (const [k, v] of Object.entries(keepaFill(list, priceBand(valuesOfFields(fields))))) why[k] = v.why;
   if (latestPoe) for (const [k, v] of Object.entries(poeFill(latestPoe as unknown as PoeExtract))) why[k] = v.why;
   const ref = list.find((a) => a.is_reference) ?? list[0];
   return { candidate, fields, asins: list, poe: latestPoe, why, waivers, refRank: ref ? await rankYear(ref.asin) : null };
@@ -256,6 +256,23 @@ export async function deleteCandidate(id: string) {
 }
 
 /** You typed it: a manual row, which no refresh overwrites. An empty value removes the row (automatic fills may then fill it again). */
+const valuesOfFields = (m: Record<string, PlField>) => Object.fromEntries(Object.entries(m).map(([k, v]) => [k, v.value]));
+
+/** The candidate's target price band (Gate 0), else £18–35. */
+async function bandOf(id: string) {
+  return priceBand(valuesOfFields((await fieldsOf([id])).get(id) ?? {}));
+}
+
+/**
+ * Gate 1's "price spread holds the band" again after the target band changes: from the stored
+ * page-one prices (no Keepa), never over your own answer.
+ */
+export async function refreshPriceTight(id: string): Promise<string[]> {
+  const asins = (must(await db().from("pl_candidate_asins").select(ASIN_COLS).eq("candidate_id", id).order("position"), "asins") as Record<string, unknown>[]).map(asinRow);
+  const fill = keepaFill(asins, await bandOf(id));
+  return fill.priceTight ? applyAuto(id, { priceTight: fill.priceTight }, "keepa") : [];
+}
+
 export async function setField(id: string, key: string, value: string | null) {
   if (!FIELD_KEYS.has(key)) throw new Error(`Unknown field ${key}`);
   const d = db();
@@ -416,7 +433,7 @@ export async function refreshCandidate(id: string, opts: { force?: boolean } = {
     result.tokensUsed += sw.tokensUsed;
     asins = (must(await d.from("pl_candidate_asins").select(ASIN_COLS).eq("candidate_id", id).order("position"), "asins") as Record<string, unknown>[]).map(asinRow);
   }
-  const fill = keepaFill(asins);
+  const fill = keepaFill(asins, await bandOf(id));
   result.filled = await applyAuto(id, fill, "keepa");
   result.skippedManual = Object.keys(fill).filter((k) => !result.filled.includes(k));
   must(await d.from("pl_candidates").update({ refreshed_at: now(), updated_at: now() }).eq("id", id), "refreshed");
@@ -438,7 +455,7 @@ async function markReference(id: string, asin: string) {
 async function applyGate2(id: string): Promise<string[]> {
   const d = db();
   const asins = (must(await d.from("pl_candidate_asins").select(ASIN_COLS).eq("candidate_id", id).order("position"), "asins") as Record<string, unknown>[]).map(asinRow);
-  const fill = keepaFill(asins);
+  const fill = keepaFill(asins, await bandOf(id));
   const g2: Fill = Object.fromEntries(GATE2_KEYS.filter((k) => fill[k]).map((k) => [k, fill[k]]));
   const filled = await applyAuto(id, g2, "keepa");
   const gone = GATE2_KEYS.filter((k) => !fill[k]);
