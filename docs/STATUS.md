@@ -1,7 +1,7 @@
 # Wholesale Scout: status
 
 Read this first in a new session. Keep it current: every commit that changes a feature updates
-it (what's built, the backlog, the rough edges). Last updated: 5 Oct 2026 (Niches incumbent check: "baby" allowed in Baby Products; "dry" off-niche for bag/box niches).
+it (what's built, the backlog, the rough edges). Last updated: 5 Oct 2026 (Niches incumbent check: a Not on-niche toggle per product; any-order matches guarded).
 
 Wholesale Scout is a single-user Amazon UK seller's workbench: Next.js 16 (App Router, `proxy.ts`
 password gate), Supabase (Postgres, RLS on, service-role access from the server only), Vercel
@@ -42,7 +42,9 @@ shortlists, runs a one-at-a-time Keepa incumbent check on a niche's search terms
 Product Finder page a distinct term, up to 3, a term containing another skipped, restricted to the
 niche's categories' Keepa roots, merged in turn to 25 detailed; only titles with any of the terms
 as a phrase, else all its words within a 4-word window in any order (the matched term shown, phrase
-preferred), none of the off-niche words (editable in Settings → Private label,
+preferred; a window match doesn't count with mat/cover/liner/replacement/holder/"stand only" or in
+Feeding Mats), not marked Not on-niche by hand (kept on the niche for reruns; the shape recomputed
+from stored snapshots, no tokens), none of the off-niche words (editable in Settings → Private label,
 `src/lib/pl/offNiche.ts`; cat/dog/toy/game allowed for pet niches, kids/children for Baby Products and Toys & Games, baby for Baby Products,
 toy/game for Toys & Games; a term's own words and plurals never exclude) not an accessory for any of the terms ("for", "fits", "compatible with" just before one) and, for a bag/box niche, not in Keepa's Locking Carabiners or Bait Storage and without "dry" in the title count; the 10 best
 sellers among them by monthly sold, else sales rank, decide open/contested/dominated; under 5 found

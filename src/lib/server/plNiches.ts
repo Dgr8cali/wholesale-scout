@@ -9,7 +9,7 @@ import { parseNichesCsv, type ParsedNiche } from "../pl/poeNiches";
 import { mergeGroup, nicheKey, type MergeRow } from "../pl/nicheMerge";
 import { activeRateCard, allRows, chunks, db, must } from "./db";
 import { applyAuto, createCandidate } from "./pl";
-import { reusable, termCheckPlan, termIncumbentCheck } from "./plHunt";
+import { reclassifyCandidates, reusable, termCheckPlan, termIncumbentCheck } from "./plHunt";
 
 export type NicheStatus = "new" | "shortlisted" | "dismissed" | "candidate";
 export const NICHE_STATUSES: NicheStatus[] = ["new", "shortlisted", "dismissed", "candidate"];
@@ -359,6 +359,7 @@ function checkInputs(n: CheckNiche, rerun: boolean) {
     kids: cats.some((c) => ["Baby Products", "Toys & Games"].includes(matchPoeCategory(c) ?? "")),
     toys: cats.some((c) => matchPoeCategory(c) === "Toys & Games"),
     baby: cats.some((c) => matchPoeCategory(c) === "Baby Products"),
+    notOnNiche: (n.extra?.notOnNiche as string[] | undefined) ?? [],
   };
 }
 const CHECK_COLS = "search_terms, customer_need, categories, extra, keepa_by_day";
@@ -379,12 +380,38 @@ export async function checkNicheIncumbents(id: string, rerun = false) {
   const d = db();
   const n = must(await d.from("pl_niches").select(CHECK_COLS).eq("id", id).single(), "niche") as CheckNiche;
   const i = checkInputs(n, rerun);
-  const r = await termIncumbentCheck(i.terms, { rootCategoryIds: i.rootCategoryIds, rootNames: i.rootNames, pet: i.pet, kids: i.kids, toys: i.toys, baby: i.baby, offNiche: await offNicheWords(), reuse: i.reuse });
+  const r = await termIncumbentCheck(i.terms, { rootCategoryIds: i.rootCategoryIds, rootNames: i.rootNames, pet: i.pet, kids: i.kids, toys: i.toys, baby: i.baby, notOnNiche: i.notOnNiche, offNiche: await offNicheWords(), reuse: i.reuse });
   must(await d.from("pl_niches").update({
     shape: r.shape, shape_rank: derivedCols({ customer_need: "", search_terms: [], flags: [], shape: r.shape }).shape_rank,
     extra: { ...(n.extra ?? {}), incumbents: r }, keepa_by_day: addDailyTokens(n.keepa_by_day, r.tokensUsed, new Date(), PL_KEEP_DAYS), updated_at: now(),
   }).eq("id", id), "save the check");
   return r;
+}
+
+/**
+ * Mark a product of the niche's incumbent check "Not on-niche" (or undo it): kept on the niche, so
+ * every rerun leaves it out, and the shape worked out again from the check's products (no Keepa).
+ */
+export async function setNotOnNiche(id: string, asin: string, out: boolean) {
+  const d = db();
+  const n = must(await d.from("pl_niches").select(CHECK_COLS).eq("id", id).single(), "niche") as CheckNiche;
+  const a = asin.trim().toUpperCase();
+  if (!/^[A-Z0-9]{10}$/.test(a)) throw new Error("Not an ASIN");
+  const prev = (n.extra?.notOnNiche as string[] | undefined) ?? [];
+  const notOnNiche = out ? [...new Set([...prev, a])] : prev.filter((x) => x !== a);
+  const extra: Record<string, unknown> = { ...(n.extra ?? {}), notOnNiche };
+  const inc = n.extra?.incumbents as ({ candidates?: string[]; shape?: string | null } & Record<string, unknown>) | undefined;
+  let shape: string | null | undefined;
+  if (inc?.candidates?.length) {
+    const i = checkInputs({ ...n, extra }, false);
+    const c = await reclassifyCandidates(inc.candidates, i.terms, { pet: i.pet, kids: i.kids, toys: i.toys, baby: i.baby, words: await offNicheWords(), notOnNiche });
+    extra.incumbents = { ...inc, ...c, reclassifiedAt: now() };
+    shape = c.shape;
+  }
+  must(await d.from("pl_niches").update({
+    extra, ...(shape !== undefined ? { shape, shape_rank: derivedCols({ customer_need: "", search_terms: [], flags: [], shape }).shape_rank } : {}), updated_at: now(),
+  }).eq("id", id), "save the override");
+  return { notOnNiche, incumbents: extra.incumbents ?? null, shape: shape ?? null };
 }
 
 /* ===================== Opportunity Explorer captures ===================== */

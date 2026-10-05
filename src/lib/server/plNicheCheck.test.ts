@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { KeepaProduct, KeepaSummary } from "../keepa/types";
 import { __setDbForTests, ensureSeed } from "./db";
 import { FakeDb } from "./fakeDb";
-import { candidateSeed, checkNicheIncumbents, nicheCheckPlan, nicheToCandidate } from "./plNiches";
+import { candidateSeed, checkNicheIncumbents, nicheCheckPlan, nicheToCandidate, setNotOnNiche } from "./plNiches";
 
 const k = vi.hoisted(() => ({ selections: [] as Record<string, unknown>[], lookups: [] as string[][] }));
 
@@ -130,5 +130,21 @@ describe("Niches incumbent check (fake Keepa)", () => {
     expect(asins.map((a) => a.asin)).toEqual(["B0POLE0001", "B0ROD00002", "B0ROD00001", "B0ROD00003"]);
     expect(asins[0].is_reference).toBe(true);
     expect(fake.tables.pl_candidate_fields.find((f) => f.candidate_id === r.candidateId && f.key === "sell")).toMatchObject({ value: "24.50", source: "poe" });
+  });
+
+  it("Not on-niche: left out and the shape recomputed with no Keepa; reruns and new checks respect it; undo", async () => {
+    await checkNicheIncumbents("n1");
+    const calls = [k.selections.length, k.lookups.length];
+    // The rod over 1,000 reviews out: no one left over 1,000, so open.
+    const r = await setNotOnNiche("n1", "b0rod00001", true);
+    expect([k.selections.length, k.lookups.length]).toEqual(calls);
+    expect(r).toMatchObject({ notOnNiche: ["B0ROD00001"], shape: "open" });
+    const n = fake.tables.pl_niches[0] as { shape: string; extra: { incumbents: { incumbents: { asin: string }[]; excluded: { asin: string; why: string }[]; onNiche: number } } };
+    expect(n.shape).toBe("open");
+    expect(n.extra.incumbents.incumbents.map((x) => x.asin)).toEqual(["B0POLE0001", "B0ROD00002", "B0ROD00003"]);
+    expect(n.extra.incumbents.excluded[0]).toMatchObject({ asin: "B0ROD00001", why: "marked not on-niche by you" });
+    expect((await checkNicheIncumbents("n1", true)).shape).toBe("open");
+    expect((await checkNicheIncumbents("n1")).incumbents.map((x) => x.asin)).not.toContain("B0ROD00001");
+    expect(await setNotOnNiche("n1", "B0ROD00001", false)).toMatchObject({ notOnNiche: [], shape: "contested" });
   });
 });

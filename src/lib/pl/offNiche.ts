@@ -58,6 +58,26 @@ function windowStarts(tw: string[], pw: string[]): number[] {
   return out;
 }
 
+/**
+ * An any-order (window) match doesn't count when the title also has one of these: it's likely a
+ * thing that goes with the product (a mat, a cover, a holder), not the product. A phrase match isn't
+ * affected, and a word the term itself uses doesn't count.
+ */
+export const WINDOW_BLOCK_WORDS = ["mat", "mats", "cover", "covers", "liner", "liners", "replacement", "holder", "holders"];
+export const WINDOW_BLOCK_PHRASES = ["stand only"];
+/** Nor when Keepa files it under one of these. */
+export const WINDOW_BLOCK_CATEGORIES = ["Feeding Mats"];
+
+/** Why a window match on this term doesn't count, or null. */
+function windowBlock(title: string, term: string, category?: string | null): string | null {
+  if (category && WINDOW_BLOCK_CATEGORIES.some((c) => c.toLowerCase() === category.trim().toLowerCase())) return `any-order match in Keepa category ${category}`;
+  const tw = words(title), pw = words(term), joined = ` ${tw.join(" ")} `;
+  const w = WINDOW_BLOCK_WORDS.find((x) => tw.includes(x) && !pw.some((p) => sameWord(x, p)));
+  if (w) return `any-order match with "${w}" in the title`;
+  const ph = WINDOW_BLOCK_PHRASES.find((x) => joined.includes(` ${x} `));
+  return ph ? `any-order match with "${ph}" in the title` : null;
+}
+
 /** How a title holds a term: "phrase" (in order, side by side), "words" (all within the window, any order), or null. */
 export function termMatch(title: string, term: string): { how: "phrase" | "words"; at: number[] } | null {
   const tw = words(title), pw = words(term);
@@ -104,6 +124,8 @@ export interface OffNicheOpts {
   kids?: boolean;
   /** A Baby Products niche: baby products are on-niche. */
   baby?: boolean;
+  /** ASINs you marked "Not on-niche" on this niche: left out whatever their titles say. */
+  notOnNiche?: string[];
   /** A Toys & Games niche: toy and game products are on-niche. */
   toys?: boolean;
 }
@@ -130,7 +152,7 @@ function reasonFor(title: string, term: string, o: OffNicheOpts): string | null 
  * count: "cat tree" is about cats). A term held as a phrase is preferred over one held only within
  * the window. The reason given is the one for the first term the title holds.
  */
-export function judgeTitle(title: string | null, terms: string | string[], o: OffNicheOpts = {}): { term: string | null; how: "phrase" | "words" | null; why: string | null } {
+export function judgeTitle(title: string | null, terms: string | string[], o: OffNicheOpts = {}, category?: string | null): { term: string | null; how: "phrase" | "words" | null; why: string | null } {
   const list = (Array.isArray(terms) ? terms : [terms]).map((t) => t.trim()).filter(Boolean);
   if (!title) return { term: null, how: null, why: "no title" };
   const acc = accessoryFor(title, list);
@@ -139,7 +161,7 @@ export function judgeTitle(title: string | null, terms: string | string[], o: Of
   for (const how of ["phrase", "words"] as const) {
     for (const t of list) {
       if (termMatch(title, t)?.how !== how) continue;
-      const why = reasonFor(title, t, o);
+      const why = (how === "words" ? windowBlock(title, t, category) : null) ?? reasonFor(title, t, o);
       if (!why) return { term: t, how, why: null };
       first ??= why;
     }
@@ -161,6 +183,9 @@ export function finderTerms(terms: string[], max = 3): string[] {
   return list.filter((t, i) => !list.some((u, j) => j !== i && phraseAt(t, u) >= 0 && (words(u).length < words(t).length || j < i))).slice(0, max);
 }
 
+/** The reason on a product you marked "Not on-niche". */
+export const MARKED_OUT = "marked not on-niche by you";
+
 export interface IncumbentCandidate {
   asin: string; title: string | null; brand: string | null; reviews: number | null; price: number | null;
   rank: number | null; monthlySold: number | null; category: string | null;
@@ -181,12 +206,17 @@ export function classifyIncumbents(products: IncumbentCandidate[], terms: string
   const bagBox = isBagOrBox(list);
   const offCats = bagBox ? new Set(BAG_BOX_OFF_CATEGORIES.map((c) => c.toLowerCase())) : null;
   if (bagBox) o = { ...o, words: [...(o.words ?? DEFAULT_OFF_NICHE), ...BAG_BOX_OFF_WORDS] };
+  const mine = new Set((o.notOnNiche ?? []).map((a) => a.toUpperCase()));
   for (const p of products) {
+    if (mine.has(p.asin.toUpperCase())) {
+      excluded.push({ ...p, why: MARKED_OUT });
+      continue;
+    }
     if (offCats && p.category && offCats.has(p.category.trim().toLowerCase())) {
       excluded.push({ ...p, why: `Keepa category ${p.category} (not a bag or box)` });
       continue;
     }
-    const j = judgeTitle(p.title, terms, o);
+    const j = judgeTitle(p.title, terms, o, p.category);
     if (j.why) excluded.push({ ...p, why: j.why });
     else kept.push({ ...p, matchedTerm: j.term, matchedHow: j.how });
   }

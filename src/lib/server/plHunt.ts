@@ -11,7 +11,7 @@ import { activeRateCard, chunks, db, must } from "./db";
 import { huntCategories, type HuntCategory } from "./hunt";
 import { createCandidate, refreshCandidate, snapshotOf } from "./pl";
 import { saveSnapshot } from "./process";
-import { classifyIncumbents, finderTerms, type IncumbentCandidate } from "../pl/offNiche";
+import { classifyIncumbents, finderTerms, MARKED_OUT, type IncumbentCandidate, type OffNicheOpts } from "../pl/offNiche";
 
 /**
  * Niche Hunt: the wholesale Hunt's Product Finder client and category list, the same Keepa
@@ -841,6 +841,34 @@ export async function termCheckPlan(reuse?: TermReuse | null, terms: string[] = 
   return { estimate, fallback, balance, reserve: TOKEN_RESERVE, fits: most === 0 || (balance != null && balance - TOKEN_RESERVE >= most), blocked, reusing, finderTerms: ft };
 }
 
+/** The classification's fields on a check's result: shape, on-niche top 10, what was left out and why, where they're filed. */
+function classifyFrom(candidates: string[], snaps: Map<string, HuntAsin>, terms: string[], opts: OffNicheOpts) {
+  const products: IncumbentCandidate[] = candidates.map((a) => snaps.get(a)).filter((x): x is HuntAsin => !!x).map((x) => ({
+    asin: x.asin, title: x.title, brand: x.brand, reviews: x.review_count, price: x.price, rank: x.rank,
+    monthlySold: x.bought_past_month, category: x.leaf_category ?? x.root_category ?? null, rootCategory: x.root_category ?? null,
+  }));
+  const c = classifyIncumbents(products, terms, opts);
+  // Every product you marked is listed (so it can be undone), then the first of the rest.
+  const mine = c.excluded.filter((x) => x.why === MARKED_OUT), rest = c.excluded.filter((x) => x.why !== MARKED_OUT);
+  return {
+    shape: c.shape, onNiche: c.onNiche, incumbents: c.top, onNicheCategories: c.categories,
+    excluded: [...mine, ...rest.slice(0, 15)].map((x) => ({ asin: x.asin, title: x.title, why: x.why })), excludedCount: c.excluded.length,
+  };
+}
+
+/**
+ * The classification again over a check's products, from their stored snapshots whatever their age
+ * (no Keepa): after you mark a product "Not on-niche" (or undo it), or the rules change.
+ */
+export async function reclassifyCandidates(candidates: string[], terms: string[], opts: OffNicheOpts) {
+  const snaps = new Map<string, HuntAsin>();
+  for (const c of chunks(candidates)) {
+    const rows = must(await db().from("pl_hunt_asins").select(ASIN_COLS).in("asin", c), "hunt snapshots") as Record<string, unknown>[];
+    for (const r of rows) snaps.set(r.asin as string, toHuntAsin(r));
+  }
+  return classifyFrom(candidates, snaps, terms, opts);
+}
+
 /**
  * The incumbent check on a niche's search terms, on-niche only: a finder page of best sellers in the
  * niche's root categories for each distinct term (one containing another is covered by it), merged
@@ -852,7 +880,7 @@ export async function termCheckPlan(reuse?: TermReuse | null, terms: string[] = 
  * with no category (Amazon files hedgehog houses under Pet Supplies, not Garden): the result says
  * it was found outside them. One at a time, never over the estimate (and that fallback) + 10%.
  */
-export async function termIncumbentCheck(termOrTerms: string | string[], o: { rootCategoryIds?: number[]; rootNames?: string[]; pet?: boolean; kids?: boolean; toys?: boolean; baby?: boolean; offNiche?: string[]; reuse?: TermReuse | null } = {}) {
+export async function termIncumbentCheck(termOrTerms: string | string[], o: { rootCategoryIds?: number[]; rootNames?: string[]; pet?: boolean; kids?: boolean; toys?: boolean; baby?: boolean; offNiche?: string[]; notOnNiche?: string[]; reuse?: TermReuse | null } = {}) {
   const terms = [...new Set((Array.isArray(termOrTerms) ? termOrTerms : [termOrTerms]).map((t) => t.trim()).filter(Boolean))];
   const term = terms[0] ?? "";
   const rooted = (o.rootCategoryIds?.length ?? 0) > 0;
@@ -911,16 +939,9 @@ export async function termIncumbentCheck(termOrTerms: string | string[], o: { ro
       const snaps = fetched.map((k) => huntSnapshot(k, names));
       if (snaps.length) must(await db().from("pl_hunt_asins").upsert(snaps, { onConflict: "asin" }), "save hunt snapshots");
     }
-    const fresh = await freshHuntAsins(candidates);
-    const products: IncumbentCandidate[] = candidates.map((a) => fresh.get(a)).filter((x): x is HuntAsin => !!x).map((x) => ({
-      asin: x.asin, title: x.title, brand: x.brand, reviews: x.review_count, price: x.price, rank: x.rank,
-      monthlySold: x.bought_past_month, category: x.leaf_category ?? x.root_category ?? null, rootCategory: x.root_category ?? null,
-    }));
-    const c = classifyIncumbents(products, terms, { pet: o.pet, kids: o.kids, toys: o.toys, baby: o.baby, words: o.offNiche });
+    const c = classifyFrom(candidates, await freshHuntAsins(candidates), terms, { pet: o.pet, kids: o.kids, toys: o.toys, baby: o.baby, words: o.offNiche, notOnNiche: o.notOnNiche });
     return {
-      term, terms, finderTerms: plan.reusing ? null : plan.finderTerms, rootCategories: o.rootNames ?? [], outside, onNicheCategories: c.categories,
-      found, shape: c.shape, onNiche: c.onNiche, incumbents: c.top,
-      excluded: c.excluded.slice(0, 15).map((x) => ({ asin: x.asin, title: x.title, why: x.why })), excludedCount: c.excluded.length,
+      term, terms, finderTerms: plan.reusing ? null : plan.finderTerms, rootCategories: o.rootNames ?? [], outside, found, ...c,
       candidates, finderAt, reusedFinder: plan.reusing, tokensUsed: spent, reused: candidates.filter((a) => cached.has(a)).length, checkedAt: new Date().toISOString(),
     };
   } finally {

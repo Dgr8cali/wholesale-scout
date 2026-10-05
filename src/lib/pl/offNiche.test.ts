@@ -68,6 +68,28 @@ describe("off-niche titles", () => {
     expect(judgeTitle("Ball Launcher for Dogs", ["dog ball launcher"])).toEqual({ term: "dog ball launcher", how: "words", why: null });
   });
 
+  it("an any-order match doesn't count with mat, cover, liner, replacement, holder, \"stand only\" or in Feeding Mats", () => {
+    const terms = ["dog bowl stand"];
+    expect(judgeTitle("Elevated Bowl Stand Dog, Bamboo", terms)).toMatchObject({ term: "dog bowl stand", how: "words" });
+    expect(judgeTitle("Dog Bowl Mat, Stand Under Bowls", terms).why).toBe('any-order match with "mat" in the title');
+    expect(judgeTitle("Raised Bowl Stand Dog, Stand Only", terms).why).toBe('any-order match with "stand only" in the title');
+    expect(judgeTitle("Stand Dog Bowl Holder", terms).why).toBe('any-order match with "holder" in the title');
+    expect(judgeTitle("Elevated Bowl Stand Dog", terms, {}, "Feeding Mats").why).toBe("any-order match in Keepa category Feeding Mats");
+    // A phrase match isn't affected, nor a word the term itself uses.
+    expect(judgeTitle("Dog Bowl Stand with Mat", terms)).toMatchObject({ term: "dog bowl stand", how: "phrase", why: null });
+    expect(judgeTitle("Mat Feeding Dog Waterproof", ["dog feeding mat"])).toMatchObject({ how: "words", why: null });
+  });
+
+  it("products you marked not on-niche are left out, and the next best moves up", () => {
+    const p = (asin: string, monthlySold: number, reviews: number) => ({ asin, title: "Spinning Fishing Rod", brand: null, reviews, price: null, rank: null, monthlySold, category: null });
+    const items = [p("A", 900, 6000), p("B", 500, 1500), p("C", 100, 50)];
+    expect(classifyIncumbents(items, "fishing rod").shape).toBe("dominated");
+    const r = classifyIncumbents(items, "fishing rod", { notOnNiche: ["a"] });
+    expect(r.top.map((x) => x.asin)).toEqual(["B", "C"]);
+    expect(r.shape).toBe("contested");
+    expect(r.excluded).toMatchObject([{ asin: "A", why: "marked not on-niche by you" }]);
+  });
+
   it("pet niches allow toy and game; Baby Products and Toys & Games allow kids and children", () => {
     const t = "Ball Launcher Dog Toy, Interactive Game";
     expect(offNicheReason(t, "dog ball launcher")).toBe('"toy" in the title');

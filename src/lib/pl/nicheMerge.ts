@@ -13,7 +13,7 @@ export function nicheKey(terms: string[], sv: number | null): string | null {
 
 export interface MergeRow {
   id: string; customer_need: string; categories: string[]; status: string; notes: string | null; shape: string | null;
-  candidate_id: string | null; extra: { aliases?: string[]; incumbents?: unknown; poe?: unknown } | null; keepa_by_day: TokensByDay | null; created_at: string;
+  candidate_id: string | null; extra: { aliases?: string[]; incumbents?: unknown; poe?: unknown; notOnNiche?: string[] } | null; keepa_by_day: TokensByDay | null; created_at: string;
 }
 
 /** How far along a status is: a candidate outranks a shortlist, which outranks new, then dismissed. */
@@ -43,7 +43,10 @@ export function mergeGroup(rows: MergeRow[]): { keep: MergeRow; drop: string[]; 
     patch: {
       categories, status: sorted[0].status, notes: notes.length ? notes.join("\n\n") : null, shape: withShape?.shape ?? null,
       candidate_id: sorted.find((r) => r.candidate_id)?.candidate_id ?? null,
-      extra: { ...(keep.extra ?? {}), aliases, ...(withShape?.extra?.incumbents ? { incumbents: withShape.extra.incumbents } : {}) },
+      extra: {
+        ...(keep.extra ?? {}), aliases, ...(withShape?.extra?.incumbents ? { incumbents: withShape.extra.incumbents } : {}),
+        ...(sorted.some((r) => r.extra?.notOnNiche?.length) ? { notOnNiche: [...new Set(sorted.flatMap((r) => r.extra?.notOnNiche ?? []))] } : {}),
+      },
       keepa_by_day: ledger,
     },
   };

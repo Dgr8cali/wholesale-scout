@@ -368,6 +368,10 @@ function NicheDetail({ n, onChanged }: { n: NicheRow; onChanged: () => void }) {
     const r = await api<Incumbents>(`/api/pl/niches/${n.id}`, { method: "POST", json: { action: rerun ? "rerun" : "check" } });
     toast.success(`"${r.term}": ${r.shape ?? "no on-niche sellers"} (${r.tokensUsed} token${r.tokensUsed === 1 ? "" : "s"})`);
   });
+  const markOut = (asin: string, out: boolean) => act(`mark-${asin}`, async () => {
+    const r = await api<{ shape: string | null }>(`/api/pl/niches/${n.id}`, { method: "POST", json: { action: "not-on-niche", asin, out } });
+    toast.success(`${out ? `${asin} marked not on-niche` : `${asin} counted again`}: ${r.shape ?? "no on-niche sellers"} (no Keepa tokens)`);
+  });
   const candidate = () => act("candidate", async () => {
     const r = await api<{ candidateId: string; existed: boolean; category?: string; asins?: number; keyword?: string; keywordFrom?: string; sell?: number | null }>(`/api/pl/niches/${n.id}`, { method: "POST", json: { action: "candidate" } });
     toast.success(r.existed ? "Already a candidate" : `Candidate created${r.category ? ` (fee category ${r.category})` : ""}`, r.existed ? undefined : {
@@ -420,11 +424,13 @@ function NicheDetail({ n, onChanged }: { n: NicheRow; onChanged: () => void }) {
                 <td className="num pr-2 text-right">{gbp(x.price)}</td>
                 <td className="pr-2 text-muted-foreground">{x.category ?? ""}</td>
                 <td className="whitespace-nowrap pr-2">{x.matchedTerm && <span className={cn("rounded-full px-1.5 py-px", x.matchedHow === "words" ? "border border-dashed" : "bg-muted")} title={x.matchedHow === "words" ? "Its title has every word of this search term within 4 words, in another order" : "Its title has this search term as a phrase"}>{x.matchedTerm}{x.matchedHow === "words" ? " (any order)" : ""}</span>}</td>
-                <td className="text-muted-foreground">{(x.title ?? "").slice(0, 80)}</td>
+                <td className="pr-2 text-muted-foreground">{(x.title ?? "").slice(0, 80)}</td>
+                <td className="whitespace-nowrap"><button type="button" disabled={!!busy} className="text-[11px] text-muted-foreground hover:text-fail hover:underline disabled:opacity-50" title="Leave this product out of the shape, now and on every rerun" onClick={() => markOut(x.asin, true)}>Not on-niche</button></td>
               </tr>
             ))}</tbody></table>
-            {!!inc.excludedCount && <details className="mt-1"><summary className="cursor-pointer text-muted-foreground">{inc.excludedCount} off-niche left out</summary>
-              <ul className="mt-0.5 space-y-0.5">{inc.excluded?.map((x) => <li key={x.asin}><span className="num">{x.asin}</span> · <i>{x.why}</i> · <span className="text-muted-foreground">{(x.title ?? "").slice(0, 70)}</span></li>)}</ul></details>}
+            {!!inc.excludedCount && <details className="mt-1"><summary className="cursor-pointer text-muted-foreground">{inc.excludedCount} off-niche left out{(() => { const m = inc.excluded?.filter((x) => x.why === "marked not on-niche by you").length ?? 0; return m ? ` (${m} marked by you)` : ""; })()}</summary>
+              <ul className="mt-0.5 space-y-0.5">{inc.excluded?.map((x) => <li key={x.asin}><span className="num">{x.asin}</span> · <i>{x.why}</i> · <span className="text-muted-foreground">{(x.title ?? "").slice(0, 70)}</span>
+                {x.why === "marked not on-niche by you" && <> · <button type="button" disabled={!!busy} className="text-brand hover:underline disabled:opacity-50" onClick={() => markOut(x.asin, false)}>Undo</button></>}</li>)}</ul></details>}
             <p className="mt-1 text-muted-foreground">Open: nobody over 1,000 reviews. Contested: one. Dominated: two or more, or one over 5,000.</p>
           </div>
         ) : <p className="text-xs text-muted-foreground">No incumbent check yet: it looks at the best sellers for {(n.search_terms.length ? n.search_terms : [n.customer_need]).map((t) => `“${t}”`).join(", ")} in the niche&rsquo;s category, titles matching any of them and on-niche only, and their review counts (Keepa, up to ~83 tokens).</p>}
