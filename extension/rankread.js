@@ -46,7 +46,7 @@
       const b = document.createElement("button");
       b.textContent = "Stop";
       b.style.cssText = "margin-top:8px;border:1px solid #b91c1c;color:#b91c1c;background:#fff;border-radius:6px;padding:4px 12px;cursor:pointer";
-      b.onclick = () => { b.disabled = true; b.textContent = "Stopping…"; chrome.runtime.sendMessage({ type: "rankStop" }); };
+      b.onclick = () => { b.disabled = true; b.textContent = "Stopping…"; try { chrome.runtime.sendMessage({ type: "rankStop" }, () => void chrome.runtime.lastError); } catch { b.textContent = "Wholesale Scout was updated — refresh this page"; } };
       el.append(b);
     }
   }

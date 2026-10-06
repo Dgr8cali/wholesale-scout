@@ -5,7 +5,7 @@
   const ws = globalThis.__ws;
   const FRESH_MS = 15 * 60_000;
 
-  chrome.storage.local.get({ pendingDg: null }, ({ pendingDg }) => {
+  ws.store.get({ pendingDg: null }).then(({ pendingDg }) => {
     if (!pendingDg || Date.now() - pendingDg.at > FRESH_MS) return;
     const asin = pendingDg.asin;
     let status = "unknown";
@@ -40,12 +40,12 @@
           onclick: async () => {
             const r = await ws.api("POST", "/api/extension/dg", { asin, status, detail: detail || null, url: location.href });
             if (!r.ok) return alert(`Wholesale Scout: ${r.error}`);
-            chrome.storage.local.remove("pendingDg");
+            ws.store.remove("pendingDg");
             bar.replaceChildren(ws.h("span", { text: `Saved: ${asin} is ${status === "hazmat" ? "hazmat" : status === "not_hazmat" ? "not hazmat" : "unknown"} in the app.` }));
             setTimeout(() => bar.remove(), 4000);
           },
         }),
-        ws.h("button", { style: "border:1px solid #d4d4d8;background:#fff;border-radius:6px;padding:6px 10px;cursor:pointer", text: "Dismiss", onclick: () => { chrome.storage.local.remove("pendingDg"); bar.remove(); } }),
+        ws.h("button", { style: "border:1px solid #d4d4d8;background:#fff;border-radius:6px;padding:6px 10px;cursor:pointer", text: "Dismiss", onclick: () => { ws.store.remove("pendingDg"); bar.remove(); } }),
       );
     }
 
@@ -53,10 +53,10 @@
     read();
     // Seller Central fills its pages in after load: read again as it does.
     let t = null;
-    new MutationObserver((changes) => {
+    ws.observe(document.body, { childList: true, subtree: true, characterData: true }, (changes) => {
       if (changes.every((c) => bar.contains(c.target))) return; // our own redraw
       clearTimeout(t);
-      t = setTimeout(read, 700);
-    }).observe(document.body, { childList: true, subtree: true, characterData: true });
+      t = ws.later(read, 700);
+    });
   });
 })();

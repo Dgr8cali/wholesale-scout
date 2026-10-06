@@ -22,7 +22,7 @@ Wholesale Scout's verdict on Amazon UK, where you browse:
    - **APP_PASSWORD**: the same password the app asks for
 6. Click **Save** (Chrome asks to allow access to the app's address: allow it), then **Test connection**. It should say "Connected".
 
-After pulling a new version of the repo, click the reload arrow on the extension's card in `chrome://extensions`.
+After pulling a new version of the repo, click the reload arrow on the extension's card in `chrome://extensions`, then refresh any Amazon, Seller Central or Alibaba tabs already open. Until you do, the extension's old scripts in those tabs can no longer reach it: since 0.5.3 they stop quietly (no "Extension context invalidated" errors), hide their panels, and show "Wholesale Scout was updated — refresh this page to use it."
 
 The password is kept in `chrome.storage.local` on this computer only and sent to your app as `Authorization: Bearer …`. Nothing is sent anywhere else.
 

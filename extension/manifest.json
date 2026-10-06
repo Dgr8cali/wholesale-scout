@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Wholesale Scout",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "description": "Wholesale Scout's verdict on Amazon UK product and search pages, competitor stock on request, and Seller Central DG look-ups, Opportunity Explorer niches sent to Private label when you click, manual organic rank checks for Ads, review pages sent to Private label's Gate 4, and Alibaba search results sent to Supplier Scout when you click.",
   "action": { "default_popup": "popup.html", "default_title": "Wholesale Scout settings" },
   "background": { "service_worker": "background.js" },

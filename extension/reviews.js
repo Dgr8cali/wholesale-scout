@@ -32,13 +32,14 @@
     toastTimer = setTimeout(() => { if (toastEl) { toastEl.remove(); toastEl = null; } }, 4500);
   }
 
-  const load = async (asin) => (await chrome.storage.local.get(KEY(asin)))[KEY(asin)] || { asin, reviews: {}, pages: [], sentAt: null };
-  const save = (asin, cap) => chrome.storage.local.set({ [KEY(asin)]: cap });
+  const load = async (asin) => (await ws.store.get(KEY(asin)))[KEY(asin)] || { asin, reviews: {}, pages: [], sentAt: null };
+  const save = (asin, cap) => ws.store.set({ [KEY(asin)]: cap });
   const keyOf = (r) => r.id || `${r.stars}|${r.title}|${r.body.slice(0, 80)}`;
 
   let lastCount = -1;
   /** Add this page's reviews to the capture for its ASIN (a product page without reviews: no panel). */
   async function capture() {
+    if (!ws.alive()) return ws.staleNotice();
     const { asin, reviews: found } = R.parseAmazonReviews(document, location.href);
     if (!asin || (productPage() && !found.length)) { if (panel && productPage()) { panel.remove(); panel = null; } return; }
     const cap = await load(asin);
@@ -76,7 +77,7 @@
       ws.h("div", { style: "color:#71717a;font-size:12px", text: "Click through more pages (filter to critical reviews for Gate 4) and they're added here. Nothing is sent until you click." }),
       status || ws.h("div", { style: "display:flex;gap:8px;flex-wrap:wrap" }, [
         list.length ? btn(cap.sentAt ? "Send again" : "Send reviews to Private label", () => send(cap), true) : null,
-        list.length ? btn("Clear", async () => { await chrome.storage.local.remove(KEY(cap.asin)); status = null; capture(); }) : null,
+        list.length ? btn("Clear", async () => { await ws.store.remove(KEY(cap.asin)); status = null; capture(); }) : null,
         btn("Hide", () => { panel.remove(); panel = null; }),
       ]),
     );
@@ -121,7 +122,7 @@
 
   function openLink(candidateId) {
     const link = ws.h("a", { href: "#", style: "color:#0b8ca0;font-weight:600;align-self:center", text: "Open in the app" });
-    link.addEventListener("click", async (e) => {
+    ws.on(link, "click", async (e) => {
       e.preventDefault();
       const s = await ws.send({ type: "settings" });
       ws.send({ type: "open", url: `${s.appUrl}/pl/candidates?c=${candidateId}` });
@@ -131,11 +132,11 @@
 
   // Amazon loads the next page of reviews in place: read again when the list changes.
   let timer = null;
-  const later = () => { clearTimeout(timer); timer = setTimeout(capture, 700); };
+  const later = () => { clearTimeout(timer); timer = ws.later(capture, 700); };
   // Our own panel and toast don't count as the page changing.
   const ours = (n) => n === panel || n === toastEl || (panel && panel.contains(n));
-  new MutationObserver((ms) => {
+  ws.observe(document.body, { childList: true, subtree: true }, (ms) => {
     if (ms.some((m) => !ours(m.target) && ![...m.addedNodes, ...m.removedNodes].every(ours))) later();
-  }).observe(document.body, { childList: true, subtree: true });
+  });
   capture();
 })();

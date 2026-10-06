@@ -19,7 +19,7 @@
     text, onclick,
   });
   const read = () => A.parseAlibabaResults(document, location.href);
-  const remembered = async () => (await chrome.storage.local.get(KEY))[KEY] || null;
+  const remembered = async () => (await ws.store.get(KEY))[KEY] || null;
 
   function shell() {
     if (panel && document.body.contains(panel)) return panel;
@@ -29,6 +29,7 @@
   }
 
   async function render() {
+    if (!ws.alive()) return ws.staleNotice();
     const r = read();
     seen = r.cards.length;
     if (!seen && !r.unparsed.length) { if (panel) { panel.remove(); panel = null; } return; }
@@ -58,7 +59,7 @@
     if (!res.ok) return say(ws.h("div", { style: "display:flex;flex-direction:column;gap:6px" }, [ws.h("div", { style: "color:#b91c1c", text: res.error }), back()]));
     const d = res.data;
     if (d.saved) {
-      await chrome.storage.local.set({ [KEY]: { id: d.candidate.id, name: d.candidate.name } });
+      await ws.store.set({ [KEY]: { id: d.candidate.id, name: d.candidate.name } });
       const s = d.saved;
       return say(ws.h("div", { style: "display:flex;flex-direction:column;gap:4px" }, [
         ws.h("div", { style: "color:#15803d", text: `Sent to “${d.candidate.name}”: ${s.added} new, ${s.updated} updated; ${s.total} suppliers in all.` }),
@@ -77,7 +78,7 @@
 
   function openLink(candidateId) {
     const link = ws.h("a", { href: "#", style: "color:#0b8ca0;font-weight:600;align-self:center", text: "Open in the app" });
-    link.addEventListener("click", async (e) => {
+    ws.on(link, "click", async (e) => {
       e.preventDefault();
       const s = await ws.send({ type: "settings" });
       ws.send({ type: "open", url: `${s.appUrl}/pl/candidates?c=${candidateId}#suppliers` });
@@ -87,10 +88,10 @@
 
   // Results load in place (next page, filters): count again when the page changes.
   let timer = null;
-  new MutationObserver((ms) => {
+  ws.observe(document.body, { childList: true, subtree: true }, (ms) => {
     if (ms.every((m) => panel && panel.contains(m.target))) return;
     clearTimeout(timer);
-    timer = setTimeout(() => { if (read().cards.length !== seen) { status = null; render(); } }, 800);
-  }).observe(document.body, { childList: true, subtree: true });
+    timer = ws.later(() => { if (read().cards.length !== seen) { status = null; render(); } }, 800);
+  });
   render();
 })();

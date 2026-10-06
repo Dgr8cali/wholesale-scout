@@ -61,6 +61,6 @@
     if (!s.configured) return;
     scan();
     // Results that load later (more pages, filters) get badges too.
-    new MutationObserver(() => scan()).observe(document.body, { childList: true, subtree: true });
+    ws.observe(document.body, { childList: true, subtree: true }, () => scan());
   });
 })();

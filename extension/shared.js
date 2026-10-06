@@ -2,7 +2,79 @@
 (() => {
   if (globalThis.__ws) return;
   const ws = {};
-  ws.send = (msg) => new Promise((resolve) => chrome.runtime.sendMessage(msg, (r) => resolve(r || { ok: false, error: chrome.runtime.lastError?.message || "No answer" })));
+  // After the extension is reloaded or updated, the scripts already running in open tabs lose their
+  // connection to it: any chrome.* call then throws "Extension context invalidated". Everything below
+  // checks first and, once it's gone, goes quiet and asks for a refresh instead of throwing.
+  /** The extension is still there for this page (false after it's reloaded or updated). */
+  ws.alive = () => { try { return !!chrome.runtime?.id; } catch { return false; } };
+  const STALE = /context invalidated|Extension context|message port closed|Receiving end does not exist/i;
+  let staleShown = false;
+  /** Our own panels, badges and bars on the page. */
+  const OURS = '[id^="wholesale-scout"], #ws-rank-panel, #ws-dg, .ws-badge';
+  /** Once a page: a note asking for a refresh, and our panels and buttons hidden and disabled. */
+  ws.staleNotice = () => {
+    if (staleShown) return;
+    staleShown = true;
+    try {
+      document.querySelectorAll(OURS).forEach((el) => {
+        el.querySelectorAll("button, input, select, a").forEach((b) => { b.disabled = true; b.style.pointerEvents = "none"; });
+        el.style.display = "none";
+      });
+      const note = document.createElement("div");
+      note.id = "wholesale-scout-stale";
+      note.textContent = "Wholesale Scout was updated — refresh this page to use it.";
+      note.style.cssText = "position:fixed;left:50%;transform:translateX(-50%);bottom:24px;z-index:2147483001;background:#111;color:#fff;border-radius:8px;padding:8px 14px;font:13px/1.4 -apple-system,Segoe UI,sans-serif;box-shadow:0 6px 20px rgba(0,0,0,.25);cursor:pointer";
+      note.title = "Click to dismiss";
+      note.addEventListener("click", () => note.remove());
+      (document.body || document.documentElement).append(note);
+      setTimeout(() => note.remove(), 12_000);
+    } catch { /* the page went away */ }
+  };
+  /** A message to the extension; never throws: { ok: false, error: "stale" } once it's gone. */
+  ws.send = (msg) => new Promise((resolve) => {
+    const stale = () => { ws.staleNotice(); resolve({ ok: false, error: "stale" }); };
+    if (!ws.alive()) return stale();
+    try {
+      chrome.runtime.sendMessage(msg, (r) => {
+        let err = null;
+        try { err = chrome.runtime.lastError?.message || null; } catch (e) { err = String(e?.message || e); }
+        if (err && STALE.test(err)) return stale();
+        resolve(r || { ok: false, error: err || "No answer" });
+      });
+    } catch (e) {
+      if (STALE.test(String(e?.message || e)) || !ws.alive()) return stale();
+      resolve({ ok: false, error: String(e?.message || e) });
+    }
+  });
+  /** chrome.storage.local that never throws: get gives `fallback` (an object of defaults, or a key's default) once the extension is gone. */
+  ws.store = {
+    async get(keys, fallback = {}) {
+      if (!ws.alive()) { ws.staleNotice(); return typeof keys === "string" ? {} : { ...fallback, ...(keys && typeof keys === "object" && !Array.isArray(keys) ? keys : {}) }; }
+      try { return await chrome.storage.local.get(keys); } catch { ws.staleNotice(); return typeof keys === "object" && keys && !Array.isArray(keys) ? { ...keys } : {}; }
+    },
+    async set(items) {
+      if (!ws.alive()) return ws.staleNotice();
+      try { await chrome.storage.local.set(items); } catch { ws.staleNotice(); }
+    },
+    async remove(keys) {
+      if (!ws.alive()) return ws.staleNotice();
+      try { await chrome.storage.local.remove(keys); } catch { ws.staleNotice(); }
+    },
+  };
+  /**
+   * A MutationObserver that disconnects itself (and asks for a refresh) once the extension is gone,
+   * so an orphaned script stops working on the page. Returns the observer.
+   */
+  ws.observe = (target, options, callback) => {
+    const obs = new MutationObserver((records) => {
+      if (!ws.alive()) { obs.disconnect(); ws.staleNotice(); return; }
+      try { callback(records, obs); } catch (e) { if (!ws.alive()) { obs.disconnect(); ws.staleNotice(); } else throw e; }
+    });
+    obs.observe(target, options);
+    return obs;
+  };
+  /** A timeout that does nothing once the extension is gone. */
+  ws.later = (fn, ms) => setTimeout(() => { if (ws.alive()) fn(); else ws.staleNotice(); }, ms);
   ws.api = (method, path, body) => ws.send({ type: "api", method, path, body });
   ws.gbp = (n) => (n == null || !Number.isFinite(Number(n)) ? "—" : `£${Number(n).toFixed(2)}`);
   ws.num = (n) => (n == null || !Number.isFinite(Number(n)) ? "—" : Number(n).toLocaleString("en-GB"));
@@ -44,13 +116,16 @@
     const el = document.createElement(tag);
     for (const [k, v] of Object.entries(attrs)) {
       if (v == null || v === false) continue;
-      if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+      // Our handlers do nothing (but ask for a refresh) once the extension is gone.
+      if (k.startsWith("on")) el.addEventListener(k.slice(2), (...a) => (ws.alive() ? v(...a) : ws.staleNotice()));
       else if (k === "text") el.textContent = v;
       else el.setAttribute(k, v === true ? "" : String(v));
     }
     for (const c of [].concat(children)) if (c != null && c !== false) el.append(c instanceof Node ? c : document.createTextNode(String(c)));
     return el;
   };
+  /** addEventListener whose handler checks the extension is still there first. */
+  ws.on = (el, type, fn, opts) => el.addEventListener(type, (...a) => (ws.alive() ? fn(...a) : ws.staleNotice()), opts);
   ws.VERDICT_COLOUR = { pass: "#15803d", warn: "#b45309", fail: "#b91c1c" };
   globalThis.__ws = ws;
 })();

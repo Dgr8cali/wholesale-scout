@@ -48,7 +48,9 @@
     shown = undefined;
   }
 
-  window.addEventListener("message", (e) => {
+  const onMessage = (e) => {
+    // Gone (reloaded or updated): stop listening.
+    if (!ws.alive()) { window.removeEventListener("message", onMessage); ws.staleNotice(); return; }
     if (e.source !== window || e.origin !== location.origin) return;
     const m = e.data;
     if (!m || m.source !== "wholesale-scout-poe") return;
@@ -65,7 +67,8 @@
       ops.set(name, { data: m.data, variables: m.variables, count: (cur?.count || 0) + 1 });
     } else if (m.kind === "growth") growth.push(m.data);
     render();
-  });
+  };
+  window.addEventListener("message", onMessage);
 
   const btn = (text, onclick, primary) => ws.h("button", {
     style: primary ? "background:#0b8ca0;color:#fff;border:0;border-radius:6px;padding:6px 10px;cursor:pointer;font-weight:600"
@@ -169,7 +172,7 @@
 
   function nichesLink() {
     const link = ws.h("a", { href: "#", style: "color:#0b8ca0;font-weight:600", text: "Open Niches" });
-    link.addEventListener("click", async (e) => {
+    ws.on(link, "click", async (e) => {
       e.preventDefault();
       const s = await ws.send({ type: "settings" });
       ws.send({ type: "open", url: `${s.appUrl}/pl/niches` });
@@ -179,7 +182,7 @@
 
   function openLink(candidateId) {
     const link = ws.h("a", { href: "#", style: "color:#0b8ca0;font-weight:600", text: "Open in the app" });
-    link.addEventListener("click", async (e) => {
+    ws.on(link, "click", async (e) => {
       e.preventDefault();
       const s = await ws.send({ type: "settings" });
       ws.send({ type: "open", url: `${s.appUrl}/pl/candidates?c=${candidateId}` });

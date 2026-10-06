@@ -41,11 +41,11 @@
   document.documentElement.append(host);
 
   let open = true;
-  chrome.storage.local.get({ panelOpen: true }, (s) => { open = s.panelOpen; panel.classList.toggle("hidden", !open); });
+  ws.store.get({ panelOpen: true }).then((s) => { open = s.panelOpen !== false; panel.classList.toggle("hidden", !open); });
   const toggle = () => {
     open = !open;
     panel.classList.toggle("hidden", !open);
-    chrome.storage.local.set({ panelOpen: open });
+    ws.store.set({ panelOpen: open });
   };
 
   let settings = { appUrl: "", configured: false };
@@ -393,8 +393,7 @@
     return new Promise((resolve) => {
       const hit = cond();
       if (hit) return resolve(hit);
-      const obs = new MutationObserver(() => { const v = cond(); if (v) { obs.disconnect(); clearTimeout(t); resolve(v); } });
-      obs.observe(document.body, { childList: true, subtree: true });
+      const obs = ws.observe(document.body, { childList: true, subtree: true }, () => { const v = cond(); if (v) { obs.disconnect(); clearTimeout(t); resolve(v); } });
       const t = setTimeout(() => { obs.disconnect(); resolve(null); }, ms);
     });
   }
@@ -549,9 +548,12 @@
     if (s.configured && s.autoCheck) load(false);
   });
   // Show debug takes effect on an open panel as soon as it's saved.
-  chrome.storage.onChanged.addListener((ch, area) => {
+  const onStorage = (ch, area) => {
+    // Gone (reloaded or updated): stop listening.
+    if (!ws.alive()) { try { chrome.storage.onChanged.removeListener(onStorage); } catch { /* gone */ } return; }
     if (area !== "local" || !ch.showDebug) return;
     settings = { ...settings, showDebug: !!ch.showDebug.newValue };
     render();
-  });
+  };
+  chrome.storage.onChanged.addListener(onStorage);
 })();
