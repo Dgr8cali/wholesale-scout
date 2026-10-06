@@ -66,7 +66,9 @@ The category download has no conversion figures. Open a niche on Opportunity Exp
 - a chip: **Buying** when a term converts at 4% or more (people search it to buy), **Browse-only** when no term reaches 2.5% (people look but don't buy). Between 2.5% and 4%, no chip;
 - a **Term conversion** line under the score in the opened niche, with every captured term's conversion and volume. It reads only: the 0–100 score doesn't change.
 
-The latest capture wins. A capture sent before the import is linked when you import. A candidate filled from the same capture gets a **Best search-term conversion** field in Gate 3 and a reads-only line on its scorecard.
+The latest capture wins. A capture sent before the import is linked when you import.
+
+**Niche only.** When no candidate's niche keyword matches, the extension's panel asks which candidate to attach the capture to. Its first choice, **Niche only (no candidate)**, links the capture to the imported niche and nothing else: the Niches page shows its best term conversion and chip, and no candidate is created or changed. If no imported niche matches, the panel says **No matching niche — import its category first**; the capture is kept and links when you import that category. A candidate filled from the same capture gets a **Best search-term conversion** field in Gate 3 and a reads-only line on its scorecard.
 
 ## Acting on niches
 

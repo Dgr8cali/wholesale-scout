@@ -424,7 +424,7 @@ const likeSafe = (s: string) => s.replace(/[\\%_]/g, (c) => `\\${c}`);
  * its aliases (any case). Each gets its best term conversion, the BUYING / BROWSE_ONLY signal and the
  * terms. One capture (after it arrives) or every capture (after an import, a merge or a re-read).
  */
-export async function linkPoeCaptures(snapshotId?: string): Promise<{ linked: number }> {
+export async function linkPoeCaptures(snapshotId?: string): Promise<{ linked: number; niches: { id: string; customer_need: string; best: number; term: string; signal: TermSignal | null }[]; noConversion: boolean; newerKept: string[] }> {
   const d = db();
   let q = d.from("pl_poe_snapshots").select("id, niche_title, captured_at, search_terms").not("niche_title", "is", null).order("captured_at", { ascending: false });
   if (snapshotId) q = q.eq("id", snapshotId);
@@ -435,6 +435,10 @@ export async function linkPoeCaptures(snapshotId?: string): Promise<{ linked: nu
     if (k && (c.search_terms?.length ?? 0) > 0 && !latest.has(k)) latest.set(k, c);
   }
   let linked = 0;
+  const newerKept: string[] = [];
+  const niches: { id: string; customer_need: string; best: number; term: string; signal: TermSignal | null }[] = [];
+  // One capture asked for, with no term conversion to give: nothing to link.
+  const noConversion = !!snapshotId && caps.length > 0 && ![...latest.values()].some((c) => bestTermConversion(c.search_terms));
   for (const [title, c] of latest) {
     const best = bestTermConversion(c.search_terms);
     if (!best) continue;
@@ -446,15 +450,16 @@ export async function linkPoeCaptures(snapshotId?: string): Promise<{ linked: nu
       if (!names.includes(title)) continue;
       const prev = n.extra?.poe as NichePoe | undefined;
       // A single capture never replaces a newer one already on the niche.
-      if (prev && prev.snapshotId !== c.id && prev.capturedAt > c.captured_at) continue;
+      if (prev && prev.snapshotId !== c.id && prev.capturedAt > c.captured_at) { newerKept.push(n.customer_need); continue; }
       const poe: NichePoe = { snapshotId: c.id, capturedAt: c.captured_at, terms: (c.search_terms ?? []).map((t) => ({ term: t.term, volume: t.volume ?? null, conversion: t.conversion })) };
       must(await d.from("pl_niches").update({
         best_term_conversion: best.conversion, term_signal: termSignal(best.conversion), extra: { ...(n.extra ?? {}), poe }, updated_at: now(),
       }).eq("id", n.id), "link a capture");
       linked++;
+      niches.push({ id: n.id, customer_need: n.customer_need, best: best.conversion, term: best.term, signal: termSignal(best.conversion) });
     }
   }
-  return { linked };
+  return { linked, niches, noConversion, newerKept };
 }
 
 /** For Home: counted in SQL, so every niche counts (not the first 1,000). */

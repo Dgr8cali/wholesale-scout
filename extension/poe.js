@@ -11,6 +11,8 @@
 
   const NICHE_OP = "getNiche";
   const FIELDS = 8; // what the app reads: title, volume, growth, products, click share, conversion, units, search terms
+  /** The picker's "Niche only (no candidate)". */
+  const NICHE_ONLY = "__niche_only__";
 
   let page = null; // the niche page the capture belongs to
   let ops = new Map(); // operation name → { data, variables, count }
@@ -130,18 +132,49 @@
     const d = r.data;
     const unread = d.unread || [];
     if (d.attached) return render(outcome(`Attached to “${d.attached.name}”: `, d.attached.filled, unread, d.attached.id));
-    if (!d.candidates.length) return render(ws.h("div", { text: "Saved, but there's no candidate to attach it to. Add one on the Private label page, then send again." }));
-    const select = ws.h("select", { style: "flex:1;min-width:0;padding:5px;border:1px solid #d4d4d8;border-radius:6px" },
-      d.candidates.map((c) => ws.h("option", { value: c.id, text: c.niche_keyword ? `${c.name} (${c.niche_keyword})` : c.name })));
+    // "Niche only" first: the capture goes to the imported niche (Private label → Niches), no candidate.
+    const select = ws.h("select", { style: "flex:1;min-width:0;padding:5px;border:1px solid #d4d4d8;border-radius:6px" }, [
+      ws.h("option", { value: NICHE_ONLY, text: "Niche only (no candidate)" }),
+      ...d.candidates.map((c) => ws.h("option", { value: c.id, text: c.niche_keyword ? `${c.name} (${c.niche_keyword})` : c.name })),
+    ]);
     render(ws.h("div", { style: "display:flex;flex-direction:column;gap:6px" }, [
-      ws.h("div", { text: `No candidate's niche keyword is “${title || "this niche"}”. Attach it to:` }),
+      ws.h("div", { text: d.candidates.length ? `No candidate's niche keyword is “${title || "this niche"}”. Attach it to:` : "No candidates yet. Keep it for the niche, or add a candidate on the Private label page and send again:" }),
       unread.length >= FIELDS ? ws.h("div", { style: "color:#b45309", text: `Warning: the app could not read any of the ${FIELDS} fields from this capture.` }) : null,
       ws.h("div", { style: "display:flex;gap:6px" }, [select, btn("Attach", async () => {
+        if (select.value === NICHE_ONLY) return nicheOnly(d.snapshotId, title);
         const a = await ws.api("POST", "/api/pl/poe/attach", { snapshotId: d.snapshotId, candidateId: select.value });
         if (!a.ok) return render(ws.h("div", { style: "color:#b91c1c", text: a.error }));
         render(outcome("Attached: ", a.data.filled || [], a.data.unread || [], select.value));
       }, true)]),
     ]));
+  }
+
+  /** The capture to its imported niche only: best term conversion and the chip on Niches; no candidate touched. */
+  async function nicheOnly(snapshotId, title) {
+    render(ws.h("div", { text: "Linking to the niche…" }));
+    const a = await ws.api("POST", "/api/pl/poe/niche", { snapshotId });
+    if (!a.ok) return render(ws.h("div", { style: "color:#b91c1c", text: a.error }));
+    const x = a.data;
+    const pct = (n) => `${Number(n).toFixed(1)}%`;
+    if (x.niches?.length) {
+      return render(ws.h("div", { style: "display:flex;flex-direction:column;gap:4px" }, [
+        ...x.niches.map((n) => ws.h("div", { style: "color:#15803d", text: `Linked to the niche “${n.customer_need}”: best term ${pct(n.best)} (“${n.term}”)${n.signal === "BUYING" ? " · Buying" : n.signal === "BROWSE_ONLY" ? " · Browse-only" : ""}. No candidate touched.` })),
+        nichesLink(),
+      ]));
+    }
+    if (x.newerKept?.length) return render(ws.h("div", { text: `Saved. “${x.newerKept.join("”, “")}” already has a newer capture, which it keeps. No candidate touched.` }));
+    if (x.noConversion) return render(ws.h("div", { style: "color:#b45309", text: "Saved, but the capture has no search-term conversion to show (open the niche's Search terms tab and send again). No candidate touched." }));
+    render(ws.h("div", { style: "color:#b45309", text: `No matching niche — import its category first. The capture of “${title || x.title || "this niche"}” is kept and links when you import it.` }));
+  }
+
+  function nichesLink() {
+    const link = ws.h("a", { href: "#", style: "color:#0b8ca0;font-weight:600", text: "Open Niches" });
+    link.addEventListener("click", async (e) => {
+      e.preventDefault();
+      const s = await ws.send({ type: "settings" });
+      ws.send({ type: "open", url: `${s.appUrl}/pl/niches` });
+    });
+    return link;
   }
 
   function openLink(candidateId) {

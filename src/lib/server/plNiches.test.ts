@@ -127,7 +127,7 @@ describe("Niche Import (FakeDb)", () => {
       { id: "s-alias", niche_title: "Window Cleaning Equipment", captured_at: "2026-10-03T00:00:00Z", search_terms: terms([1.2, 2.1]) },
       { id: "s-none", niche_title: "not a niche here", captured_at: "2026-10-02T00:00:00Z", search_terms: terms([7]) },
     );
-    expect(await linkPoeCaptures()).toEqual({ linked: 1 });
+    expect(await linkPoeCaptures()).toMatchObject({ linked: 1, niches: [{ customer_need: "window cleaner", best: 2.1, signal: "BROWSE_ONLY" }] });
     const wc = (await nichePage({ q: "window cleaner", status: "all" })).rows.find((n) => n.customer_need === "window cleaner")!;
     expect(wc).toMatchObject({ best_term_conversion: 2.1, term_signal: "BROWSE_ONLY", extra: { poe: { snapshotId: "s-alias" } } });
     // The niche's page sorts by it.
@@ -137,5 +137,22 @@ describe("Niche Import (FakeDb)", () => {
     fake.tables.pl_poe_snapshots.push({ id: "s-buy", niche_title: "window cleaner", captured_at: "2026-10-05T00:00:00Z", search_terms: terms([4.4, 0.5]) });
     await linkPoeCaptures("s-buy");
     expect(fake.tables.pl_niches.find((n) => n.id === wc.id)).toMatchObject({ best_term_conversion: 4.4, term_signal: "BUYING" });
+  });
+
+  it("niche only: a capture before its category's import is kept and links on import; no candidate touched", async () => {
+    const terms = [{ term: "window cleaner", volume: 5000, click_share: null, conversion: 6.2 }];
+    fake.tables.pl_poe_snapshots.push({ id: "s1", niche_title: "Window Cleaner", captured_at: "2026-10-05T00:00:00Z", search_terms: terms, candidate_id: null });
+    expect(await linkPoeCaptures("s1")).toMatchObject({ linked: 0, niches: [], noConversion: false, newerKept: [] });
+    await importNiches({ text: csv, category: "DIY & Tools" });
+    const wc = fake.tables.pl_niches.find((n) => n.customer_need === "window cleaner")!;
+    expect(wc).toMatchObject({ best_term_conversion: 6.2, term_signal: "BUYING" });
+    expect(fake.tables.pl_poe_snapshots[0].candidate_id).toBeNull();
+    expect(fake.tables.pl_candidates ?? []).toHaveLength(0);
+    // An older capture of the same niche: the newer one stays.
+    fake.tables.pl_poe_snapshots.push({ id: "s0", niche_title: "window cleaner", captured_at: "2026-09-01T00:00:00Z", search_terms: terms.map((t) => ({ ...t, conversion: 1 })) });
+    expect(await linkPoeCaptures("s0")).toMatchObject({ linked: 0, newerKept: ["window cleaner"] });
+    // A capture without term conversion says so.
+    fake.tables.pl_poe_snapshots.push({ id: "s2", niche_title: "window cleaner", captured_at: "2026-10-06T00:00:00Z", search_terms: [{ term: "x", volume: 1, conversion: null }] });
+    expect(await linkPoeCaptures("s2")).toMatchObject({ noConversion: true });
   });
 });
