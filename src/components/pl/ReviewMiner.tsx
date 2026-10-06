@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { CostLine, DataSent, Uncited, type Run } from "@/components/ads/AiPanels";
 import { SortTh, useSortable } from "@/components/SortableTable";
 import { Button } from "@/components/ui/button";
+import { reviewBoxes } from "@/lib/pl/reviewBoxes";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import type { PlAsin } from "@/lib/pl/fill";
@@ -15,7 +16,7 @@ import { cn } from "@/lib/utils";
 import type { FieldMap } from "./types";
 
 type Mark = "chosen" | "not fixable" | "ignore";
-interface Data { dumps: { asin: string; text: string; pasted_at: string; captured?: { total: number; inDump: number; at: string | null } | null }[]; marks: Record<string, Mark>; synonyms: SynonymGroup[]; summary: Run<ReviewSummary> | null }
+interface Data { dumps: { asin: string; text: string; pasted_at: string; captured?: { total: number; inDump: number; at: string | null } | null; removed_at?: string | null; kept_separate?: boolean }[]; marks: Record<string, Mark>; synonyms: SynonymGroup[]; summary: Run<ReviewSummary> | null }
 
 const criticalUrl = (asin: string) => `https://www.amazon.co.uk/product-reviews/${asin}/?filterByStar=critical&sortBy=recent&reviewerType=all_reviews`;
 
@@ -23,9 +24,11 @@ const criticalUrl = (asin: string) => `https://www.amazon.co.uk/product-reviews/
  * Gate 4: paste each top listing's 1–3★ reviews; the themes are mined here, in the browser (no API),
  * and the theme you pick fills the gate's share and draft six words. Claude only on a click.
  */
-export function ReviewMiner({ candidateId, asins, product, fields, onSave }: {
+export function ReviewMiner({ candidateId, asins, product, fields, onSave, onAsinsChanged }: {
   candidateId: string; asins: PlAsin[]; product: string; fields: FieldMap;
   onSave: (k: string, v: string, delay?: number) => void;
+  /** An ASIN was added to the candidate from here: reload it. */
+  onAsinsChanged?: () => void;
 }) {
   const [data, setData] = useState<Data | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -33,12 +36,18 @@ export function ReviewMiner({ candidateId, asins, product, fields, onSave }: {
   const [showIgnored, setShowIgnored] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
 
+  // Reloaded when the candidate's ASINs change (added, removed): their reviews' labels follow.
+  const asinKey = asins.map((a) => a.asin).join(",");
   useEffect(() => {
     api<Data>(`/api/pl/candidates/${candidateId}/reviews`).then((d) => {
       setData(d);
       setDrafts(Object.fromEntries(d.dumps.map((x) => [x.asin, x.text])));
+      const on = new Set(asinKey.split(","));
+      for (const x of d.dumps.filter((y) => !on.has(y.asin) && !y.removed_at && !y.kept_separate)) {
+        toast(`Reviews received for ${x.asin}, which isn't on this candidate — add it?`, { duration: 10_000, description: "Add it to the page-one ASINs, or keep its reviews separate (its box stays in Gate 4)." });
+      }
     }).catch((e: Error) => toast.error(e.message));
-  }, [candidateId]);
+  }, [candidateId, asinKey]);
 
   const reviews = useMemo(() => (data ? reviewsOf(data.dumps) : []), [data]);
   const mined = useMemo(() => (data ? mineThemes(reviews, data.synonyms) : { total: 0, themes: [] as Theme[] }), [data, reviews]);
@@ -85,7 +94,19 @@ export function ReviewMiner({ candidateId, asins, product, fields, onSave }: {
   };
   const chosen = mined.themes.find((t) => data.marks[t.theme] === "chosen") ?? null;
   const pasted = new Set(data.dumps.map((d) => d.asin));
-  const others = data.dumps.filter((d) => !asins.some((a) => a.asin === d.asin));
+  const boxes = reviewBoxes(asins, data.dumps);
+  const offAction = async (asin: string, action: "add-asin" | "keep-separate") => {
+    setBusy(`${action}:${asin}`);
+    try {
+      take(await api<Data>(`/api/pl/candidates/${candidateId}/reviews`, { method: "POST", json: { action, asin } }));
+      if (action === "add-asin") { toast.success(`${asin} added to the candidate: Refresh from Keepa to fill it in`); onAsinsChanged?.(); }
+      else toast.success(`${asin}'s reviews kept separate`);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
   const rows = mined.themes.filter((t) => showIgnored || data.marks[t.theme] !== "ignore");
   const ignored = mined.themes.filter((t) => data.marks[t.theme] === "ignore").length;
 
@@ -94,12 +115,12 @@ export function ReviewMiner({ candidateId, asins, product, fields, onSave }: {
       <div>
         <h3 className="text-sm font-semibold">Mine the reviews</h3>
         <p className="max-w-[75ch] text-xs text-muted-foreground">
-          Open each listing&apos;s critical reviews, select the page&apos;s text (Ctrl+A, Ctrl+C) and paste it below; more pages can follow in the same box. Or, with the extension (0.4.0+), click through the review pages and press <b>Send reviews to Private label</b>: they land here on their own. The reviews are split and the complaint phrases counted here, in your browser: nothing is sent anywhere.
+          Open each listing&apos;s critical reviews, select the page&apos;s text (Ctrl+A, Ctrl+C) and paste it below; more pages can follow in the same box. Or, with the extension (0.5.2+), click through the review pages and press <b>Send reviews to Private label</b>: they land here on their own. The reviews are split and the complaint phrases counted here, in your browser: nothing is sent anywhere.
         </p>
       </div>
 
       <div className="grid gap-3 md:grid-cols-2">
-        {[...asins.map((a) => ({ asin: a.asin, brand: a.brand })), ...others.map((d) => ({ asin: d.asin, brand: null as string | null }))].map((a) => {
+        {boxes.map((a) => {
           const text = drafts[a.asin] ?? "";
           const n = text.trim() ? splitReviews(a.asin, text).length : 0;
           const cap = data.dumps.find((d) => d.asin === a.asin)?.captured;
@@ -108,10 +129,19 @@ export function ReviewMiner({ candidateId, asins, product, fields, onSave }: {
               <span className="flex flex-wrap items-center gap-2 text-xs">
                 <span className="num font-medium">{a.asin}</span>
                 {a.brand && <span className="text-muted-foreground">{a.brand}</span>}
+                {a.state === "removed" && <span className="rounded-full bg-empty-soft px-1.5 py-px text-[10px] text-ink-2" title="This ASIN is no longer on the candidate; its reviews are kept and still mined">removed from candidate</span>}
+                {a.state === "separate" && <span className="rounded-full bg-empty-soft px-1.5 py-px text-[10px] text-ink-2" title="Not on the candidate; its reviews are kept and still mined">kept separate</span>}
                 <a className="inline-flex items-center gap-1 text-brand hover:underline" target="_blank" rel="noreferrer" href={criticalUrl(a.asin)}>1–3★ reviews <ExternalLinkIcon className="size-3" /></a>
                 {cap && <span className="rounded-full bg-brand-soft px-1.5 py-px text-[10px] text-brand" title={`Sent by the extension from Amazon's review pages${cap.at ? `, last ${new Date(cap.at).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}` : ""}. ${cap.total - cap.inDump} at 4–5★ kept out of the miner. Editing the text here makes it your paste.`}>from the extension: {cap.total} ({cap.inDump} at 1–3★)</span>}
                 <span className="ml-auto text-muted-foreground">{n ? `${n} review${n === 1 ? "" : "s"}${pasted.has(a.asin) ? "" : " (not saved)"}` : "none yet"}</span>
               </span>
+              {a.state === "pending" && (
+                <span className="flex flex-wrap items-center gap-2 rounded-md bg-warn-soft px-2 py-1 text-xs text-warn">
+                  Reviews received for {a.asin}, which isn&apos;t on this candidate — add it?
+                  <Button size="xs" variant="outline" disabled={!!busy} onClick={(e) => { e.preventDefault(); offAction(a.asin, "add-asin"); }}>{busy === `add-asin:${a.asin}` && <LoaderIcon className="animate-spin" />} Add</Button>
+                  <Button size="xs" variant="ghost" disabled={!!busy} onClick={(e) => { e.preventDefault(); offAction(a.asin, "keep-separate"); }}>Keep separate</Button>
+                </span>
+              )}
               <Textarea rows={4} className="text-xs" placeholder="Paste the critical reviews page here" value={text}
                 onChange={(e) => setDrafts((d) => ({ ...d, [a.asin]: e.target.value }))} onBlur={() => saveOne(a.asin)} />
             </label>

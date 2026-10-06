@@ -246,6 +246,9 @@ export async function setAsins(id: string, asins: string[]) {
   if (pinned && !keep) must(await d.from("pl_candidates").update({ reference_pinned: false }).eq("id", id), "unpin reference");
   const drop = cur.map((r) => r.asin).filter((a) => !list.includes(a));
   if (drop.length) must(await d.from("pl_candidate_asins").delete().eq("candidate_id", id).in("asin", drop), "remove ASINs");
+  // Gate 4's reviews follow: a removed ASIN's are kept and marked removed; an added one's unmarked.
+  if (drop.length) must(await d.from("pl_review_dumps").update({ removed_at: now() }).eq("candidate_id", id).in("asin", drop), "mark removed reviews");
+  if (list.length) must(await d.from("pl_review_dumps").update({ removed_at: null, kept_separate: false }).eq("candidate_id", id).in("asin", list), "unmark reviews");
   if (list.length) {
     // Positions are unique per candidate only by convention; upsert by (candidate, asin).
     must(await d.from("pl_candidate_asins").upsert(list.map((asin, i) => ({ candidate_id: id, asin, position: i + 1, is_reference: keep ? asin === keep : i === 0 })), { onConflict: "candidate_id,asin" }), "save ASINs");

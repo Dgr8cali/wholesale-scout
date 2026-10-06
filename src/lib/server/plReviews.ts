@@ -7,12 +7,15 @@ import { uncitedNumbers } from "../ads/ai";
 import { cleanCaptured, forGate4, mergeCaptured, renderCaptured, starCounts, type CapturedReview } from "../pl/capturedReviews";
 import { askModel, latestAi } from "./adsAi";
 import { db, must } from "./db";
+import { setAsins } from "./pl";
 
 export type ReviewMark = "chosen" | "not fixable" | "ignore";
 export interface ReviewDump {
   asin: string; text: string; pasted_at: string;
   /** Sent by the extension: how many reviews (all stars), how many in the dump (1–3★), when. */
   captured?: { total: number; inDump: number; at: string | null } | null;
+  /** Its ASIN was removed from the candidate (the reviews kept), or you chose to keep it separate. */
+  removed_at?: string | null; kept_separate?: boolean;
 }
 
 const now = () => new Date().toISOString();
@@ -45,13 +48,13 @@ export async function saveReviewSynonyms(groups: unknown): Promise<SynonymGroup[
 export async function reviewData(candidateId: string) {
   const d = db();
   const [dumps, marks, synonyms] = await Promise.all([
-    d.from("pl_review_dumps").select("asin, text, pasted_at, captured, captured_at").eq("candidate_id", candidateId).order("asin"),
+    d.from("pl_review_dumps").select("asin, text, pasted_at, captured, captured_at, removed_at, kept_separate").eq("candidate_id", candidateId).order("asin"),
     d.from("pl_review_marks").select("theme, mark").eq("candidate_id", candidateId),
     reviewSynonyms(),
   ]);
   return {
     dumps: (must(dumps, "review dumps") as (ReviewDump & { captured: CapturedReview[] | null; captured_at: string | null })[]).map((x) => ({
-      asin: x.asin, text: x.text, pasted_at: x.pasted_at,
+      asin: x.asin, text: x.text, pasted_at: x.pasted_at, removed_at: x.removed_at ?? null, kept_separate: !!x.kept_separate,
       captured: x.captured?.length ? { total: x.captured.length, inDump: x.captured.filter(forGate4).length, at: x.captured_at } : null,
     })),
     marks: Object.fromEntries((must(marks, "review marks") as { theme: string; mark: ReviewMark }[]).map((m) => [m.theme, m.mark])) as Record<string, ReviewMark>,
@@ -105,10 +108,27 @@ export async function saveCapturedReviews(candidateId: string, asin: string, inp
   const at = now();
   must(await d.from("pl_review_dumps").upsert({ candidate_id: candidateId, asin: a, text, pasted_at: at, captured: merged.reviews, captured_at: at, manual_text: manual }, { onConflict: "candidate_id,asin" }), "save captured reviews");
   must(await d.from("pl_candidates").update({ updated_at: at }).eq("id", candidateId), "touch candidate");
+  const onCandidate = !!(await d.from("pl_candidate_asins").select("asin").eq("candidate_id", candidateId).eq("asin", a).maybeSingle()).data;
   return {
-    conflict: null, asin: a, sent: now_.length, added: merged.added, total: merged.reviews.length,
+    conflict: null, asin: a, onCandidate, sent: now_.length, added: merged.added, total: merged.reviews.length,
     inDump: merged.reviews.filter(forGate4).length, stars: starCounts(merged.reviews), keptPaste: !!manual,
   };
+}
+
+/** Reviews for an ASIN that isn't on the candidate: keep them in their own box, not asked about again. */
+export async function keepReviewsSeparate(candidateId: string, asin: string) {
+  must(await db().from("pl_review_dumps").update({ kept_separate: true }).eq("candidate_id", candidateId).eq("asin", asin.trim().toUpperCase()), "keep separate");
+}
+
+/** Add an ASIN that has reviews to the candidate's page-one ASINs (at most 10; Keepa fills it on the next refresh). */
+export async function addReviewedAsin(candidateId: string, asin: string): Promise<string[]> {
+  const a = asin.trim().toUpperCase();
+  if (!isAsin(a)) throw new Error("An ASIN (10 characters)");
+  const cur = (must(await db().from("pl_candidate_asins").select("asin").eq("candidate_id", candidateId).order("position"), "asins") as { asin: string }[]).map((r) => r.asin);
+  if (cur.includes(a)) return cur;
+  if (cur.length >= 10) throw new Error("A candidate holds 10 page-one ASINs: remove one (Header → Edit) before adding this one");
+  await setAsins(candidateId, [...cur, a]);
+  return [...cur, a];
 }
 
 /** "Paste all": a section per "ASIN: B0…" line, each replacing that ASIN's paste. */

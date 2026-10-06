@@ -83,7 +83,7 @@ The niche summary's "purchase conversion post-launch" is a different measure (pr
 
 ### Gate 4: Mine the reviews (you, then the miner)
 
-The gate lists the top five ASINs with their rating, review count and a link to Amazon's **critical reviews** (the 1–3★ ones). Paste each listing's critical reviews into its box. The app splits them into reviews, counts the complaint phrases in your browser, and shows a **Themes** table. **Use for Gate 4** on a theme fills the share of negative reviews and drafts the six words; you answer whether a factory can fix it. See [Private label: mining reviews](/help/howto/pl-mining-reviews).
+The gate lists every page-one ASIN on the candidate, in its order, with its rating, review count and a link to Amazon's **critical reviews** (the 1–3★ ones), and gives each its own box: add an ASIN in the header and its box appears. Paste each listing's critical reviews into its box (or send them with the extension). The app splits them into reviews, counts the complaint phrases in your browser, and shows a **Themes** table. **Use for Gate 4** on a theme fills the share of negative reviews and drafts the six words; you answer whether a factory can fix it. See [Private label: mining reviews](/help/howto/pl-mining-reviews).
 
 ### Gate 5: Keywords (the extension, then you)
 

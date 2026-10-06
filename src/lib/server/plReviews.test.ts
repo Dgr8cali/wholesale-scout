@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { __setAnthropicForTests } from "./adsAi";
 import { __setDbForTests } from "./db";
 import { FakeDb } from "./fakeDb";
-import { candidatesWithAsin, reviewData, saveCapturedReviews, saveReviewDump, saveReviewSynonyms, savePasteAll, setReviewMark, summariseReviews } from "./plReviews";
+import { addReviewedAsin, candidatesWithAsin, keepReviewsSeparate, reviewData, saveCapturedReviews, saveReviewDump, saveReviewSynonyms, savePasteAll, setReviewMark, summariseReviews } from "./plReviews";
 
 const fx = (f: string) => readFileSync(join(__dirname, "..", "pl", "__fixtures__", f), "utf8");
 const CAND = "c1";
@@ -49,6 +49,30 @@ describe("Gate 4 review dumps (FakeDb, API mocked)", () => {
     await saveCapturedReviews(CAND, "B0FAKE0001", first, "replace");
     expect(db.tables.pl_review_dumps[0].text).not.toContain("Mine now.");
     await expect(saveCapturedReviews(CAND, "B0FAKE0001", [{ body: " " }])).rejects.toThrow("No reviews");
+  });
+
+  it("reviews for an ASIN not on the candidate are kept; add it or keep it separate; a removed ASIN's reviews stay", async () => {
+    db.tables.pl_candidate_asins = [{ candidate_id: CAND, asin: "B0FAKE0001", position: 1, is_reference: true }];
+    const rv = [{ id: "R1AAAAAAAA", stars: 1, title: "Snapped", body: "Snapped on day one.", date: null, variant: null, helpful: null }];
+    const r = await saveCapturedReviews(CAND, "B0FY3H7Y9R", rv);
+    expect(r).toMatchObject({ onCandidate: false, total: 1 });
+    expect((await reviewData(CAND)).dumps).toEqual([expect.objectContaining({ asin: "B0FY3H7Y9R", removed_at: null, kept_separate: false })]);
+    expect(await saveCapturedReviews(CAND, "B0FAKE0001", rv)).toMatchObject({ onCandidate: true });
+
+    await keepReviewsSeparate(CAND, "B0FY3H7Y9R");
+    expect((await reviewData(CAND)).dumps.find((d) => d.asin === "B0FY3H7Y9R")).toMatchObject({ kept_separate: true });
+    expect(await addReviewedAsin(CAND, "b0fy3h7y9r")).toEqual(["B0FAKE0001", "B0FY3H7Y9R"]);
+    expect((await reviewData(CAND)).dumps.find((d) => d.asin === "B0FY3H7Y9R")).toMatchObject({ kept_separate: false, removed_at: null });
+
+    // Removed from the candidate: its reviews stay, marked.
+    const { setAsins } = await import("./pl");
+    await setAsins(CAND, ["B0FAKE0001"]);
+    expect((await reviewData(CAND)).dumps.find((d) => d.asin === "B0FY3H7Y9R")!.removed_at).toBeTruthy();
+    expect(db.tables.pl_review_dumps).toHaveLength(2);
+
+    // Ten ASINs is the most.
+    await setAsins(CAND, Array.from({ length: 10 }, (_, i) => `B0FULL000${i}`));
+    await expect(addReviewedAsin(CAND, "B0FY3H7Y9R")).rejects.toThrow("10 page-one ASINs");
   });
 
   it("stores the raw text per ASIN; a new paste replaces it; empty clears", async () => {

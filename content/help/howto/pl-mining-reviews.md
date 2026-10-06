@@ -13,7 +13,13 @@ Gate 4 asks for one complaint that repeats across the top listings, that a facto
 2. Select the page's text (Ctrl+A, Ctrl+C) and paste it into that listing's box. Paste more pages into the same box if you want more reviews: 50 a listing is plenty.
 3. Click outside the box: it's saved, and the count of reviews read shows above it.
 
-**Paste all** takes several listings at once: start each listing's reviews with a line `ASIN: B0…`. Each listing's paste replaces what was saved for it, and a listing that isn't in the top five gets its own box.
+**Paste all** takes several listings at once: start each listing's reviews with a line `ASIN: B0…`. Each listing's paste replaces what was saved for it, and a listing that isn't on the candidate gets its own box.
+
+**Reviews for an ASIN that isn't on the candidate** are never dropped. A box for each ASIN on the candidate comes first, in its order; then:
+
+- **Removed from candidate**: you took the ASIN off the candidate; its reviews stay, still mined. Add it back and the label goes.
+- **Reviews received for … — add it?**: the extension sent reviews for an ASIN the candidate doesn't list. **Add** puts it on the page-one ASINs (at most 10; **Refresh from Keepa** fills it in); **Keep separate** keeps its box apart and stops asking.
+- **Kept separate**: as you chose; still mined.
 
 **Or send them with the extension** (version 0.5.2 or later). On a listing's reviews page on amazon.co.uk (click **See all reviews**; filter to 1, 2 or 3 stars), a panel at the bottom right counts the reviews it has read, by star; a product page with reviews on it gets the same panel at the bottom left. If it doesn't appear, click the extension's icon and **Capture reviews on this page**. Click through as many pages as you want (filter to critical reviews first): each page is added. Click **Send reviews to Private label** and they go into the Gate 4 box of the candidate with that ASIN among its page-one ASINs. If several candidates have it, or none, the panel asks which. Sending again adds only reviews it hasn't seen (Amazon's review id). Reviews you pasted by hand for that listing stay until you choose **Add to them** or **Replace them**. Only the 1–3★ reviews go into the box; 4–5★ ones, and any whose stars couldn't be read, are kept but not mined. The box says **from the extension** with the count; editing its text by hand makes it your paste.
 

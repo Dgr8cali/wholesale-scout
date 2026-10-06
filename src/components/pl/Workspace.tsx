@@ -187,7 +187,7 @@ export function Workspace({ id, settings, card, adsCpc, onChanged, onDeleted }: 
                 ))}
               </div>
               {g.id === "g2" && <ReferencePanel data={data} onChanged={async () => { const d = await load(); if (d) onChanged(id, { fields: d.fields }); }} />}
-              <GateExtras g={g} data={data} fields={fields} settings={settings} card={card} onSave={saveField} />
+              <GateExtras g={g} data={data} fields={fields} settings={settings} card={card} onSave={saveField} onAsinsChanged={async () => { const d = await load(); if (d) onChanged(id, { fields: d.fields }); }} />
               <div className="overflow-hidden rounded-lg border">
                 {rows.map((r, i) => (
                   <CheckRow key={i} row={r} gate={g} gateWaived={!!gateWaiver} onWaive={(reason) => waive(g.id, r.label, reason)} onUnwaive={unwaive} />
@@ -571,7 +571,7 @@ function RankSparkline({ points }: { points: [number, number][] }) {
   );
 }
 
-function GateExtras({ g, data, fields, settings, card, onSave }: { g: GateDef; data: CandidateDetail; fields: FieldMap; settings: Settings; card: RateCard; onSave: (k: string, v: string, delay?: number) => void }) {
+function GateExtras({ g, data, fields, settings, card, onSave, onAsinsChanged }: { g: GateDef; data: CandidateDetail; fields: FieldMap; settings: Settings; card: RateCard; onSave: (k: string, v: string, delay?: number) => void; onAsinsChanged: () => void }) {
   const f = valuesOf(fields);
   if (g.id === "g3" || g.id === "g5") {
     const p = data.poe;
@@ -582,11 +582,12 @@ function GateExtras({ g, data, fields, settings, card, onSave }: { g: GateDef; d
   }
   if (g.id === "g1") return data.asins.length ? <PageOneTable asins={data.asins} /> : null;
   if (g.id === "g4") {
-    const top = data.asins.slice(0, 5);
+    // Every page-one ASIN, in the candidate's order: no cap (Gatekeeper said "the top five").
+    const top = data.asins;
     return (
       <div className="flex flex-col gap-3">
         {top.length > 0 && <CriticalReviewsTable asins={top} />}
-        <ReviewMiner candidateId={data.candidate.id} asins={top} product={data.candidate.niche_keyword || data.candidate.name} fields={fields} onSave={onSave} />
+        <ReviewMiner candidateId={data.candidate.id} asins={top} product={data.candidate.niche_keyword || data.candidate.name} fields={fields} onSave={onSave} onAsinsChanged={onAsinsChanged} />
       </div>
     );
   }
@@ -781,7 +782,7 @@ function SearchTermsTable({ terms, captured }: { terms: PoeTerm[]; captured: num
   );
 }
 
-/** Gate 4: the top five listings, with a link to each one's critical reviews. */
+/** Gate 4: every page-one listing, with a link to each one's critical reviews. */
 function CriticalReviewsTable({ asins }: { asins: CandidateDetail["asins"] }) {
   const t = useSortable("pl.criticalReviews", asins, {
     listing: { value: (a) => a.asin, kind: "text" },

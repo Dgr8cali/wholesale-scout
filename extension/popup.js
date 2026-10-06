@@ -111,7 +111,7 @@ function sendButton(cap, candidateId, mode) {
     if (d.saved) {
       cap.sentAt = new Date().toISOString();
       await chrome.storage.local.set({ [`wsReviews:${cap.asin}`]: cap });
-      return revMsg(`Sent to “${d.candidate.name}”: ${d.saved.added} new, ${d.saved.inDump} at 1–3★ in Gate 4.`, "ok");
+      return revMsg(`Sent to “${d.candidate.name}”: ${d.saved.added} new, ${d.saved.inDump} at 1–3★ in Gate 4.${d.saved.onCandidate === false ? ` ${cap.asin} isn't on this candidate: add it or keep it separate in Gate 4.` : ""}`, "ok");
     }
     if (d.conflict) {
       revMsg(`“${d.candidate.name}” already has reviews you pasted for ${cap.asin}.`);

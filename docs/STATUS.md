@@ -1,7 +1,7 @@
 # Wholesale Scout: status
 
 Read this first in a new session. Keep it current: every commit that changes a feature updates
-it (what's built, the backlog, the rough edges). Last updated: 6 Oct 2026 (Extension 0.5.3: scripts left in open tabs after a reload stop quietly and ask for a refresh).
+it (what's built, the backlog, the rough edges). Last updated: 6 Oct 2026 (Gate 4: a review box for every ASIN on the candidate; reviews for other ASINs kept).
 
 Wholesale Scout is a single-user Amazon UK seller's workbench: Next.js 16 (App Router, `proxy.ts`
 password gate), Supabase (Postgres, RLS on, service-role access from the server only), Vercel
@@ -81,7 +81,7 @@ re-capture updates price/MOQ/sold and keeps status and notes); each is scored 0�
 max, default 1,000, 20; trust 25; relevance 20) with flags (not a factory, unit unclear, MOQ too high,
 off product hidden by default, high price) and rescored when the targets change; Copy RFQ fills an
 editable template (Settings → Private label, `pl_text_settings`); Add quote starts a prefilled quote;
-Home counts the ones to contact. Gate 4's review miner takes pasted 1–3★ reviews per top-5 ASIN (`pl_review_dumps`), or the extension's
+Home counts the ones to contact. Gate 4's review miner takes pasted 1–3★ reviews per page-one ASIN, a box for every ASIN on the candidate (no cap; reviews for an ASIN not on it are kept: removed from candidate, add it / keep separate) (`pl_review_dumps`), or the extension's
 capture from amazon.co.uk review pages (0.4.0: stars, date, title, body, variant, helpful votes over the
 pages you click through, sent per click to the candidate with that ASIN, merged by review id, a hand
 paste kept until you choose; rendered 1–3★ in Amazon's layout), splits

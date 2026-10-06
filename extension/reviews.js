@@ -97,6 +97,7 @@
       const s = d.saved;
       return say(cap, ws.h("div", { style: "display:flex;flex-direction:column;gap:4px" }, [
         ws.h("div", { style: "color:#15803d", text: `Sent to “${d.candidate.name}”: ${s.added} new, ${s.total} in all for ${s.asin}; ${s.inDump} at 1–3★ in Gate 4's reviews${s.keptPaste ? " (your pasted reviews kept above them)" : ""}.` }),
+        s.onCandidate === false ? ws.h("div", { style: "color:#b45309", text: `${s.asin} isn't on this candidate: its reviews are kept in their own box in Gate 4, where you can add it or keep it separate.` }) : null,
         ws.h("div", { style: "display:flex;gap:8px" }, [openLink(d.candidate.id), btn("Back", () => { status = null; render(cap); })]),
       ]));
     }
