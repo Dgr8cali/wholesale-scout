@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { extractPoe, nicheOf, poeFill, unreadFields } from "./poe";
+import { extractPoe, nicheOf, poeFill, poeTopClicked, unreadFields } from "./poe";
 
 const fixture = (name: string) => JSON.parse(readFileSync(join(__dirname, "__fixtures__", name), "utf8"));
 
@@ -115,5 +115,19 @@ describe("Opportunity Explorer captures", () => {
     });
     expect(x).toMatchObject({ niche_title: "bottle brush", search_volume_360: 1484395 });
     expect(x.search_terms).toHaveLength(20);
+  });
+});
+
+describe("Opportunity Explorer top clicked", () => {
+  const term = (searchTerm: string, asins: string[]) => ({ searchTerm, topClickedProducts: asins.map((asin) => ({ asin, asinTitle: "x" })) });
+  const niche = { data: { niche: { searchTermMetrics: [term("mouse traps", ["B089XYF1HQ", "B0CPDBHHJT", "B01NB0QNPI"]), term("mouse trap", ["B089XYF1HQ", "B01NB0QNPI", "B0CP847PTB"]), term("rat trap", ["B0CP847PTB", "bad", "B0RAT00001"])] } } };
+  it("#1–#3 of every captured term, once each at its best rank, best ranks first", () => {
+    expect(poeTopClicked({ niche, operations: { getNiche: niche } })).toEqual([
+      { asin: "B089XYF1HQ", term: "mouse traps", rank: 1 }, { asin: "B0CP847PTB", term: "rat trap", rank: 1 },
+      { asin: "B0CPDBHHJT", term: "mouse traps", rank: 2 }, { asin: "B01NB0QNPI", term: "mouse trap", rank: 2 },
+      { asin: "B0RAT00001", term: "rat trap", rank: 3 },
+    ]);
+    expect(poeTopClicked({ niche }, 2)).toHaveLength(2);
+    expect(poeTopClicked(null)).toEqual([]);
   });
 });

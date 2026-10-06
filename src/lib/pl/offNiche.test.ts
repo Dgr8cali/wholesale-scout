@@ -121,4 +121,11 @@ describe("off-niche titles", () => {
     expect(keepaRootsFor(["Sports & Outdoors", "pet supplies", "Nowhere"])).toEqual([318949011, 340840031]);
     expect(keepaRootsFor(["Stationery & Office Supplies", "Business/Industrial & Scientific"])).toEqual([192413031, 5866054031]);
   });
+
+  it("POE top clicked: on-niche whatever the title, unless you marked it", () => {
+    const p = (asin: string, title: string, poe: { term: string; rank: number } | null, monthlySold = 100) => ({ asin, title, brand: null, reviews: 10, price: null, rank: 1, monthlySold, category: null, poe });
+    const r = classifyIncumbents([p("A", "Rodent Snap Kit for Kids", { term: "mouse traps", rank: 1 }, 900), p("B", "Mouse Traps Humane", null), p("C", "Cat Toy", null)], "mouse traps");
+    expect(r.top.map((x) => [x.asin, x.matchedHow, x.matchedTerm])).toEqual([["A", "poe", "mouse traps"], ["B", "phrase", "mouse traps"]]);
+    expect(classifyIncumbents([p("A", "x", { term: "t", rank: 2 })], "mouse traps", { notOnNiche: ["A"] }).top).toEqual([]);
+  });
 });

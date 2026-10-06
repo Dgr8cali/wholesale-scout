@@ -324,3 +324,40 @@ export function poeFill(x: PoeExtract): Record<string, PoeFilled> {
   }
   return out;
 }
+
+/** A search term's #1–#3 clicked product, from a capture. */
+export interface PoeTopClicked { asin: string; term: string; rank: number }
+
+/**
+ * Every captured search term's #1, #2 and #3 clicked ASINs (searchTermMetrics[].topClickedProducts),
+ * once each: an ASIN keeps its best rank (then the first term it's under, in the capture's order).
+ * At most `max`, best ranks first.
+ */
+export function poeTopClicked(raw: unknown, max = 30): PoeTopClicked[] {
+  const lists: Record<string, unknown>[][] = [];
+  const find = (x: unknown, depth = 0) => {
+    if (depth > 10 || !x || typeof x !== "object") return;
+    if (Array.isArray(x)) { x.forEach((v) => find(v, depth + 1)); return; }
+    for (const [k, v] of Object.entries(x as Record<string, unknown>)) {
+      if (k === "searchTermMetrics" && Array.isArray(v) && v.some((t) => t && typeof t === "object" && "topClickedProducts" in t)) lists.push(v as Record<string, unknown>[]);
+      else find(v, depth + 1);
+    }
+  };
+  find(raw);
+  const best = new Map<string, PoeTopClicked & { order: number }>();
+  let order = 0;
+  // The niche's own getNiche response first (the capture stores it twice: niche and operations).
+  for (const terms of lists.slice(0, 1)) {
+    for (const t of terms) {
+      const term = typeof t.searchTerm === "string" ? t.searchTerm : "";
+      const prods = Array.isArray(t.topClickedProducts) ? (t.topClickedProducts as { asin?: unknown }[]) : [];
+      prods.slice(0, 3).forEach((p, i) => {
+        const asin = typeof p?.asin === "string" ? p.asin.trim().toUpperCase() : "";
+        if (!/^[A-Z0-9]{10}$/.test(asin)) return;
+        const cur = best.get(asin);
+        if (!cur || i + 1 < cur.rank) best.set(asin, { asin, term, rank: i + 1, order: cur?.order ?? order++ });
+      });
+    }
+  }
+  return [...best.values()].sort((a, b) => a.rank - b.rank || a.order - b.order).slice(0, max).map(({ asin, term, rank }) => ({ asin, term, rank }));
+}

@@ -1,7 +1,7 @@
 # Wholesale Scout: status
 
 Read this first in a new session. Keep it current: every commit that changes a feature updates
-it (what's built, the backlog, the rough edges). Last updated: 6 Oct 2026 (Extension 0.5.1: Opportunity Explorer captures can go to the niche only, no candidate).
+it (what's built, the backlog, the rough edges). Last updated: 6 Oct 2026 (Niches incumbent check: Opportunity Explorer's top-clicked ASINs detailed first and counted).
 
 Wholesale Scout is a single-user Amazon UK seller's workbench: Next.js 16 (App Router, `proxy.ts`
 password gate), Supabase (Postgres, RLS on, service-role access from the server only), Vercel
@@ -49,7 +49,9 @@ Product Finder page a distinct term, up to 3, a term containing another skipped,
 niche's categories' Keepa roots, merged in turn to 25 detailed; only titles with any of the terms
 as a phrase, else all its words within a 4-word window in any order (the matched term shown, phrase
 preferred; a window match doesn't count with mat/cover/liner/replacement/holder/"stand only" or in
-Feeding Mats), not marked Not on-niche by hand (kept on the niche for reruns; the shape recomputed
+Feeding Mats), with the niche's Opportunity Explorer
+capture's #1–#3 clicked ASINs per search term (deduped, up to 30) detailed first and counted on-niche
+("POE top clicked"), not marked Not on-niche by hand (kept on the niche for reruns; the shape recomputed
 from stored snapshots, no tokens), none of the off-niche words (editable in Settings → Private label,
 `src/lib/pl/offNiche.ts`; cat/dog/toy/game allowed for pet niches, kids/children for Baby Products and Toys & Games, baby for Baby Products,
 toy/game for Toys & Games; a term's own words and plurals never exclude) not an accessory for any of the terms ("for", "fits", "compatible with" just before one) and, for a bag/box niche, not in Keepa's Locking Carabiners or Bait Storage and without "dry" in the title count; the 10 best

@@ -12,6 +12,7 @@ import { huntCategories, type HuntCategory } from "./hunt";
 import { createCandidate, refreshCandidate, snapshotOf } from "./pl";
 import { saveSnapshot } from "./process";
 import { classifyIncumbents, finderTerms, MARKED_OUT, type IncumbentCandidate, type OffNicheOpts } from "../pl/offNiche";
+import type { PoeTopClicked } from "../pl/poe";
 
 /**
  * Niche Hunt: the wholesale Hunt's Product Finder client and category list, the same Keepa
@@ -823,7 +824,7 @@ export function reusable(prev: { candidates?: string[]; finderAt?: string; check
  * rerun with the finder's list from the last 7 days costs only the snapshots that have aged out.
  * `fallback`: the extra finder pages if the niche's categories have too few (rooted checks only).
  */
-export async function termCheckPlan(reuse?: TermReuse | null, terms: string[] = [], rooted = false): Promise<{ estimate: number; fallback: number; balance: number | null; reserve: number; fits: boolean; blocked: string | null; reusing: boolean; finderTerms: string[] }> {
+export async function termCheckPlan(reuse?: TermReuse | null, terms: string[] = [], rooted = false, pinned: string[] = []): Promise<{ estimate: number; fallback: number; balance: number | null; reserve: number; fits: boolean; blocked: string | null; reusing: boolean; finderTerms: string[]; pinned: number }> {
   const keepa = getKeepa();
   const balance = keepa.available ? (await keepa.tokenStatus().catch(() => null))?.tokensLeft ?? null : null;
   let blocked: string | null = null;
@@ -835,17 +836,21 @@ export async function termCheckPlan(reuse?: TermReuse | null, terms: string[] = 
   }
   const reusing = !!reuse && Date.now() - Date.parse(reuse.at) < TERM_REUSE_MS && reuse.asins.length > 0;
   const ft = finderTerms(terms, TERM_FINDER_MAX);
-  const estimate = reusing ? (reuse!.asins.length - (await freshHuntAsins(reuse!.asins)).size) * DETAIL_TOKENS_PER_ASIN : termCheckTokens(Math.max(1, ft.length));
+  // Opportunity Explorer's top clicked are detailed too (those under 7 days old reused).
+  const pinNew = pinned.length ? pinned.length - (await freshHuntAsins(pinned)).size : 0;
+  const reusedList = reusing ? [...new Set([...pinned, ...reuse!.asins])] : [];
+  const estimate = reusing ? (reusedList.length - (await freshHuntAsins(reusedList)).size) * DETAIL_TOKENS_PER_ASIN : termCheckTokens(Math.max(1, ft.length)) + pinNew * DETAIL_TOKENS_PER_ASIN;
   const fallback = !reusing && rooted ? Math.max(1, ft.length) * DIRECT_PAGE_TOKENS : 0;
   const most = estimate + fallback;
-  return { estimate, fallback, balance, reserve: TOKEN_RESERVE, fits: most === 0 || (balance != null && balance - TOKEN_RESERVE >= most), blocked, reusing, finderTerms: ft };
+  return { estimate, fallback, balance, reserve: TOKEN_RESERVE, fits: most === 0 || (balance != null && balance - TOKEN_RESERVE >= most), blocked, reusing, finderTerms: ft, pinned: pinned.length };
 }
 
 /** The classification's fields on a check's result: shape, on-niche top 10, what was left out and why, where they're filed. */
-function classifyFrom(candidates: string[], snaps: Map<string, HuntAsin>, terms: string[], opts: OffNicheOpts) {
+function classifyFrom(candidates: string[], snaps: Map<string, HuntAsin>, terms: string[], opts: OffNicheOpts, poeTop: PoeTopClicked[] = []) {
+  const poe = new Map(poeTop.map((p) => [p.asin, { term: p.term, rank: p.rank }]));
   const products: IncumbentCandidate[] = candidates.map((a) => snaps.get(a)).filter((x): x is HuntAsin => !!x).map((x) => ({
     asin: x.asin, title: x.title, brand: x.brand, reviews: x.review_count, price: x.price, rank: x.rank,
-    monthlySold: x.bought_past_month, category: x.leaf_category ?? x.root_category ?? null, rootCategory: x.root_category ?? null,
+    monthlySold: x.bought_past_month, category: x.leaf_category ?? x.root_category ?? null, rootCategory: x.root_category ?? null, poe: poe.get(x.asin) ?? null,
   }));
   const c = classifyIncumbents(products, terms, opts);
   // Every product you marked is listed (so it can be undone), then the first of the rest.
@@ -860,13 +865,13 @@ function classifyFrom(candidates: string[], snaps: Map<string, HuntAsin>, terms:
  * The classification again over a check's products, from their stored snapshots whatever their age
  * (no Keepa): after you mark a product "Not on-niche" (or undo it), or the rules change.
  */
-export async function reclassifyCandidates(candidates: string[], terms: string[], opts: OffNicheOpts) {
+export async function reclassifyCandidates(candidates: string[], terms: string[], opts: OffNicheOpts, poeTop: PoeTopClicked[] = []) {
   const snaps = new Map<string, HuntAsin>();
   for (const c of chunks(candidates)) {
     const rows = must(await db().from("pl_hunt_asins").select(ASIN_COLS).in("asin", c), "hunt snapshots") as Record<string, unknown>[];
     for (const r of rows) snaps.set(r.asin as string, toHuntAsin(r));
   }
-  return classifyFrom(candidates, snaps, terms, opts);
+  return classifyFrom(candidates, snaps, terms, opts, poeTop);
 }
 
 /**
@@ -880,11 +885,13 @@ export async function reclassifyCandidates(candidates: string[], terms: string[]
  * with no category (Amazon files hedgehog houses under Pet Supplies, not Garden): the result says
  * it was found outside them. One at a time, never over the estimate (and that fallback) + 10%.
  */
-export async function termIncumbentCheck(termOrTerms: string | string[], o: { rootCategoryIds?: number[]; rootNames?: string[]; pet?: boolean; kids?: boolean; toys?: boolean; baby?: boolean; offNiche?: string[]; notOnNiche?: string[]; reuse?: TermReuse | null } = {}) {
+export async function termIncumbentCheck(termOrTerms: string | string[], o: { rootCategoryIds?: number[]; rootNames?: string[]; pet?: boolean; kids?: boolean; toys?: boolean; baby?: boolean; offNiche?: string[]; notOnNiche?: string[]; poeTop?: PoeTopClicked[]; reuse?: TermReuse | null } = {}) {
   const terms = [...new Set((Array.isArray(termOrTerms) ? termOrTerms : [termOrTerms]).map((t) => t.trim()).filter(Boolean))];
   const term = terms[0] ?? "";
   const rooted = (o.rootCategoryIds?.length ?? 0) > 0;
-  const plan = await termCheckPlan(o.reuse, terms, rooted);
+  const poeTop = o.poeTop ?? [];
+  const pinned = [...new Set(poeTop.map((p) => p.asin))];
+  const plan = await termCheckPlan(o.reuse, terms, rooted, pinned);
   if (plan.blocked) throw new Error(plan.blocked);
   if (!plan.fits) throw new Error(`The check needs up to ${plan.estimate + plan.fallback} tokens: ${plan.balance ?? "?"} in the balance, ${plan.reserve} kept in reserve. Wait for the refill.`);
   const keepa = getKeepa() as Finder;
@@ -922,6 +929,8 @@ export async function termIncumbentCheck(termOrTerms: string | string[], o: { ro
       }
       candidates = [...seen]; finderAt = new Date().toISOString();
     }
+    // Opportunity Explorer's top clicked first, then the search results.
+    candidates = [...new Set([...pinned, ...candidates.filter((a) => !pinned.includes(a))])];
     const cached = await freshHuntAsins(candidates);
     let need = candidates.filter((a) => !cached.has(a));
     const room = Math.max(0, Math.floor((cap - spent) / DETAIL_TOKENS_PER_ASIN));
@@ -939,9 +948,9 @@ export async function termIncumbentCheck(termOrTerms: string | string[], o: { ro
       const snaps = fetched.map((k) => huntSnapshot(k, names));
       if (snaps.length) must(await db().from("pl_hunt_asins").upsert(snaps, { onConflict: "asin" }), "save hunt snapshots");
     }
-    const c = classifyFrom(candidates, await freshHuntAsins(candidates), terms, { pet: o.pet, kids: o.kids, toys: o.toys, baby: o.baby, words: o.offNiche, notOnNiche: o.notOnNiche });
+    const c = classifyFrom(candidates, await freshHuntAsins(candidates), terms, { pet: o.pet, kids: o.kids, toys: o.toys, baby: o.baby, words: o.offNiche, notOnNiche: o.notOnNiche }, poeTop);
     return {
-      term, terms, finderTerms: plan.reusing ? null : plan.finderTerms, rootCategories: o.rootNames ?? [], outside, found, ...c,
+      term, terms, finderTerms: plan.reusing ? null : plan.finderTerms, rootCategories: o.rootNames ?? [], outside, found, ...c, poeTop: poeTop.length,
       candidates, finderAt, reusedFinder: plan.reusing, tokensUsed: spent, reused: candidates.filter((a) => cached.has(a)).length, checkedAt: new Date().toISOString(),
     };
   } finally {

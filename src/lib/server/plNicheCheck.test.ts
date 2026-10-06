@@ -63,7 +63,7 @@ describe("Niches incumbent check (fake Keepa)", () => {
   beforeEach(() => {
     fake = new FakeDb();
     __setDbForTests(fake);
-    for (const t of ["pl_niches", "pl_niche_settings", "pl_hunts", "pl_hunt_asins", "keepa_categories"]) fake.tables[t] ??= [];
+    for (const t of ["pl_niches", "pl_niche_settings", "pl_hunts", "pl_hunt_asins", "keepa_categories", "pl_poe_snapshots"]) fake.tables[t] ??= [];
     fake.tables.pl_niches.push({ id: "n1", customer_need: "fishing", search_terms: ["fishing rod", "fishing pole", "fishing rods"], categories: ["Sports & Outdoors"], extra: {}, keepa_by_day: null, shape: null });
     k.selections.length = 0; k.lookups.length = 0;
   });
@@ -146,5 +146,21 @@ describe("Niches incumbent check (fake Keepa)", () => {
     expect((await checkNicheIncumbents("n1", true)).shape).toBe("open");
     expect((await checkNicheIncumbents("n1")).incumbents.map((x) => x.asin)).not.toContain("B0ROD00001");
     expect(await setNotOnNiche("n1", "B0ROD00001", false)).toMatchObject({ notOnNiche: [], shape: "contested" });
+  });
+
+  it("a niche with a POE capture: its top clicked are detailed first, marked, and counted on-niche", async () => {
+    fake.tables.pl_poe_snapshots = [{ id: "cap1", niche_title: "fishing", raw: { niche: { data: { niche: { searchTermMetrics: [
+      { searchTerm: "fishing rod", topClickedProducts: [{ asin: "B0BATHTOY1" }, { asin: "B0ROD00003" }] },
+    ] } } } } }];
+    (fake.tables.pl_niches[0] as { extra: Record<string, unknown> }).extra = { poe: { snapshotId: "cap1", capturedAt: "2026-10-06", terms: [] } };
+    expect(await nicheCheckPlan("n1")).toMatchObject({ pinned: 2 });
+    const r = await checkNicheIncumbents("n1");
+    // Detailed first: the two POE ASINs, then the search results.
+    expect(k.lookups[0].slice(0, 2)).toEqual(["B0BATHTOY1", "B0ROD00003"]);
+    // The bath toy is Amazon's #1 clicked for "fishing rod": counted, marked, whatever its title.
+    const toy = r.incumbents.find((x) => x.asin === "B0BATHTOY1")!;
+    expect(toy).toMatchObject({ matchedHow: "poe", poe: { term: "fishing rod", rank: 1 } });
+    expect(r.excluded.map((x) => x.asin)).not.toContain("B0BATHTOY1");
+    expect(r).toMatchObject({ poeTop: 2, shape: "dominated" });
   });
 });

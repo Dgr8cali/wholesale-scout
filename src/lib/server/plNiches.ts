@@ -2,6 +2,7 @@ import "server-only";
 import { feeCategoryFor, keepaRootsFor, matchPoeCategory } from "../pl/poeCategories";
 import { DEFAULT_OFF_NICHE, parseWordList } from "../pl/offNiche";
 import { bestTermConversion, termSignal, type ConvTerm, type TermSignal } from "../pl/termConversion";
+import { poeTopClicked, type PoeTopClicked } from "../pl/poe";
 import { addDailyTokens, PL_KEEP_DAYS, type TokensByDay } from "../keepaLedger";
 import { DEFAULT_BRAND_TERMS, parseBrandTerms } from "../pl/brandTerms";
 import { nicheFlags, scoreNiche } from "../pl/nicheScore";
@@ -364,11 +365,20 @@ function checkInputs(n: CheckNiche, rerun: boolean) {
 }
 const CHECK_COLS = "search_terms, customer_need, categories, extra, keepa_by_day";
 
+/** The #1–#3 clicked ASINs of the niche's linked Opportunity Explorer capture (its raw response), or none. */
+async function poeTopFor(n: CheckNiche): Promise<PoeTopClicked[]> {
+  const id = (n.extra?.poe as NichePoe | undefined)?.snapshotId;
+  if (!id) return [];
+  const r = (await db().from("pl_poe_snapshots").select("raw").eq("id", id).maybeSingle()).data as { raw: unknown } | null;
+  return r ? poeTopClicked(r.raw) : [];
+}
+
 /** What an incumbent check (or a rerun) on this niche's search terms would cost, and whether it can run now. */
 export async function nicheCheckPlan(id: string, rerun = false) {
   const n = must(await db().from("pl_niches").select(CHECK_COLS).eq("id", id).single(), "niche") as CheckNiche;
   const i = checkInputs(n, rerun);
-  return { term: i.term, terms: i.terms, categories: i.rootNames, ...(await termCheckPlan(i.reuse, i.terms, i.rootCategoryIds.length > 0)) };
+  const top = await poeTopFor(n);
+  return { term: i.term, terms: i.terms, categories: i.rootNames, ...(await termCheckPlan(i.reuse, i.terms, i.rootCategoryIds.length > 0, top.map((p) => p.asin))) };
 }
 
 /**
@@ -380,7 +390,7 @@ export async function checkNicheIncumbents(id: string, rerun = false) {
   const d = db();
   const n = must(await d.from("pl_niches").select(CHECK_COLS).eq("id", id).single(), "niche") as CheckNiche;
   const i = checkInputs(n, rerun);
-  const r = await termIncumbentCheck(i.terms, { rootCategoryIds: i.rootCategoryIds, rootNames: i.rootNames, pet: i.pet, kids: i.kids, toys: i.toys, baby: i.baby, notOnNiche: i.notOnNiche, offNiche: await offNicheWords(), reuse: i.reuse });
+  const r = await termIncumbentCheck(i.terms, { rootCategoryIds: i.rootCategoryIds, rootNames: i.rootNames, pet: i.pet, kids: i.kids, toys: i.toys, baby: i.baby, notOnNiche: i.notOnNiche, poeTop: await poeTopFor(n), offNiche: await offNicheWords(), reuse: i.reuse });
   must(await d.from("pl_niches").update({
     shape: r.shape, shape_rank: derivedCols({ customer_need: "", search_terms: [], flags: [], shape: r.shape }).shape_rank,
     extra: { ...(n.extra ?? {}), incumbents: r }, keepa_by_day: addDailyTokens(n.keepa_by_day, r.tokensUsed, new Date(), PL_KEEP_DAYS), updated_at: now(),
@@ -404,7 +414,7 @@ export async function setNotOnNiche(id: string, asin: string, out: boolean) {
   let shape: string | null | undefined;
   if (inc?.candidates?.length) {
     const i = checkInputs({ ...n, extra }, false);
-    const c = await reclassifyCandidates(inc.candidates, i.terms, { pet: i.pet, kids: i.kids, toys: i.toys, baby: i.baby, words: await offNicheWords(), notOnNiche });
+    const c = await reclassifyCandidates(inc.candidates, i.terms, { pet: i.pet, kids: i.kids, toys: i.toys, baby: i.baby, words: await offNicheWords(), notOnNiche }, await poeTopFor(n));
     extra.incumbents = { ...inc, ...c, reclassifiedAt: now() };
     shape = c.shape;
   }

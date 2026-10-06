@@ -191,8 +191,10 @@ export interface IncumbentCandidate {
   rank: number | null; monthlySold: number | null; category: string | null;
   /** Keepa's root category (where Amazon files it). */
   rootCategory?: string | null;
-  /** The search term its title matched (on-niche products), and how: as a phrase, or its words within the window. */
-  matchedTerm?: string | null; matchedHow?: "phrase" | "words" | null;
+  /** The search term its title matched (on-niche products), and how: as a phrase, its words within the window, or POE's top clicked. */
+  matchedTerm?: string | null; matchedHow?: "phrase" | "words" | "poe" | null;
+  /** One of Opportunity Explorer's #1–#3 clicked products for a captured search term: on-niche by Amazon's own clicks. */
+  poe?: { term: string; rank: number } | null;
 }
 
 /**
@@ -210,6 +212,11 @@ export function classifyIncumbents(products: IncumbentCandidate[], terms: string
   for (const p of products) {
     if (mine.has(p.asin.toUpperCase())) {
       excluded.push({ ...p, why: MARKED_OUT });
+      continue;
+    }
+    // Amazon's own top clicked for the niche's search terms: on-niche whatever the title says.
+    if (p.poe) {
+      kept.push({ ...p, matchedTerm: p.poe.term, matchedHow: "poe" });
       continue;
     }
     if (offCats && p.category && offCats.has(p.category.trim().toLowerCase())) {

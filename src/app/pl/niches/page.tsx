@@ -34,7 +34,8 @@ interface Incumbents {
   term: string; terms?: string[]; finderTerms?: string[] | null; found: number; shape: string | null; tokensUsed: number; reused: number; checkedAt: string; rootCategories?: string[];
   outside?: boolean; onNicheCategories?: { name: string; count: number }[];
   onNiche?: number; excludedCount?: number; excluded?: { asin: string; title: string | null; why: string }[]; candidates?: string[]; finderAt?: string; reusedFinder?: boolean;
-  incumbents: { asin: string; title: string | null; brand: string | null; reviews: number | null; price: number | null; monthlySold?: number | null; rank?: number | null; category?: string | null; matchedTerm?: string | null; matchedHow?: "phrase" | "words" | null }[];
+  incumbents: { asin: string; title: string | null; brand: string | null; reviews: number | null; price: number | null; monthlySold?: number | null; rank?: number | null; category?: string | null; matchedTerm?: string | null; matchedHow?: "phrase" | "words" | "poe" | null; poe?: { term: string; rank: number } | null }[];
+  poeTop?: number;
 }
 
 const pct = (g: number | null | undefined, dp = 1) => (g == null ? "—" : `${g >= 0 ? "+" : ""}${(g * 100).toLocaleString("en-GB", { maximumFractionDigits: dp, minimumFractionDigits: dp })}%`);
@@ -358,12 +359,13 @@ function NicheDetail({ n, onChanged }: { n: NicheRow; onChanged: () => void }) {
   };
   const status = (s: string) => act(s, async () => { await api(`/api/pl/niches/${n.id}`, { method: "PATCH", json: { status: s } }); toast.success(s === "new" ? "Reset" : `${s[0].toUpperCase()}${s.slice(1)}`); });
   const check = (rerun: boolean) => act(rerun ? "rerun" : "check", async () => {
-    const plan = await api<{ term: string; terms: string[]; finderTerms: string[]; categories: string[]; estimate: number; fallback: number; balance: number | null; reserve: number; fits: boolean; blocked: string | null; reusing: boolean }>(`/api/pl/niches/${n.id}${rerun ? "?rerun=1" : ""}`);
+    const plan = await api<{ term: string; terms: string[]; finderTerms: string[]; categories: string[]; estimate: number; fallback: number; pinned: number; balance: number | null; reserve: number; fits: boolean; blocked: string | null; reusing: boolean }>(`/api/pl/niches/${n.id}${rerun ? "?rerun=1" : ""}`);
     if (plan.blocked) throw new Error(plan.blocked);
     const where = plan.categories.length ? ` in ${plan.categories.join(", ")}` : " (no Keepa category for this niche: all of Amazon)";
     const q = (t: string[]) => t.map((x) => `"${x}"`).join(", ");
     const how = plan.reusing ? `the last check's products again (no Product Finder call), re-detailing only those not detailed in the last 7 days` : `${plan.finderTerms.length} Product Finder page${plan.finderTerms.length === 1 ? "" : "s"} (${q(plan.finderTerms)})${where}, then the top 25 detailed (ASINs detailed in the last 7 days are reused)`;
-    if (!(await confirm({ title: `${rerun ? "Rerun" : "Check"} incumbents for "${plan.term}"?`, description: `Up to ${plan.estimate} Keepa tokens: ${how}.${plan.fallback ? ` If fewer than 5 products turn up in ${plan.categories.join(", ")}, the same search runs on all of Amazon (+${plan.fallback} tokens).` : ""} Only titles with one of ${q(plan.terms)} as a phrase and none of the off-niche words count; the 10 best sellers among them decide the shape. Balance ${plan.balance ?? "?"}, ${plan.reserve} kept in reserve${plan.fits ? "" : ": not enough now, wait for the refill"}.`, confirmLabel: plan.fits ? "Run the check" : "Close" }))) return;
+    const poe = plan.pinned ? ` Opportunity Explorer's ${plan.pinned} top-clicked product${plan.pinned === 1 ? "" : "s"} (#1–#3 for its captured search terms) are detailed first and counted on-niche.` : "";
+    if (!(await confirm({ title: `${rerun ? "Rerun" : "Check"} incumbents for "${plan.term}"?`, description: `Up to ${plan.estimate} Keepa tokens: ${how}.${poe}${plan.fallback ? ` If fewer than 5 products turn up in ${plan.categories.join(", ")}, the same search runs on all of Amazon (+${plan.fallback} tokens).` : ""} Only titles with one of ${q(plan.terms)} as a phrase and none of the off-niche words count; the 10 best sellers among them decide the shape. Balance ${plan.balance ?? "?"}, ${plan.reserve} kept in reserve${plan.fits ? "" : ": not enough now, wait for the refill"}.`, confirmLabel: plan.fits ? "Run the check" : "Close" }))) return;
     if (!plan.fits) return;
     const r = await api<Incumbents>(`/api/pl/niches/${n.id}`, { method: "POST", json: { action: rerun ? "rerun" : "check" } });
     toast.success(`"${r.term}": ${r.shape ?? "no on-niche sellers"} (${r.tokensUsed} token${r.tokensUsed === 1 ? "" : "s"})`);
@@ -423,7 +425,8 @@ function NicheDetail({ n, onChanged }: { n: NicheRow; onChanged: () => void }) {
                 <td className="num pr-2 text-right">{x.monthlySold != null ? `${x.monthlySold.toLocaleString("en-GB")}+/mo` : x.rank != null ? `#${x.rank.toLocaleString("en-GB")}` : "—"}</td>
                 <td className="num pr-2 text-right">{gbp(x.price)}</td>
                 <td className="pr-2 text-muted-foreground">{x.category ?? ""}</td>
-                <td className="whitespace-nowrap pr-2">{x.matchedTerm && <span className={cn("rounded-full px-1.5 py-px", x.matchedHow === "words" ? "border border-dashed" : "bg-muted")} title={x.matchedHow === "words" ? "Its title has every word of this search term within 4 words, in another order" : "Its title has this search term as a phrase"}>{x.matchedTerm}{x.matchedHow === "words" ? " (any order)" : ""}</span>}</td>
+                <td className="whitespace-nowrap pr-2">{x.poe ? <span className="rounded-full bg-brand-soft px-1.5 py-px font-semibold text-brand" title={`Opportunity Explorer's #${x.poe.rank} clicked product for “${x.poe.term}”: counted on-niche whatever its title says`}>POE top clicked #{x.poe.rank}</span>
+                  : x.matchedTerm && <span className={cn("rounded-full px-1.5 py-px", x.matchedHow === "words" ? "border border-dashed" : "bg-muted")} title={x.matchedHow === "words" ? "Its title has every word of this search term within 4 words, in another order" : "Its title has this search term as a phrase"}>{x.matchedTerm}{x.matchedHow === "words" ? " (any order)" : ""}</span>}</td>
                 <td className="pr-2 text-muted-foreground">{(x.title ?? "").slice(0, 80)}</td>
                 <td className="whitespace-nowrap"><button type="button" disabled={!!busy} className="text-[11px] text-muted-foreground hover:text-fail hover:underline disabled:opacity-50" title="Leave this product out of the shape, now and on every rerun" onClick={() => markOut(x.asin, true)}>Not on-niche</button></td>
               </tr>
