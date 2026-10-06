@@ -1,13 +1,16 @@
-// amazon.co.uk review pages (/product-reviews/<ASIN>): "Send reviews to Private label". Every review
-// page you open (or that Amazon loads in place) is read and kept here, per ASIN, so a capture builds
-// up as you click through pages; nothing is sent until you click. The app puts them into the Gate 4
-// dump of the candidate with that ASIN (you pick when several have it, or none).
+// amazon.co.uk reviews: "Send reviews to Private label". On the review pages (/portal/customer-reviews/
+// <ASIN>, /product-reviews/<ASIN>, /gp/customer-reviews/…, slugged or not) and on product pages that
+// show reviews (/dp/<ASIN>, /gp/product/<ASIN>), every review the page shows (or Amazon loads in place:
+// next page, a star filter, "show more") is read by reviews-parse.js and kept here, per ASIN, so a
+// capture builds up as you click through; nothing is sent until you click. The app puts them into the
+// Gate 4 dump of the candidate with that ASIN (you pick when several have it, or none).
 (() => {
-  const ws = globalThis.__ws;
-  if (!ws || globalThis.__wsReviews) return;
+  const ws = globalThis.__ws, R = globalThis.__wsReviewsParse;
+  if (!ws || !R || globalThis.__wsReviews) return;
   globalThis.__wsReviews = true;
 
-  const asinOf = () => location.pathname.match(/\/product-reviews\/([A-Z0-9]{10})(?:[/?]|$)/i)?.[1]?.toUpperCase() || null;
+  /** A product page (not a review page): the panel shows only when the page has reviews on it. */
+  const productPage = () => !/(product-reviews|customer-reviews)\//.test(location.pathname);
   const KEY = (asin) => `wsReviews:${asin}`;
   let panel = null;
   let status = null; // the line under the buttons, kept until the capture changes
@@ -19,36 +22,25 @@
     text, onclick,
   });
 
-  /** The reviews on the page now: stars, date, title, body, variant, helpful votes. */
-  function readPage() {
-    return [...document.querySelectorAll('[data-hook="review"]')].map((el) => {
-      const q = (h) => el.querySelector(`[data-hook="${h}"]`);
-      const starText = (q("review-star-rating") || q("cmps-review-star-rating") || el.querySelector("i[class*='a-star-']"))?.textContent || "";
-      const sm = starText.match(/([1-5])(?:[.,]\d)?\s+out of 5/);
-      const t = q("review-title");
-      let title = "";
-      if (t) {
-        const spans = [...t.querySelectorAll("span")].filter((s) => !s.children.length && !s.closest(".a-icon-alt") && !s.classList.contains("a-letter-space"));
-        title = spans.map((s) => s.textContent.trim()).filter(Boolean).pop() || t.textContent.replace(/[1-5](?:[.,]\d)?\s+out of 5 stars/i, "").trim();
-      }
-      const body = (q("review-body")?.innerText || "").replace(/\s*Read more\s*$/i, "").trim();
-      const ht = (q("helpful-vote-statement")?.textContent || "").trim();
-      const hm = ht.match(/([\d,]+)\s+people/i);
-      const helpful = hm ? Number(hm[1].replace(/,/g, "")) : /^one person/i.test(ht) ? 1 : null;
-      const variant = (q("format-strip")?.innerText || "").split(/\s*[\n|]\s*/).filter(Boolean).join(" | ") || null;
-      return { id: el.id || null, stars: sm ? Number(sm[1]) : null, date: q("review-date")?.textContent.trim() || null, title: title || null, body, variant, helpful };
-    }).filter((r) => r.body || r.title);
+  /** A short note at the bottom of the page: "Captured N reviews (X critical) for <ASIN>". */
+  let toastEl = null, toastTimer = null;
+  function toast(text, warn) {
+    if (toastEl) toastEl.remove();
+    toastEl = ws.h("div", { style: `position:fixed;left:50%;transform:translateX(-50%);bottom:24px;z-index:2147483001;background:${warn ? "#b45309" : "#111"};color:#fff;border-radius:8px;padding:8px 14px;font:13px/1.4 -apple-system,Segoe UI,sans-serif;box-shadow:0 6px 20px rgba(0,0,0,.25)`, text });
+    document.body.append(toastEl);
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { if (toastEl) { toastEl.remove(); toastEl = null; } }, 4500);
   }
 
   const load = async (asin) => (await chrome.storage.local.get(KEY(asin)))[KEY(asin)] || { asin, reviews: {}, pages: [], sentAt: null };
   const save = (asin, cap) => chrome.storage.local.set({ [KEY(asin)]: cap });
   const keyOf = (r) => r.id || `${r.stars}|${r.title}|${r.body.slice(0, 80)}`;
 
-  /** Add this page's reviews to the capture for its ASIN. */
+  let lastCount = -1;
+  /** Add this page's reviews to the capture for its ASIN (a product page without reviews: no panel). */
   async function capture() {
-    const asin = asinOf();
-    if (!asin) return;
-    const found = readPage();
+    const { asin, reviews: found } = R.parseAmazonReviews(document, location.href);
+    if (!asin || (productPage() && !found.length)) { if (panel && productPage()) { panel.remove(); panel = null; } return; }
     const cap = await load(asin);
     let added = 0;
     for (const r of found) { const k = keyOf(r); if (!cap.reviews[k]) added++; cap.reviews[k] = r; }
@@ -57,11 +49,15 @@
     if (added) status = null;
     await save(asin, cap);
     render(cap, found.length);
+    if (added) toast(`Captured ${found.length} review${found.length === 1 ? "" : "s"} (${found.filter((r) => r.stars != null && r.stars <= 3).length} critical) for ${asin}`);
+    else if (!found.length && lastCount !== 0) toast("No reviews found on this page — open the 'See all reviews' page and try again.", true);
+    lastCount = found.length;
   }
 
   function shell() {
     if (panel && document.body.contains(panel)) return panel;
-    panel = ws.h("div", { id: "wholesale-scout-reviews", style: "position:fixed;right:16px;bottom:16px;z-index:2147483000;width:340px;background:#fff;color:#111;border:2px solid #0b8ca0;border-radius:10px;padding:10px 12px;box-shadow:0 10px 30px rgba(0,0,0,.2);font:13px/1.4 -apple-system,Segoe UI,sans-serif;display:flex;flex-direction:column;gap:8px" });
+    // Bottom left on a product page, where the verdict panel is on the right.
+    panel = ws.h("div", { id: "wholesale-scout-reviews", style: `position:fixed;${productPage() ? "left" : "right"}:16px;bottom:16px;z-index:2147483000;width:340px;background:#fff;color:#111;border:2px solid #0b8ca0;border-radius:10px;padding:10px 12px;box-shadow:0 10px 30px rgba(0,0,0,.2);font:13px/1.4 -apple-system,Segoe UI,sans-serif;display:flex;flex-direction:column;gap:8px` });
     document.body.append(panel);
     return panel;
   }
@@ -136,6 +132,10 @@
   // Amazon loads the next page of reviews in place: read again when the list changes.
   let timer = null;
   const later = () => { clearTimeout(timer); timer = setTimeout(capture, 700); };
-  new MutationObserver((ms) => { if (ms.some((m) => !panel || !panel.contains(m.target))) later(); }).observe(document.body, { childList: true, subtree: true });
+  // Our own panel and toast don't count as the page changing.
+  const ours = (n) => n === panel || n === toastEl || (panel && panel.contains(n));
+  new MutationObserver((ms) => {
+    if (ms.some((m) => !ours(m.target) && ![...m.addedNodes, ...m.removedNodes].every(ours))) later();
+  }).observe(document.body, { childList: true, subtree: true });
   capture();
 })();

@@ -139,9 +139,9 @@ On Seller Central's **Product Opportunity Explorer**, the extension can send a n
 
 **Check ranks** in the popup records where an Ads product sits in amazon.co.uk's organic results for its tracked keywords (its exact keywords, its launch head terms, and any you add): one keyword every 3–6 seconds in a tab you can see, at most 30 a run, with a progress panel and **Stop**. It runs only when you click. See [Ads: rank checks](/help/howto/ads-rank-checks).
 
-## Review pages (0.4.0)
+## Review pages (0.4.0; every review address from 0.5.2)
 
-On an amazon.co.uk review page, a panel counts the reviews on each page you open; **Send reviews to Private label** puts them in a candidate's Gate 4. See [Private label: mining reviews](/help/howto/pl-mining-reviews).
+On an amazon.co.uk reviews page (where **See all reviews** goes) or a product page that shows reviews, a panel counts the reviews you've opened, by star; **Send reviews to Private label** puts them in a candidate's Gate 4. If the panel doesn't appear, click the extension's icon and **Capture reviews on this page**. See [Private label: mining reviews](/help/howto/pl-mining-reviews).
 
 ## Alibaba suppliers (0.5.0)
 

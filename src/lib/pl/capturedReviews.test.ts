@@ -17,6 +17,7 @@ describe("reviews captured by the extension", () => {
     expect(c[3]).toMatchObject({ stars: null, body: "No stars read on this one" });
     expect(c[3].id).toMatch(/^t:/);
     expect(starCounts(c)).toEqual({ 1: 1, 3: 1, 5: 1, "?": 1 });
+    expect(cleanCaptured([{ id: "R9ZZZZZZZZ", stars: 2, body: "x", verified: true, country: "United Kingdom" }])[0]).toMatchObject({ verified: true, country: "United Kingdom", helpful: null });
   });
 
   it("renders 1–3★ in Amazon's layout, which the miner splits back with stars, titles and bodies only", () => {

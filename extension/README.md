@@ -66,8 +66,9 @@ Seller Central's pages can't be read reliably, so the bar suggests hazmat / not 
 
 ## Reviews to Private label: per click
 
-- **Where**: any `amazon.co.uk/product-reviews/<ASIN>` page (Amazon's "See more reviews"; filter to critical reviews for Gate 4). A panel at the bottom right.
-- **What it reads**: each review on the page (`[data-hook="review"]`): star rating, the "Reviewed in … on …" date, title, body, variant ("Colour: … | Size: …") and helpful votes, with Amazon's review id. Every review page you open, or that Amazon loads in place, is added to the capture for that ASIN, kept in the extension's storage (`chrome.storage.local`) until you **Clear** it. The panel counts them by star.
+- **Where** (0.5.2): Amazon's review pages, whichever address they use: `/portal/customer-reviews/<ASIN>` (where "See all reviews" goes now), `/product-reviews/<ASIN>` and `/gp/customer-reviews/…`, with or without the product's name before them; and product pages (`/dp/<ASIN>`, `/<name>/dp/<ASIN>`, `/gp/product/<ASIN>`), where the panel shows only when the page has reviews on it (bottom left there, clear of the verdict panel). Before 0.5.2 only `/product-reviews/` matched, so the panel never appeared on `/portal/customer-reviews/` pages.
+- **What it reads**: `reviews-parse.js` reads each review (`[data-hook="review"]`, else `div[id^="customer_review-"]`): stars ("1.0 out of 5 stars"), title (the rating Amazon nests in it taken out), body, the "Reviewed in … on …" date and country, Verified Purchase, helpful votes and variant ("Colour Name: … | Number Of Items: …"), with Amazon's review id; each review once. The ASIN comes from the address, else the page's canonical link, else its ASIN field. Every selector is in `REVIEW_SELECTORS` at the top of that file. Every review page you open, or that Amazon loads in place (next page, a star filter, "show more": the panel watches the page and counts again a moment after it changes), is added to the capture for that ASIN, kept in `chrome.storage.local` until you **Clear** it. A note at the bottom says "Captured N reviews (X critical) for <ASIN>", or "No reviews found on this page — open the 'See all reviews' page and try again."
+- **When the panel doesn't show**: the popup's **Capture reviews on this page** runs the same parser on the tab you're on (`activeTab` + `scripting`), adds to the same capture and offers **Send** there, with the same candidate picker.
 - **Where it goes**: only when you click **Send reviews to Private label**: `POST /api/pl/reviews/capture` with `{ asin, reviews }` and your password. The app puts them in the Gate 4 reviews of the candidate with that ASIN among its page-one ASINs; with several (or none), the panel asks which. Sending again adds only new reviews (matched by review id). Reviews you pasted by hand for that ASIN aren't touched until you choose **Add to them** or **Replace them**.
 - **What Gate 4 mines**: the 1–3★ ones. 4–5★ reviews, and any whose stars couldn't be read (the panel counts them), are kept but left out of the miner.
 
@@ -95,8 +96,9 @@ The app allows the extension 60 checks and 120 other requests a minute from one 
 | `poe.js` | Opportunity Explorer panel: merges the niche page's responses, Send to Private label, the candidate picker, what was and wasn't read |
 | `alibaba-parse.js` | Alibaba results → supplier listings: the selectors (`ALIBABA_SELECTORS`) and the parser, also run by the app's tests |
 | `alibaba.js` | The Alibaba panel: Send suppliers to Private label, the candidate picker |
-| `reviews.js` | Review pages: reads each page's reviews into a capture per ASIN, Send reviews to Private label, the candidate picker |
-| `popup.html`, `popup.js` | Settings, the connection test, and Check ranks |
+| `reviews-parse.js` | Amazon reviews → structured reviews: the selectors (`REVIEW_SELECTORS`) and the parser, also run by the popup and the app's tests |
+| `reviews.js` | Review and product pages: the panel, the capture per ASIN, the page watcher, Send reviews to Private label, the candidate picker |
+| `popup.html`, `popup.js` | Settings, the connection test, Capture reviews on this page, and Check ranks |
 | `ranks.js` | Rank checks (background): the run, one keyword at a time, and posting the results |
 | `rankread.js` | Rank checks (in the search tab): reads the organic results and draws the progress panel |
 

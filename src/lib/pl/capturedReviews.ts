@@ -17,6 +17,9 @@ export interface CapturedReview {
   /** "Colour: Blue | Size: Large". */
   variant: string | null;
   helpful: number | null;
+  /** "Verified Purchase" shown, and the country it was reviewed in (0.5.2+). */
+  verified?: boolean | null;
+  country?: string | null;
 }
 
 /** At most this many kept per ASIN, and this much text each. */
@@ -39,7 +42,10 @@ export function cleanCaptured(input: unknown): CapturedReview[] {
     const s = Number(o.stars);
     const stars = Number.isFinite(s) && s >= 1 && s <= 5 ? Math.round(s) : null;
     const h = Number(o.helpful);
-    const r = { stars, date: str(o.date, 120), title, body, variant: str(o.variant, 200), helpful: Number.isFinite(h) && h >= 0 ? Math.round(h) : null };
+    const r = {
+      stars, date: str(o.date, 120), title, body, variant: str(o.variant, 200), helpful: o.helpful != null && Number.isFinite(h) && h >= 0 ? Math.round(h) : null,
+      verified: typeof o.verified === "boolean" ? o.verified : null, country: str(o.country, 60),
+    };
     const id = typeof o.id === "string" && /^[A-Za-z0-9_-]{6,40}$/.test(o.id) ? o.id : keyOf(r);
     out.push({ id, ...r });
   }

@@ -1,7 +1,7 @@
 # Wholesale Scout: status
 
 Read this first in a new session. Keep it current: every commit that changes a feature updates
-it (what's built, the backlog, the rough edges). Last updated: 6 Oct 2026 (Niches incumbent check: Opportunity Explorer's top-clicked ASINs detailed first and counted).
+it (what's built, the backlog, the rough edges). Last updated: 6 Oct 2026 (Extension 0.5.2: review capture on every review address and product pages, with a popup fallback).
 
 Wholesale Scout is a single-user Amazon UK seller's workbench: Next.js 16 (App Router, `proxy.ts`
 password gate), Supabase (Postgres, RLS on, service-role access from the server only), Vercel
