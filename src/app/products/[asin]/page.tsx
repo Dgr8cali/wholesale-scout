@@ -1,5 +1,6 @@
 "use client";
 
+import { VatTag, vatBasisOf } from "@/components/VatTag";
 import { ExternalLinkIcon } from "lucide-react";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
@@ -43,7 +44,7 @@ const DECISION: Record<Decision, { label: string; variant: "pass" | "warn" | "fa
 const CONFIDENCE = { high: "pass", medium: "warn", low: "fail" } as const;
 
 /** A figure with where it came from and how old it is. */
-function Figure({ label, value, source }: { label: string; value: ReactNode; source?: string | null }) {
+function Figure({ label, value, source }: { label: ReactNode; value: ReactNode; source?: string | null }) {
   return (
     <div className="min-w-0">
       <p className="eyebrow">{label}</p>
@@ -192,7 +193,7 @@ export default function ProductPage() {
         </div>
         {r && (
           <div className="grid grid-cols-2 gap-4 border-t pt-4 sm:grid-cols-4 lg:grid-cols-8">
-            <Figure label={r.landed_cost != null ? `Profit at ${gbp(r.landed_cost)}` : "Profit"} value={r.landed_cost != null ? gbp(r.profit) : "—"}
+            <Figure label={<>{r.landed_cost != null ? `Profit at ${gbp(r.landed_cost)}` : "Profit"} <VatTag registered={vatBasisOf(r.fees as { vatRegistered?: boolean; outputVat?: number | null } | null)} /></>} value={r.landed_cost != null ? gbp(r.profit) : "—"}
               source={r.roi != null ? `${pct(r.roi)} ROI · ${pct(r.margin)} margin` : "no cost"} />
             <Figure label="Max landed" value={gbp(v.maxLandedGbp)} source="clears the profile's floors" />
             <Figure label="Sells at" value={gbp(r.sell_price)} source={r.price_source} />
@@ -245,8 +246,17 @@ export default function ProductPage() {
                   {offerSort.rows.map((o) => {
                     const room = roomOf(o);
                     return (
-                      <TableRow key={o.id} data-verdict={room == null ? "empty" : room >= 0 ? "pass" : "fail"}>
-                        <TableCell>{o.supplier ? <Link className="font-medium text-brand hover:underline" href={`/suppliers/${o.supplier.id}`}>{o.supplier.name}</Link> : "—"}</TableCell>
+                      <TableRow key={o.id} data-verdict={room == null ? "empty" : room >= 0 ? "pass" : "fail"} className={cn(o.archived && "opacity-60")}>
+                        <TableCell>
+                          {o.supplier ? <Link className="font-medium text-brand hover:underline" href={`/suppliers/${o.supplier.id}`}>{o.supplier.name}</Link> : "—"}
+                          {o.archived && <span className="ml-1 rounded bg-surface-2 px-1 py-px text-[10px] text-muted-foreground" title="The Qogita UK account now prices this product: this EU offer is kept for history and left out of plans">archived</span>}
+                          {(o.stock != null || o.offerCount != null || o.preOrder || o.deliveryWeeks != null) && (
+                            <span className="block text-[11px] text-muted-foreground">
+                              {[o.stock != null ? `${o.stock.toLocaleString("en-GB")} in stock` : null, o.offerCount != null ? `${o.offerCount} offer${o.offerCount === 1 ? "" : "s"}` : null, o.preOrder ? "pre-order" : null, o.deliveryWeeks != null ? `${o.deliveryWeeks} wk delivery` : null].filter(Boolean).join(" · ")}
+                              {o.link && <> · <a className="text-brand hover:underline" href={o.link} target="_blank" rel="noreferrer">view</a></>}
+                            </span>
+                          )}
+                        </TableCell>
                         <TableCell className="num text-right">{o.costKnown ? gbp(o.unitCostGbp) : <span className="text-muted-foreground">no cost</span>}</TableCell>
                         <TableCell className="num text-right">{gbp(o.landedGbp)}</TableCell>
                         <TableCell className={cn("num text-right", room != null && (room >= 0 ? "text-pass" : "text-fail"))}>{room == null ? "—" : `${room >= 0 ? "" : "-"}£${Math.abs(room).toFixed(2)}`}</TableCell>

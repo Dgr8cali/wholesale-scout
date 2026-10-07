@@ -3,10 +3,11 @@
 import { useSearchParams } from "next/navigation";
 import { IpRiskTab } from "@/components/settings/IpRiskTab";
 import { CategoryRanks } from "@/components/settings/CategoryRanks";
+import { BusinessSettingsTab } from "@/components/settings/BusinessSettingsTab";
 import { PlSettingsTab } from "@/components/settings/PlSettingsTab";
 import { AdsSettingsTab } from "@/components/settings/AdsSettingsTab";
 import { StockSettingsTab } from "@/components/settings/StockSettingsTab";
-import { BoxesIcon, FilterIcon, GaugeIcon, MegaphoneIcon, ReceiptIcon, ShieldAlertIcon, ShieldCheckIcon, SlidersHorizontalIcon, TagIcon, Trash2Icon, UndoIcon } from "lucide-react";
+import { BoxesIcon, BuildingIcon, FilterIcon, GaugeIcon, MegaphoneIcon, ReceiptIcon, ShieldAlertIcon, ShieldCheckIcon, SlidersHorizontalIcon, TagIcon, Trash2Icon, UndoIcon } from "lucide-react";
 import { Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { activeChips, normalizeFilters, type FilterSet } from "@/lib/filters";
 import type { RateCard } from "@/lib/fees/rateCard";
@@ -84,7 +85,8 @@ function ModeSelect({ value, onChange, allowOff = true }: { value: GateMode; onC
 }
 
 type ProfileTab = "gates" | "score" | "fees" | "profiles";
-const TABS: { id: ProfileTab | "waived" | "filters" | "ip" | "pl" | "ads" | "stock"; label: string; icon: ReactNode }[] = [
+const TABS: { id: ProfileTab | "business" | "waived" | "filters" | "ip" | "pl" | "ads" | "stock"; label: string; icon: ReactNode }[] = [
+  { id: "business", label: "Business", icon: <BuildingIcon /> },
   { id: "gates", label: "Gates", icon: <ShieldCheckIcon /> },
   { id: "score", label: "Score", icon: <GaugeIcon /> },
   { id: "fees", label: "Fees", icon: <ReceiptIcon /> },
@@ -141,6 +143,7 @@ function Settings() {
         <TabsContent value="score" className="space-y-5">{editor.ready ? <ScoreTab editor={editor} /> : editor.error ? <LoadError message={editor.error} /> : <LoadingBlocks />}</TabsContent>
         <TabsContent value="fees" className="space-y-5">{editor.ready ? <FeesTab editor={editor} /> : editor.error ? <LoadError message={editor.error} /> : <LoadingBlocks />}</TabsContent>
         <TabsContent value="profiles" className="space-y-5">{editor.ready ? <ProfilesTab editor={editor} /> : editor.error ? <LoadError message={editor.error} /> : <LoadingBlocks />}</TabsContent>
+        <TabsContent value="business"><BusinessSettingsTab /></TabsContent>
         <TabsContent value="waived"><Waived /></TabsContent>
         <TabsContent value="ip"><IpRiskTab /></TabsContent>
         <TabsContent value="filters"><FilterSets /></TabsContent>
@@ -415,12 +418,12 @@ function FeesTab({ editor: e }: { editor: Editor }) {
   return (
     <>
       <Section title="Fees and landed cost" note="How this profile turns a supplier price into a landed cost and Amazon's fees into profit.">
-        <label className="flex items-center gap-2 text-sm">
-          <Switch checked={draft.fees.vatRegistered} onCheckedChange={(on) => setDraft({ ...draft, fees: { ...draft.fees, vatRegistered: on } })} />
-          VAT registered (reclaim VAT on fees and stock; pay output VAT on sales)
-        </label>
+        <p className="flex flex-wrap items-center gap-2 text-sm">
+          <span className={cn("rounded px-1.5 py-px text-[11px] font-semibold", draft.fees.vatRegistered ? "bg-brand-soft text-brand" : "bg-surface-2 text-ink-2")}>{draft.fees.vatRegistered ? "VAT reg." : "Non-VAT"}</span>
+          {draft.fees.vatRegistered ? `VAT registered at ${draft.fees.vatRatePct}%: output VAT comes off the sale price; fees and goods count ex-VAT.` : `Not VAT registered: VAT on fees and goods is a cost (${draft.fees.vatRatePct}%).`}
+          <a className="text-brand underline" href="/settings?tab=business">Set in Settings → Business</a>
+        </p>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <NumberField label="VAT rate" unit="%" value={draft.fees.vatRatePct} onChange={(n) => setDraft({ ...draft, fees: { ...draft.fees, vatRatePct: n } })} />
           <NumberField label="Digital services fee" unit="%" value={draft.fees.dsfPct} step={0.1} onChange={(n) => setDraft({ ...draft, fees: { ...draft.fees, dsfPct: n } })} />
           <NumberField label="Inbound to FBA" unit="£/unit" value={draft.fees.inboundPerUnit} step={0.05} onChange={(n) => setDraft({ ...draft, fees: { ...draft.fees, inboundPerUnit: n } })} />
           <NumberField label="Prep, bag and label" unit="£/unit" value={draft.fees.prepPerUnit} step={0.05} onChange={(n) => setDraft({ ...draft, fees: { ...draft.fees, prepPerUnit: n } })} />

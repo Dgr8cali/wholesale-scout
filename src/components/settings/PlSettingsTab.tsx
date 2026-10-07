@@ -45,8 +45,8 @@ export function PlSettingsTab() {
         {SETTINGS_DEF.map((d) => (
           <label key={d.k} className="space-y-1.5">
             <span className="field-label">{d.label} ({d.unit})</span>
-            <Input className="num" type="number" step="any" value={s[d.k]} onChange={(e) => setS({ ...s, [d.k]: e.target.value })} />
-            <span className="block text-2xs text-muted-foreground">Default {d.d}</span>
+            <Input className="num" type="number" step="any" value={s[d.k]} disabled={d.k === "vat"} onChange={(e) => setS({ ...s, [d.k]: e.target.value })} />
+            <span className="block text-2xs text-muted-foreground">{d.k === "vat" ? <>Set in <a className="text-brand underline" href="/settings?tab=business">Settings → Business</a>, with VAT registration</> : `Default ${d.d}`}</span>
           </label>
         ))}
       </div>

@@ -96,7 +96,15 @@ export async function loadProfile(id?: string | null): Promise<{ id: string; nam
   const res = id ? await q.eq("id", id).maybeSingle() : await q.eq("is_default", true).maybeSingle();
   let row = must(res, "profile") as { id: string; name: string; config: ProfileConfig } | null;
   if (!row) row = must(await db().from("profiles").select("id, name, config, updated_at").limit(1).single(), "profile");
-  return { ...row, config: withDefaults(row.config) };
+  const config = withDefaults(row.config);
+  // The business's VAT basis (Settings → Business) wins over what the profile last saved.
+  const biz = await db().from("business_settings").select("key, value").in("key", ["vatRegistered", "vatRate"]);
+  if (!biz.error) {
+    const m = Object.fromEntries((biz.data as { key: string; value: unknown }[]).map((r) => [r.key, r.value]));
+    if (typeof m.vatRegistered === "boolean") config.fees = { ...config.fees, vatRegistered: m.vatRegistered };
+    if (typeof m.vatRate === "number") config.fees = { ...config.fees, vatRatePct: m.vatRate };
+  }
+  return { ...row, config };
 }
 
 /** Split a list into chunks — PostgREST URLs get long with big `in` filters. */

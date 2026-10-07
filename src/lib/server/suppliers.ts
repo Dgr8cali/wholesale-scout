@@ -246,8 +246,9 @@ export async function updateSupplier(id: string, patch: Record<string, unknown>)
  */
 async function prefillQogita(): Promise<void> {
   const d = db();
-  const q = must(await d.from("suppliers").select("id, delivery_days").eq("source_type", "qogita").maybeSingle(), "qogita supplier") as { id: string; delivery_days: number | null } | null;
-  if (!q || q.delivery_days != null) return;
+  // Either Qogita account (UK, EU): the first without a delivery time gets it.
+  const q = (must(await d.from("suppliers").select("id, delivery_days").eq("source_type", "qogita"), "qogita suppliers") as { id: string; delivery_days: number | null }[]).find((x) => x.delivery_days == null);
+  if (!q) return;
   const rows = must(await d.from("results").select("q:inputs->qogita->offers").not("inputs->qogita->offers", "is", null).limit(500), "qogita offers") as { q: { deliveryWeeks?: number | null }[] | null }[];
   const weeks = rows.flatMap((r) => (r.q ?? []).map((o) => o.deliveryWeeks)).filter((w): w is number => typeof w === "number" && w > 0).sort((a, b) => a - b);
   if (!weeks.length) return;

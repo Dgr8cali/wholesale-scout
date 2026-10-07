@@ -16,7 +16,7 @@ export interface Result {
   fees: {
     source: string; referralCategory: string; referralPct: number; referral: number | null; fba: number | null;
     storage: number | null; returns: number | null; total: number | null; tier: string | null; fbaSource: string;
-    dimsEstimated: boolean; outputVat: number | null; dimsSource?: "catalog" | "keepa" | null;
+    dimsEstimated: boolean; outputVat: number | null; vatRegistered?: boolean; inputVat?: number | null; vatPayable?: number | null; dimsSource?: "catalog" | "keepa" | null;
     compare?: {
       amazon: { referral: number | null; fba: number | null } | null;
       keepa: { referral: number | null; fba: number | null } | null;

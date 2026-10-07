@@ -9,3 +9,6 @@ export function median(xs: number[]): number | null {
   const m = s.length >> 1;
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
 }
+
+/** "£", "€", "$" for GBP, EUR, USD; else the code and a space ("PLN "). */
+export const currencySymbol = (c: string | null | undefined) => (c === "GBP" ? "£" : c === "EUR" ? "€" : c === "USD" ? "$" : c ? `${c} ` : "");

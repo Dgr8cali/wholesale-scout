@@ -33,7 +33,7 @@ interface Filters {
   skipScreenedDays?: number | null;
 }
 interface Estimate { matching: number; products: number; reused: number; amazonMinutes: number; keepaTokens: number }
-interface PullStats { fetched: number; kept: number; screened: number; outsidePrice: number; tooSlow: number; unknownDelivery: number; truncated: boolean; currency: string; new?: number; moved?: number; unchanged?: number }
+interface PullStats { fetched: number; kept: number; screened: number; outsidePrice: number; tooSlow: number; unknownDelivery: number; truncated: boolean; currency: string; new?: number; moved?: number; unchanged?: number; region?: "UK" | "EU" | null; regionWarning?: string }
 interface Preset {
   id: string; name: string; filters: Filters; profile_id: string | null; nightly: boolean; last_pulled_at: string | null;
   lastPull: { run_id: string | null; kind: string; stats: PullStats; error: string | null; started_at: string } | null;
@@ -77,6 +77,9 @@ export default function QogitaPage() {
   const [presetNote, setPresetNote] = useState<string | null>(null);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [profileId, setProfileId] = useState("");
+  // The account's currency, from Settings → Business's Qogita region: prices and MOVs are in it.
+  const [cur, setCur] = useState("£");
+  useEffect(() => { api<{ qogitaRegion: "UK" | "EU" }>("/api/business").then((b) => setCur(b.qogitaRegion === "EU" ? "€" : "£")).catch(() => {}); }, []);
   const [filters, setFilters] = useState<Filters>(EMPTY);
   const [name, setName] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
@@ -141,6 +144,7 @@ export default function QogitaPage() {
         return;
       }
       const reused = (s as PullStats & { reused?: number }).reused;
+      if (s.regionWarning) toast.warning(s.regionWarning, { duration: 15_000 });
       toast.success(`Pulled ${s.kept.toLocaleString("en-GB")} products${dropped ? `; ${dropped}` : ""}${s.truncated ? "; stopped at Max products" : ""}${reused ? `; ${reused} reused from the last ${filters.skipScreenedDays ?? 7} days` : ""}. Screening now.`);
       router.push(`/runs/${r.runId}`);
     } catch (e) {
@@ -192,11 +196,11 @@ export default function QogitaPage() {
               <Label className="field-label" htmlFor="brand">Brands</Label>
               <BrandInput value={filters.brands} onChange={(brands) => set({ brands })} />
             </div>
-            <NumberField id="minPrice" label="Min price (€ per piece)" value={filters.minPrice} onChange={(minPrice) => set({ minPrice })} />
-            <NumberField id="maxPrice" label="Max price (€ per piece)" value={filters.maxPrice} onChange={(maxPrice) => set({ maxPrice })} />
+            <NumberField id="minPrice" label={`Min price (${cur} per piece)`} value={filters.minPrice} onChange={(minPrice) => set({ minPrice })} />
+            <NumberField id="maxPrice" label={`Max price (${cur} per piece)`} value={filters.maxPrice} onChange={(maxPrice) => set({ maxPrice })} />
             <NumberField id="maxDeliveryWeeks" label="Max delivery (weeks)" value={filters.maxDeliveryWeeks} step={1} onChange={(maxDeliveryWeeks) => set({ maxDeliveryWeeks })}
               hint="Products with no estimate are kept." />
-            <NumberField id="movLimit" label="MOV limit (€)" value={filters.movLimit} step={50} onChange={(movLimit) => set({ movLimit })}
+            <NumberField id="movLimit" label={`MOV limit (${cur})`} value={filters.movLimit} step={50} onChange={(movLimit) => set({ movLimit })}
               hint="Applied to the supplier offers of rows that pass." />
             <NumberField id="maxProducts" label="Max products" value={filters.maxProducts ?? 500} step={50} onChange={(maxProducts) => set({ maxProducts })}
               hint="The pull stops here." />
@@ -206,7 +210,7 @@ export default function QogitaPage() {
           <div className="grid gap-4 border-t pt-5 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label className="field-label" htmlFor="name">Save as</Label>
-              <Input id="name" placeholder="e.g. K-beauty masks under €10" value={name} onChange={(e) => setName(e.target.value)} />
+              <Input id="name" placeholder={`e.g. K-beauty masks under ${cur}10`} value={name} onChange={(e) => setName(e.target.value)} />
             </div>
             <div className="space-y-1.5">
               <Label className="field-label" htmlFor="profile">Profile</Label>
@@ -249,7 +253,7 @@ export default function QogitaPage() {
                 <div className="flex items-start gap-2">
                   <button className="min-w-0 flex-1 text-left" onClick={() => { setFilters({ ...EMPTY, ...p.filters }); setName(p.name); if (p.profile_id) setProfileId(p.profile_id); }} title="Load these filters">
                     <p className="truncate font-medium hover:underline">{p.name}</p>
-                    <p className="text-xs text-muted-foreground">{describeFilters(p.filters).join(" · ")}</p>
+                    <p className="text-xs text-muted-foreground">{describeFilters(p.filters, cur).join(" · ")}</p>
                   </button>
                   <Button variant="ghost" size="icon-xs" className="text-muted-foreground hover:text-fail" aria-label={`Delete ${p.name}`}
                     onClick={async () => {

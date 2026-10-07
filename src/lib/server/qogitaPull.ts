@@ -4,9 +4,10 @@ import { getQogita, type QogitaCategory, type QogitaClient, type QogitaProduct }
 import { chunks, db, must, schemaMissing, selectAll } from "./db";
 import { finishFromStored } from "./process";
 import { gbpRate } from "./fx";
+import { businessSettings } from "./business";
 import { ingest } from "./ingest";
 
-/** A pull's filters, as saved on a preset. Prices in the account currency (EUR here). */
+/** A pull's filters, as saved on a preset. Prices in the account currency (GBP on the UK account, EUR on the EU one). */
 export interface QogitaFilters {
   /** A category at any level; a parent pulls every category under it. */
   category: { name: string; path: string[] } | null;
@@ -120,14 +121,31 @@ const MAPPING: ColumnMapping = {
   pricePer: "unit",
 };
 
+/** The account's region from its prices' currency: £ UK, € EU. */
+export const regionOf = (currency: string): "UK" | "EU" | null => (currency === "GBP" ? "UK" : currency === "EUR" ? "EU" : null);
+/** The supplier a Qogita account's offers go under. */
+export const qogitaSupplierName = (currency: string) => `Qogita ${regionOf(currency) ?? currency}`;
+/** The region the prices say, and a warning when Settings → Business expects the other. */
+export function regionCheck(currency: string, expected: "UK" | "EU"): { region: "UK" | "EU" | null; regionWarning?: string } {
+  const region = regionOf(currency);
+  if (region === expected) return { region };
+  return { region, regionWarning: `Qogita priced this in ${currency}, but Settings → Business says the account is ${expected} (${expected === "UK" ? "GBP" : "EUR"}). Check QOGITA_EMAIL / QOGITA_PASSWORD are the ${expected} login, or change the region.` };
+}
+
 /** Qogita products as the rows an uploaded sheet would give, through the same column mapper. */
 function productsToRows(products: QogitaProduct[], currency: string, fx: { rate: number; date: string }) {
   const sheet: Cell[][] = [HEADERS, ...products.map((p) => [
     p.gtin, p.name, p.brand, p.category, p.price?.amount ?? null, p.unit ?? 1, p.inventory ?? null, p.estimatedDeliveryTime ?? null, p.productUrl,
   ] as Cell[])];
   const { rows, rejected } = applyMapping(sheet, MAPPING, { vatBasis: "ex_vat", vatRate: 20, currency }, fx);
-  const links = new Map(products.map((p) => [p.gtin, p.productUrl]));
-  return { rows: rows.map((r) => ({ ...r, externalRef: links.get(r.ean) ?? null })), rejected };
+  const byGtin = new Map(products.map((p) => [p.gtin, p]));
+  return {
+    rows: rows.map((r) => {
+      const p = byGtin.get(r.ean);
+      return { ...r, externalRef: p?.productUrl ?? null, offerCount: p?.offerCount ?? null, preOrder: p?.isPreOrder ?? null, deliveryWeeks: p?.estimatedDeliveryTime ?? null };
+    }),
+    rejected,
+  };
 }
 
 /**
@@ -238,7 +256,9 @@ async function recentRates(): Promise<{ perMinute: number; tokensPerRow: number 
 export interface PullResult {
   runId: string | null;
   presetId: string | null;
-  stats: { fetched: number; kept: number; screened: number; outsidePrice: number; tooSlow: number; unknownDelivery: number; truncated: boolean; currency: string; unchanged?: number; new?: number; moved?: number; reused?: number };
+  stats: { fetched: number; kept: number; screened: number; outsidePrice: number; tooSlow: number; unknownDelivery: number; truncated: boolean; currency: string; unchanged?: number; new?: number; moved?: number; reused?: number;
+    /** The account's region (from the prices' currency), and a note when it isn't Settings → Business's. */
+    region?: "UK" | "EU" | null; regionWarning?: string };
   note?: string;
 }
 
@@ -285,6 +305,7 @@ export async function runQogitaPull(opts: {
   const stats: PullResult["stats"] = {
     fetched: pull.fetched, kept: pull.products.length, screened: chosen.length, outsidePrice: pull.outsidePrice, tooSlow: pull.tooSlow,
     unknownDelivery: pull.unknownDelivery, truncated: pull.truncated, currency: pull.currency,
+    ...regionCheck(pull.currency, (await businessSettings()).qogitaRegion),
     ...(opts.onlyChanged ? { new: pull.products.filter((p) => isNew(p.gtin)).length, moved: pull.products.filter((p) => moved(p.gtin)).length, unchanged: pull.products.length - chosen.length } : {}),
   };
 
@@ -301,7 +322,8 @@ export async function runQogitaPull(opts: {
       name: `${label} · ${day}${opts.kind === "nightly" ? " (nightly)" : ""}`,
       files: [{
         fileName: label,
-        supplier: { name: "Qogita", vatBasis: "ex_vat", vatRate: 20, currency: pull.currency },
+        // One supplier per account: Qogita UK (GBP, ex-VAT, shipping included) or Qogita EU (EUR).
+        supplier: { name: qogitaSupplierName(pull.currency), vatBasis: "ex_vat", vatRate: 20, currency: pull.currency, region: regionOf(pull.currency) },
         sourceType: "qogita",
         headers: HEADERS,
         fingerprint: headerFingerprint(HEADERS),

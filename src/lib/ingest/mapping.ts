@@ -65,6 +65,10 @@ export interface NormalizedRow {
   productId?: string;
   /** ASIN check with no cost given: unitCost is 0 and the fee gates are skipped. */
   costKnown?: boolean;
+  /** Qogita: how many sellers offer it, pre-order, and the estimated delivery (weeks). */
+  offerCount?: number | null;
+  preOrder?: boolean | null;
+  deliveryWeeks?: number | null;
 }
 
 export interface RejectedRow {

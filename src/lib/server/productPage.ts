@@ -18,6 +18,10 @@ type Row = Record<string, unknown>;
 export interface ProductOffer {
   id: string; supplier: { id: string; name: string } | null; unitCostGbp: number | null; costKnown: boolean;
   landedGbp: number | null; moq: number | null; packUnits: number | null; stock: number | null; seenAt: string; title: string | null; sourceRef: string | null;
+  /** A Qogita EU offer the UK account now prices: kept, left out of plans and picks. */
+  archived?: boolean;
+  /** Qogita: sellers offering it, pre-order, estimated delivery (weeks), the product link. */
+  offerCount?: number | null; preOrder?: boolean | null; deliveryWeeks?: number | null; link?: string | null;
 }
 
 export interface ProductView {
@@ -59,7 +63,7 @@ export async function productView(asin: string): Promise<ProductView | null> {
   const [snap, offers, profile, approvals, documents, favs, overrides] = await Promise.all([
     d.from("keepa_snapshots").select("fetched_at, rank_series, buybox_series, offer_count_series, amazon_series").eq("asin", asin).order("fetched_at", { ascending: false }).limit(1)
       .then((r) => (must(r, "snapshot") as Row[])[0] ?? null),
-    d.from("offers").select("id, unit_cost_gbp, cost_known, moq, pack_units, stock, seen_at, title, source_ref, supplier:suppliers(id, name, vat_rate)").in("product_id", ids).order("seen_at", { ascending: false }).limit(200)
+    d.from("offers").select("id, unit_cost_gbp, cost_known, moq, pack_units, stock, seen_at, title, source_ref, archived_at, offer_count, pre_order, delivery_weeks, external_ref, supplier:suppliers(id, name, vat_rate)").in("product_id", ids).order("seen_at", { ascending: false }).limit(200)
       .then((r) => must(r, "offers") as Row[]),
     loadProfile(null),
     brand ? d.from("brand_approvals").select("status, requirement, status_date").eq("brand_key", brandKey(brand)).maybeSingle().then((r) => must(r, "approval") as ProductView["approval"]) : Promise.resolve(null),
@@ -82,8 +86,11 @@ export async function productView(asin: string): Promise<ProductView | null> {
       id: o.id as string, supplier: s ? { id: s.id, name: s.name } : null, unitCostGbp: known ? cost : null, costKnown: known,
       landedGbp: known ? Math.round(landedCost(cost!, { goodsVatRatePct: num(s?.vat_rate) ?? 20 }, profile.config.fees).total * 100) / 100 : null,
       moq: num(o.moq), packUnits: num(o.pack_units), stock: num(o.stock), seenAt: o.seen_at as string, title: (o.title as string) ?? null, sourceRef: (o.source_ref as string) ?? null,
+      archived: !!o.archived_at, offerCount: num(o.offer_count), preOrder: (o.pre_order as boolean | null) ?? null, deliveryWeeks: num(o.delivery_weeks),
+      link: typeof o.external_ref === "string" && /^https?:/.test(o.external_ref) ? o.external_ref : null,
     };
-  }).sort((a, b) => (a.landedGbp ?? Infinity) - (b.landedGbp ?? Infinity));
+  // Archived (a Qogita EU offer the UK account now prices) last.
+  }).sort((a, b) => Number(a.archived) - Number(b.archived) || (a.landedGbp ?? Infinity) - (b.landedGbp ?? Infinity));
 
   const inputs = (latest?.inputs ?? null) as { market?: JudgeInput["market"] & Record<string, unknown>; maxLandedGbp?: number | null; amazonFees?: FeeOptions["amazon"] } | null;
   // The most a unit can cost landed at the latest sell price and still clear the default

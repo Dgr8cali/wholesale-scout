@@ -14,6 +14,7 @@ import { brandShare } from "../screening/distributor";
 import { isDormant } from "../screening/dormant";
 import { getQogita, variantFid } from "../qogita/client";
 import { chooseOffer, toSupplierOffer, type QogitaOffers, type SupplierOffer } from "../qogita/offers";
+import { gbpRate } from "./fx";
 import { GATE_ORDER, withDefaults, type GateId, type ProfileConfig } from "../screening/config";
 import { effectiveMoq, packNote, resolveScoringPrice, runGates, verdictOf, type GateRun, type MarketData, type ScreenContext, type SellerView } from "../screening/gates";
 import { listingPack, supplierPack, type PackAttrs } from "../screening/pack";
@@ -87,6 +88,9 @@ interface Offer {
 interface Supplier {
   id: string;
   name: string;
+  /** "qogita" for either Qogita account (UK, EU); the region says which. */
+  source_type?: string | null;
+  region?: "UK" | "EU" | null;
   vat_rate: number;
   mov: number | null;
   delivery_days: number | null;
@@ -382,6 +386,10 @@ function resultFields(row: Row, run: GateRun, cfg: ProfileConfig, ctx: ScreenCon
         dimsEstimated: e.fees.dimsEstimated,
         dimsSource: ctx.product.dimsSource ?? null,
         outputVat: r2(e.outputVat),
+        // The VAT basis these figures are on, and (registered) what goes to HMRC per unit.
+        vatRegistered: e.vatRegistered,
+        inputVat: e.inputVat,
+        vatPayable: e.vatPayable,
         compare: feeComparison(e.price, ctx, cfg),
       } : null,
       sell_price: r2(run.scoringPrice),
@@ -1573,7 +1581,8 @@ async function stageKeepa(rows: Row[], env: StageEnv): Promise<StageOut & { defe
 }
 
 /** Stage 3: your account — gating in parallel, Amazon's fees 20 at a time, sellers, verdict. */
-const isQogita = (row: Row) => row.supplier.name === "Qogita";
+// Either Qogita account: "Qogita UK", "Qogita EU" (and "Qogita", its name before the UK account).
+const isQogita = (row: Row) => row.supplier.source_type === "qogita" || /^Qogita\b/.test(row.supplier.name);
 
 /** The chosen offer and why, for the stored inputs (the expanded row highlights it). */
 function pick(q: QogitaOffers, cfg: ProfileConfig): Pick<QogitaOffers, "chosen" | "reason"> {
@@ -1610,8 +1619,13 @@ async function attachQogitaOffers(rows: Row[], env: StageEnv): Promise<void> {
       if (!fid) throw new Error("no Qogita product for this EAN");
       const raw = await q.variantOffers(fid, { maxMov: limits.movLimit, maxWeeks: limits.maxWeeks });
       const offers = raw.offers.map(toSupplierOffer).filter((o): o is SupplierOffer => !!o);
+      // The account's currency, from the offers themselves (GBP on the UK account: no conversion).
+      const stored = String(row.offer.currency ?? "EUR").trim();
+      const currency = raw.offers.flatMap((o) => o.tieredPrices ?? []).find((t) => t.tierPrice?.currency)?.tierPrice.currency ?? stored;
+      const fxRate = currency === "GBP" ? 1 : currency === stored ? Number(row.offer.fx_rate) : (await gbpRate(currency))?.rate;
+      if (!fxRate) throw new Error(`no ${currency} → GBP rate`);
       const base: QogitaOffers = {
-        fid, currency: String(row.offer.currency ?? "EUR"), fxRate: Number(row.offer.fx_rate), fetchedAt: new Date().toISOString(),
+        fid, currency, fxRate, fetchedAt: new Date().toISOString(),
         movLimit: limits.movLimit, offers, chosen: null, reason: "", excluded: raw.excluded,
       };
       row.qogita = { ...base, ...pick(base, env.cfg) };

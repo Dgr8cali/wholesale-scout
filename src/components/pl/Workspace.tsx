@@ -19,6 +19,7 @@ import { budget, econ, evaluate, money, pct, referralOptions, type Evaluation, t
 import { api } from "@/lib/ui/client";
 import { ago } from "@/lib/ui/when";
 import { TERM_SIGNAL_LABEL } from "@/lib/pl/termConversion";
+import { VatTag } from "@/components/VatTag";
 import { targetExworks } from "@/lib/pl/supplierScore";
 import { cn } from "@/lib/utils";
 import { Readout, SourceChip, StatusPill } from "./bits";
@@ -608,15 +609,22 @@ function GateExtras({ g, data, fields, settings, card, onSave, onAsinsChanged }:
         <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
           <Readout label="FBA size tier" value={<span className="flex flex-wrap items-center gap-1.5 font-sans text-sm font-semibold">{tierLine}
             {e.fbaSource === "low-price" && <span className="rounded-full bg-pass-soft px-1.5 py-px text-[10px] font-semibold text-pass uppercase" title={`Amazon's Low-Price FBA rate: the sell price is £${e.lowThreshold} or less in this category`}>low-price rate</span>}</span>} sub={`${dimNote}${srcNote}`} />
-          <Readout label="FBA fee" value={e.fbaV == null ? "—" : money(e.fbaV)} sub={e.fbaBase == null ? "enter dimensions and weight in Gate 0" : `${money(e.fbaBase)} + VAT + DSF${e.fbaSource === "peak" ? " (peak)" : e.fbaSource === "low-price" ? " (low-price rate)" : ""}`} />
-          <Readout label="Referral fee" value={money(e.referral)} sub={`${e.pct}% of ${money(e.sell)} + VAT + DSF`} />
-          <Readout label="Storage" value={money(e.storage)} sub={e.storage == null ? "enter dimensions in Gate 0" : `${money(e.storageBase)} (${S.storageMonths} mo × £${e.peak ? card.storage.peakPerCuFt : card.storage.standardPerCuFt}/cu ft${e.peak ? ", peak" : ""}) + VAT + DSF`} />
+          <Readout label="FBA fee" value={e.fbaV == null ? "—" : money(e.fbaV)} sub={e.fbaBase == null ? "enter dimensions and weight in Gate 0" : `${money(e.fbaBase)} + ${e.vatRegistered ? "" : "VAT + "}DSF${e.fbaSource === "peak" ? " (peak)" : e.fbaSource === "low-price" ? " (low-price rate)" : ""}`} />
+          <Readout label="Referral fee" value={money(e.referral)} sub={`${e.pct}% of ${money(e.sell)} + ${e.vatRegistered ? "" : "VAT + "}DSF`} />
+          <Readout label="Storage" value={money(e.storage)} sub={e.storage == null ? "enter dimensions in Gate 0" : `${money(e.storageBase)} (${S.storageMonths} mo × £${e.peak ? card.storage.peakPerCuFt : card.storage.standardPerCuFt}/cu ft${e.peak ? ", peak" : ""}) + ${e.vatRegistered ? "" : "VAT + "}DSF`} />
           <Readout label="Inbound, prep, returns" value={money(e.inbound + e.prep + e.returns)} sub={`${money(e.inbound)} + ${money(e.prep)} + ${S.returnsPct}% returns`} />
           <Readout label="Amazon's total take" value={money(e.amazonTake)} sub={e.amazonTake == null ? "" : `${((e.amazonTake / e.sell) * 100).toFixed(1)}% of price`} />
           <Readout label="Multiple" value={e.multiple == null ? "—" : `${e.multiple.toFixed(2)}×`} sub="sell ÷ landed" tone={cls(e.multiple, S.minMultiple, 3)} />
-          <Readout label="Profit, launch" value={money(e.pL)} sub={`${pct(e.mL)} margin, ads in`} tone={cls(e.mL, S.minLaunchMargin, S.minLaunchMargin - 5)} />
-          <Readout label="Profit, steady" value={money(e.pS)} sub={`${pct(e.mS)} margin`} tone={cls(e.mS, S.minSteadyMargin, S.minSteadyMargin - 5)} />
+          <Readout label={<>Profit, launch <VatTag registered={e.vatRegistered} /></>} value={money(e.pL)} sub={`${pct(e.mL)} margin, ads in`} tone={cls(e.mL, S.minLaunchMargin, S.minLaunchMargin - 5)} />
+          <Readout label={<>Profit, steady <VatTag registered={e.vatRegistered} /></>} value={money(e.pS)} sub={`${pct(e.mS)} margin`} tone={cls(e.mS, S.minSteadyMargin, S.minSteadyMargin - 5)} />
         </div>
+        {e.vatRegistered ? (
+          <div className="space-y-0.5 rounded-lg bg-surface-2 px-3 py-2 text-xs text-muted-foreground">
+            <p>VAT registered: revenue {money(e.revenue)} ({money(e.sell)} less {money(e.outputVat)} output VAT); Amazon&apos;s fees ex-VAT with the DSF; margins on the revenue.</p>
+            <p>Import VAT on the goods is reclaimed, so Gate 0&apos;s landed cost should exclude it (a quote written to Gate 0 does). It&apos;s still cash when the order lands.</p>
+            <p>VAT payable per unit: <b className="num text-foreground">{money(e.vatPayable)}</b> ({money(e.outputVat)} output less {money(e.inputVat)} input: VAT on the fees and on the landed cost). Information, not a cost.</p>
+          </div>
+        ) : <p className="text-xs text-muted-foreground">Not VAT registered (Settings → Business): VAT on the fees is a cost, and the sale price is all revenue.</p>}
       </div>
     );
   }

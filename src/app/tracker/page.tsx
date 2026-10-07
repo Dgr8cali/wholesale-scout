@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { VatTag } from "@/components/VatTag";
 import { useEffect, useMemo, useState } from "react";
 import { usePageCrumbs } from "@/components/Crumbs";
 import { ProductThumb } from "@/components/ProductThumb";
@@ -31,7 +32,7 @@ const purchaseTitle = (p: Purchase) => p.stock?.name ?? p.product?.title ?? p.as
 const purchaseImage = (p: Purchase) => p.stock?.image_url || p.product?.image_url || null;
 const label = (s: PurchaseStatus) => PURCHASE_STATUSES.find((x) => x.id === s)?.label ?? s;
 
-function Tile({ label, value, hint }: { label: string; value: React.ReactNode; hint?: React.ReactNode }) {
+function Tile({ label, value, hint }: { label: React.ReactNode; value: React.ReactNode; hint?: React.ReactNode }) {
   return (
     <Card size="sm"><CardContent>
       <p className="eyebrow">{label}</p>
@@ -53,6 +54,7 @@ export default function TrackerPage() {
   const [error, setError] = useState<string | null>(null);
   const [show, setShow] = useState<"open" | "all">("open");
   const [nonce, setNonce] = useState(0);
+  const [vatReg, setVatReg] = useState<boolean | null>(null);
   // From Stock → Reorder: ?new=stock&item=<id>&qty=<n>&supplier=<id> opens a prefilled purchase.
   const [stockNew, setStockNew] = useState<{ item: string; qty: number | null; supplier: string | null } | null>(() => {
     if (typeof window === "undefined") return null;
@@ -70,6 +72,7 @@ export default function TrackerPage() {
       toast.error((e as Error).message);
     }
   };
+  useEffect(() => { api<{ vatRegistered: boolean }>("/api/business").then((b) => setVatReg(b.vatRegistered)).catch(() => {}); }, []);
   useEffect(() => {
     api<{ purchases: Row[] }>("/api/purchases?actuals=1")
       .then((r) => setRows(r.purchases))
@@ -118,8 +121,8 @@ export default function TrackerPage() {
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Tile label="Money in stock" value={gbp(invested, 0)} hint={`${open.length} open purchase${open.length === 1 ? "" : "s"}, landed`} />
-        <Tile label="Predicted profit / month" value={gbp(predictedMonth, 0)} hint="next month at your share, up to the units held" />
-        <Tile label="Profit to date" value={gbp(profitToDate, 0)} hint="from Amazon's reports" />
+        <Tile label={<>Predicted profit / month <VatTag registered={vatReg} /></>} value={gbp(predictedMonth, 0)} hint="next month at your share, up to the units held" />
+        <Tile label={<>Profit to date <VatTag registered={vatReg} /></>} value={gbp(profitToDate, 0)} hint="from Amazon's reports" />
         <Tile label="Pipeline" value={open.length} hint={PURCHASE_STATUSES.filter((s) => counts.get(s.id)).map((s) => `${counts.get(s.id)} ${s.label.toLowerCase()}`).join(" · ") || "nothing open"} />
       </div>
 

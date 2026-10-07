@@ -1,13 +1,31 @@
 ---
 title: Settings
 summary: Screening profiles (gates, score, fees), the shared compliance rules and rate card, waived gates, the IP-risk list and saved filter sets.
-synonyms: [profile, thresholds, gate modes, rate card, compliance rules, ip risk, waivers, filter sets]
+synonyms: [profile, thresholds, gate modes, rate card, compliance rules, ip risk, waivers, filter sets, business, vat registered, vat rate, qogita region, recalculate all]
 route: /settings
 order: 12
 ---
 Settings is where you decide how products are screened: which gates run and how strict they are, how the 0–100 score is built, and how fees and landed cost are worked out. It also holds the lists shared by every profile: compliance rules, the rate card, your waivers and your IP-risk brands.
 
-The page has nine tabs: **Gates**, **Score**, **Fees**, **Profiles**, **Waived**, **IP risk**, **Filter sets**, **Private label** and **Ads**. Settings is in every workspace. You can open a tab directly with `?tab=`, for example `/settings?tab=ip` (the Brands page links there).
+The page's tabs: **Business**, **Gates**, **Score**, **Fees**, **Profiles**, **Waived**, **IP risk**, **Filter sets**, **Private label**, **Ads** and **Stock**. Settings is in every workspace. You can open a tab directly with `?tab=`, for example `/settings?tab=ip` (the Brands page links there).
+
+## Business tab
+
+Settings for the whole business, which every part of the app follows.
+
+**VAT registered** (default on) and **VAT rate** (default 20%). Registered:
+
+- Revenue is the Amazon sale price ÷ 1.2: the output VAT is HMRC's.
+- Cost of goods is the supplier's price ex-VAT. A supplier whose **Supplier prices are** inc-VAT (its page under Suppliers) is divided by 1.2.
+- Amazon's referral, FBA and storage fees count ex-VAT, as the VAT on them is reclaimed; the digital services fee stays.
+- Private label's import VAT is reclaimed, so it isn't in Gate 0's landed cost (a quote written to Gate 0 leaves it out). It's still cash when the order lands.
+- **VAT payable per unit** (output VAT less input VAT) shows on a result's breakdown and in Gate 6 as information, not a cost.
+
+Not registered: the full sale price is revenue, and VAT on fees and goods is a cost. Every profit, ROI and margin carries a small **VAT reg.** or **Non-VAT** tag for the basis it's on. Saving a change writes it into every screening profile, so new runs use it.
+
+**Recalculate all** re-screens every finished run from its stored data (no Amazon or Keepa calls) on the current basis, in the background, then lists the 20 biggest profit changes, before and after. Private-label candidates follow the setting at once.
+
+**Qogita region**: **UK (GBP)** (default) or **EU (EUR)**, which Qogita account the app's login is. See [Qogita](/help/pages/qogita).
 
 ## The profile bar
 
@@ -88,8 +106,7 @@ How the [score](/help/concepts/score) is built.
 
 | Control | Default |
 |---|---|
-| **VAT registered** (reclaim VAT on fees and stock; pay output VAT on sales) | off |
-| **VAT rate (%)** | 20 |
+| VAT registered and VAT rate | Set on the **Business** tab for the whole business (shown here with its tag) |
 | **Digital services fee (%)** | 2 |
 | **Inbound to FBA (£/unit)** | £0.30 |
 | **Prep, bag and label (£/unit)** | £0.15 |
@@ -132,7 +149,7 @@ Filter sets are saved from a run's filter bar with **Save current filters…** a
 
 ## Private label tab
 
-The thresholds and cost assumptions for [Private label](/help/pages/private-label), shared by every candidate. They are budget available, VAT rate, digital services fee, inbound shipping per unit, prep per unit, average months in storage, returns allowance, min price multiple, min launch margin, min steady margin and min profit per unit. Each shows its default. **Save** applies them to every candidate straight away. The fees themselves come from the rate card on the **Fees** tab. There's no peak-rate switch here: Private label uses the peak rates in October–December automatically.
+The thresholds and cost assumptions for [Private label](/help/pages/private-label), shared by every candidate. They are budget available, VAT rate (set on the **Business** tab, with VAT registration), digital services fee, inbound shipping per unit, prep per unit, average months in storage, returns allowance, min price multiple, min launch margin, min steady margin and min profit per unit. Each shows its default. **Save** applies them to every candidate straight away. The fees themselves come from the rate card on the **Fees** tab. There's no peak-rate switch here: Private label uses the peak rates in October–December automatically.
 
 ## Ads tab
 

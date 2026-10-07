@@ -144,7 +144,7 @@ async function suppliersFor(eans: string[]): Promise<Map<string, string[]>> {
     for (const p of must(await d.from("products").select("id, ean").in("ean", c), "products") as { id: string; ean: string }[]) products.set(p.id, p.ean);
   }
   const offers: { product_id: string; supplier_id: string }[] = [];
-  for (const c of chunks([...products.keys()], 200)) offers.push(...(must(await d.from("offers").select("product_id, supplier_id").in("product_id", c), "offers") as typeof offers));
+  for (const c of chunks([...products.keys()], 200)) offers.push(...(must(await d.from("offers").select("product_id, supplier_id").in("product_id", c).is("archived_at", null), "offers") as typeof offers));
   const names = new Map<string, string>();
   for (const c of chunks([...new Set(offers.map((o) => o.supplier_id))], 200)) {
     for (const s of must(await d.from("suppliers").select("id, name").in("id", c), "suppliers") as { id: string; name: string }[]) names.set(s.id, s.name);
@@ -199,7 +199,7 @@ export async function brandDetail(key: string) {
   }
   const offers: { product_id: string; supplier_id: string; unit_cost_gbp: number; moq: number | null; seen_at: string; cost_known?: boolean }[] = [];
   for (const c of chunks([...productEan.keys()], 200)) {
-    offers.push(...(must(await d.from("offers").select("product_id, supplier_id, unit_cost_gbp, moq, seen_at, cost_known").in("product_id", c), "offers") as typeof offers));
+    offers.push(...(must(await d.from("offers").select("product_id, supplier_id, unit_cost_gbp, moq, seen_at, cost_known").in("product_id", c).is("archived_at", null), "offers") as typeof offers));
   }
   const supplierNames = new Map<string, string>();
   for (const c of chunks([...new Set(offers.map((o) => o.supplier_id))], 200)) {

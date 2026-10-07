@@ -131,7 +131,11 @@ export const SETTINGS_DEF = [
 ] as const;
 
 export type SettingKey = (typeof SETTINGS_DEF)[number]["k"];
-export type Settings = Record<SettingKey, number>;
+/**
+ * The settings; `vatRegistered` (1 or 0) comes from Settings → Business, not from these (and `vat`
+ * follows the business's VAT rate). Unset, Gate 6 works as Gatekeeper did: not registered.
+ */
+export type Settings = Record<SettingKey, number> & { vatRegistered?: number };
 export const DEFAULT_SETTINGS = Object.fromEntries(SETTINGS_DEF.map((s) => [s.k, s.d])) as Settings;
 
 /** Gatekeeper's sell-price band, unless the candidate sets its own in Gate 0. */
@@ -215,6 +219,15 @@ export interface Econ {
   lowMiss: string | null;
   /** The card's peak months (Oct–Dec): peak storage rate and small-parcel surcharge. */
   peak: boolean;
+  /** VAT registered (Settings → Business): the sale price less its output VAT is the revenue, fees ex-VAT. */
+  vatRegistered: boolean;
+  /** The sale price, less its output VAT when registered. */
+  revenue: number;
+  outputVat: number;
+  /** Registered: VAT reclaimed on Amazon's fees and the goods' import VAT (on the landed cost). */
+  inputVat: number;
+  /** Registered: output VAT less input VAT, per unit (info: what goes to HMRC). */
+  vatPayable: number;
   /** Storage ex-VAT, and with VAT and DSF (what's charged; the figure the profit uses). */
   storageBase: number | null; storage: number | null; inbound: number; prep: number; returns: number; over: number;
   pL: number | null; pS: number | null; amazonTake: number | null; mL: number | null; mS: number | null; multiple: number | null;
@@ -222,8 +235,11 @@ export interface Econ {
 
 export function econ(f: Fields, S: Settings, cat: string, card: RateCard, date: Date = new Date()): Econ | null {
   const sell = num(f.sell), landed = num(f.landed), aL = num(f.adsLaunch), aS = num(f.adsSteady), ov = num(f.fbaOverride);
-  const vat = 1 + S.vat / 100, dst = 1 + (S.dst || 0) / 100;
+  const reg = !!S.vatRegistered;
+  // Registered, VAT on Amazon's fees is reclaimed: they cost their ex-VAT amount (with the DSF).
+  const vat = reg ? 1 : 1 + S.vat / 100, dst = 1 + (S.dst || 0) / 100;
   if (sell == null) return null;
+  const revenue = reg ? sell / (1 + S.vat / 100) : sell;
   const p = referralPct(cat || "Everything else", sell, card);
   const referralBase = Math.max((sell * p) / 100, card.referral.minimumFee);
   const referral = referralBase * vat * dst;
@@ -245,13 +261,18 @@ export function econ(f: Fields, S: Settings, cat: string, card: RateCard, date: 
   const storage = storageBase == null ? null : storageBase * vat * dst;
   const inbound = S.inbound || 0, prep = S.prep || 0, returns = (sell * (S.returnsPct || 0)) / 100;
   const over = (storage || 0) + inbound + prep + returns;
-  const base = fbaV == null || landed == null ? null : sell - referral - fbaV - landed - over;
+  const base = fbaV == null || landed == null ? null : revenue - referral - fbaV - landed - over;
+  const outputVat = sell - revenue;
+  // What's reclaimed: VAT on the fees (and DSF), and the import VAT on the goods (the landed cost, VAT-able).
+  const inputVat = reg ? ((referral + (fbaV ?? 0) + (storage ?? 0)) * S.vat) / 100 + ((landed ?? 0) * S.vat) / 100 : 0;
   const pL = base == null || aL == null ? null : base - aL;
   const pS = base == null || aS == null ? null : base - aS;
   return {
+    vatRegistered: reg, revenue, outputVat, inputVat, vatPayable: outputVat - inputVat,
     sell, landed, pct: p, referralBase, referral, tier, lowPrice, lowThreshold, fbaBase, fbaSource, fbaV, lowMiss, peak, storageBase, storage, inbound, prep, returns, over, pL, pS,
     amazonTake: fbaV == null ? null : referral + fbaV,
-    mL: pL == null ? null : (pL / sell) * 100, mS: pS == null ? null : (pS / sell) * 100,
+    // Margins on the revenue: ex-VAT when registered.
+    mL: pL == null ? null : (pL / revenue) * 100, mS: pS == null ? null : (pS / revenue) * 100,
     multiple: landed && landed > 0 ? sell / landed : null,
   };
 }

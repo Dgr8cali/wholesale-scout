@@ -93,6 +93,27 @@ function randomCandidate(r: () => number): { f: Fields; S: Settings; cat: string
   return { f, S, cat: pick(ref.REFERRAL.map((x) => x[0])), date };
 }
 
+describe("Gate 6 on the business's VAT basis", () => {
+  const f = { sell: "24", landed: "4.00", dimL: "20", dimW: "15", dimH: "8", weight: "400", adsLaunch: "2", adsSteady: "0.8" };
+  const aug = new Date(Date.UTC(2026, 7, 5));
+  it("registered: revenue is the price ÷ 1.2, fees ex-VAT with the DSF, VAT payable as information", () => {
+    const non = econ(f, DEFAULT_SETTINGS, "Home Products", card, aug)!;
+    const reg = econ(f, { ...DEFAULT_SETTINGS, vatRegistered: 1 }, "Home Products", card, aug)!;
+    expect(non).toMatchObject({ vatRegistered: false, revenue: 24, outputVat: 0, inputVat: 0 });
+    expect(reg.vatRegistered).toBe(true);
+    expect(reg.revenue).toBeCloseTo(20, 6);
+    expect(reg.outputVat).toBeCloseTo(4, 6);
+    // Fees lose their VAT (keep the 2% DSF): × 1.02 instead of × 1.2 × 1.02.
+    expect(reg.referral).toBeCloseTo(non.referral / 1.2, 6);
+    expect(reg.fbaV!).toBeCloseTo(non.fbaV! / 1.2, 6);
+    // Steady profit: revenue − fees − landed − overheads − ads.
+    expect(reg.pS!).toBeCloseTo(20 - reg.referral - reg.fbaV! - 4 - reg.over - 0.8, 6);
+    expect(reg.mS!).toBeCloseTo((reg.pS! / 20) * 100, 6);
+    expect(reg.vatPayable).toBeCloseTo(reg.outputVat - reg.inputVat, 6);
+    expect(reg.inputVat).toBeCloseTo((reg.referral + reg.fbaV! + (reg.storage ?? 0)) * 0.2 + 4 * 0.2, 6);
+  });
+});
+
 describe("Low-Price FBA on Gate 6", () => {
   // The lens wipes candidate: Beauty (low-price at £10 or less), 17 × 12 × 9 cm, 450 g: a small parcel.
   const wipes = { dimL: "17", dimW: "12", dimH: "9", weight: "450", landed: "1.80" };

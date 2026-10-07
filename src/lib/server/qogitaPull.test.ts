@@ -58,20 +58,50 @@ describe("Qogita pull", () => {
     expect(r.truncated).toBe(true);
   });
 
-  it("opens a run exactly as an upload would, with supplier Qogita, the response currency and the product link", async () => {
+  it("opens a run exactly as an upload would, with supplier Qogita EU, the response currency and the product link", async () => {
+    fake.tables.business_settings = [{ key: "qogitaRegion", value: "EU" }];
     const { client } = fakeClient([[product("8809937361657", "8.53"), product("3337875597197", "12.00")]]);
     const r = await runQogitaPull({ name: "Korean masks", filters: { ...EMPTY_QOGITA_FILTERS, brands: ["Biodance"] }, client });
     expect(r.runId).toBeTruthy();
-    expect(r.stats).toMatchObject({ fetched: 2, kept: 2, screened: 2, currency: "EUR" });
+    expect(r.stats).toMatchObject({ fetched: 2, kept: 2, screened: 2, currency: "EUR", region: "EU" });
+    expect(r.stats.regionWarning).toBeUndefined();
     const run = fake.tables.runs.find((x) => x.id === r.runId)!;
     expect(run.name).toMatch(/^Qogita · Korean masks · /);
-    expect(fake.tables.suppliers).toEqual([expect.objectContaining({ name: "Qogita", currency: "EUR", vat_basis: "ex_vat" })]);
+    expect(fake.tables.suppliers).toEqual([expect.objectContaining({ name: "Qogita EU", currency: "EUR", vat_basis: "ex_vat", region: "EU" })]);
     const offer = fake.tables.offers.find((o) => o.unit_cost === 8.53)!;
     expect(offer).toMatchObject({ currency: "EUR", unit_cost_gbp: 7.3358, moq: 10, stock: 500, external_ref: expect.stringContaining("/products/") });
     expect(fake.tables.results.filter((x) => x.run_id === r.runId)).toHaveLength(2);
     const preset = fake.tables.qogita_presets[0];
     expect(preset).toMatchObject({ name: "Korean masks", filters: expect.objectContaining({ brands: ["Biodance"] }), last_prices: { "8809937361657": 8.53, "3337875597197": 12 } });
     expect(fake.tables.qogita_pulls[0]).toMatchObject({ preset_id: preset.id, run_id: r.runId, kind: "manual" });
+  });
+
+  it("the UK account: £ prices, no conversion, supplier Qogita UK; its products' EU offers archived, not duplicated", async () => {
+    // An EU pull first, then the UK account prices the same product (and one more).
+    fake.tables.business_settings = [{ key: "qogitaRegion", value: "EU" }];
+    await runQogitaPull({ name: "EU masks", filters: { ...EMPTY_QOGITA_FILTERS, brands: ["Biodance"] }, client: fakeClient([[product("8809937361657", "8.53")]]).client });
+    fake.tables.business_settings = [{ key: "qogitaRegion", value: "UK" }];
+    const gbp = (gtin: string, price: string) => product(gtin, price, { price: { amount: price, currency: "GBP" }, offerCount: 3, isPreOrder: false, estimatedDeliveryTime: 2 });
+    const r = await runQogitaPull({ name: "UK masks", filters: { ...EMPTY_QOGITA_FILTERS, brands: ["Biodance"] }, client: fakeClient([[gbp("8809937361657", "7.10"), gbp("3337875597197", "9.99")]]).client });
+    expect(r.stats).toMatchObject({ currency: "GBP", region: "UK" });
+    expect(r.stats.regionWarning).toBeUndefined();
+    const uk = fake.tables.suppliers.find((x) => x.name === "Qogita UK")!;
+    expect(uk).toMatchObject({ currency: "GBP", vat_basis: "ex_vat", region: "UK" });
+    const ukOffer = fake.tables.offers.find((o) => o.supplier_id === uk.id && o.unit_cost === 7.1)!;
+    expect(ukOffer).toMatchObject({ currency: "GBP", fx_rate: 1, unit_cost_gbp: 7.1, offer_count: 3, pre_order: false, delivery_weeks: 2 });
+    // One product per EAN (matched by GTIN), the EU offer for it archived, not deleted.
+    expect(fake.tables.products.filter((p) => p.ean === "8809937361657")).toHaveLength(1);
+    const eu = fake.tables.suppliers.find((x) => x.name === "Qogita EU")!;
+    const euOffer = fake.tables.offers.find((o) => o.supplier_id === eu.id)!;
+    expect(euOffer.archived_at).toBeTruthy();
+    expect(ukOffer.archived_at ?? null).toBeNull();
+  });
+
+  it("warns when the prices' currency isn't the region in Settings → Business", async () => {
+    fake.tables.business_settings = [{ key: "qogitaRegion", value: "UK" }];
+    const r = await runQogitaPull({ name: "x", filters: { ...EMPTY_QOGITA_FILTERS, brands: ["Biodance"] }, client: fakeClient([[product("8809937361657", "8.53")]]).client });
+    expect(r.stats).toMatchObject({ currency: "EUR", region: "EU" });
+    expect(r.stats.regionWarning).toMatch(/priced this in EUR, but Settings → Business says the account is UK/);
   });
 
   it("screens only new EANs and moved prices when asked", async () => {

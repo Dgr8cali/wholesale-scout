@@ -73,7 +73,8 @@ export interface TierResult {
   peakSurcharge: number;
 }
 
-const round2 = (n: number) => Math.round(n * 100) / 100;
+/** To the penny, half up: 3.055 is £3.06, though in binary it's 3.0549999… */
+const round2 = (n: number) => Math.round(Number((n * 100).toFixed(6))) / 100;
 
 function sortDims(d: Dims): [number, number, number] {
   return [d.l, d.w, d.h].sort((a, b) => b - a) as [number, number, number];
@@ -350,6 +351,27 @@ export interface Economics {
   roi: number | null;
   /** Profit ÷ price, %. */
   margin: number | null;
+  /** The basis these figures are on (VAT registered: fees and goods ex-VAT, output VAT out of the price). */
+  vatRegistered: boolean;
+  /** VAT registered: the VAT reclaimed on Amazon's fees and on the goods (an info figure). */
+  inputVat: number;
+  /** VAT registered: output VAT less input VAT, per unit — what goes to HMRC (info, not a cost). */
+  vatPayable: number;
+}
+
+/**
+ * Profit on the business's VAT basis, the rule every profit figure follows. Registered: the sale
+ * price less its output VAT, less fees and goods ex-VAT (the VAT on them is reclaimed). Not
+ * registered: the full price less fees and goods with their VAT (it's a cost).
+ * £9.99, £1.50 referral, £2.46 FBA, £1.31 goods, registered at 20%: 9.99 ÷ 1.2 − 1.50 − 2.46 − 1.31 = £3.06.
+ */
+export function profitOnVatBasis(x: { price: number; feesExVat: number; goodsExVat: number; vatRegistered: boolean; vatRatePct: number; goodsVatRatePct?: number }): { netRevenue: number; outputVat: number; fees: number; goods: number; profit: number } {
+  const r = x.vatRatePct, g = x.goodsVatRatePct ?? r;
+  const outputVat = x.vatRegistered ? (x.price * g) / (100 + g) : 0;
+  const fees = x.vatRegistered ? x.feesExVat : x.feesExVat * (1 + r / 100);
+  const goods = x.vatRegistered ? x.goodsExVat : x.goodsExVat * (1 + g / 100);
+  const netRevenue = x.price - outputVat;
+  return { netRevenue, outputVat, fees, goods, profit: round2(netRevenue - fees - goods) };
 }
 
 export function economics(
@@ -366,6 +388,8 @@ export function economics(
   const outputVat = a.vatRegistered ? (price * goodsVatRate) / (100 + goodsVatRate) : 0;
   const netRevenue = price - outputVat;
   const profit = fees.totalFees == null ? null : netRevenue - fees.totalFees - landed.total;
+  // Registered: the VAT on Amazon's fees (with the DSF) and on the goods is reclaimed.
+  const inputVat = a.vatRegistered ? (fees.referral + (fees.fba ?? 0) + fees.storage) * (a.vatRatePct / 100) + ((unitCostGbpExVat + landed.duty) * goodsVatRate) / 100 : 0;
   return {
     price,
     netRevenue,
@@ -375,6 +399,9 @@ export function economics(
     profit: profit == null ? null : round2(profit),
     roi: profit == null || landed.total <= 0 ? null : round2((profit / landed.total) * 100),
     margin: profit == null || price <= 0 ? null : round2((profit / price) * 100),
+    vatRegistered: a.vatRegistered,
+    inputVat: round2(inputVat),
+    vatPayable: round2(outputVat - inputVat),
   };
 }
 

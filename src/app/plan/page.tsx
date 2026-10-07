@@ -1,8 +1,9 @@
 "use client";
 
+import { VatTag } from "@/components/VatTag";
 import { DownloadIcon, PinIcon, PinOffIcon, RotateCcwIcon, ShoppingCartIcon, XIcon } from "lucide-react";
 import Link from "next/link";
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { useDialogs } from "@/components/Dialogs";
 import * as XLSX from "xlsx";
@@ -25,7 +26,7 @@ import type { CostInput } from "@/lib/costOverride";
 import { api, gbp, when } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
 
-interface Data { limits: PlanLimits; profile: string; candidates: PlanCandidate[]; noOffer?: NoOffer[]; updatedAt: string | null; updating?: boolean }
+interface Data { limits: PlanLimits; profile: string; candidates: PlanCandidate[]; noOffer?: NoOffer[]; updatedAt: string | null; updating?: boolean; vatRegistered?: boolean; vatRate?: number }
 
 const STORE = "ws.plan.controls";
 const gates = (g?: string[]) => (g ?? []).map((x) => GATE_LABELS[x as GateId] ?? x).join(", ");
@@ -179,11 +180,26 @@ export default function PlanPage() {
 
       <section className="panel grid grid-cols-2 gap-4 p-4 sm:grid-cols-5" aria-label="Totals">
         <Total label="Plan total" value={gbp(plan.total)} note={`of ${gbp(l.budget)} budget${over ? " · over" : ` · ${gbp(plan.left)} left`}`} bad={over} />
-        <Total label="Profit / month" value={gbp(plan.profitMonth)} note="at your share of sales" good />
+        <Total label={<>Profit / month <VatTag registered={data.vatRegistered} /></>} value={gbp(plan.profitMonth)} note="at your share of sales" good />
         <Total label="Payback" value={plan.paybackMonths == null ? "—" : monthsLabel(plan.paybackMonths)} note="until sales bring the outlay back" />
         <Total label="Lines" value={String(plan.groups.reduce((a, g) => a + g.lines.length, 0))} note={`${plan.groups.length} supplier order${plan.groups.length === 1 ? "" : "s"}`} />
         <Total label="Limits" value={`${gbp(l.lineCap)} / line`} note={`sell within ${l.maxMonths} months`} />
       </section>
+
+      {(() => {
+        // Cash on the day: Qogita charges VAT at checkout on its ex-VAT prices (reclaimed when registered).
+        const qogita = plan.groups.filter((g) => g.supplierKey.startsWith("qogita:")).reduce((a, g) => a + g.goods, 0);
+        if (!qogita) return null;
+        const rate = data.vatRate ?? 20, vat = (qogita * rate) / 100;
+        return (
+          <section className="panel flex flex-wrap items-baseline gap-x-6 gap-y-1 px-4 py-3 text-sm" aria-label="Cash flow">
+            <span><span className="text-muted-foreground">Qogita goods (ex-VAT)</span> <b className="num">{gbp(qogita)}</b></span>
+            <span><span className="text-muted-foreground">VAT paid at checkout{data.vatRegistered ? " (reclaimable)" : ""}</span> <b className="num">{gbp(vat)}</b></span>
+            <span><span className="text-muted-foreground">Cash needed on the day</span> <b className="num">{gbp(data.vatRegistered ? plan.total + vat : plan.total)}</b></span>
+            <span className="text-xs text-muted-foreground">{data.vatRegistered ? `The plan total plus Qogita's ${rate}% VAT, which you reclaim on your VAT return.` : `The plan total plus Qogita's ${rate}% VAT (already a cost in the landed figures as you're not VAT registered).`}</span>
+          </section>
+        );
+      })()}
 
       {!plan.groups.length ? (
         <EmptyState title="Nothing to plan">
@@ -286,7 +302,7 @@ export default function PlanPage() {
   );
 }
 
-function Total({ label, value, note, good, bad }: { label: string; value: string; note: string; good?: boolean; bad?: boolean }) {
+function Total({ label, value, note, good, bad }: { label: ReactNode; value: string; note: string; good?: boolean; bad?: boolean }) {
   return (
     <div>
       <p className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>

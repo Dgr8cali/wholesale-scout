@@ -1,5 +1,6 @@
 "use client";
 
+import { VatTag, vatBasisOf } from "@/components/VatTag";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   columnOrderingFeature, columnPinningFeature, columnResizingFeature, columnSizingFeature, columnVisibilityFeature,
@@ -122,6 +123,9 @@ export interface ResultsTableProps {
 
 export function ResultsTable(props: ResultsTableProps) {
   const { rows, storageKey, sort, onSort, activeId } = props;
+  // The VAT basis of the profit, ROI and margin columns: one tag when every row is on the same one.
+  const bases = new Set(rows.map((d) => vatBasisOf(d.r.fees)).filter((b): b is boolean => b != null));
+  const vatBasis: boolean | "mixed" | null = bases.size === 1 ? [...bases][0] : bases.size > 1 ? "mixed" : null;
   const [prefs, setPrefs] = useState<TablePrefs>(() => loadPrefs(storageKey, IDS, BOUNDS));
   useEffect(() => savePrefs(storageKey, prefs), [storageKey, prefs]);
 
@@ -236,7 +240,7 @@ export function ResultsTable(props: ResultsTableProps) {
           <thead className="text-left text-xs text-muted-foreground">
             <tr>
               {headers.map((h) => (
-                <HeaderCell key={h.id} header={h} spec={SPEC[h.column.id]} sort={sort} onSort={onSort}
+                <HeaderCell key={h.id} header={h} spec={SPEC[h.column.id]} sort={sort} onSort={onSort} vatBasis={["profit", "roi", "margin", "profitMo"].includes(h.column.id) ? vatBasis : null}
                   style={pinStyle(h.column)} edge={h.column.id === lastPinned}
                   dragging={dragId === h.column.id} dropTarget={dropId === h.column.id && dragId !== h.column.id}
                   onDragStart={() => setDragId(h.column.id)} onDragEnd={() => { setDragId(null); setDropId(null); }}
@@ -290,7 +294,9 @@ export function ResultsTable(props: ResultsTableProps) {
   );
 }
 
-function HeaderCell({ header, spec, sort, onSort, style, edge, children, dragging, dropTarget, onDragStart, onDragEnd, onDragOver, onDrop }: {
+function HeaderCell({ header, spec, sort, onSort, style, edge, children, dragging, dropTarget, onDragStart, onDragEnd, onDragOver, onDrop, vatBasis }: {
+  /** Profit figures: the VAT basis they're on ("mixed" when the rows differ). */
+  vatBasis?: boolean | "mixed" | null;
   header: Header<typeof features, DisplayRow, unknown>;
   spec: ColSpec;
   sort: { key: SortKey; dir: 1 | -1 };
@@ -326,6 +332,7 @@ function HeaderCell({ header, spec, sort, onSort, style, edge, children, draggin
               {label}{sorted ? (sort.dir === -1 ? " ↓" : " ↑") : ""}
             </button>
           ) : <span className="uppercase tracking-wide">{label}</span>}
+          {vatBasis === "mixed" ? <span className="ml-0.5 rounded bg-warn-soft px-1 py-px text-[9.5px] font-semibold text-warn normal-case" title="Rows on different VAT bases: Settings → Business → Recalculate all">mixed</span> : vatBasis != null ? <VatTag registered={vatBasis} className="ml-0.5" /> : null}
         </span>
       )}
       {col.getCanResize() && (

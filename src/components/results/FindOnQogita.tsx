@@ -1,5 +1,6 @@
 "use client";
 
+import { currencySymbol } from "@/lib/format";
 import { ExternalLinkIcon, LoaderIcon, SearchIcon } from "lucide-react";
 import { useState } from "react";
 import { api } from "@/lib/ui/client";
@@ -18,7 +19,7 @@ export function FindOnQogita({ ean }: { ean: string }) {
       setState({ busy: false, error: (e as Error).message });
     }
   }
-  const money = (p: Found["price"]) => (p ? `${p.currency === "EUR" ? "€" : p.currency === "GBP" ? "£" : `${p.currency} `}${p.amount.toFixed(2)}` : "—");
+  const money = (p: Found["price"]) => (p ? `${currencySymbol(p.currency)}${p.amount.toFixed(2)}` : "—");
   return (
     <div className="mt-2 text-xs">
       {!state.found && (

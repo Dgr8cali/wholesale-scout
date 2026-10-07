@@ -1,5 +1,5 @@
 -- Wholesale Scout schema, dumped by scripts/schema-backup.mjs. No data.
--- Dumped 2026-10-06T16:03:14.530Z. Safe to re-run. Restore: npm run schema:restore
+-- Dumped 2026-10-07T17:12:21.210Z. Safe to re-run. Restore: npm run schema:restore
 
 -- @section extensions
 create extension if not exists "pg_cron";
@@ -850,6 +850,16 @@ alter table "brand_products" add column if not exists "warn_gates" text[] defaul
 alter table "brand_products" add column if not exists "qogita" jsonb;
 alter table "brand_products" enable row level security;
 
+create table if not exists "business_settings" (
+  "key" text not null,
+  "value" jsonb not null,
+  "updated_at" timestamp with time zone default now() not null
+);
+alter table "business_settings" add column if not exists "key" text;
+alter table "business_settings" add column if not exists "value" jsonb;
+alter table "business_settings" add column if not exists "updated_at" timestamp with time zone default now();
+alter table "business_settings" enable row level security;
+
 create table if not exists "category_rules" (
   "id" uuid default gen_random_uuid() not null,
   "key" text not null,
@@ -1090,7 +1100,11 @@ create table if not exists "offers" (
   "vat_basis" text,
   "manual_supplier" text,
   "note" text,
-  "mov_gbp" numeric(12,2)
+  "mov_gbp" numeric(12,2),
+  "archived_at" timestamp with time zone,
+  "offer_count" integer,
+  "pre_order" boolean,
+  "delivery_weeks" numeric
 );
 alter table "offers" add column if not exists "id" uuid default gen_random_uuid();
 alter table "offers" add column if not exists "product_id" uuid;
@@ -1116,6 +1130,10 @@ alter table "offers" add column if not exists "vat_basis" text;
 alter table "offers" add column if not exists "manual_supplier" text;
 alter table "offers" add column if not exists "note" text;
 alter table "offers" add column if not exists "mov_gbp" numeric(12,2);
+alter table "offers" add column if not exists "archived_at" timestamp with time zone;
+alter table "offers" add column if not exists "offer_count" integer;
+alter table "offers" add column if not exists "pre_order" boolean;
+alter table "offers" add column if not exists "delivery_weeks" numeric;
 alter table "offers" enable row level security;
 
 create table if not exists "pl_candidate_asins" (
@@ -1912,6 +1930,20 @@ alter table "rate_cards" add column if not exists "is_active" boolean default fa
 alter table "rate_cards" add column if not exists "created_at" timestamp with time zone default now();
 alter table "rate_cards" enable row level security;
 
+create table if not exists "recalc_jobs" (
+  "id" uuid default gen_random_uuid() not null,
+  "started_at" timestamp with time zone default now() not null,
+  "basis" text not null,
+  "run_ids" uuid[] default '{}'::uuid[] not null,
+  "before" jsonb default '{}'::jsonb not null
+);
+alter table "recalc_jobs" add column if not exists "id" uuid default gen_random_uuid();
+alter table "recalc_jobs" add column if not exists "started_at" timestamp with time zone default now();
+alter table "recalc_jobs" add column if not exists "basis" text;
+alter table "recalc_jobs" add column if not exists "run_ids" uuid[] default '{}'::uuid[];
+alter table "recalc_jobs" add column if not exists "before" jsonb default '{}'::jsonb;
+alter table "recalc_jobs" enable row level security;
+
 create table if not exists "results" (
   "id" uuid default gen_random_uuid() not null,
   "run_id" uuid not null,
@@ -2251,7 +2283,8 @@ create table if not exists "suppliers" (
   "invoice_name_matches" boolean,
   "invoice_accepted_for_approval" boolean,
   "kind" text,
-  "marketplace" text
+  "marketplace" text,
+  "region" text
 );
 alter table "suppliers" add column if not exists "id" uuid default gen_random_uuid();
 alter table "suppliers" add column if not exists "name" text;
@@ -2276,6 +2309,7 @@ alter table "suppliers" add column if not exists "invoice_name_matches" boolean;
 alter table "suppliers" add column if not exists "invoice_accepted_for_approval" boolean;
 alter table "suppliers" add column if not exists "kind" text;
 alter table "suppliers" add column if not exists "marketplace" text;
+alter table "suppliers" add column if not exists "region" text;
 alter table "suppliers" enable row level security;
 
 create table if not exists "watch_alerts" (
@@ -2499,6 +2533,11 @@ do $$ begin
   end if;
 end $$;
 do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'business_settings_pkey' and conrelid = '"business_settings"'::regclass) then
+    alter table "business_settings" add constraint "business_settings_pkey" PRIMARY KEY (key);
+  end if;
+end $$;
+do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'category_rules_pkey' and conrelid = '"category_rules"'::regclass) then
     alter table "category_rules" add constraint "category_rules_pkey" PRIMARY KEY (id);
   end if;
@@ -2686,6 +2725,11 @@ end $$;
 do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'rate_cards_pkey' and conrelid = '"rate_cards"'::regclass) then
     alter table "rate_cards" add constraint "rate_cards_pkey" PRIMARY KEY (id);
+  end if;
+end $$;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'recalc_jobs_pkey' and conrelid = '"recalc_jobs"'::regclass) then
+    alter table "recalc_jobs" add constraint "recalc_jobs_pkey" PRIMARY KEY (id);
   end if;
 end $$;
 do $$ begin
@@ -3154,6 +3198,11 @@ do $$ begin
   end if;
 end $$;
 do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'suppliers_region_check' and conrelid = '"suppliers"'::regclass) then
+    alter table "suppliers" add constraint "suppliers_region_check" CHECK ((region = ANY (ARRAY['UK'::text, 'EU'::text])));
+  end if;
+end $$;
+do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'suppliers_source_type_check' and conrelid = '"suppliers"'::regclass) then
     alter table "suppliers" add constraint "suppliers_source_type_check" CHECK ((source_type = ANY (ARRAY['upload'::text, 'qogita'::text, 'manual'::text, 'stock'::text])));
   end if;
@@ -3530,6 +3579,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS offers_one_manual ON offers USING btree (produ
 CREATE INDEX IF NOT EXISTS offers_product_idx ON offers USING btree (product_id);
 CREATE INDEX IF NOT EXISTS offers_seen ON offers USING btree (supplier_id, seen_at DESC);
 CREATE INDEX IF NOT EXISTS offers_supplier_idx ON offers USING btree (supplier_id);
+CREATE INDEX IF NOT EXISTS offers_supplier_product ON offers USING btree (supplier_id, product_id) WHERE (archived_at IS NULL);
 CREATE INDEX IF NOT EXISTS pl_candidate_asins_asin ON pl_candidate_asins USING btree (asin, snapshot_at DESC);
 CREATE INDEX IF NOT EXISTS pl_category_tree_root ON pl_category_tree USING btree (root_id);
 CREATE UNIQUE INDEX IF NOT EXISTS pl_gate_waivers_key ON pl_gate_waivers USING btree (candidate_id, gate_id, COALESCE(check_label, ''::text));
@@ -3813,3 +3863,4 @@ insert into schema_migrations (name) values ('20261005000700_pl_review_dumps_cap
 insert into schema_migrations (name) values ('20261005000800_pl_candidates_reference_pinned.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261005000900_pl_supplier_leads.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261006000100_pl_review_dumps_off_candidate.sql') on conflict do nothing;
+insert into schema_migrations (name) values ('20261007000100_business_vat_qogita_uk.sql') on conflict do nothing;

@@ -105,7 +105,7 @@ async function offersByEan(eans: string[], fees: FeeAssumptions): Promise<Map<st
   }
   const offers: { product_id: string; supplier_id: string; unit_cost_gbp: number; cost_known?: boolean; stock: number | null }[] = [];
   for (const c of chunks([...productEan.keys()], 200)) {
-    offers.push(...(must(await d.from("offers").select("product_id, supplier_id, unit_cost_gbp, cost_known, stock").in("product_id", c), "offers") as typeof offers));
+    offers.push(...(must(await d.from("offers").select("product_id, supplier_id, unit_cost_gbp, cost_known, stock").in("product_id", c).is("archived_at", null), "offers") as typeof offers));
   }
   const suppliers = new Map<string, { name: string; vat_rate: number }>();
   for (const c of chunks([...new Set(offers.map((o) => o.supplier_id))], 200)) {

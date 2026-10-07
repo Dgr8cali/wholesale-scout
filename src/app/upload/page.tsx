@@ -22,6 +22,7 @@ import {
   type FieldKey,
 } from "@/lib/ingest/mapping";
 import { api, gbp } from "@/lib/ui/client";
+import { isQogitaCatalog, parseQogitaCatalog } from "@/lib/qogita/catalogFile";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -65,6 +66,34 @@ interface FileState {
   fxError: string | null;
   /** Set when the currency was read from the price column's header. */
   currencyHint: string | null;
+  /** A Qogita catalogue export: its account (by the price's currency) and what each GTIN's row adds. */
+  qogita?: QogitaFile | null;
+}
+
+interface QogitaFile {
+  currency: "GBP" | "EUR" | null; region: "UK" | "EU" | null; products: number; shippingIncluded: boolean;
+  /** Set when the file's currency isn't the region in Settings → Business. */
+  warning: string | null;
+  extras: Record<string, { link: string | null; offerCount: number | null; preOrder: boolean; deliveryWeeks: number | null }>;
+}
+
+/**
+ * A Qogita catalogue export (header row with GTIN and "£/€ Lowest Price inc. shipping"): its rows
+ * read again with formulas, for the product links (HYPERLINK cells hold no value), keyed by GTIN.
+ */
+function qogitaFile(buf: ArrayBuffer, sheet: string, expected: "UK" | "EU" | null): QogitaFile {
+  const wb = XLSX.read(buf, { type: "array", cellFormula: true, sheetStubs: true });
+  const ws = wb.Sheets[sheet];
+  const rows = XLSX.utils.sheet_to_json<Cell[]>(ws, { header: 1, raw: true, defval: null, blankrows: true });
+  const formulas: Record<number, string> = {};
+  for (const [addr, cell] of Object.entries(ws)) if (!addr.startsWith("!") && (cell as { f?: string }).f) formulas[XLSX.utils.decode_cell(addr).r] = (cell as { f: string }).f;
+  const cat = parseQogitaCatalog(rows, formulas);
+  const region = cat.currency === "GBP" ? "UK" : cat.currency === "EUR" ? "EU" : null;
+  return {
+    currency: cat.currency, region, products: cat.rows.length, shippingIncluded: cat.shippingIncluded,
+    warning: expected && region && region !== expected ? `This file is priced in ${cat.currency}, but Settings → Business says your Qogita account is ${expected}. It will import as Qogita ${region}; change the region if that's wrong.` : null,
+    extras: Object.fromEntries(cat.rows.map((r) => [r.gtin, { link: r.link, offerCount: r.offerCount, preOrder: r.preOrder, deliveryWeeks: r.deliveryWeeks }])),
+  };
 }
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -87,9 +116,11 @@ export default function UploadPage() {
   const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState<Step>(0);
   const [tab, setTab] = useState<string>("");
+  const [qogitaRegion, setQogitaRegion] = useState<"UK" | "EU" | null>(null);
 
   useEffect(() => {
     api<{ suppliers: Supplier[] }>("/api/suppliers").then((r) => setSuppliers(r.suppliers)).catch(() => {});
+    api<{ qogitaRegion: "UK" | "EU" }>("/api/business").then((r) => setQogitaRegion(r.qogitaRegion)).catch(() => {});
     api<{ profiles: Profile[] }>("/api/profiles").then((r) => {
       setProfiles(r.profiles);
       setProfileId(r.profiles.find((p) => p.is_default)?.id ?? r.profiles[0]?.id ?? "");
@@ -124,6 +155,31 @@ export default function UploadPage() {
     const columns = guessMapping(headers);
     const fresh: FileState = { ...f, mapping: { headerRow, columns, pricePer: "unit" }, remembered: null };
     return withHeaderCurrency(fresh, columns.unitPrice);
+  }
+
+  /**
+   * A Qogita catalogue: the columns mapped (price per item, Unit the case size as the order multiple,
+   * the cheapest offer's inventory as stock), the supplier Qogita UK or EU by the price's currency,
+   * ex-VAT, shipping already in the price.
+   */
+  async function qogitaLayout(f: FileState, q: QogitaFile): Promise<FileState> {
+    const headerRow = detectHeaderRow(f.rows);
+    const headers = headersOf(f.rows, headerRow);
+    const find = (pred: (h: string) => boolean) => headers.find((h) => pred(h.toLowerCase()));
+    const priceHeader = find((h) => h.includes("lowest price"));
+    const columns = {
+      ean: find((h) => h === "gtin"), title: find((h) => h === "name"), brand: find((h) => h === "brand"), category: find((h) => h === "category"),
+      unitPrice: priceHeader, moq: find((h) => h === "unit"), stock: find((h) => h.startsWith("lowest priced offer inventory")),
+    };
+    const currency = q.currency ?? "GBP";
+    const fx = currency === "GBP" ? { rate: 1, date: today(), source: "fixed" } : await fetchFx(currency).catch(() => ({ rate: 0, date: today(), source: "" }));
+    return {
+      ...f, qogita: q, remembered: null,
+      mapping: { headerRow, columns, pricePer: "unit" },
+      supplier: { name: `Qogita ${q.region ?? currency}`, vatBasis: "ex_vat", vatRate: 20, currency },
+      fx, fxError: fx.rate ? null : "Couldn't fetch a rate; enter it by hand",
+      currencyHint: `Qogita catalogue, priced in ${currency} from the “${priceHeader}” header${q.shippingIncluded ? ", shipping included" : ""}, ex-VAT`,
+    };
   }
 
   /** Pre-select the currency (and its ECB rate) named in the price column's header. */
@@ -167,7 +223,8 @@ export default function UploadPage() {
           fxError: null,
           currencyHint: null,
         };
-        const ready = await loadLayout(base);
+        // Qogita's catalogue export: its own columns, the account's supplier, no guessing.
+        const ready = isQogitaCatalog(base.rows) ? await qogitaLayout(base, qogitaFile(buf, sheet, qogitaRegion)) : await loadLayout(base);
         setFiles((fs) => [...fs.filter((f) => f.key !== ready.key), ready]);
         setTab((t) => t || ready.key);
       } catch (e) {
@@ -220,14 +277,20 @@ export default function UploadPage() {
         profileId,
         files: files.map((f) => {
           const headers = headersOf(f.rows, f.mapping.headerRow);
+          const q = f.qogita;
           return {
             fileName: f.fileName,
-            supplier: f.supplier,
+            supplier: q ? { ...f.supplier, region: q.region } : f.supplier,
+            ...(q ? { sourceType: "qogita" } : {}),
             headers,
             fingerprint: headerFingerprint(headers),
             mapping: f.mapping,
             fx: { rate: f.fx.rate, date: f.fx.date },
-            rows: previews[f.key]!.rows,
+            // A Qogita catalogue's rows carry the product link, the number of offers, pre-order and delivery.
+            rows: q ? previews[f.key]!.rows.map((r) => {
+              const x = q.extras[r.ean];
+              return x ? { ...r, externalRef: x.link, offerCount: x.offerCount, preOrder: x.preOrder, deliveryWeeks: x.deliveryWeeks } : r;
+            }) : previews[f.key]!.rows,
           };
         }),
       };
@@ -498,6 +561,8 @@ function MapFile({ f, suppliers, problems, onUpdate, onCurrency, onSupplier, onS
           )}
         </div>
         {f.currencyHint && !f.fxError && <p className="text-xs text-brand">{f.currencyHint}</p>}
+        {f.qogita && <p className="text-xs text-muted-foreground">{f.qogita.products.toLocaleString("en-GB")} products. The price is per item; Unit is the case size (the order multiple, stored as the MOQ). Imported as supplier <b>{f.supplier.name}</b>: products already known by GTIN aren&apos;t duplicated{f.qogita.region === "UK" ? ", and Qogita EU offers for them are archived" : ""}.</p>}
+        {f.qogita?.warning && <p className="text-xs font-medium text-warn">{f.qogita.warning}</p>}
         <p className="text-xs text-muted-foreground">VAT basis and currency are saved with the supplier and applied to every future file from them. Costs are stored in GBP ex-VAT.</p>
       </section>
 

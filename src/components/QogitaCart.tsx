@@ -1,5 +1,6 @@
 "use client";
 
+import { currencySymbol } from "@/lib/format";
 import { ExternalLinkIcon, RefreshCwIcon, ShoppingCartIcon, Trash2Icon } from "lucide-react";
 import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
 import { toast } from "sonner";
@@ -26,7 +27,7 @@ const Ctx = createContext<CartState | null>(null);
 export const useQogitaCart = () => useContext(Ctx);
 
 const money = (m: Money | null | undefined) =>
-  m ? `${m.currency === "EUR" ? "€" : `${m.currency} `}${Number(m.amount).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—";
+  m ? `${currencySymbol(m.currency)}${Number(m.amount).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—";
 
 /** The Qogita cart, shared by the top bar and "Add to Qogita cart" on results. */
 export function QogitaCartProvider({ enabled, children }: { enabled: boolean; children: ReactNode }) {
@@ -84,6 +85,19 @@ export function QogitaCartProvider({ enabled, children }: { enabled: boolean; ch
               <p className="py-10 text-center text-sm text-muted-foreground">The cart is empty. Add a passing Qogita product from its details.</p>
             ) : allocations.map((a) => <Allocation key={a.qid} a={a} onChanged={refresh} />)}
           </div>
+          {allocations && allocations.length > 0 && (() => {
+            // Cash at checkout: Qogita's prices are ex-VAT; 20% VAT is added (reclaimed when VAT registered).
+            const sub = allocations.reduce((t, x) => t + Number(x.subtotal.amount), 0);
+            const ccy = allocations[0].subtotal.currency;
+            const m = (n: number) => money({ amount: String(n), currency: ccy });
+            return (
+              <div className="num space-y-0.5 border-t px-4 py-3 text-sm">
+                <p className="flex justify-between"><span className="text-muted-foreground">Goods (ex-VAT)</span><span>{m(sub)}</span></p>
+                <p className="flex justify-between"><span className="text-muted-foreground">VAT paid at checkout (reclaimable when VAT registered)</span><span>{m(sub * 0.2)}</span></p>
+                <p className="flex justify-between font-semibold"><span>Cash needed at checkout</span><span>{m(sub * 1.2)}</span></p>
+              </div>
+            );
+          })()}
           <div className="flex items-center justify-between gap-2 border-t p-4">
             <Button variant="ghost" size="sm" onClick={refresh} disabled={loading}><RefreshCwIcon className={cn(loading && "animate-spin")} /> Refresh</Button>
             <Button variant="outline" size="sm" asChild>

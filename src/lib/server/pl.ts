@@ -1,6 +1,7 @@
 import "server-only";
 import { nicheLedgers, nicheSummary } from "./plNiches";
 import { supplierSummary } from "./plSuppliers";
+import { businessSettings } from "./business";
 import { LAUNCH_STEPS } from "../pl/launch";
 import { addDailyTokens, PL_KEEP_DAYS, ukDay, type TokensByDay } from "../keepaLedger";
 import { getKeepa, type KeepaProduct, type OnKeepaResponse, type Point } from "../keepa/client";
@@ -72,7 +73,9 @@ export async function plSettings(): Promise<Settings> {
   const rows = (must(res, "private label settings") as { key: string; value: number }[]);
   const out = { ...DEFAULT_SETTINGS };
   for (const r of rows) if (r.key in out) out[r.key as keyof Settings] = Number(r.value);
-  return out;
+  // VAT registration and rate are the business's (Settings → Business).
+  const b = await businessSettings();
+  return { ...out, vat: b.vatRate, vatRegistered: b.vatRegistered ? 1 : 0 };
 }
 
 export async function savePlSettings(input: Partial<Record<string, unknown>>): Promise<Settings> {

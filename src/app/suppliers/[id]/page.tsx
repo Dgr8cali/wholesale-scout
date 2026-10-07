@@ -130,10 +130,10 @@ export default function SupplierPage() {
             {[1, 2, 3, 4, 5].map((n) => <NativeSelectOption key={n} value={n}>{"★".repeat(n)}</NativeSelectOption>)}
           </NativeSelect>
         </Field>
-        <Field label="VAT basis of prices">
+        <Field label="Supplier prices are" hint="Inc-VAT prices are divided by 1 + the VAT rate to the ex-VAT cost every profit uses (VAT registered: that's the cost; not: the VAT is added back as a cost).">
           <NativeSelect value={s.vat_basis} aria-label="VAT basis" onChange={(e) => save({ vat_basis: e.target.value as SupplierRecord["vat_basis"] })}>
-            <NativeSelectOption value="ex_vat">Ex VAT</NativeSelectOption>
-            <NativeSelectOption value="inc_vat">Inc VAT</NativeSelectOption>
+            <NativeSelectOption value="ex_vat">ex-VAT</NativeSelectOption>
+            <NativeSelectOption value="inc_vat">inc-VAT</NativeSelectOption>
           </NativeSelect>
         </Field>
         <Field label="Currency">{text("currency", "GBP")}</Field>

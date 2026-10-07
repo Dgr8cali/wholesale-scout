@@ -1,5 +1,7 @@
 "use client";
 
+import { currencySymbol } from "@/lib/format";
+import { VatTag, vatBasisOf } from "@/components/VatTag";
 import { FavouriteNote } from "@/components/FavouriteStar";
 import { WaiveControl } from "@/components/WaiveControl";
 import { GATE_LABELS, GROUP_LABELS, type GateId, type GroupId } from "@/lib/screening/config";
@@ -209,9 +211,10 @@ export function Detail({ r, fav, onNote, onWaive, onWatch, onCost, stacked = fal
             <dt>Returns allowance</dt><dd className="text-right">{gbp(r.fees.returns)}</dd>
             {r.fees.outputVat ? <><dt>Output VAT</dt><dd className="text-right">{gbp(r.fees.outputVat)}</dd></> : null}
             <dt>Landed cost</dt><dd className="text-right">{gbp(r.landed_cost)}</dd>
-            <dt className="font-semibold">Profit</dt><dd className="text-right font-semibold">{gbp(r.profit)}</dd>
+            <dt className="font-semibold">Profit <VatTag registered={vatBasisOf(r.fees)} /></dt><dd className="text-right font-semibold">{gbp(r.profit)}</dd>
+            {vatBasisOf(r.fees) && r.fees.vatPayable != null && <><dt className="text-muted-foreground">VAT payable per unit (output less input; info)</dt><dd className="text-right text-muted-foreground">{gbp(r.fees.vatPayable)}</dd></>}
             <dt className="col-span-2 mt-1 text-muted-foreground">
-              {r.fees.source === "amazon" ? "Referral and FBA from Amazon's fee estimate" : "Fees from the rate card"}; DSF and VAT on fees included{r.fees.dimsEstimated ? "; size assumed (no dimensions)" : ""}. Price: {r.price_source}.
+              {r.fees.source === "amazon" ? "Referral and FBA from Amazon's fee estimate" : "Fees from the rate card"}; {vatBasisOf(r.fees) ? "fees with the DSF, ex-VAT (VAT registered: reclaimed); output VAT taken off the price" : "DSF and VAT on fees included"}{r.fees.dimsEstimated ? "; size assumed (no dimensions)" : ""}. Price: {r.price_source}.
             </dt>
           </dl>
         ) : (
@@ -316,7 +319,7 @@ function SellerGap({ r }: { r: Result }) {
 
 /** Every Qogita supplier's offer for the product, the one that fits the budget highlighted. */
 function QogitaOfferList({ q, stacked }: { q: QogitaOffers; stacked: boolean }) {
-  const cur = q.currency === "EUR" ? "€" : `${q.currency} `;
+  const cur = currencySymbol(q.currency);
   const m = (n: number) => `${cur}${n.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   // Cheapest first until a column is clicked.
   const sorting = useSortable("wholesale.qogitaOffers", q.offers, {
@@ -401,7 +404,7 @@ function AddToCart({ r, budgetGbp }: { r: Result; budgetGbp?: number }) {
         <Input id={`qty-${r.id}`} className="num h-8 w-28" type="number" min={offer.unit} step={offer.unit} value={qty} onChange={(e) => setQty(e.target.value)} />
       </div>
       <p className="num pb-1.5 text-xs text-muted-foreground">
-        ≈ {q!.currency === "EUR" ? "€" : `${q!.currency} `}{cost.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} from {offer.seller}
+        ≈ {currencySymbol(q!.currency)}{cost.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} from {offer.seller}
         {budgetGbp ? <> · {suggested.toLocaleString("en-GB")} is the most your {gbp(budgetGbp)} line budget buys</> : null}
       </p>
       <Button size="sm" variant="outline" className="ml-auto" disabled={bad || busy} onClick={async () => { setBusy(true); await cart.add(offer.qid, n, offer.unit, r.product?.title ?? offer.seller); setBusy(false); }}>

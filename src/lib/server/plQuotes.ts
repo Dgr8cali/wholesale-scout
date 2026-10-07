@@ -4,6 +4,7 @@ import type { Fill } from "../pl/fill";
 import { CURRENCIES, QUOTE_SOURCES, QUOTE_STATUSES, landedCost, type LandedInputs, type Quote } from "../pl/quotes";
 import { adsDashboard, saveAdsProduct } from "./ads";
 import { ensureStockItemForAsin } from "./stock";
+import { businessSettings } from "./business";
 import { db, must } from "./db";
 import { applyAuto } from "./pl";
 
@@ -76,23 +77,29 @@ export async function applyQuote(id: string, to: "gate0" | "gate7"): Promise<{ w
   const q = await quoteOrThrow(id);
   const l = landedCost(q);
   if (!l) throw new Error("The quote needs a unit price, units and an FX rate");
+  // VAT registered: the import VAT is reclaimed, so it isn't part of the landed cost (it's still cash on the day).
+  const reg = (await businessSettings()).vatRegistered;
+  const perUnit = reg ? l.perUnitExVat : l.perUnit;
+  const why = `${q.supplier_name}: £${fmt(l.total)} for ${l.units} units${reg && l.vat ? `, less £${fmt(l.vat)} import VAT (reclaimed)` : ""}`;
   const fill: Fill = to === "gate0"
-    ? { landed: { value: fmt(l.perUnit), why: `${q.supplier_name}: £${fmt(l.total)} for ${l.units} units` } }
-    : { units: { value: String(l.units), why: `${q.supplier_name}'s first order` }, landed: { value: fmt(l.perUnit), why: `${q.supplier_name}: £${fmt(l.total)} for ${l.units} units` } };
+    ? { landed: { value: fmt(perUnit), why } }
+    : { units: { value: String(l.units), why: `${q.supplier_name}'s first order` }, landed: { value: fmt(perUnit), why } };
   const written = await applyAuto(q.candidate_id, fill, "quote");
-  return { written, kept: Object.keys(fill).filter((k) => !written.includes(k)), perUnit: l.perUnit, total: l.total, units: l.units };
+  return { written, kept: Object.keys(fill).filter((k) => !written.includes(k)), perUnit, total: l.total, units: l.units };
 }
 
 /** Choose a quote: it's "chosen", the others "rejected" (unless kept), and its landed cost is stored on the candidate. */
 export async function chooseQuote(id: string, rejectOthers = true): Promise<{ chosenLanded: number | null }> {
   const q = await quoteOrThrow(id);
   const l = landedCost(q);
+  const reg = (await businessSettings()).vatRegistered;
+  const perUnit = l ? (reg ? l.perUnitExVat : l.perUnit) : null;
   const d = db();
   must(await d.from("pl_quotes").update({ status: "chosen", updated_at: now() }).eq("id", id), "choose quote");
   if (rejectOthers) must(await d.from("pl_quotes").update({ status: "rejected", updated_at: now() }).eq("candidate_id", q.candidate_id).neq("id", id), "reject others");
   else must(await d.from("pl_quotes").update({ status: "received", updated_at: now() }).eq("candidate_id", q.candidate_id).neq("id", id).eq("status", "chosen"), "unchoose");
-  must(await d.from("pl_candidates").update({ chosen_quote: id, chosen_landed: l?.perUnit ?? null, updated_at: now() }).eq("id", q.candidate_id), "store chosen landed");
-  return { chosenLanded: l?.perUnit ?? null };
+  must(await d.from("pl_candidates").update({ chosen_quote: id, chosen_landed: perUnit, updated_at: now() }).eq("id", q.candidate_id), "store chosen landed");
+  return { chosenLanded: perUnit };
 }
 
 /* ===================== launch ===================== */

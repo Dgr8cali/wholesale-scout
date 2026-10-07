@@ -18,7 +18,7 @@ type Supplier = { id: string; name: string; source_type: string; vat_rate: numbe
  * landed cost and held to the profile's profit floors. Products that warn only for brand
  * approval come back flagged, to list separately.
  */
-export async function planCandidates(opts: { warns?: boolean } = {}): Promise<{ limits: PlanLimits; profile: string; candidates: PlanCandidate[]; noOffer: NoOffer[]; updatedAt: string | null }> {
+export async function planCandidates(opts: { warns?: boolean } = {}): Promise<{ limits: PlanLimits; profile: string; candidates: PlanCandidate[]; noOffer: NoOffer[]; updatedAt: string | null; vatRegistered: boolean; vatRate: number }> {
   const d = db();
   const profile = await loadProfile(null);
   const cfg = profile.config;
@@ -43,10 +43,10 @@ export async function planCandidates(opts: { warns?: boolean } = {}): Promise<{ 
   }
   const offers: Offer[] = [];
   for (const c of chunks([...productEan.keys()], 200)) {
-    const res = await d.from("offers").select("id, product_id, supplier_id, unit_cost_gbp, cost_known, moq, stock, fx_rate, manual, manual_supplier, landed_gbp, mov_gbp").in("product_id", c);
+    const res = await d.from("offers").select("id, product_id, supplier_id, unit_cost_gbp, cost_known, moq, stock, fx_rate, manual, manual_supplier, landed_gbp, mov_gbp").in("product_id", c).is("archived_at", null);
     // Before the cost-override migrations: the offers without those columns.
     offers.push(...(res.error && /manual|landed_gbp|mov_gbp/.test(res.error.message)
-      ? must(await d.from("offers").select("id, product_id, supplier_id, unit_cost_gbp, cost_known, moq, stock, fx_rate").in("product_id", c), "offers") as Offer[]
+      ? must(await d.from("offers").select("id, product_id, supplier_id, unit_cost_gbp, cost_known, moq, stock, fx_rate").in("product_id", c).is("archived_at", null), "offers") as Offer[]
       : must(res, "offers") as Offer[]));
   }
   const suppliers = new Map<string, Supplier>();
@@ -133,7 +133,7 @@ export async function planCandidates(opts: { warns?: boolean } = {}): Promise<{ 
     }
   }
   const updatedAt = rows.reduce<string | null>((m, r) => (r.evaluated_at && (!m || r.evaluated_at > m) ? r.evaluated_at : m), null);
-  return { limits, profile: profile.name, candidates: out, noOffer, updatedAt };
+  return { limits, profile: profile.name, candidates: out, noOffer, updatedAt, vatRegistered: profile.config.fees.vatRegistered, vatRate: profile.config.fees.vatRatePct };
 }
 
 /** It warns, and only because the brand needs approval. */

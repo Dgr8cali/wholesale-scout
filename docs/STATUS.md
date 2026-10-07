@@ -1,7 +1,7 @@
 # Wholesale Scout: status
 
 Read this first in a new session. Keep it current: every commit that changes a feature updates
-it (what's built, the backlog, the rough edges). Last updated: 6 Oct 2026 (Gate 4: a review box for every ASIN on the candidate; reviews for other ASINs kept).
+it (what's built, the backlog, the rough edges). Last updated: 7 Oct 2026 (VAT registered business-wide; Qogita UK account and catalogue import).
 
 Wholesale Scout is a single-user Amazon UK seller's workbench: Next.js 16 (App Router, `proxy.ts`
 password gate), Supabase (Postgres, RLS on, service-role access from the server only), Vercel
@@ -25,6 +25,21 @@ compared with Amazon's orders, FBA stock and fee estimates from the nightly SP-A
 purchases, Received into a Stock bucket). The extension shows the verdict on product and search
 pages, reads competitor stock on request, looks up dangerous goods in Seller Central, captures
 Opportunity Explorer niches and runs manual rank checks.
+
+**Business (Settings → Business).** `business_settings`: VAT registered (default yes) and rate (20%),
+written into every screening profile's fees and applied by loadProfile, and to Private label's
+settings (Gate 6: revenue ÷ 1.2, fees ex-VAT with DSF, margins on revenue, VAT payable as info; a
+quote's landed cost excludes the reclaimed import VAT). `profitOnVatBasis` is the rule; results store
+their basis, input VAT and VAT payable in `fees`; profit, ROI and margin carry a VAT reg. / Non-VAT tag
+(results table, breakdown, product page, plan, Tracker, Gate 6). Recalculate all re-screens every
+finished run from stored data and lists the 20 biggest profit changes (`recalc_jobs`). The plan and
+the Qogita cart show the VAT paid at checkout and the cash needed. Qogita: the region (UK/EU) is a
+business setting; suppliers "Qogita UK" (GBP, ex-VAT, shipping included) and "Qogita EU" (EUR, ECB
+rate; the old "Qogita"), chosen by the prices' currency with a mismatch warning; a UK pull or file
+archives the EU offers for its products (`offers.archived_at`, left out of plans and picks) and adds
+offer count, pre-order and delivery weeks; the upload page reads Qogita's catalogue export
+(`catalogFile.ts`: header row found, GTINs as text, HYPERLINK URLs, price per item with Unit as the
+case size).
 
 **Private label: launch your own product.** Candidates are scored through Gatekeeper's eight gates,
 a 10-line scorecard and a verdict, with Keepa filling Gates 0–2, Opportunity Explorer captures

@@ -31,7 +31,7 @@ export function SourceChip({ source }: { source: FieldSource }) {
 }
 
 /** A labelled figure: the readouts under Gates 6 and 7. */
-export function Readout({ label, value, sub, tone }: { label: string; value: React.ReactNode; sub?: React.ReactNode; tone?: Status | null }) {
+export function Readout({ label, value, sub, tone }: { label: React.ReactNode; value: React.ReactNode; sub?: React.ReactNode; tone?: Status | null }) {
   return (
     <div className="flex flex-col gap-0.5 rounded-lg bg-surface-2 px-3 py-2.5">
       <span className="text-[11px] tracking-wide text-muted-foreground uppercase">{label}</span>

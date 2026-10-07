@@ -11,7 +11,16 @@ If Qogita isn't set up, the page says "Qogita isn't connected" and asks for QOGI
 
 ## Choosing what to pull
 
-You need a category or at least one brand. Prices are in your Qogita account's currency (euros).
+You need a category or at least one brand. Prices are in your Qogita account's currency: pounds on a UK account, euros on an EU one.
+
+**UK or EU account.** The app's login (QOGITA_EMAIL, QOGITA_PASSWORD) is one Qogita account; **Settings → Business → Qogita region** says which. The currency comes from Qogita's own prices:
+
+- **UK account**: prices in £, ex-VAT, shipping included, so no conversion and nothing added. Offers go under the supplier **Qogita UK**. When a UK pull or file prices a product the EU account priced before, the EU offer is archived: kept for history, left out of plans and picks. Products are matched by GTIN, never duplicated.
+- **EU account**: prices in €, converted at the day's ECB rate, under **Qogita EU** (the supplier the app called "Qogita" before).
+
+A pull whose prices come back in the other currency than the region says so.
+
+The pull page's min/max price and MOV limit are in the account's currency.
 
 | Field | What it does |
 | --- | --- |

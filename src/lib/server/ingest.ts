@@ -6,7 +6,7 @@ import { checkNewOffers } from "./watchlist";
 
 export interface IngestFile {
   fileName: string;
-  supplier: { name: string; vatBasis: "ex_vat" | "inc_vat"; vatRate: number; currency: string };
+  supplier: { name: string; vatBasis: "ex_vat" | "inc_vat"; vatRate: number; currency: string; region?: "UK" | "EU" | null };
   headers: string[];
   fingerprint: string;
   mapping: ColumnMapping;
@@ -65,7 +65,7 @@ export async function ingest(payload: IngestPayload): Promise<{ runId: string; r
       : null;
     const row = existing ?? must(
       await d.from("suppliers")
-        .upsert({ name: s.name.trim(), source_type: f.sourceType ?? "upload", vat_basis: s.vatBasis, vat_rate: s.vatRate, currency: s.currency, updated_at: new Date().toISOString() }, { onConflict: "name" })
+        .upsert({ name: s.name.trim(), source_type: f.sourceType ?? "upload", vat_basis: s.vatBasis, vat_rate: s.vatRate, currency: s.currency, ...(s.region ? { region: s.region } : {}), updated_at: new Date().toISOString() }, { onConflict: "name" })
         .select("id, vat_rate")
         .single(),
       "supplier",
@@ -120,6 +120,7 @@ export async function ingest(payload: IngestPayload): Promise<{ runId: string; r
         ...(r.externalRef ? { external_ref: r.externalRef } : {}),
         // A check sets it on every row: in a bulk insert a missing column is sent as null, not its default.
         ...(r.costKnown !== undefined ? { cost_known: r.costKnown } : {}),
+        ...(r.offerCount !== undefined ? { offer_count: r.offerCount, pre_order: r.preOrder ?? null, delivery_weeks: r.deliveryWeeks ?? null } : {}),
         _vatRate: sup.vatRate,
       })),
     );
@@ -133,6 +134,17 @@ export async function ingest(payload: IngestPayload): Promise<{ runId: string; r
     }
     const inserted = must(res, "insert offers") as { id: string; product_id: string; unit_cost_gbp: number }[];
     inserted.forEach((o, i) => offers.push({ ...o, _vatRate: c[i]._vatRate }));
+  }
+
+  // Qogita UK now prices these products: the EU account's offers for them are archived (kept, not
+  // used for picks or plans). Matched by product, so the EU history stays on the same products.
+  for (const f of payload.files) {
+    if (f.sourceType !== "qogita" || f.supplier.region !== "UK") continue;
+    const supId = supplierIds.get(f.fileName)!.id;
+    const pids = [...new Set(offerRows.filter((r) => r.supplier_id === supId).map((r) => r.product_id))];
+    const eu = (must(await d.from("suppliers").select("id").eq("source_type", "qogita").eq("region", "EU"), "EU Qogita") as { id: string }[]).map((x) => x.id);
+    if (!eu.length || !pids.length) continue;
+    for (const c of chunks(pids, 200)) must(await d.from("offers").update({ archived_at: new Date().toISOString() }).in("supplier_id", eu).in("product_id", c).is("archived_at", null), "archive Qogita EU offers");
   }
 
   // Cheapest landed offer per product (VAT on goods counts when not registered).

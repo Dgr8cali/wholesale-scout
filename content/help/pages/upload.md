@@ -23,6 +23,15 @@ Each file is listed with its row count and either **Layout remembered: [supplier
 
 ## 2. Map
 
+**A Qogita catalogue export** (the "Catalog" sheet with title lines, then a header row with **GTIN** and **£ Lowest Price inc. shipping**) is recognised and mapped for you. Its supplier is **Qogita UK** (£) or **Qogita EU** (€), by the price header's currency, with a warning if that isn't your region in Settings → Business. The price already includes shipping and is ex-VAT.
+
+- **Price and Unit**: the price is per item and **Unit** is the case size (the order multiple, stored as the MOQ). In the sample, Neutrogena Cuticle Oil 75ml is £4.97 with Unit 120: £4.97 a bottle, not 4p; inventory always comes in whole cases.
+- **GTINs** keep their leading zeros.
+- **Product Link**: the URL is taken from the HYPERLINK formula.
+- **Other columns**: the cheapest offer's inventory, the number of offers, pre-order and delivery weeks show on the product page.
+
+Products already known by GTIN aren't duplicated, and a UK file archives the EU offers for its products.
+
 With several files, a tab per file; a dot marks a file that still needs something, a tick one that's ready.
 
 ### Supplier
