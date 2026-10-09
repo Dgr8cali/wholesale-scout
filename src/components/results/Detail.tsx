@@ -2,6 +2,7 @@
 
 import { currencySymbol } from "@/lib/format";
 import { VatTag, vatBasisOf } from "@/components/VatTag";
+import { PRICE_BASIS_SHORT, type PriceBasis } from "@/lib/screening/config";
 import { FavouriteNote } from "@/components/FavouriteStar";
 import { WaiveControl } from "@/components/WaiveControl";
 import { GATE_LABELS, GROUP_LABELS, type GateId, type GroupId } from "@/lib/screening/config";
@@ -21,7 +22,7 @@ import { Input } from "@/components/ui/input";
 import { ShoppingCartIcon } from "lucide-react";
 import { useState } from "react";
 import Link from "next/link";
-import type { Fav, Result, Seller } from "./types";
+import type { Fav, PriceProfit, Result, Seller } from "./types";
 import { WatchEditor } from "./WatchEditor";
 import { CostOverrideControl } from "./CostOverride";
 import type { CostInput } from "@/lib/costOverride";
@@ -212,6 +213,7 @@ export function Detail({ r, fav, onNote, onWaive, onWatch, onCost, stacked = fal
             {r.fees.outputVat ? <><dt>Output VAT</dt><dd className="text-right">{gbp(r.fees.outputVat)}</dd></> : null}
             <dt>Landed cost</dt><dd className="text-right">{gbp(r.landed_cost)}</dd>
             <dt className="font-semibold">Profit <VatTag registered={vatBasisOf(r.fees)} /></dt><dd className="text-right font-semibold">{gbp(r.profit)}</dd>
+            {r.fees.at && <PriceCompare at={r.fees.at} basis={r.fees.priceBasis} spike={r.gate_outcomes?.some((o) => o.tags?.includes("SPIKE")) ?? false} />}
             {vatBasisOf(r.fees) && r.fees.vatPayable != null && <><dt className="text-muted-foreground">VAT payable per unit (output less input; info)</dt><dd className="text-right text-muted-foreground">{gbp(r.fees.vatPayable)}</dd></>}
             <dt className="col-span-2 mt-1 text-muted-foreground">
               {r.fees.source === "amazon" ? "Referral and FBA from Amazon's fee estimate" : "Fees from the rate card"}; {vatBasisOf(r.fees) ? "fees with the DSF, ex-VAT (VAT registered: reclaimed); output VAT taken off the price" : "DSF and VAT on fees included"}{r.fees.dimsEstimated ? "; size assumed (no dimensions)" : ""}. Price: {r.price_source}.
@@ -412,5 +414,26 @@ function AddToCart({ r, budgetGbp }: { r: Result; budgetGbp?: number }) {
       </Button>
       {bad && <p className="w-full text-xs text-warn">Order whole cases of {offer.unit}.</p>}
     </div>
+  );
+}
+
+/**
+ * The profit at both prices, so the basis can be compared: "Profit at current Buy Box (£18.00): £x"
+ * and "Profit at 90-day median (£16.84): £x", with the basis the gates used and a spike tag.
+ */
+function PriceCompare({ at, basis, spike }: { at: NonNullable<NonNullable<Result["fees"]>["at"]>; basis?: PriceBasis; spike: boolean }) {
+  const line = (x: PriceProfit | null, what: string) => x && (
+    <><dt className="text-muted-foreground">Profit at {what} ({gbp(x.price)})</dt><dd className="text-right">{x.profit == null ? "needs a cost" : gbp(x.profit)}</dd></>
+  );
+  return (
+    <>
+      {line(at.current, "current Buy Box")}
+      {line(at.median90, at.median90?.label ?? "90-day median")}
+      {!at.current && <dt className="col-span-2 text-warn">No current Buy Box (suppressed or no offers): the 90-day median is used.</dt>}
+      <dt className="col-span-2 flex flex-wrap items-center gap-1.5 text-muted-foreground">
+        Gates use: <b className="text-foreground">{PRICE_BASIS_SHORT[basis ?? "lower"]}</b>
+        {spike && <span className="rounded-full bg-warn-soft px-1.5 py-px text-[10px] font-semibold text-warn uppercase" title="The current Buy Box is more than 15% over its 90-day median">Price spike</span>}
+      </dt>
+    </>
   );
 }

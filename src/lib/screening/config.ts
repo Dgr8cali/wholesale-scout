@@ -49,8 +49,22 @@ export interface SellerLookupConfig {
   distributorBrandSharePct: number;
 }
 
+export type PriceBasis = "current" | "median90" | "median" | "lower90" | "lower";
+export const PRICE_BASES: PriceBasis[] = ["current", "median90", "median", "lower90"];
+export const PRICE_BASIS_LABEL: Record<PriceBasis, string> = {
+  current: "Current Buy Box", median90: "90-day median Buy Box", median: "12-month median Buy Box",
+  lower90: "Conservative: lower of current Buy Box and 90-day median", lower: "Lower of current Buy Box and 12-month median",
+};
+/** Short, for tags: "Gates use: Conservative". */
+export const PRICE_BASIS_SHORT: Record<PriceBasis, string> = { current: "Current Buy Box", median90: "90-day median", median: "12-month median", lower90: "Conservative", lower: "Lower of current and 12-month median" };
+
 export interface ProfileConfig {
-  scoringPrice: "current" | "median" | "lower";
+  /**
+   * The price profit is worked out at (Settings → Business → Price basis): the current Buy Box, its
+   * 90-day or 12-month median, or the lower of the current and the 90-day median ("lower90", the
+   * default). "lower" (the lower of current and the 12-month median) is the old default.
+   */
+  scoringPrice: PriceBasis;
   sellerLookup: SellerLookupConfig;
   budget: number;
   /** Reuse a Keepa snapshot up to this many days old (any run's) instead of fetching again. */
@@ -173,7 +187,7 @@ export const DEFAULT_GATES: GateConfigs = {
 };
 
 export const DEFAULT_PROFILE: ProfileConfig = {
-  scoringPrice: "lower",
+  scoringPrice: "lower90",
   sellerLookup: { enabled: true, topN: 3, distributorBrandSharePct: 50 },
   budget: 1000,
   keepaMaxAgeDays: 7,

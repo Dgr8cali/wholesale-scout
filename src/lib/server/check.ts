@@ -1,3 +1,4 @@
+import { PRICE_BASIS_SHORT, type PriceBasis } from "../screening/config";
 import "server-only";
 import { parseCheckInput, type CheckLine } from "../check/parse";
 import { economics, hurdlePrice, maxLandedCost, referralCategoryFor, unitCostFromLanded } from "../fees/engine";
@@ -185,6 +186,8 @@ export interface VerdictCard {
   margin: number | null;
   sellPrice: number | null;
   priceSource: string | null;
+  /** The profit at the current Buy Box and at the 90-day median, and the price basis the gates used ("Conservative"). */
+  compare: { current: PriceAt | null; median90: PriceAt | null; gatesUse: string | null; spike: boolean } | null;
   /** With a cost: the sell price that clears the floors. Without: the most it can cost landed. */
   hurdle: { kind: "price" | "landed"; value: number | null };
   buyBox: number | null;
@@ -215,11 +218,16 @@ export interface VerdictCard {
 
 type CompetitorStock = { at: string; sellers: { sellerId: string; name: string | null; stock: number | null; limited: boolean; source?: string | null; at?: string }[] };
 
+type PriceAt = { price: number; label: string; profit: number | null };
+
 type ResultRow = {
   id: string; status: string; verdict: VerdictCard["verdict"]; failed_gate: string | null; score: number | null; band: string | null; why: string | null;
   landed_cost: number | null; profit: number | null; roi: number | null; margin: number | null; sell_price: number | null; price_source: string | null;
   hurdle_price: number | null; gate_outcomes: VerdictCard["gates"] | null;
-  fees: { referral?: number | null; fba?: number | null; total?: number | null; source?: string | null } | null;
+  fees: {
+    referral?: number | null; fba?: number | null; total?: number | null; source?: string | null;
+    priceBasis?: string; at?: { current: PriceAt | null; median90: PriceAt | null };
+  } | null;
   inputs: { market?: (StoredMarket & { amazonNow?: boolean | null }) | null; maxLandedGbp?: number | null; restriction?: { status: string; message: string; links?: RestrictionLink[] } | null; pack?: { ratio: number } | null } | null;
   product: { asin: string | null; ean: string; title: string | null; brand?: string | null; image_url: string | null; competitor_stock?: CompetitorStock | null } | null;
   updated_at?: string | null;
@@ -280,6 +288,11 @@ export async function verdictCard(runId: string): Promise<VerdictCard | null> {
     margin: num(r?.margin),
     sellPrice: num(r?.sell_price),
     priceSource: r?.price_source ?? null,
+    compare: r?.fees?.at ? {
+      current: r.fees.at.current, median90: r.fees.at.median90,
+      gatesUse: r.fees.priceBasis ? PRICE_BASIS_SHORT[r.fees.priceBasis as PriceBasis] ?? r.fees.priceBasis : null,
+      spike: (r.gate_outcomes ?? []).some((o) => (o as { tags?: string[] }).tags?.includes("SPIKE")),
+    } : null,
     hurdle: costKnown ? { kind: "price", value: num(r?.hurdle_price) } : { kind: "landed", value: num(r?.inputs?.maxLandedGbp) },
     buyBox: num(m?.currentBuyBox),
     salesPerMonth: estSales(m).value,

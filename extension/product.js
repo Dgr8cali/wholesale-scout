@@ -139,7 +139,11 @@
         kv("Gating", c.gating?.applyUrl ? ws.h("span", {}, [gating, " · ", ws.h("a", { href: c.gating.applyUrl, target: "_blank", rel: "noreferrer", text: "Apply" })]) : gating),
         kv(c.hurdle.kind === "landed" ? "Max landed" : "Hurdle (sell at)", ws.gbp(c.hurdle.value)),
         kv(c.costKnown ? `Profit at ${ws.gbp(c.landed)}` : "Profit", c.costKnown ? ws.gbp(c.profit) : "needs a cost"),
-      ]));
+        // Both prices side by side, and which the gates used.
+        c.compare?.current ? kv(`Profit at current Buy Box (${ws.gbp(c.compare.current.price)})`, c.compare.current.profit == null ? "needs a cost" : ws.gbp(c.compare.current.profit)) : null,
+        c.compare?.median90 ? kv(`Profit at ${c.compare.median90.label} (${ws.gbp(c.compare.median90.price)})`, c.compare.median90.profit == null ? "needs a cost" : ws.gbp(c.compare.median90.profit)) : null,
+        c.compare?.gatesUse ? kv("Gates use", c.compare.spike ? ws.h("span", {}, [c.compare.gatesUse, " ", ws.h("span", { style: "background:#fef3c7;color:#b45309;border-radius:9px;padding:0 6px;font-size:10px;font-weight:700", text: "PRICE SPIKE" })]) : c.compare.gatesUse) : null,
+      ].filter(Boolean)));
       if (c.why) panel.append(ws.h("div", { class: "why", text: c.why }));
       if (c.notFetched) {
         panel.append(ws.h("div", { class: "why", style: "background:#f4f4f5;padding:6px 8px;border-radius:6px" }, [

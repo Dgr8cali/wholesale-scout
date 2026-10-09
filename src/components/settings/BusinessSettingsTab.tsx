@@ -10,10 +10,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Switch } from "@/components/ui/switch";
+import { PRICE_BASES, PRICE_BASIS_LABEL, type PriceBasis } from "@/lib/screening/config";
 import { api } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
 
-interface Business { vatRegistered: boolean; vatRate: number; qogitaRegion: "UK" | "EU" }
+interface Business { vatRegistered: boolean; vatRate: number; qogitaRegion: "UK" | "EU"; priceBasis: PriceBasis }
 interface Change { id: string; runId: string; asin: string | null; title: string | null; before: number | null; after: number | null; change: number }
 interface Status { job: { id: string; started_at: string; basis: string } | null; pending: number; runs: number; done: boolean; changed: number; top: Change[] }
 
@@ -52,14 +53,14 @@ export function BusinessSettingsTab() {
   if (error) return <ErrorState title="Couldn't load the business settings" message={error} />;
   if (!b || !saved) return <p className="text-sm text-muted-foreground">Loading…</p>;
   const changed = JSON.stringify(b) !== JSON.stringify(saved);
-  const basisChanged = b.vatRegistered !== saved.vatRegistered || b.vatRate !== saved.vatRate;
+  const basisChanged = b.vatRegistered !== saved.vatRegistered || b.vatRate !== saved.vatRate || b.priceBasis !== saved.priceBasis;
 
   const save = async () => {
     setBusy(true);
     try {
       const r = await api<{ settings: Business; profilesUpdated: number }>("/api/business", { method: "PUT", json: b });
       setB(r.settings); setSaved(r.settings);
-      toast.success("Business settings saved", basisChanged ? { description: `${r.profilesUpdated} screening profile${r.profilesUpdated === 1 ? "" : "s"} now on this VAT basis. Recalculate all to update saved results.` } : undefined);
+      toast.success("Business settings saved", basisChanged ? { description: `${r.profilesUpdated} screening profile${r.profilesUpdated === 1 ? "" : "s"} now on these settings. Screenings made on the old ones show as stale: Re-check them, or Recalculate all.` } : undefined);
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -107,6 +108,18 @@ export function BusinessSettingsTab() {
             <li>Revenue is the full sale price; VAT on Amazon&apos;s fees and on the goods is a cost.</li>
           </>}
         </ul>
+      </section>
+
+      <section className="panel space-y-4 p-4 sm:p-5">
+        <div className="space-y-1">
+          <h2 className="section-label">Price basis for profit</h2>
+          <p className="max-w-3xl text-sm text-muted-foreground">The sell price every screening works profit out at: the referral fee, profit, ROI, margin, the Fee engine gate and the score. Every card also shows the profit at the current Buy Box and at the 90-day median side by side, and says which the gates used. With no current Buy Box (suppressed, no offers) it falls back to the 90-day median and says so. Screenings made on another basis show a <b>stale</b> banner until re-checked.</p>
+        </div>
+        <label className="block max-w-xl space-y-1.5"><span className="field-label">Price basis</span>
+          <NativeSelect className="w-full" value={b.priceBasis} onChange={(e) => setB({ ...b, priceBasis: e.target.value as PriceBasis })}>
+            {PRICE_BASES.map((k) => <NativeSelectOption key={k} value={k}>{PRICE_BASIS_LABEL[k]}{k === "lower90" ? " (default)" : ""}</NativeSelectOption>)}
+          </NativeSelect></label>
+        <p className="max-w-3xl text-xs text-muted-foreground">Current Buy Box matches SellerAmp. Conservative scores on the lower of the current Buy Box and its 90-day median, so a temporary spike doesn&apos;t flatter the profit.</p>
       </section>
 
       <section className="panel space-y-4 p-4 sm:p-5">

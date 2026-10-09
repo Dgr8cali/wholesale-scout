@@ -12,7 +12,7 @@ A profile is one complete set of screening settings. It decides which gates run 
 | Part | Where you edit it | What it holds |
 |---|---|---|
 | Gates | [Settings](/help/pages/settings) → **Gates** | Each gate's mode (off, warn or fail) and its thresholds. Compliance has a mode per rule, and gating has **Approval needed counts as** |
-| Scoring price | **Score** → **Score on** | Which price fees, profit and the score use. Default **Lower of current Buy Box and 12-month median** |
+| Scoring price | **Business** → **Price basis** (shown on **Score**) | Which price fees, profit and the score use. Default **Conservative: lower of current Buy Box and 90-day median** |
 | Score | **Score** | Group weights, green and amber bands, and every parameter's scale. See [Score](/help/concepts/score) |
 | Fees | **Fees** → **Fees and landed cost** | VAT registration, VAT rate, DSF, inbound, prep, duty, storage months, returns and the missing-size assumptions. See [Fee engine](/help/concepts/fees) |
 | Budget | **Profiles** → **Budget** | The money for a first order across a run (default £1,000). The [Budget fit](/help/gates/budgetFit) gate caps each line at a share of it |
@@ -96,7 +96,7 @@ For avoiding hazmat and liquids:
 | [Gating and blocks](/help/gates/gating) | fail | approval needed: warn |
 | [Fee engine](/help/gates/fees) | fail | £2 profit, 20% ROI, 15% margin |
 
-Budget £1,000, scoring price the lower of current Buy Box and 12-month median, Keepa history max age 7 days, seller lookup on for the top 3 sellers.
+Budget £1,000, scoring price Conservative (the lower of the current Buy Box and its 90-day median), Keepa history max age 7 days, seller lookup on for the top 3 sellers.
 
 ## Editing a profile
 

@@ -1,7 +1,7 @@
 # Wholesale Scout: status
 
 Read this first in a new session. Keep it current: every commit that changes a feature updates
-it (what's built, the backlog, the rough edges). Last updated: 7 Oct 2026 (VAT registered business-wide; Qogita UK account and catalogue import).
+it (what's built, the backlog, the rough edges). Last updated: 9 Oct 2026 (Price basis for profit: Conservative by default, both profits on every card, stale screenings).
 
 Wholesale Scout is a single-user Amazon UK seller's workbench: Next.js 16 (App Router, `proxy.ts`
 password gate), Supabase (Postgres, RLS on, service-role access from the server only), Vercel
@@ -33,7 +33,14 @@ quote's landed cost excludes the reclaimed import VAT). `profitOnVatBasis` is th
 their basis, input VAT and VAT payable in `fees`; profit, ROI and margin carry a VAT reg. / Non-VAT tag
 (results table, breakdown, product page, plan, Tracker, Gate 6). Recalculate all re-screens every
 finished run from stored data and lists the 20 biggest profit changes (`recalc_jobs`). The plan and
-the Qogita cart show the VAT paid at checkout and the cash needed. Qogita: the region (UK/EU) is a
+the Qogita cart show the VAT paid at checkout and the cash needed. Price basis for profit (business setting, mirrored into every profile's scoringPrice): current
+Buy Box, 90-day median (new `medianBuyBox90d`, backfilled from stored Buy Box series), 12-month
+median, or Conservative (lower of current and 90-day median, the default); no current Buy Box falls
+back to the 90-day median. Each result stores `fees.priceBasis` and `fees.at` (profit at the current
+Buy Box and at the 90-day median), shown side by side with "Gates use" on the card, the product page
+and the extension (0.5.5); the price-regime gate tags a Price spike over 15% above the 90-day median
+and no longer re-prices. Screenings on another price or VAT basis show a Stale banner with Re-check
+(stored-only re-screen of those results). Qogita: the region (UK/EU) is a
 business setting; suppliers "Qogita UK" (GBP, ex-VAT, shipping included) and "Qogita EU" (EUR, ECB
 rate; the old "Qogita"), chosen by the prices' currency with a mismatch warning; a UK pull or file
 archives the EU offers for its products (`offers.archived_at`, left out of plans and picks) and adds

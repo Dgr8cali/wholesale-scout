@@ -25,6 +25,15 @@ Not registered: the full sale price is revenue, and VAT on fees and goods is a c
 
 **Recalculate all** re-screens every finished run from its stored data (no Amazon or Keepa calls) on the current basis, in the background, then lists the 20 biggest profit changes, before and after. Private-label candidates follow the setting at once.
 
+**Price basis for profit**: the sell price every screening works the referral fee, profit, ROI, margin, the Fee engine gate and the score out at:
+
+- **Current Buy Box** (SellerAmp's).
+- **90-day median Buy Box**.
+- **12-month median Buy Box** (the old default).
+- **Conservative: lower of current Buy Box and 90-day median** (default).
+
+With no current Buy Box (suppressed, no offers) every basis falls back to the 90-day median, and the card says so. Every screening card shows **Profit at current Buy Box (£x)** and **Profit at 90-day median (£x)** side by side and **Gates use: Conservative** (or whichever), with an amber **Price spike** tag when the Buy Box is more than 15% over the 90-day median. Each screening stores the basis it used: after you change it (or VAT registration), screenings on the old settings show a **Stale** banner, and **Re-check** re-screens them from stored data (no Amazon or Keepa calls).
+
 **Qogita region**: **UK (GBP)** (default) or **EU (EUR)**, which Qogita account the app's login is. See [Qogita](/help/pages/qogita).
 
 ## The profile bar
@@ -93,7 +102,7 @@ Each rule has:
 
 How the [score](/help/concepts/score) is built.
 
-- **Scoring price**, **Score on**: the sell price used for fees, profit and the score. **Lower of current Buy Box and 12-month median** (default), **Current Buy Box**, or **12-month median**.
+- **Scoring price**: the sell price used for fees, profit and the score. Shown here; it's the **price basis** set on the **Business** tab for every profile.
 - **Score weights**: a slider and number for each group: Demand 25, Competition 20, Price health 15, Margin 25, Risk 10, Fit 5. They must total 100; the running total shows as **Total N / 100**.
 - **Green (order a test) from** (default 75) and **Amber (needs one thing to move) from** (default 55): the score bands.
 - **Score scales**: every parameter inside a group maps a value to 0–100 along a set of points, with straight lines between them and flat beyond the ends. Each point is a value and a score; **+ point** adds one, **×** removes one (a scale keeps at least two). **weight** sets the parameter's pull inside its group; 0 leaves it out. For example, Net profit per unit scores £0 → 0, £2 → 30, £5 → 80, £8 → 100.

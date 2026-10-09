@@ -65,6 +65,11 @@ function dailyPoints(series: Point[], from: number, to: number): [number, number
   return out;
 }
 
+/** The Buy Box's daily median over the `days` before `now` (as summarize() works it out), or null. */
+export function medianBuyBoxOver(buyBox: Point[], days: number, now: number): number | null {
+  return median(dailyPoints(buyBox, now - days * DAY, now).map(([, v]) => v));
+}
+
 /**
  * The part of a series the gates read, for storage: points from `since` on, plus the
  * point in force at `since` (series are step functions). Full Keepa histories run to
@@ -180,6 +185,8 @@ export function summarize(i: SummaryInput): KeepaSummary {
   const bbPoints = dailyPoints(i.buyBox, yearAgo, now);
   const bbDaily = bbPoints.map(([, v]) => v);
   const medianBuyBox12m = median(bbDaily);
+  // The last 90 days' median: the price basis's "90-day median" and the spike check's reference.
+  const medianBuyBox90d = median(dailyPoints(i.buyBox, now - 90 * DAY, now).map(([, v]) => v));
   const bbMean = mean(bbDaily);
   const bbSd = bbMean == null ? null : Math.sqrt(bbDaily.reduce((a, v) => a + (v - bbMean) ** 2, 0) / bbDaily.length);
 
@@ -237,6 +244,7 @@ export function summarize(i: SummaryInput): KeepaSummary {
     rankTrendPct12m: avgRank90d != null && avgRank90dYearAgo ? ((avgRank90d - avgRank90dYearAgo) / avgRank90dYearAgo) * 100 : null,
     currentBuyBox: valueAt(i.buyBox, now),
     medianBuyBox12m,
+    medianBuyBox90d,
     bbSlopePctYr: slopePctPerYear(bbPoints, medianBuyBox12m),
     bbVolatilityPct: bbSd != null && bbMean ? (bbSd / bbMean) * 100 : null,
     offersNow: valueAt(i.offerCount, now),

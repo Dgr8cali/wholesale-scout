@@ -8,7 +8,7 @@ import { addDailyTokens } from "../keepaLedger";
 import { keepaOwner } from "./keepaTurn";
 import { finishWatchRun } from "./watchlist";
 import { getKeepa, type KeepaProduct, type KeepaResponseMeta, type KeepaSummary, type KeepaTokens, type OnKeepaResponse, type SellerProfile } from "../keepa/client";
-import { dormancy, trimSeries, type Dormancy } from "../keepa/summarize";
+import { dormancy, medianBuyBoxOver, trimSeries, type Dormancy } from "../keepa/summarize";
 import type { Point } from "../keepa/types";
 import { brandShare } from "../screening/distributor";
 import { isDormant } from "../screening/dormant";
@@ -16,7 +16,7 @@ import { getQogita, variantFid } from "../qogita/client";
 import { chooseOffer, toSupplierOffer, type QogitaOffers, type SupplierOffer } from "../qogita/offers";
 import { gbpRate } from "./fx";
 import { GATE_ORDER, withDefaults, type GateId, type ProfileConfig } from "../screening/config";
-import { effectiveMoq, packNote, resolveScoringPrice, runGates, verdictOf, type GateRun, type MarketData, type ScreenContext, type SellerView } from "../screening/gates";
+import { effectiveMoq, median90, packNote, resolveScoringPrice, runGates, verdictOf, type GateRun, type MarketData, type ScreenContext, type SellerView } from "../screening/gates";
 import { listingPack, supplierPack, type PackAttrs } from "../screening/pack";
 import type { DgLookup } from "../dg/report";
 import { keepSellerCentralMark, type CategoryRule, type DgFacts } from "../screening/rules";
@@ -173,6 +173,7 @@ function marketFromSpApi(p: CompetitivePrice | undefined, rank: number | null): 
     rankTrendPct12m: null,
     currentBuyBox: p?.buyBox ?? null,
     medianBuyBox12m: null,
+    medianBuyBox90d: null,
     bbSlopePctYr: null,
     bbVolatilityPct: null,
     offersNow: p?.newOffers ?? null,
@@ -343,6 +344,24 @@ function maxLandedFor(ctx: ScreenContext, run: GateRun, cfg: ProfileConfig): num
   return maxLandedCost(run.scoringPrice, item, ctx.card, cfg.fees, { minProfit: g.minProfit, minRoiPct: g.minRoiPct, minMarginPct: g.minMarginPct }, { date: ctx.now, amazon: ctx.amazonFees });
 }
 
+/**
+ * Profit at the current Buy Box and at the 90-day median, side by side on every card, whatever the
+ * price basis the gates used. Amazon's fee estimate only at the price it was quoted for.
+ */
+function profitsAt(row: Row, ctx: ScreenContext, cfg: ProfileConfig) {
+  const item = { referralCategory: ctx.product.referralCategory, dimsCm: ctx.product.dimsCm, weightG: ctx.product.weightG, goodsVatRatePct: ctx.offer.goodsVatRatePct };
+  const known = ctx.offer.costKnown !== false;
+  const at = (price: number | null, label: string) => {
+    if (price == null || price <= 0) return null;
+    const f = row.amazonFees;
+    const amazon = f && Math.abs(price - f.price) < 0.005 ? { referral: f.referral, fba: f.fba } : null;
+    const e = economics(price, known ? ctx.offer.unitCostGbp : 0, item, ctx.card, cfg.fees, { date: ctx.now, amazon });
+    return { price: r2(price), label, profit: known ? e.profit : null, roi: known ? e.roi : null, margin: known ? e.margin : null };
+  };
+  const m90 = median90(row.market);
+  return { current: at(row.market?.currentBuyBox ?? null, "current Buy Box"), median90: at(m90.price, m90.label) };
+}
+
 /** A screened row's result columns: verdict, gates, money, score, why and the inputs behind them. */
 function resultFields(row: Row, run: GateRun, cfg: ProfileConfig, ctx: ScreenContext) {
   const w = winScore(ctx, run, cfg, { deliveryDays: row.supplier.delivery_days, supplierRating: row.supplier.rating });
@@ -388,6 +407,9 @@ function resultFields(row: Row, run: GateRun, cfg: ProfileConfig, ctx: ScreenCon
         outputVat: r2(e.outputVat),
         // The VAT basis these figures are on, and (registered) what goes to HMRC per unit.
         vatRegistered: e.vatRegistered,
+        // The price basis the gates used, and the profit at both prices for comparison.
+        priceBasis: cfg.scoringPrice,
+        at: profitsAt(row, ctx, cfg),
         inputVat: e.inputVat,
         vatPayable: e.vatPayable,
         compare: feeComparison(e.price, ctx, cfg),
@@ -847,7 +869,24 @@ async function loadRows(results: PendingRow[], maxAge: number = KEEPA_TTL): Prom
     };
   });
   await backfillDormancy(rows);
+  await backfillMedian90(rows);
   return rows;
+}
+
+/**
+ * Market data stored before the 90-day median Buy Box was kept: work it out from the latest stored
+ * snapshot's Buy Box series, as of when it was fetched. No Keepa calls.
+ */
+async function backfillMedian90(rows: { match: { asin: string | null } | null; market: MarketData | null }[]): Promise<void> {
+  const need = rows.filter((r) => r.match?.asin && r.market?.hasHistory && r.market.medianBuyBox90d === undefined);
+  if (!need.length) return;
+  const med = new Map<string, number | null>();
+  for (const c of chunks([...new Set(need.map((r) => r.match!.asin!))], 50)) {
+    const snaps = must(await db().from("keepa_snapshots").select("asin, fetched_at, buybox_series").in("asin", c).order("fetched_at", { ascending: false }), "Buy Box series") as
+      { asin: string; fetched_at: string; buybox_series: Point[] | null }[];
+    for (const x of snaps) if (!med.has(x.asin)) med.set(x.asin, medianBuyBoxOver(nums(x.buybox_series), 90, Date.parse(x.fetched_at)));
+  }
+  for (const r of need) if (med.has(r.match!.asin!)) r.market = { ...r.market!, medianBuyBox90d: med.get(r.match!.asin!) ?? null };
 }
 
 /**
@@ -1352,7 +1391,7 @@ function earlyPriceFail(row: Row, cfg: ProfileConfig): boolean {
   const g = cfg.gates.priceBand;
   const bb = row.market?.currentBuyBox;
   if (g.mode !== "fail" || bb == null || row.market?.hasHistory) return false;
-  if (cfg.scoringPrice === "lower") return bb < g.min;
+  if (cfg.scoringPrice === "lower" || cfg.scoringPrice === "lower90") return bb < g.min;
   if (cfg.scoringPrice === "current") return bb < g.min || bb > g.max;
   return false;
 }

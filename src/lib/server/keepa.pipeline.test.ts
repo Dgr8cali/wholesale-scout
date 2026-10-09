@@ -197,6 +197,12 @@ describe("Keepa path", () => {
     expect(fees.compare.keepa.fba).toBe(3.09);
     expect(fees.compare.keepa.referral).toBe(3.44); // 15% of £22.90, to the penny
     expect(fees.compare.rateCard.fba).toBeGreaterThan(0);
+    // The price basis the gates used, and the profit at both prices for the card.
+    const basis = r.fees as { priceBasis: string; at: { current: { price: number; profit: number | null } | null; median90: { price: number; label: string } | null } };
+    expect(basis.priceBasis).toBe("lower90");
+    expect(basis.at.current).toMatchObject({ price: 23.55 });
+    expect(basis.at.current!.profit).toEqual(expect.any(Number));
+    expect(basis.at.median90).toMatchObject({ label: expect.stringMatching(/median/) });
 
     expect(k.sellerCalls).toEqual([["S1", "S2", "S3"]]);
     const sellers = (r.inputs as { sellers: { sellerId: string; brandSharePct: number }[] }).sellers;

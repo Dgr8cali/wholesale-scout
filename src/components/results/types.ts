@@ -1,3 +1,4 @@
+import type { PriceBasis } from "@/lib/screening/config";
 import type { Eta } from "@/lib/eta";
 import type { QogitaOffers } from "@/lib/qogita/offers";
 import type { GateId, GroupId } from "@/lib/screening/config";
@@ -16,7 +17,10 @@ export interface Result {
   fees: {
     source: string; referralCategory: string; referralPct: number; referral: number | null; fba: number | null;
     storage: number | null; returns: number | null; total: number | null; tier: string | null; fbaSource: string;
-    dimsEstimated: boolean; outputVat: number | null; vatRegistered?: boolean; inputVat?: number | null; vatPayable?: number | null; dimsSource?: "catalog" | "keepa" | null;
+    dimsEstimated: boolean; outputVat: number | null; vatRegistered?: boolean; inputVat?: number | null; vatPayable?: number | null;
+    /** The price basis the gates used (Settings → Business), and the profit at the current Buy Box and the 90-day median. */
+    priceBasis?: PriceBasis;
+    at?: { current: PriceProfit | null; median90: PriceProfit | null }; dimsSource?: "catalog" | "keepa" | null;
     compare?: {
       amazon: { referral: number | null; fba: number | null } | null;
       keepa: { referral: number | null; fba: number | null } | null;
@@ -111,3 +115,6 @@ export const listingMoq = (r: Result): number | null => {
 
 export const titleOf = (r: Result) => r.product?.title ?? r.offer?.title ?? r.product?.ean ?? "";
 export const eanOf = (r: Result) => r.product?.ean ?? r.id;
+
+/** The profit at one price, for the side-by-side on a card. */
+export interface PriceProfit { price: number; label: string; profit: number | null; roi: number | null; margin: number | null }

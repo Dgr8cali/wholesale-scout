@@ -1,5 +1,6 @@
 "use client";
 
+import { StaleBanner } from "@/components/results/StaleBanner";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronsUpIcon, LoaderIcon, PauseIcon, PlayIcon } from "lucide-react";
@@ -491,6 +492,8 @@ export default function RunPage() {
           <LoaderIcon className="size-3 animate-spin" /> Loading rows: {loadingRest.loaded.toLocaleString("en-GB")} of {loadingRest.total.toLocaleString("en-GB")}. Filters, sorting and export cover the rows loaded so far.
         </p>
       )}
+
+      <StaleBanner rows={results.map((x) => ({ id: x.id, run_id: id, fees: x.fees as never }))} onRechecked={() => setNonce((n) => n + 1)} />
 
       <ResultsTable rows={displayRows} storageKey="ws.table.results.v1"
         selected={selected} onToggleSelect={(rid) => setSelected((s) => { const n = new Set(s); if (n.has(rid)) n.delete(rid); else n.add(rid); return n; })}

@@ -52,6 +52,8 @@ export interface MarketData {
   rankTrendPct12m: number | null;
   currentBuyBox: number | null;
   medianBuyBox12m: number | null;
+  /** The Buy Box median over the last 90 days (absent on data stored before it was kept). */
+  medianBuyBox90d?: number | null;
   bbSlopePctYr: number | null;
   bbVolatilityPct: number | null;
   offersNow: number | null;
@@ -186,34 +188,58 @@ const pct = (n: number) => `${Math.round(n)}%`;
 /** Status for a failed check under a gate mode. */
 const failAs = (mode: GateMode): GateStatus => (mode === "fail" ? "fail" : "warn");
 
-/** The price the fee gate and score use, per the profile rule. */
-function scoringPrice(m: MarketData | null, rule: ProfileConfig["scoringPrice"]): { price: number | null; source: string | null } {
-  if (!m) return { price: null, source: null };
-  const cur = m.currentBuyBox, med = m.medianBuyBox12m;
-  if (rule === "current") return cur != null ? { price: cur, source: "current Buy Box" } : med != null ? { price: med, source: "12-month median" } : { price: null, source: null };
-  if (rule === "median") return med != null ? { price: med, source: "12-month median" } : cur != null ? { price: cur, source: "current Buy Box (no history)" } : { price: null, source: null };
-  if (cur != null && med != null) return cur <= med ? { price: cur, source: "current Buy Box" } : { price: med, source: "12-month median" };
-  if (cur != null) return { price: cur, source: "current Buy Box (no history)" };
-  if (med != null) return { price: med, source: "12-month median" };
-  return { price: null, source: null };
+/**
+ * The 90-day median Buy Box: Keepa's, else (data stored before it was kept) the 12-month median
+ * standing in, labelled so.
+ */
+export function median90(m: MarketData | null): { price: number | null; label: string } {
+  if (m?.medianBuyBox90d != null) return { price: m.medianBuyBox90d, label: "90-day median" };
+  if (m?.medianBuyBox12m != null) return { price: m.medianBuyBox12m, label: "12-month median (no 90-day figure stored: Re-check)" };
+  return { price: null, label: "90-day median" };
 }
 
 /**
- * Scoring price including the spike rule: when the Buy Box is more than the spike
- * tolerance over its median with offers falling, score on the median whatever the rule.
+ * The price the fee gate and score use, per the price basis (Settings → Business). With no current
+ * Buy Box (suppressed, no offers) every basis falls back to the 90-day median, and says so.
+ */
+export function scoringPrice(m: MarketData | null, rule: ProfileConfig["scoringPrice"]): { price: number | null; source: string | null } {
+  if (!m) return { price: null, source: null };
+  const cur = m.currentBuyBox, med12 = m.medianBuyBox12m, m90 = median90(m);
+  const fallback = (): { price: number | null; source: string | null } =>
+    m90.price != null ? { price: m90.price, source: `${m90.label} (no current Buy Box)` } : { price: null, source: null };
+  switch (rule) {
+    case "current":
+      return cur != null ? { price: cur, source: "current Buy Box" } : fallback();
+    case "median90":
+      return m90.price != null ? { price: m90.price, source: m90.label } : cur != null ? { price: cur, source: "current Buy Box (no history)" } : { price: null, source: null };
+    case "median":
+      return med12 != null ? { price: med12, source: "12-month median" } : cur != null ? { price: cur, source: "current Buy Box (no history)" } : fallback();
+    case "lower":
+      if (cur != null && med12 != null) return cur <= med12 ? { price: cur, source: "current Buy Box" } : { price: med12, source: "12-month median" };
+      return cur != null ? { price: cur, source: "current Buy Box (no history)" } : fallback();
+    case "lower90":
+    default:
+      if (cur != null && m90.price != null) return cur <= m90.price ? { price: cur, source: "current Buy Box (the lower)" } : { price: m90.price, source: `${m90.label} (the lower)` };
+      return cur != null ? { price: cur, source: "current Buy Box (no history)" } : fallback();
+  }
+}
+
+/** The Buy Box is a spike: more than the tolerance (15%) over its 90-day median. */
+export function priceSpike(m: MarketData | null, spikePct: number): { above: number; median: number; label: string } | null {
+  const m90 = median90(m);
+  if (!m?.hasHistory || m.currentBuyBox == null || m90.price == null || m90.price <= 0) return null;
+  const above = (m.currentBuyBox / m90.price - 1) * 100;
+  return above > spikePct ? { above, median: m90.price, label: m90.label } : null;
+}
+
+/**
+ * The scoring price: the price basis's. A spike is tagged by the price-regime gate, not re-priced:
+ * the basis you choose decides (Conservative already takes the lower of the two).
  */
 export function resolveScoringPrice(m: MarketData | null, p: ProfileConfig): { price: number | null; source: string | null } {
   // Nobody selling now: the last Buy Box of the past year is the best price evidence there is.
   if (isDormant(m)) return m!.lastBuyBox12m != null ? { price: m!.lastBuyBox12m, source: lastSeenLabel(m!.lastBuyBox12m, m!.lastBuyBoxAt) } : { price: null, source: null };
-  const base = scoringPrice(m, p.scoringPrice);
-  if (
-    m?.hasHistory && m.currentBuyBox != null && m.medianBuyBox12m != null && p.gates.priceRegime.mode !== "off" &&
-    (m.currentBuyBox / m.medianBuyBox12m - 1) * 100 > p.gates.priceRegime.spikePct &&
-    m.offersNow != null && m.offers90dAgo != null && m.offersNow < m.offers90dAgo
-  ) {
-    return { price: m.medianBuyBox12m, source: "12-month median (spike)" };
-  }
-  return base;
+  return scoringPrice(m, p.scoringPrice);
 }
 
 /** "size tier disagreement: SP-API catalog says Small parcel, Keepa says Standard parcel", or null. */
@@ -482,13 +508,14 @@ const EVALUATORS: Record<GateId, Evaluator> = {
   priceRegime(ctx, p) {
     const g = p.gates.priceRegime;
     const m = ctx.market;
-    if (!m?.hasHistory || m.currentBuyBox == null || m.medianBuyBox12m == null) return skipped("Needs Keepa history");
-    const above = (m.currentBuyBox / m.medianBuyBox12m - 1) * 100;
-    const offersFalling = m.offersNow != null && m.offers90dAgo != null && m.offersNow < m.offers90dAgo;
-    if (above > g.spikePct && offersFalling) {
-      return { status: failAs(g.mode), detail: `SPIKE: Buy Box ${money(m.currentBuyBox)} is ${pct(above)} over the ${money(m.medianBuyBox12m)} median with offers falling; scored on the median`, tags: ["SPIKE"] };
+    const m90 = median90(m);
+    if (!m?.hasHistory || m.currentBuyBox == null || m90.price == null) return skipped("Needs Keepa history");
+    const spike = priceSpike(m, g.spikePct);
+    if (spike) {
+      const falling = m.offersNow != null && m.offers90dAgo != null && m.offersNow < m.offers90dAgo;
+      return { status: failAs(g.mode), detail: `Price spike: Buy Box ${money(m.currentBuyBox)} is ${pct(spike.above)} over the ${money(spike.median)} ${spike.label}${falling ? ", with offers falling" : ""}`, tags: ["SPIKE"] };
     }
-    return { status: "pass", detail: `Buy Box ${money(m.currentBuyBox)} vs median ${money(m.medianBuyBox12m)}` };
+    return { status: "pass", detail: `Buy Box ${money(m.currentBuyBox)} vs ${money(m90.price)} ${m90.label}` };
   },
 
   priceDrift(ctx, p) {

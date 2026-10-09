@@ -16,6 +16,7 @@ import {
   GATE_LABELS,
   GATE_ORDER,
   GROUP_LABELS,
+  PRICE_BASIS_LABEL,
   SCALE_DEFS,
   type GateConfigs,
   type GateId,
@@ -335,14 +336,10 @@ function ScoreTab({ editor: e }: { editor: Editor }) {
   return (
     <>
       <Section title="Scoring price" note="The sell price fees, profit and the score are worked out at.">
-        <div className="max-w-md space-y-1.5">
-          <span className="field-label">Score on</span>
-          <NativeSelect className="w-full" value={draft.scoringPrice} onChange={(ev) => setDraft({ ...draft, scoringPrice: ev.target.value as ProfileConfig["scoringPrice"] })}>
-            <NativeSelectOption value="lower">Lower of current Buy Box and 12-month median</NativeSelectOption>
-            <NativeSelectOption value="current">Current Buy Box</NativeSelectOption>
-            <NativeSelectOption value="median">12-month median</NativeSelectOption>
-          </NativeSelect>
-        </div>
+        <p className="text-sm">
+          <b>{PRICE_BASIS_LABEL[draft.scoringPrice]}</b> <span className="text-muted-foreground">· the price basis for every profile, set in </span>
+          <a className="text-brand underline" href="/settings?tab=business">Settings → Business</a>
+        </p>
       </Section>
 
       <Section title="Score weights" note="How much each group counts towards the 0–100 score. They must total 100."

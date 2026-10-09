@@ -1,6 +1,7 @@
 "use client";
 
 import { VatTag, vatBasisOf } from "@/components/VatTag";
+import { StaleBanner } from "@/components/results/StaleBanner";
 import { ExternalLinkIcon } from "lucide-react";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
@@ -316,6 +317,7 @@ export default function ProductPage() {
       {/* The latest screening in full */}
       {r && (
         <Panel title={<>Latest screening <span>· {r.run ? <Link className="text-brand hover:underline" href={`/runs/${r.run.id}`}>{r.run.name ?? r.run.source}</Link> : null}</span></>}>
+          {r.run && <StaleBanner rows={[{ id: r.id, run_id: r.run.id, fees: r.fees as never }]} onRechecked={load} />}
           <Detail r={r} fav={fav ?? undefined} onNote={saveNote} onWaive={waive} onWatch={watch} onCost={cost} />
         </Panel>
       )}

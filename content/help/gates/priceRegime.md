@@ -1,6 +1,6 @@
 ---
 title: Price regime
-summary: Flags a Buy Box that has spiked well above its 12-month median while sellers leave, and scores on the median instead.
+summary: Flags a Buy Box that has spiked more than 15% above its 90-day median (an amber Price spike tag); the price basis in Settings → Business decides the price profit uses.
 synonyms: [spike, price spike, buy box spike, median, stock-out, temporary price]
 gate: priceRegime
 order: 9
@@ -9,16 +9,13 @@ Price regime catches a temporary [spike](/help/reference/glossary#spike): the Bu
 
 ## What it checks
 
-Both must be true:
+The current Buy Box is more than **Spike tolerance over median** (15%) above its **90-day median** Buy Box. The why-line says so ("Price spike: Buy Box £31.00 is 24% over the £25.00 90-day median, with offers falling") and the card shows an amber **Price spike** tag. Falling offers are mentioned but aren't needed.
 
-- The current Buy Box is more than **Spike tolerance over median** above the 12-month median Buy Box.
-- The offer count is falling: fewer offers now than 90 days ago.
-
-When the gate trips, the scoring price switches to the 12-month median, whatever your **Score on** setting. That happens in **warn** mode too; only **off** stops it. So the [Fee engine](/help/gates/fees), [Price band](/help/gates/priceBand) and the score are all worked out at the median.
+The gate no longer re-prices: the **price basis** (Settings → Business) decides the price profit is worked out at. The default, **Conservative**, already takes the lower of the current Buy Box and the 90-day median, so a spike doesn't flatter the profit. With **Current Buy Box** chosen, a spike is tagged and the profit is at the current price, as SellerAmp shows it.
 
 ## When it runs
 
-**After Keepa history.** It needs both the current Buy Box and a 12-month median.
+**After Keepa history.** It needs the current Buy Box and the 90-day median (screenings stored before that was kept work it out from the stored Buy Box history on Re-check, with no Keepa call).
 
 ## Settings
 

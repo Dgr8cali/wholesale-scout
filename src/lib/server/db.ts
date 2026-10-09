@@ -97,12 +97,14 @@ export async function loadProfile(id?: string | null): Promise<{ id: string; nam
   let row = must(res, "profile") as { id: string; name: string; config: ProfileConfig } | null;
   if (!row) row = must(await db().from("profiles").select("id, name, config, updated_at").limit(1).single(), "profile");
   const config = withDefaults(row.config);
-  // The business's VAT basis (Settings → Business) wins over what the profile last saved.
-  const biz = await db().from("business_settings").select("key, value").in("key", ["vatRegistered", "vatRate"]);
+  // The business's VAT basis and price basis (Settings → Business) win over what the profile last saved.
+  const biz = await db().from("business_settings").select("key, value").in("key", ["vatRegistered", "vatRate", "priceBasis"]);
   if (!biz.error) {
     const m = Object.fromEntries((biz.data as { key: string; value: unknown }[]).map((r) => [r.key, r.value]));
     if (typeof m.vatRegistered === "boolean") config.fees = { ...config.fees, vatRegistered: m.vatRegistered };
     if (typeof m.vatRate === "number") config.fees = { ...config.fees, vatRatePct: m.vatRate };
+    // The price basis (Settings → Business) too.
+    if (typeof m.priceBasis === "string" && ["current", "median90", "median", "lower90"].includes(m.priceBasis)) config.scoringPrice = m.priceBasis as ProfileConfig["scoringPrice"];
   }
   return { ...row, config };
 }

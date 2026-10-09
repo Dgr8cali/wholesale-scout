@@ -13,6 +13,8 @@ export interface KeepaSummary {
   rankTrendPct12m: number | null;
   currentBuyBox: number | null;
   medianBuyBox12m: number | null;
+  /** The Buy Box median over the last 90 days (absent on data stored before it was kept). */
+  medianBuyBox90d?: number | null;
   /** Buy Box least-squares slope as % of the 12-month median per year. Negative = falling. */
   bbSlopePctYr: number | null;
   /** Coefficient of variation of the Buy Box over 12 months, %. */

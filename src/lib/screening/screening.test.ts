@@ -61,18 +61,41 @@ describe("gates", () => {
     expect(w.why).toContain("drops/mo");
   });
 
-  it("scores a spike on the median whatever the rule (Walker Tape, Swiffer)", () => {
-    const m = market({ currentBuyBox: 31, medianBuyBox12m: 24, offersNow: 3, offers90dAgo: 6 });
-    const current = { ...DEFAULT_PROFILE, scoringPrice: "current" as const };
-    expect(resolveScoringPrice(m, current)).toEqual({ price: 24, source: "12-month median (spike)" });
+  it("a spike (over 15% above the 90-day median) is tagged; the price basis decides the price (Walker Tape, Swiffer)", () => {
+    const m = market({ currentBuyBox: 31, medianBuyBox12m: 24, medianBuyBox90d: 25, offersNow: 3, offers90dAgo: 6 });
+    expect(resolveScoringPrice(m, { ...DEFAULT_PROFILE, scoringPrice: "current" })).toEqual({ price: 31, source: "current Buy Box" });
     const run = runGates(ctx({ market: m }), DEFAULT_PROFILE);
-    expect(run.scoringPrice).toBe(24);
-    expect(run.outcomes.find((o) => o.gate === "priceRegime")?.tags).toContain("SPIKE");
+    // Conservative (the default): the lower of the current Buy Box and the 90-day median.
+    expect(run.scoringPrice).toBe(25);
+    const regime = run.outcomes.find((o) => o.gate === "priceRegime")!;
+    expect(regime.tags).toContain("SPIKE");
+    expect(regime.detail).toMatch(/Price spike: Buy Box £31\.00 is 24% over the £25\.00 90-day median, with offers falling/);
+    // 15% over isn't a spike; just over is, offers falling or not.
+    expect(runGates(ctx({ market: market({ currentBuyBox: 28.75, medianBuyBox90d: 25, medianBuyBox12m: 25 }) }), DEFAULT_PROFILE).outcomes.find((o) => o.gate === "priceRegime")?.tags ?? []).not.toContain("SPIKE");
+    expect(runGates(ctx({ market: market({ currentBuyBox: 28.8, medianBuyBox90d: 25, medianBuyBox12m: 25, offersNow: 6, offers90dAgo: 3 }) }), DEFAULT_PROFILE).outcomes.find((o) => o.gate === "priceRegime")?.tags).toContain("SPIKE");
   });
 
-  it("uses the lower of current and median by default", () => {
+  it("B000LXUWU4: £18.00 current, £16.84 median: Current prices at £18.00 (SellerAmp's), Conservative at £16.84", () => {
+    const m = market({ currentBuyBox: 18, medianBuyBox12m: 16.84, medianBuyBox90d: 16.84 });
+    expect(resolveScoringPrice(m, { ...DEFAULT_PROFILE, scoringPrice: "current" })).toEqual({ price: 18, source: "current Buy Box" });
+    expect(resolveScoringPrice(m, { ...DEFAULT_PROFILE, scoringPrice: "lower90" })).toEqual({ price: 16.84, source: "90-day median (the lower)" });
+    expect(resolveScoringPrice(m, { ...DEFAULT_PROFILE, scoringPrice: "median90" }).price).toBe(16.84);
+    expect(resolveScoringPrice(m, { ...DEFAULT_PROFILE, scoringPrice: "median" }).price).toBe(16.84);
+    expect(DEFAULT_PROFILE.scoringPrice).toBe("lower90");
+    // The 90-day median above the current: Conservative takes the current.
+    expect(resolveScoringPrice(market({ currentBuyBox: 18, medianBuyBox90d: 19, medianBuyBox12m: 16.84 }), DEFAULT_PROFILE)).toEqual({ price: 18, source: "current Buy Box (the lower)" });
+  });
+
+  it("no current Buy Box (suppressed, no offers): the 90-day median, and it says so", () => {
+    const m = market({ currentBuyBox: null, medianBuyBox12m: 16.84, medianBuyBox90d: 17.2 });
+    for (const rule of ["current", "lower90", "lower"] as const) {
+      expect(resolveScoringPrice(m, { ...DEFAULT_PROFILE, scoringPrice: rule })).toEqual({ price: 17.2, source: "90-day median (no current Buy Box)" });
+    }
+  });
+
+  it("data stored before the 90-day median was kept: the 12-month median stands in, labelled", () => {
+    expect(resolveScoringPrice(market({ currentBuyBox: 26, medianBuyBox12m: 22 }), DEFAULT_PROFILE)).toEqual({ price: 22, source: "12-month median (no 90-day figure stored: Re-check) (the lower)" });
     expect(resolveScoringPrice(market({ currentBuyBox: 20, medianBuyBox12m: 22 }), DEFAULT_PROFILE).price).toBe(20);
-    expect(resolveScoringPrice(market({ currentBuyBox: 26, medianBuyBox12m: 22, offersNow: 5, offers90dAgo: 5 }), DEFAULT_PROFILE).price).toBe(22);
   });
 
   it("fails fragrance on compliance in Strict and stops there", () => {
