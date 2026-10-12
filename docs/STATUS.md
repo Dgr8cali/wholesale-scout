@@ -109,7 +109,16 @@ pages you click through, sent per click to the candidate with that ASIN, merged 
 paste kept until you choose; rendered 1–3★ in Amazon's layout), splits
 them, counts complaint phrases locally (stop words, bigrams/trigrams, an editable synonym list) into a
 sortable Themes table, and the theme you pick fills the gate's share and a draft six words; an
-optional Claude summary runs only on a click. Launch is a 12-step checklist (samples to
+optional Claude summary runs only on a click. The Listing Writer (a Listing section on each candidate,
+`pl_listing_drafts`, `src/lib/pl/listing.ts`, `src/lib/server/plListing.ts`) writes the title, five
+bullets, description, backend terms and a differentiation angle with Claude, only on a click (feature
+`pl_listing` in `ads_ai_calls`, cached by input hash), from Gate 4's themes, pick and summary, the
+attached POE capture's search terms and the linked Ads product's keyword bank, in an editable brand
+voice. Checked live in the browser: title limit (default 200, per candidate), lead term, ALL CAPS,
+promo words, capitalised bullet openers, three bullets on complaint themes, backend ≤ 249 bytes
+(cleaned of title words, brands from Settings → Private label, ASINs), compliance claims with
+rewrites, and a sortable keyword-coverage table weighted by volume. Per-field Regenerate, Copy all,
+a Seller Central flat-file row, and every generation/edit/restore kept as a version. Launch is a 13-step checklist (samples to
 first review) moving the status, a budget tracker against Gate 7, and a listing ASIN that links
 the candidate to its Ads product and stock item.
 
@@ -167,7 +176,7 @@ StockPilot data is imported (3 items). Ads days of cover and the stock guard cou
 | **Keepa** | Live. About 21 tokens a minute refill; spend is logged per feature (Home's Keepa tile). Token-conscious: estimate before spending, report what was spent. |
 | **SP-API** | Live: orders report, FBA inventory (getInventorySummaries), catalog, fee estimates, listing restrictions, offers. Nightly sync plus on demand. The **Brand Analytics** and **Finance** roles are approved but the token still gets 403: no Buy Box %, no exact fees charged (the fee estimate stands in). Retry later. |
 | **Amazon Ads API** | **Pending approval.** LWA client credentials are in the env (`ADS_LWA_CLIENT_ID`, `ADS_LWA_CLIENT_SECRET`); no connector yet (backlog). Until then: bulk export in, bulk sheet out. |
-| **Anthropic API** | Live (`@anthropic-ai/sdk`): Ads Explain, Recommend targets and the monthly review, Private label's review summary, only on a click or the monthly schedule (off by default). Model and prices in Settings → Ads (Sonnet 5.5 default); cost per call logged in `ads_ai_calls`. |
+| **Anthropic API** | Live (`@anthropic-ai/sdk`): Ads Explain, Recommend targets and the monthly review, Private label's review summary and Listing Writer, only on a click or the monthly schedule (off by default). Model and prices in Settings → Ads (Sonnet 5.5 default); cost per call logged in `ads_ai_calls`. |
 | **Supabase** | Postgres with RLS on every table; pg_cron + pg_net run the watchdog (restarts stalled runs and hunts). |
 | **Vercel** | Hosting; crons: Qogita nightly 03:00, Watchlist Sunday 06:00, Ads review 1st of the month 06:00 (does nothing unless turned on). Env vars set there (Sensitive), including Qogita and `SPAPI_SELLER_ID`. |
 | **Qogita** | Live: nightly catalogue and offer pull. |

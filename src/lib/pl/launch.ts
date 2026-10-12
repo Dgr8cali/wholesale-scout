@@ -18,6 +18,7 @@ export const LAUNCH_STEPS: LaunchStepDef[] = [
   { key: "inspection_passed", label: "Inspection passed", line: "inspection" },
   { key: "shipped", label: "Shipped", line: "stock", hint: "Freight, duty and import VAT" },
   { key: "at_fba", label: "At FBA", line: "other" },
+  { key: "listing_written", label: "Listing written", line: "photography", hint: "Title, bullets and backend terms from the candidate's Listing section" },
   { key: "listing_live", label: "Listing live", line: "photography", hint: "Photography and the listing" },
   { key: "ads_launched", label: "Ads launched", line: "launchAds", hint: "Ads → Launch builds the campaigns" },
   { key: "first_review", label: "First review", line: "other" },

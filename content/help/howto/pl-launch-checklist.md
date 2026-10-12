@@ -20,9 +20,10 @@ In order:
 7. Inspection passed
 8. Shipped
 9. At FBA
-10. Listing live
-11. Ads launched
-12. First review
+10. Listing written (its link opens the candidate's **Listing** section: see [Private label: writing the listing](/help/howto/pl-writing-the-listing))
+11. Listing live
+12. Ads launched
+13. First review
 
 Each step has a **done** tick (today's date is filled in; change it), a **note**, and a **cost** in £. The next step is highlighted, and the candidates list shows it.
 

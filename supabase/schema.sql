@@ -1,5 +1,5 @@
 -- Wholesale Scout schema, dumped by scripts/schema-backup.mjs. No data.
--- Dumped 2026-10-09T16:49:37.762Z. Safe to re-run. Restore: npm run schema:restore
+-- Dumped 2026-10-12T23:23:35.064Z. Safe to re-run. Restore: npm run schema:restore
 
 -- @section extensions
 create extension if not exists "pg_cron";
@@ -1218,7 +1218,10 @@ create table if not exists "pl_candidates" (
   "park_reason" text,
   "parked_at" timestamp with time zone,
   "parked_from" text,
-  "reference_pinned" boolean default false not null
+  "reference_pinned" boolean default false not null,
+  "listing_voice" text,
+  "listing_pack" text,
+  "listing_title_limit" integer
 );
 alter table "pl_candidates" add column if not exists "id" uuid default gen_random_uuid();
 alter table "pl_candidates" add column if not exists "name" text;
@@ -1238,6 +1241,9 @@ alter table "pl_candidates" add column if not exists "park_reason" text;
 alter table "pl_candidates" add column if not exists "parked_at" timestamp with time zone;
 alter table "pl_candidates" add column if not exists "parked_from" text;
 alter table "pl_candidates" add column if not exists "reference_pinned" boolean default false;
+alter table "pl_candidates" add column if not exists "listing_voice" text;
+alter table "pl_candidates" add column if not exists "listing_pack" text;
+alter table "pl_candidates" add column if not exists "listing_title_limit" integer;
 alter table "pl_candidates" enable row level security;
 
 create table if not exists "pl_category_tree" (
@@ -1415,6 +1421,24 @@ alter table "pl_leaf_counts" add column if not exists "asins" text[] default '{}
 alter table "pl_leaf_counts" add column if not exists "finder_tokens" integer default 0;
 alter table "pl_leaf_counts" add column if not exists "counted_at" timestamp with time zone default now();
 alter table "pl_leaf_counts" enable row level security;
+
+create table if not exists "pl_listing_drafts" (
+  "id" uuid default gen_random_uuid() not null,
+  "candidate_id" uuid not null,
+  "version" integer not null,
+  "source" text default 'generated'::text not null,
+  "inputs" jsonb default '{}'::jsonb not null,
+  "outputs" jsonb not null,
+  "created_at" timestamp with time zone default now() not null
+);
+alter table "pl_listing_drafts" add column if not exists "id" uuid default gen_random_uuid();
+alter table "pl_listing_drafts" add column if not exists "candidate_id" uuid;
+alter table "pl_listing_drafts" add column if not exists "version" integer;
+alter table "pl_listing_drafts" add column if not exists "source" text default 'generated'::text;
+alter table "pl_listing_drafts" add column if not exists "inputs" jsonb default '{}'::jsonb;
+alter table "pl_listing_drafts" add column if not exists "outputs" jsonb;
+alter table "pl_listing_drafts" add column if not exists "created_at" timestamp with time zone default now();
+alter table "pl_listing_drafts" enable row level security;
 
 create table if not exists "pl_niche_dismissals" (
   "key" text not null,
@@ -2638,6 +2662,11 @@ do $$ begin
   end if;
 end $$;
 do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'pl_listing_drafts_pkey' and conrelid = '"pl_listing_drafts"'::regclass) then
+    alter table "pl_listing_drafts" add constraint "pl_listing_drafts_pkey" PRIMARY KEY (id);
+  end if;
+end $$;
+do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'pl_niche_dismissals_pkey' and conrelid = '"pl_niche_dismissals"'::regclass) then
     alter table "pl_niche_dismissals" add constraint "pl_niche_dismissals_pkey" PRIMARY KEY (key);
   end if;
@@ -2853,6 +2882,11 @@ do $$ begin
   end if;
 end $$;
 do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'pl_listing_drafts_candidate_id_version_key' and conrelid = '"pl_listing_drafts"'::regclass) then
+    alter table "pl_listing_drafts" add constraint "pl_listing_drafts_candidate_id_version_key" UNIQUE (candidate_id, version);
+  end if;
+end $$;
+do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'pl_review_dumps_candidate_id_asin_key' and conrelid = '"pl_review_dumps"'::regclass) then
     alter table "pl_review_dumps" add constraint "pl_review_dumps_candidate_id_asin_key" UNIQUE (candidate_id, asin);
   end if;
@@ -2914,7 +2948,7 @@ do $$ begin
 end $$;
 do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'ads_ai_calls_feature_check' and conrelid = '"ads_ai_calls"'::regclass) then
-    alter table "ads_ai_calls" add constraint "ads_ai_calls_feature_check" CHECK ((feature = ANY (ARRAY['explain'::text, 'review'::text, 'targets'::text, 'pl_reviews'::text])));
+    alter table "ads_ai_calls" add constraint "ads_ai_calls_feature_check" CHECK ((feature = ANY (ARRAY['explain'::text, 'review'::text, 'targets'::text, 'pl_reviews'::text, 'pl_listing'::text])));
   end if;
 end $$;
 do $$ begin
@@ -3403,6 +3437,11 @@ do $$ begin
   end if;
 end $$;
 do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'pl_listing_drafts_candidate_id_fkey' and conrelid = '"pl_listing_drafts"'::regclass) then
+    alter table "pl_listing_drafts" add constraint "pl_listing_drafts_candidate_id_fkey" FOREIGN KEY (candidate_id) REFERENCES pl_candidates(id) ON DELETE CASCADE;
+  end if;
+end $$;
+do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'pl_niches_candidate_id_fkey' and conrelid = '"pl_niches"'::regclass) then
     alter table "pl_niches" add constraint "pl_niches_candidate_id_fkey" FOREIGN KEY (candidate_id) REFERENCES pl_candidates(id) ON DELETE SET NULL;
   end if;
@@ -3583,6 +3622,7 @@ CREATE INDEX IF NOT EXISTS offers_supplier_product ON offers USING btree (suppli
 CREATE INDEX IF NOT EXISTS pl_candidate_asins_asin ON pl_candidate_asins USING btree (asin, snapshot_at DESC);
 CREATE INDEX IF NOT EXISTS pl_category_tree_root ON pl_category_tree USING btree (root_id);
 CREATE UNIQUE INDEX IF NOT EXISTS pl_gate_waivers_key ON pl_gate_waivers USING btree (candidate_id, gate_id, COALESCE(check_label, ''::text));
+CREATE INDEX IF NOT EXISTS pl_listing_drafts_candidate ON pl_listing_drafts USING btree (candidate_id, version DESC);
 CREATE INDEX IF NOT EXISTS pl_niche_imports_category ON pl_niche_imports USING btree (lower(category));
 CREATE INDEX IF NOT EXISTS pl_niches_best_term_conversion ON pl_niches USING btree (best_term_conversion DESC NULLS LAST, id);
 CREATE INDEX IF NOT EXISTS pl_niches_categories ON pl_niches USING gin (categories);
@@ -3865,3 +3905,4 @@ insert into schema_migrations (name) values ('20261005000900_pl_supplier_leads.s
 insert into schema_migrations (name) values ('20261006000100_pl_review_dumps_off_candidate.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261007000100_business_vat_qogita_uk.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261009000100_price_basis.sql') on conflict do nothing;
+insert into schema_migrations (name) values ('20261013000100_pl_listing_drafts.sql') on conflict do nothing;

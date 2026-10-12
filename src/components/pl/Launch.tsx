@@ -1,6 +1,6 @@
 "use client";
 
-import { MegaphoneIcon } from "lucide-react";
+import { MegaphoneIcon, PenLineIcon } from "lucide-react";
 import Link from "next/link";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
@@ -79,6 +79,7 @@ export function LaunchSection({ candidateId, status, steps, listingAsin, ads, pl
                     <input type="checkbox" className="mt-1" checked={!!s?.done} onChange={(e) => save(d.key, { done: e.target.checked })} />
                     <span><span className={cn("font-medium", s?.done && "text-pass")}>{i + 1}. {d.label}</span>
                       {d.hint && <span className="block text-xs text-muted-foreground">{d.hint}</span>}
+                      {d.key === "listing_written" && <Link href={`/pl/candidates?c=${candidateId}#listing`} className="inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline"><PenLineIcon className="size-3" /> Write it in the candidate&apos;s Listing section</Link>}
                       {d.key === "ads_launched" && <Link href={adsHref} className="inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline"><MegaphoneIcon className="size-3" /> Build the campaigns in Ads → Launch</Link>}
                     </span>
                   </label>

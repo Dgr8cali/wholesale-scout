@@ -58,7 +58,7 @@ function client(): MessagesClient {
 }
 
 /** What a call was for: the Ads features, and Private label's review summary. */
-export type AiFeature = "explain" | "review" | "targets" | "pl_reviews";
+export type AiFeature = "explain" | "review" | "targets" | "pl_reviews" | "pl_listing";
 
 export interface AiRun<T> {
   result: T; cached: boolean; model: string; at: string; costGbp: number; costUsd: number;
