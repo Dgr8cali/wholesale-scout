@@ -1,6 +1,6 @@
 import "server-only";
 import {
-  buildReviewSummaryContext, DEFAULT_SYNONYMS, mineThemes, REVIEW_SUMMARY_SYSTEM, REVIEW_SUMMARY_TOOL, reviewsOf, splitPasteAll,
+  buildReviewSummaryContext, DEFAULT_SYNONYMS, markOf, mineThemes, REVIEW_SUMMARY_SYSTEM, REVIEW_SUMMARY_TOOL, reviewsOf, splitPasteAll,
   type ReviewSummary, type SynonymGroup,
 } from "../pl/reviews";
 import { uncitedNumbers } from "../ads/ai";
@@ -156,7 +156,7 @@ export async function reviewSummaryContext(candidateId: string) {
   const { dumps, marks, synonyms } = await reviewData(candidateId);
   const reviews = reviewsOf(dumps);
   if (!reviews.length) throw new Error("Paste some reviews first");
-  const themes = mineThemes(reviews, synonyms).themes.filter((t) => marks[t.theme] !== "ignore" && marks[t.theme] !== "not fixable");
+  const themes = mineThemes(reviews, synonyms).themes.filter((t) => markOf(marks, t) !== "ignore" && markOf(marks, t) !== "not fixable");
   return buildReviewSummaryContext(cand.niche_keyword || cand.name, reviews, themes);
 }
 

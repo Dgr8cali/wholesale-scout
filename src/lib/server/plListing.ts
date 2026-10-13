@@ -3,7 +3,7 @@ import {
   DEFAULT_BRAND_VOICE, DEFAULT_TITLE_LIMIT, LISTING_FIELDS, complianceFlags, keywordCoverage, leadTerm, normaliseDraft, ruleIssues,
   type ListingDraft, type ListingField,
 } from "../pl/listing";
-import { mineThemes, reviewsOf, type ReviewSummary } from "../pl/reviews";
+import { markOf, mineThemes, reviewsOf, type ReviewSummary } from "../pl/reviews";
 import { askModel, latestAi } from "./adsAi";
 import { db, must } from "./db";
 import { brandTerms } from "./plNiches";
@@ -58,8 +58,10 @@ export async function listingInputs(candidateId: string): Promise<ListingInputs>
 
   // Gate 4: the themes (fixable ones, by share), the one picked, and the summary if there is one.
   const rd = await reviewData(candidateId);
-  const mined = mineThemes(reviewsOf(rd.dumps), rd.synonyms).themes.filter((t) => rd.marks[t.theme] !== "ignore" && rd.marks[t.theme] !== "not fixable");
-  const chosenTheme = Object.entries(rd.marks).find(([, m]) => m === "chosen")?.[0] ?? null;
+  const mined = mineThemes(reviewsOf(rd.dumps), rd.synonyms).themes.filter((t) => markOf(rd.marks, t) !== "ignore" && markOf(rd.marks, t) !== "not fixable");
+  // Marks are saved under the theme's key ("clean glass"); the listing gets its wording ("clean glasses").
+  const chosenKey = Object.entries(rd.marks).find(([, m]) => m === "chosen")?.[0] ?? null;
+  const chosenTheme = chosenKey == null ? null : mined.find((t) => t.key === chosenKey || t.theme === chosenKey)?.theme ?? chosenKey;
   const summary = ((await latestAi("pl_reviews", candidateId))?.result as ReviewSummary | undefined)?.complaints?.map((x) => x.sentence) ?? [];
 
   // Gates 3 and 5: the attached Opportunity Explorer capture's search terms.

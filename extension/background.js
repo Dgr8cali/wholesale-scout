@@ -16,8 +16,17 @@ const DEFAULTS = {
 
 const POE_OTHER = ["https://sellercentral.amazon.com/opportunity-explorer/*", "https://sellercentral.amazon.de/opportunity-explorer/*"];
 
-/** The .com/.de Opportunity Explorer scripts: registered only while the setting is on and allowed. */
-async function syncPoeMarkets() {
+/**
+ * The .com/.de Opportunity Explorer scripts: registered only while the setting is on and allowed.
+ * One at a time (install, start-up and the popup can ask together; two at once registered the same
+ * id twice), and never an uncaught error.
+ */
+let poeSync = Promise.resolve();
+function syncPoeMarkets() {
+  poeSync = poeSync.then(syncPoeMarketsNow).catch((e) => console.info("[Wholesale Scout] Opportunity Explorer scripts for .com/.de not updated:", e?.message || e));
+  return poeSync;
+}
+async function syncPoeMarketsNow() {
   const s = await chrome.storage.local.get({ poeOtherMarkets: false });
   const allowed = await chrome.permissions.contains({ origins: ["https://sellercentral.amazon.com/*", "https://sellercentral.amazon.de/*"] }).catch(() => false);
   const ids = ["ws-poe-page", "ws-poe-panel"];
@@ -54,7 +63,15 @@ async function api(method, path, body) {
   }
 }
 
-chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
+/** Answer a content script or the popup; a tab or popup that closed meanwhile isn't an error. */
+function safeReply(reply, value) {
+  try { reply(value); } catch { /* the sender went away (tab closed, page reloaded, popup shut) */ }
+}
+
+chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  // Rank-check messages are answered by ranks.js.
+  if (!msg || typeof msg.type !== "string" || msg.type.startsWith("rank")) return false;
+  const reply = (v) => safeReply(sendResponse, v);
   (async () => {
     if (msg.type === "api") return reply(await api(msg.method || "GET", msg.path, msg.body));
     if (msg.type === "settings") {
@@ -76,10 +93,8 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
       await chrome.tabs.create({ url: s.dgUrl.replace("{asin}", encodeURIComponent(msg.asin)) });
       return reply({ ok: true });
     }
-    // Rank-check messages are answered by ranks.js.
-    if (String(msg.type).startsWith("rank")) return;
     reply({ ok: false, error: `Unknown message ${msg.type}` });
-  })();
+  })().catch((e) => reply({ ok: false, error: String(e?.message || e) }));
   return true; // reply asynchronously
 });
 

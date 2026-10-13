@@ -10,7 +10,7 @@ import { reviewBoxes } from "@/lib/pl/reviewBoxes";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import type { PlAsin } from "@/lib/pl/fill";
-import { mineThemes, reviewsOf, sixWordsDraft, splitReviews, type ReviewSummary, type SynonymGroup, type Theme } from "@/lib/pl/reviews";
+import { markOf, mineThemes, reviewsOf, sixWordsDraft, splitReviews, type ReviewSummary, type SynonymGroup, type Theme } from "@/lib/pl/reviews";
 import { api } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
 import type { FieldMap } from "./types";
@@ -87,12 +87,12 @@ export function ReviewMiner({ candidateId, asins, product, fields, onSave, onAsi
   };
   /** Use a theme for Gate 4: its share and a draft six words; then you answer "fixable?". */
   const choose = async (t: Theme) => {
-    await mark(t.theme, "chosen");
+    await mark(t.key, "chosen");
     onSave("complaintPct", String(Math.round(t.pct)), 0);
     onSave("sixWordsText", sixWordsDraft(t.theme, product), 0);
     toast.success(`Gate 4: ${Math.round(t.pct)}% of negative reviews, and a draft six words. Now answer: can a factory fix it?`);
   };
-  const chosen = mined.themes.find((t) => data.marks[t.theme] === "chosen") ?? null;
+  const chosen = mined.themes.find((t) => markOf(data.marks, t) === "chosen") ?? null;
   const pasted = new Set(data.dumps.map((d) => d.asin));
   const boxes = reviewBoxes(asins, data.dumps);
   const offAction = async (asin: string, action: "add-asin" | "keep-separate") => {
@@ -107,8 +107,8 @@ export function ReviewMiner({ candidateId, asins, product, fields, onSave, onAsi
       setBusy(null);
     }
   };
-  const rows = mined.themes.filter((t) => showIgnored || data.marks[t.theme] !== "ignore");
-  const ignored = mined.themes.filter((t) => data.marks[t.theme] === "ignore").length;
+  const rows = mined.themes.filter((t) => showIgnored || markOf(data.marks, t) !== "ignore");
+  const ignored = mined.themes.filter((t) => markOf(data.marks, t) === "ignore").length;
 
   return (
     <div className="space-y-3 rounded-lg border p-3">
@@ -161,7 +161,7 @@ export function ReviewMiner({ candidateId, asins, product, fields, onSave, onAsi
       {mined.total > 0 && (
         <>
           <p className="text-xs text-muted-foreground"><b className="text-foreground">{mined.total}</b> negative reviews across {new Set(reviews.map((r) => r.asin)).size} listing{new Set(reviews.map((r) => r.asin)).size === 1 ? "" : "s"}. A theme counts each review once.</p>
-          {chosen && <ChosenTheme theme={chosen} fields={fields} onSave={onSave} onNotFixable={() => mark(chosen.theme, "not fixable")} />}
+          {chosen && <ChosenTheme theme={chosen} fields={fields} onSave={onSave} onNotFixable={() => mark(chosen.key, "not fixable")} />}
           <ThemesTable themes={rows} marks={data.marks} onChoose={choose} onMark={mark} />
           {ignored > 0 && <button type="button" className="text-xs text-brand hover:underline" onClick={() => setShowIgnored((s) => !s)}>{showIgnored ? "Hide" : "Show"} {ignored} ignored theme{ignored === 1 ? "" : "s"}</button>}
           <Summary candidateId={candidateId} initial={data.summary} />
@@ -190,9 +190,9 @@ function ThemesTable({ themes, marks, onChoose, onMark }: { themes: Theme[]; mar
           <th className="px-2 py-1.5">Examples</th><th className="px-2 py-1.5" />
         </tr></thead>
         <tbody>{t.rows.map((x) => {
-          const m = marks[x.theme];
+          const m = markOf(marks, x);
           return (
-            <tr key={x.theme} className={cn("border-b align-top last:border-b-0", m === "chosen" && "bg-brand-soft/40", (m === "not fixable" || m === "ignore") && "text-muted-foreground")}>
+            <tr key={x.key} className={cn("border-b align-top last:border-b-0", m === "chosen" && "bg-brand-soft/40", (m === "not fixable" || m === "ignore") && "text-muted-foreground")}>
               <td className="px-2 py-1.5">
                 <b className={cn(m === "ignore" && "line-through")}>{x.theme}</b>
                 {x.kind === "group" && <span className="ml-1 text-[10px] text-muted-foreground uppercase" title="Any of the synonym group's words">group</span>}
@@ -204,10 +204,10 @@ function ThemesTable({ themes, marks, onChoose, onMark }: { themes: Theme[]; mar
               <td className="max-w-md px-2 py-1.5 text-xs">{x.examples.map((e, i) => <p key={i} className="truncate" title={e}>“{e}”</p>)}</td>
               <td className="px-2 py-1.5 whitespace-nowrap">
                 {m === "chosen" ? null : <Button size="xs" variant="outline" onClick={() => onChoose(x)}>Use for Gate 4</Button>}
-                {m ? <Button size="xs" variant="ghost" onClick={() => onMark(x.theme, null)}>{m === "ignore" ? "Unignore" : "Clear"}</Button> : (
+                {m ? <Button size="xs" variant="ghost" onClick={() => onMark(marks[x.key] ? x.key : x.theme, null)}>{m === "ignore" ? "Unignore" : "Clear"}</Button> : (
                   <>
-                    <Button size="xs" variant="ghost" onClick={() => onMark(x.theme, "not fixable")}>Not fixable</Button>
-                    <Button size="xs" variant="ghost" onClick={() => onMark(x.theme, "ignore")}>Ignore</Button>
+                    <Button size="xs" variant="ghost" onClick={() => onMark(x.key, "not fixable")}>Not fixable</Button>
+                    <Button size="xs" variant="ghost" onClick={() => onMark(x.key, "ignore")}>Ignore</Button>
                   </>
                 )}
               </td>

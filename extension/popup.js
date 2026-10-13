@@ -2,6 +2,21 @@
 // the Seller Central DG page, and a connection test.
 const DEFAULTS = { appUrl: "https://wholesale-scout.vercel.app", password: "", dgUrl: "https://sellercentral.amazon.co.uk/product-search/search?q={asin}", autoCheck: true, showDebug: false, poeOtherMarkets: false };
 const $ = (id) => document.getElementById(id);
+/**
+ * A message to the background, as a promise. It always reads chrome.runtime.lastError, so a
+ * background that didn't answer (or was restarting) is { ok: false } here, not an "Unchecked
+ * runtime.lastError" in chrome://extensions → Errors.
+ */
+const bg = (message) => new Promise((resolve) => {
+  try {
+    chrome.runtime.sendMessage(message, (r) => {
+      const err = chrome.runtime.lastError?.message;
+      resolve(r ?? { ok: false, error: err || "No answer" });
+    });
+  } catch (e) {
+    resolve({ ok: false, error: String(e?.message || e) });
+  }
+});
 const msg = (text, ok) => { $("msg").textContent = text; $("msg").className = ok ? "ok" : "err"; };
 
 chrome.storage.local.get(DEFAULTS, (s) => {
@@ -24,7 +39,7 @@ async function save() {
   const granted = await chrome.permissions.request({ origins });
   if (!granted) { msg(other ? "Allow access to the app's address and Seller Central .com/.de, or untick that option." : "Allow access to the app's address to connect."); return false; }
   await chrome.storage.local.set({ appUrl, password: $("password").value, dgUrl: $("dgUrl").value.trim() || DEFAULTS.dgUrl, autoCheck: $("autoCheck").checked, showDebug: $("showDebug").checked, poeOtherMarkets: other });
-  await new Promise((r) => chrome.runtime.sendMessage({ type: "poeMarkets" }, r));
+  await bg({ type: "poeMarkets" });
   $("appUrl").value = appUrl;
   return true;
 }
@@ -33,10 +48,9 @@ $("save").addEventListener("click", async () => { if (await save()) msg("Saved."
 $("test").addEventListener("click", async () => {
   if (!(await save())) return;
   msg("Testing…", true);
-  chrome.runtime.sendMessage({ type: "api", method: "GET", path: "/api/extension/ping" }, (r) => {
-    if (r?.ok && r.data?.app === "wholesale-scout") msg("Connected: the app accepted the password.", true);
-    else msg(r?.error || "No answer.");
-  });
+  const r = await bg({ type: "api", method: "GET", path: "/api/extension/ping" });
+  if (r?.ok && r.data?.app === "wholesale-scout") msg("Connected: the app accepted the password.", true);
+  else msg(r?.error || "No answer.");
 });
 
 // Check ranks: the products and their tracked keywords come from the app; the run happens in a tab (ranks.js).
@@ -50,8 +64,8 @@ function showRankInfo() {
     ? `${t.keywords.length} keyword${t.keywords.length === 1 ? "" : "s"}${t.keywords.length > rankCap ? ` (the first ${rankCap} are checked)` : ""}: ${t.keywords.slice(0, 6).join(", ")}${t.keywords.length > 6 ? "…" : ""}`
     : "No exact keywords or added keywords for this product yet.";
 }
-chrome.runtime.sendMessage({ type: "rankState" }, (s) => { if (s?.running) rankMsg(`A check of ${s.asin} is running (${s.results.length} of ${s.keywords.length}).`, true); });
-chrome.runtime.sendMessage({ type: "api", method: "GET", path: "/api/ads/ranks" }, (r) => {
+bg({ type: "rankState" }).then((s) => { if (s?.running) rankMsg(`A check of ${s.asin} is running (${s.results.length} of ${s.keywords.length}).`, true); });
+bg({ type: "api", method: "GET", path: "/api/ads/ranks" }).then((r) => {
   if (!r?.ok) { $("rankAsin").innerHTML = "<option value=''>Couldn't load products</option>"; rankMsg(r?.error || "No answer."); return; }
   rankTargets = r.data.targets || [];
   rankCap = r.data.cap || 30;
@@ -64,7 +78,7 @@ $("rankAsin").addEventListener("change", showRankInfo);
 $("rankGo").addEventListener("click", () => {
   const t = rankTargets.find((x) => x.asin === $("rankAsin").value);
   if (!t) return;
-  chrome.runtime.sendMessage({ type: "rankStart", asin: t.asin, keywords: t.keywords }, (r) => {
+  bg({ type: "rankStart", asin: t.asin, keywords: t.keywords }).then((r) => {
     if (r?.ok) rankMsg(`Checking ${r.count} keywords in a new tab. Results are saved to the app at the end (or when you Stop).`, true);
     else rankMsg(r?.error || "No answer.");
   });
@@ -73,7 +87,7 @@ $("rankGo").addEventListener("click", () => {
 // Capture reviews on this page: the same parser as the page's panel (reviews-parse.js), run in the
 // active tab on demand (activeTab + scripting), so it works even where the panel didn't load.
 const revMsg = (text, cls) => { $("revMsg").textContent = text; $("revMsg").className = cls || ""; };
-const revApi = (body) => new Promise((resolve) => chrome.runtime.sendMessage({ type: "api", method: "POST", path: "/api/pl/reviews/capture", body }, (r) => resolve(r || { ok: false, error: "No answer" })));
+const revApi = (body) => bg({ type: "api", method: "POST", path: "/api/pl/reviews/capture", body });
 
 $("revCapture").addEventListener("click", async () => {
   $("revSend").replaceChildren();

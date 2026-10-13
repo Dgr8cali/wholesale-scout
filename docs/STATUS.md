@@ -5,7 +5,7 @@ it (what's built, the backlog, the rough edges). Last updated: 9 Oct 2026 (Price
 
 Wholesale Scout is a single-user Amazon UK seller's workbench: Next.js 16 (App Router, `proxy.ts`
 password gate), Supabase (Postgres, RLS on, service-role access from the server only), Vercel
-hosting, a Chrome extension (`extension/`, 0.3.0), and the Help centre in `content/help`. It has
+hosting, a Chrome extension (`extension/`, 0.5.6), and the Help centre in `content/help`. It has
 four workspaces (switch at the top of the sidebar, Alt+Shift+W); Home, Settings and Help are
 shared.
 
@@ -38,7 +38,7 @@ Buy Box, 90-day median (new `medianBuyBox90d`, backfilled from stored Buy Box se
 median, or Conservative (lower of current and 90-day median, the default); no current Buy Box falls
 back to the 90-day median. Each result stores `fees.priceBasis` and `fees.at` (profit at the current
 Buy Box and at the 90-day median), shown side by side with "Gates use" on the card, the product page
-and the extension (0.5.5); the price-regime gate tags a Price spike over 15% above the 90-day median
+and the extension; the price-regime gate tags a Price spike over 15% above the 90-day median
 and no longer re-prices. Screenings on another price or VAT basis show a Stale banner with Re-check
 (stored-only re-screen of those results). Qogita: the region (UK/EU) is a
 business setting; suppliers "Qogita UK" (GBP, ex-VAT, shipping included) and "Qogita EU" (EUR, ECB
@@ -107,7 +107,9 @@ Home counts the ones to contact. Gate 4's review miner takes pasted 1–3★ rev
 capture from amazon.co.uk review pages (0.4.0: stars, date, title, body, variant, helpful votes over the
 pages you click through, sent per click to the candidate with that ASIN, merged by review id, a hand
 paste kept until you choose; rendered 1–3★ in Amazon's layout), splits
-them, counts complaint phrases locally (stop words, bigrams/trigrams, an editable synonym list) into a
+them, counts complaint phrases locally (stop words, bigrams/trigrams, an editable synonym list; plurals
+folded for counting only by `singular()`, each theme shown in its commonest wording, e.g. "clean glasses",
+marked under its folded `key`) into a
 sortable Themes table, and the theme you pick fills the gate's share and a draft six words; an
 optional Claude summary runs only on a click. The Listing Writer (a Listing section on each candidate,
 `pl_listing_drafts`, `src/lib/pl/listing.ts`, `src/lib/server/plListing.ts`) writes the title, five
@@ -193,6 +195,7 @@ StockPilot data is imported (3 items). Ads days of cover and the stock guard cou
 
 ## Known rough edges
 
+- **Extension 0.5.6** fixes what it could put in chrome://extensions → Errors (an uncaught "Amazon took over 30 s to load" when a rank-check tab was closed, uncaught background errors, unchecked `lastError` in the popup, the reviews parser's warning on product pages, whose new `reviewTitle`/`reviewText` markup it couldn't read). Checked in a scratch Chromium with the shipped and fixed copies; old entries stay listed until **Clear all**.
 - **Ads bulk sheets haven't been uploaded to Amazon yet**: the format follows Amazon's export column for column, but acceptance is unproven until the first upload. Batch "2026-10-02 #1" (7 proposals) waits to be uploaded. Batch "2026-10-02 #3" (the dog seat belt 2-pack launch) has the SKU `REPLACE-WITH-2PACK-SKU`: re-create it on Ads → Launch with the real SKU (and the 2-pack's own ASIN once it exists); B0H9ZH3RV5 is in its launch phase because of it.
 - **Daily Ads reports** are parsed against a sample in Amazon's format: the first real daily Campaign/Placement export confirms the column names.
 - **Bid up, Budget, Revive** need the daily Campaign report imported; impression share, hourly budget timing and keyword-level days need the Ads API.

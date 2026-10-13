@@ -15,14 +15,24 @@ function rankState() {
 
 function rankWaitLoaded(tabId, timeout = 30000) {
   return new Promise((resolve, reject) => {
-    const t = setTimeout(() => { chrome.tabs.onUpdated.removeListener(l); reject(new Error("Amazon took over 30 s to load")); }, timeout);
-    const l = (id, info) => { if (id === tabId && info.status === "complete") { clearTimeout(t); chrome.tabs.onUpdated.removeListener(l); resolve(); } };
+    const t = setTimeout(() => { done(); reject(new Error("Amazon took over 30 s to load")); }, timeout);
+    const done = () => { clearTimeout(t); chrome.tabs.onUpdated.removeListener(l); chrome.tabs.onRemoved.removeListener(gone); };
+    const l = (id, info) => { if (id === tabId && info.status === "complete") { done(); resolve(); } };
+    // Closed while loading: say so now rather than after 30 s.
+    const gone = (id) => { if (id === tabId) { done(); reject(new Error("The rank-check tab was closed, so the run stopped.")); } };
     chrome.tabs.onUpdated.addListener(l);
+    chrome.tabs.onRemoved.addListener(gone);
   });
 }
 async function rankGo(tabId, url) {
   const loaded = rankWaitLoaded(tabId);
-  await chrome.tabs.update(tabId, { url });
+  try {
+    await chrome.tabs.update(tabId, { url });
+  } catch (e) {
+    // The tab is gone: don't leave the load wait to fail on its own 30 s later.
+    loaded.catch(() => {});
+    throw /No tab with id/i.test(String(e?.message)) ? new Error("The rank-check tab was closed, so the run stopped.") : e;
+  }
   await loaded;
 }
 async function rankInPage(tabId, func, args) {
@@ -34,7 +44,13 @@ const rankPanel = (tabId) => rankInPage(tabId, (s) => globalThis.__wsRank.panel(
 
 async function runRanks(asin, keywords) {
   Object.assign(RANK, { running: true, stopped: false, stop: false, asin, keywords: [...new Set(keywords)].slice(0, RANK_CAP), results: [], status: "", error: null, saved: null, runId: crypto.randomUUID() });
-  const tab = await chrome.tabs.create({ url: "https://www.amazon.co.uk/", active: true });
+  let tab;
+  try {
+    tab = await chrome.tabs.create({ url: "https://www.amazon.co.uk/", active: true });
+  } catch (e) {
+    Object.assign(RANK, { running: false, error: `Couldn't open a tab: ${e?.message || e}` });
+    return;
+  }
   RANK.tabId = tab.id;
   try {
     for (let i = 0; i < RANK.keywords.length && !RANK.stop; i++) {
@@ -76,7 +92,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   if (msg.type === "rankStart") {
     if (RANK.running) { reply({ ok: false, error: "A rank check is already running: stop it first" }); return; }
     if (!/^[A-Z0-9]{10}$/.test(msg.asin || "") || !Array.isArray(msg.keywords) || !msg.keywords.length) { reply({ ok: false, error: "Pick a product with keywords" }); return; }
-    runRanks(msg.asin, msg.keywords);
+    runRanks(msg.asin, msg.keywords).catch((e) => Object.assign(RANK, { running: false, error: String(e?.message || e) }));
     reply({ ok: true, count: Math.min(RANK_CAP, msg.keywords.length) });
     return;
   }

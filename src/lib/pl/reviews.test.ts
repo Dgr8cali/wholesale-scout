@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { CONTEXT_TOKEN_CAP, estimateTokens } from "../ads/ai";
-import { buildReviewSummaryContext, DEFAULT_SYNONYMS, canonicalise, mineThemes, reviewsOf, sixWordsDraft, splitPasteAll, splitReviews } from "./reviews";
+import { buildReviewSummaryContext, DEFAULT_SYNONYMS, canonicalise, markOf, mineThemes, singular, reviewsOf, sixWordsDraft, splitPasteAll, splitReviews } from "./reviews";
 
 // 40 fake critical reviews of a pill organiser across 3 ASINs, one per paste format: Amazon's page
 // (star lines, names, "Helpful/Report"), "Reviewed in …" lines with titles, and blank-line paragraphs.
@@ -14,7 +14,8 @@ const dumps = [
 ];
 const reviews = reviewsOf(dumps);
 const { total, themes } = mineThemes(reviews);
-const theme = (t: string) => themes.find((x) => x.theme === t);
+/** By its key (plurals folded) or its wording. */
+const theme = (t: string) => themes.find((x) => x.key === t || x.theme === t);
 
 describe("splitting a paste into reviews", () => {
   it("each format: 16 + 14 + 10 = 40", () => {
@@ -99,5 +100,32 @@ describe("Gate 4 prefill and the summary", () => {
     const big = buildReviewSummaryContext("x", Array.from({ length: 2000 }, (_, i) => ({ ...reviews[i % 40], body: "word ".repeat(100) })), themes);
     expect(estimateTokens(big)).toBeLessThanOrEqual(CONTEXT_TOKEN_CAP);
     expect(big.trimmed).toContain("reviews");
+  });
+});
+
+describe("plurals: folded for counting, shown as written", () => {
+  it("singular() handles -sses, -ies, -ches/-shes/-xes, -ss and lens", () => {
+    const cases: Record<string, string> = {
+      glasses: "glass", lenses: "lens", wipes: "wipe", boxes: "box", glass: "glass", scratches: "scratch",
+      batteries: "battery", brushes: "brush", less: "less", lens: "lens", headaches: "headache", lids: "lid", bus: "bus", this: "this",
+    };
+    for (const [w, s] of Object.entries(cases)) expect(singular(w), w).toBe(s);
+  });
+  it("a theme counts glasses and glass together but reads as the reviews wrote it most", () => {
+    const text = [
+      "1.0 out of 5 stars Smeary\nThey don't clean glasses at all.",
+      "2.0 out of 5 stars Poor\nDidn't clean glasses, left streaks.",
+      "1.0 out of 5 stars Bad\nCould not clean glass properly, scratches on the lenses.",
+      "1.0 out of 5 stars Awful\nLeft scratches on my lenses and the batteries died.",
+      "2.0 out of 5 stars Meh\nThe boxes arrived crushed. Scratches on the lens.",
+    ].join("\n\n");
+    const t = mineThemes(splitReviews("B0FAKE0001", text)).themes;
+    const clean = t.find((x) => x.key === "clean glass")!;
+    expect(clean).toMatchObject({ theme: "clean glasses", reviews: 3 });
+    expect(t.every((x) => !/\b(glasse|lense|boxe|scratche|batterie)\b/.test(x.theme))).toBe(true);
+    const scratch = t.find((x) => x.key === "scratch lens")!;
+    expect(scratch).toMatchObject({ theme: "scratches lenses", reviews: 3 });
+    expect(markOf({ "clean glass": "chosen" }, clean)).toBe("chosen");
+    expect(markOf({ "clean glasses": "ignore" }, clean)).toBe("ignore");
   });
 });

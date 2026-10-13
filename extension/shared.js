@@ -7,7 +7,7 @@
   // checks first and, once it's gone, goes quiet and asks for a refresh instead of throwing.
   /** The extension is still there for this page (false after it's reloaded or updated). */
   ws.alive = () => { try { return !!chrome.runtime?.id; } catch { return false; } };
-  const STALE = /context invalidated|Extension context|message port closed|Receiving end does not exist/i;
+  const STALE = /context invalidated|Extension context|Receiving end does not exist/i;
   let staleShown = false;
   /** Our own panels, badges and bars on the page. */
   const OURS = '[id^="wholesale-scout"], #ws-rank-panel, #ws-dg, .ws-badge';
@@ -39,6 +39,8 @@
         let err = null;
         try { err = chrome.runtime.lastError?.message || null; } catch (e) { err = String(e?.message || e); }
         if (err && STALE.test(err)) return stale();
+        // The background restarted mid-request: an error to retry, not a reason to ask for a refresh.
+        if (err && /message port closed/i.test(err)) return resolve({ ok: false, error: "No answer from the extension: try again" });
         resolve(r || { ok: false, error: err || "No answer" });
       });
     } catch (e) {

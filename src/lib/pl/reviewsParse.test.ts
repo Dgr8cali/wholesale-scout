@@ -69,4 +69,14 @@ describe("Amazon reviews parser", () => {
     expect(r.reviews[0].body).toMatch(/^These traps are not for Rats/);
     expect(r.reviews.filter((x) => x.helpful != null)).toHaveLength(3);
   });
+  it("a product page's reviews (Oct 2026 markup: reviewTitle, reviewText): all 13 read, no screen-reader text", () => {
+    const d = dom(readFileSync(join(__dirname, "../../../docs/samples/amazon/dp-B000LXUWU4-reviews.html"), "utf8"));
+    const r = P.parseAmazonReviews(d, "https://www.amazon.co.uk/dp/B000LXUWU4");
+    expect(r.asin).toBe("B000LXUWU4");
+    expect(r.unparsed).toEqual([]);
+    expect(r.reviews).toHaveLength(13);
+    expect(r.reviews[0]).toMatchObject({ id: "R30V908R2UHCHK", stars: 5, title: "Gets rid of red slime algae", country: "United Kingdom", reviewedOn: "10 December 2025" });
+    expect(r.reviews[0].body).toMatch(/^Have been getting a lot of persistent red slime algae/);
+    expect(r.reviews.every((x) => x.body && !/content visible|double tap|Read more$/i.test(x.body))).toBe(true);
+  });
 });

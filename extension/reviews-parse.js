@@ -7,8 +7,9 @@
   const REVIEW_SELECTORS = {
     review: '[data-hook="review"], li[data-hook="review"], div[id^="customer_review-"]',
     rating: '[data-hook="review-star-rating"], [data-hook="cmps-review-star-rating"], i[class*="a-star-"]',
-    title: '[data-hook="review-title"]',
-    body: '[data-hook="review-body"]',
+    // Product pages since Oct 2026 use camelCase hooks (reviewTitle, reviewText).
+    title: '[data-hook="review-title"], [data-hook="reviewTitle"]',
+    body: '[data-hook="review-body"], [data-hook="reviewText"]',
     date: '[data-hook="review-date"]',
     verified: '[data-hook="avp-badge"], [data-hook="avp-badge-linkless"]',
     helpful: '[data-hook="helpful-vote-statement"]',
@@ -73,7 +74,7 @@
     const stars = parseStars(ratingEl ? ratingEl.textContent : "") ?? parseStars(textOf(q(S.title)));
     // Amazon nests the rating inside the title link: drop it.
     const title = textOf(q(S.title), '[data-hook="review-star-rating"], [data-hook="cmps-review-star-rating"], .a-icon-alt, i.a-icon, .a-letter-space').replace(/^[1-5](?:[.,]\d)?\s+out of 5 stars\s*/i, "") || null;
-    const body = textOf(q(S.body), '[data-hook="review-body-read-more"], .cr-translate-review, a.a-expander-header').replace(/\s*Read more\s*$/i, "");
+    const body = textOf(q(S.body), '[data-hook="review-body-read-more"], .cr-translate-review, a.a-expander-header, [class^="a-teaser-describedby"], [data-hook="reviewExpandButtonContainer"], .a-cardui-footer').replace(/\s*Read more\s*$/i, "");
     const dateText = textOf(q(S.date));
     const dm = dateText.match(/^Reviewed in (?:the )?(.+?) on (.+)$/i);
     const ht = textOf(q(S.helpful));
@@ -112,7 +113,7 @@
         unparsed.push({ index, reason: String((e && e.message) || e) });
       }
     });
-    if (unparsed.length && typeof console !== "undefined") console.warn(`[Wholesale Scout] ${unparsed.length} review(s) not read`, unparsed);
+    if (unparsed.length && typeof console !== "undefined") console.debug(`[Wholesale Scout] ${unparsed.length} review(s) not read`, unparsed);
     return { asin: pageAsin(doc, url), reviews, unparsed };
   }
 

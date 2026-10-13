@@ -144,7 +144,7 @@
         unparsed.push({ index, reason: String((e && e.message) || e) });
       }
     });
-    if (unparsed.length && typeof console !== "undefined") console.warn(`[Wholesale Scout] ${unparsed.length} Alibaba card(s) not read`, unparsed);
+    if (unparsed.length && typeof console !== "undefined") console.debug(`[Wholesale Scout] ${unparsed.length} Alibaba card(s) not read`, unparsed);
     return { cards, unparsed, tradeAssurance: ctx.tradeAssurance };
   }
 

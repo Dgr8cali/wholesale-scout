@@ -34,13 +34,16 @@
     box.append(node);
   }
 
+  let warned = false;
   async function flush() {
     timer = null;
     while (queue.length) {
       const batch = queue.splice(0, 20);
       const r = await ws.api("GET", `/api/extension/lookup?asins=${batch.map((x) => x.asin).join(",")}`);
       if (!r.ok) {
-        console.warn("[Wholesale Scout]", r.error);
+        // No password yet, the app unreachable, or the extension reloaded: the badges just don't show
+        // (said once, quietly, rather than a warning per batch in chrome://extensions → Errors).
+        if (r.error !== "stale" && !warned) { warned = true; console.debug("[Wholesale Scout] search badges:", r.error); }
         return;
       }
       for (const { el, asin } of batch) badge(el, r.data.badges[asin] ?? null, asin);

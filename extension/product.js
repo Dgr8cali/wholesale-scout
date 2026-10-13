@@ -207,7 +207,7 @@
       const dump = debug.map((d) => JSON.stringify(d)).join("\n\n");
       sec.append(ws.h("details", { style: "margin-top:6px" }, [
         ws.h("summary", { class: "muted", style: "cursor:pointer", text: `Debug (${debug.length} steps)` }),
-        ws.h("button", { class: "b", style: "margin:4px 0", text: "Copy", onclick: () => navigator.clipboard.writeText(dump).then(() => status("Debug copied.")) }),
+        ws.h("button", { class: "b", style: "margin:4px 0", text: "Copy", onclick: () => navigator.clipboard.writeText(dump).then(() => status("Debug copied."), () => status("Couldn't copy: click the page first, then Copy.", true)) }),
         ws.h("pre", { style: "white-space:pre-wrap;word-break:break-all;font-size:10px;max-height:200px;overflow:auto;background:#f4f4f5;padding:6px;border-radius:6px", text: dump }),
       ]));
     }

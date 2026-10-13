@@ -14,7 +14,10 @@ export interface SynonymGroup {
   terms: string[];
 }
 export interface Theme {
+  /** As shown: the phrase's commonest wording in the reviews ("clean glasses"), or the group's name. */
   theme: string;
+  /** What it's counted and marked under: plurals folded ("clean glass"); the group's name for a group. */
+  key: string;
   /** A synonym group (any of its terms), or a phrase found in the reviews. */
   kind: "group" | "phrase";
   reviews: number;
@@ -141,24 +144,57 @@ export function canonicalise(text: string, groups: SynonymGroup[]): string {
   return t.replace(/\u0000/g, " ").replace(/\u0001/g, " ").replace(/\s+/g, " ").replace(/ ([;,.!?:])/g, "$1").trim();
 }
 
-/** Content words, plurals folded ("lids" → "lid"), except the groups' own words ("breaks"). */
-export const tokensOf = (canon: string, keep: Set<string> = new Set()) => (canon.match(/[a-z0-9']+/g) ?? [])
+/** Singulars that end in s (never folded) and plurals that don't follow the rules below. */
+const S_SINGULAR = new Set(["lens", "gas", "bias", "atlas", "canvas", "chaos", "series", "species", "news", "yes", "always", "perhaps", "plus", "has", "was", "does", "its", "his", "hers", "ours", "yours", "theirs"]);
+const IRREGULAR: Record<string, string> = { lenses: "lens", gases: "gas", biases: "bias", canvases: "canvas", atlases: "atlas" };
+
+/**
+ * A word's singular, for counting only (themes show the words as written): glasses → glass,
+ * batteries → battery, boxes → box, scratches → scratch, brushes → brush, lenses → lens, wipes →
+ * wipe; glass, less, lens, bus and this stay as they are.
+ */
+export function singular(w: string): string {
+  if (w.length < 4 || S_SINGULAR.has(w) || !w.endsWith("s")) return w;
+  if (IRREGULAR[w]) return IRREGULAR[w];
+  if (/(ss|us|is|ous)$/.test(w)) return w;
+  if (/sses$/.test(w)) return w.slice(0, -2);
+  if (w.length > 4 && /[^aeiou]ies$/.test(w)) return `${w.slice(0, -3)}y`;
+  if (/aches$/.test(w)) return w.slice(0, -1); // headaches → headache, not "headach"
+  if (/(ch|sh|x|z)es$/.test(w)) return w.slice(0, -2);
+  return w.slice(0, -1);
+}
+
+/** Content words as written, stop words and numbers dropped. */
+const wordsOf = (canon: string) => (canon.match(/[a-z0-9']+/g) ?? [])
   .map((w) => w.replace(/^'+|'+$/g, ""))
-  .filter((w) => w && !STOP.has(w) && !/^\d+$/.test(w))
-  .map((w) => (!keep.has(w) && w.length >= 4 && /s$/.test(w) && !/(ss|us|is)$/.test(w) ? w.slice(0, -1) : w));
+  .filter((w) => w && !STOP.has(w) && !/^\d+$/.test(w));
+
+/** Content words, plurals folded ("lids" → "lid"), except the groups' own words ("breaks"). */
+export const tokensOf = (canon: string, keep: Set<string> = new Set()) => wordsOf(canon).map((w) => (keep.has(w) ? w : singular(w)));
 
 /** The sentence's content-word bigrams and trigrams (stop words dropped, so they bridge). */
 export function phrasesOf(tokens: string[]): string[] {
-  const out = new Set<string>();
+  return phrasesWithSurface(tokens, tokens).map((p) => p.key);
+}
+
+/** Each phrase's folded key (for counting) and its words as written (for showing). */
+function phrasesWithSurface(tokens: string[], surface: string[]): { key: string; surface: string }[] {
+  const out = new Map<string, string>();
   for (let n = 2; n <= 3; n++) {
     for (let i = 0; i + n <= tokens.length; i++) {
       const g = tokens.slice(i, i + n);
       if (g.every((w) => WEAK.has(w)) || new Set(g).size < n || WEAK.has(g[n - 1])) continue;
       if (g.filter((w) => !WEAK.has(w)).every((w) => w.length < 3)) continue;
-      out.add(g.join(" "));
+      const key = g.join(" ");
+      if (!out.has(key)) out.set(key, surface.slice(i, i + n).join(" "));
     }
   }
-  return [...out];
+  return [...out].map(([key, surface]) => ({ key, surface }));
+}
+
+/** A theme's mark: under its key, or (marks saved before keys) under its name. */
+export function markOf<M>(marks: Record<string, M>, t: Pick<Theme, "key" | "theme">): M | undefined {
+  return marks[t.key] ?? marks[t.theme];
 }
 
 /* ===================== themes ===================== */
@@ -170,10 +206,11 @@ export function phrasesOf(tokens: string[]): string[] {
  */
 export function mineThemes(reviews: MinedReview[], groups: SynonymGroup[] = DEFAULT_SYNONYMS, opts: { max?: number } = {}): { total: number; themes: Theme[] } {
   const total = reviews.length;
-  const hits = new Map<string, { kind: Theme["kind"]; ids: Set<number>; asins: Set<string>; examples: Map<number, string> }>();
-  const hit = (key: string, kind: Theme["kind"], id: number, asin: string, sentence: string) => {
-    const h = hits.get(key) ?? { kind, ids: new Set(), asins: new Set(), examples: new Map() };
+  const hits = new Map<string, { kind: Theme["kind"]; ids: Set<number>; asins: Set<string>; examples: Map<number, string>; surfaces: Map<string, number> }>();
+  const hit = (key: string, kind: Theme["kind"], id: number, asin: string, sentence: string, surface?: string) => {
+    const h = hits.get(key) ?? { kind, ids: new Set(), asins: new Set(), examples: new Map(), surfaces: new Map() };
     h.ids.add(id); h.asins.add(asin);
+    if (surface) h.surfaces.set(surface, (h.surfaces.get(surface) ?? 0) + 1);
     if (!h.examples.has(id)) h.examples.set(id, sentence);
     hits.set(key, h);
   };
@@ -184,7 +221,8 @@ export function mineThemes(reviews: MinedReview[], groups: SynonymGroup[] = DEFA
       const c = canonicalise(s, groups);
       const words = ` ${c.match(/[a-z0-9']+/g)?.join(" ") ?? ""} `;
       for (const { g, words: cw } of canonWords) if (words.includes(` ${cw.join(" ")} `)) hit(g.theme, "group", id, r.asin, s);
-      for (const p of phrasesOf(tokensOf(c, keep))) hit(p, "phrase", id, r.asin, s);
+      const written = wordsOf(c);
+      for (const p of phrasesWithSurface(written.map((w) => (keep.has(w) ? w : singular(w))), written)) hit(p.key, "phrase", id, r.asin, s, p.surface);
     }
   });
   // Word-order twins ("breaks lid", "lid breaks") are one phrase: the commoner order, both reviews.
@@ -228,8 +266,10 @@ export function mineThemes(reviews: MinedReview[], groups: SynonymGroup[] = DEFA
     }
     return true;
   });
+  // Shown as the reviews wrote it most often ("clean glasses"), counted under the folded key.
+  const shown = (k: string, h: { surfaces: Map<string, number> }) => [...h.surfaces].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0] ?? k;
   const themes = kept.map(([k, h]): Theme => ({
-    theme: k, kind: h.kind, reviews: h.ids.size, pct: total ? Math.round((h.ids.size / total) * 1000) / 10 : 0,
+    theme: h.kind === "group" ? k : shown(k, h), key: k, kind: h.kind, reviews: h.ids.size, pct: total ? Math.round((h.ids.size / total) * 1000) / 10 : 0,
     asins: [...h.asins].sort(), examples: [...h.examples.values()].slice(0, 3),
   })).sort((a, b) => b.reviews - a.reviews || (a.kind === "group" ? -1 : 1) - (b.kind === "group" ? -1 : 1) || a.theme.localeCompare(b.theme));
   return { total, themes: themes.slice(0, opts.max ?? 40) };
