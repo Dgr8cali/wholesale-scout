@@ -164,7 +164,7 @@ export async function reviewSummaryContext(candidateId: string) {
 export async function summariseReviews(candidateId: string, opts: { force?: boolean } = {}) {
   const context = await reviewSummaryContext(candidateId);
   const run = await askModel<ReviewSummary>({
-    feature: "pl_reviews", subject: candidateId, context, force: opts.force, maxTokens: 3000, tool: REVIEW_SUMMARY_TOOL, system: REVIEW_SUMMARY_SYSTEM,
+    feature: "pl_reviews", subject: candidateId, context, force: opts.force, maxTokens: 4000, tool: REVIEW_SUMMARY_TOOL, system: REVIEW_SUMMARY_SYSTEM,
     instruction: "Name the top three complaints a factory could fix, commonest first, one sentence each, using the themes' shares.",
   });
   const result = { complaints: (run.result.complaints ?? []).slice(0, 3) };

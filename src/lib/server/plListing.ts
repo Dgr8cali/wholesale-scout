@@ -129,6 +129,9 @@ export async function listingInputs(candidateId: string): Promise<ListingInputs>
   };
 }
 
+/** What to try when an answer is cut off twice. */
+const CUT_OFF_HINT = "Try again or shorten Key specs.";
+
 const LISTING_SYSTEM = `You write Amazon UK product listings for a small private-label seller. British English, in the brand voice given. The first draft goes live without editing, so every rule in the instruction is a hard rule: count characters and bytes.
 - Use only the facts given (brand, key specs, pack size, suitable for, not for). Never invent a spec, a number, a certification or a test result.
 - Answer the review complaints given with the key specs as the evidence ("70% isopropyl alcohol dries in seconds" answers "too wet").
@@ -190,7 +193,7 @@ export async function generateListing(candidateId: string, opts: { force?: boole
   if (!inputs.themes.length && !inputs.searchTerms.length) throw new Error("Nothing to write from yet: mine some reviews in Gate 4 or attach an Opportunity Explorer capture first");
   const rc = ruleContext(inputs);
   const run = await askModel<Partial<ListingDraft>>({
-    feature: "pl_listing", subject: candidateId, context: contextOf(inputs), force: opts.force, maxTokens: 4000, system: LISTING_SYSTEM,
+    feature: "pl_listing", subject: candidateId, context: contextOf(inputs), force: opts.force, maxTokens: 8000, cutOffHint: CUT_OFF_HINT, system: LISTING_SYSTEM,
     tool: { name: "listing", description: "The Amazon listing", input_schema: DRAFT_SCHEMA as never },
     instruction: `Write the listing for "${inputs.product}". Hard rules:\n${rulesPrompt(rc)}`,
   });
@@ -202,7 +205,7 @@ export async function generateListing(candidateId: string, opts: { force?: boole
   // One repair call, with only what failed and the draft as it stands; the code fixes again after it.
   if (failures.length) {
     const repair = await askModel<Partial<ListingDraft>>({
-      feature: "pl_listing", subject: `${candidateId}:repair`, force: opts.force, maxTokens: 4000, system: LISTING_SYSTEM,
+      feature: "pl_listing", subject: `${candidateId}:repair`, force: opts.force, maxTokens: 4000, cutOffHint: CUT_OFF_HINT, system: LISTING_SYSTEM,
       context: { draft: first.draft, failedRules: failures, facts: { brand: inputs.brand, keySpecs: inputs.specs, suitableFor: inputs.suitableFor, notFor: inputs.notFor, claimsToAvoid: inputs.avoid, packSize: inputs.packSize, leadSearchTerm: inputs.leadTerm, complaintsToAnswer: requiredThemes(rc), chosenTheme: inputs.chosenTheme }, competitorBrandsToAvoid: inputs.brands.slice(0, 200) },
       tool: { name: "listing", description: "The repaired Amazon listing", input_schema: DRAFT_SCHEMA as never },
       instruction: `Repair this listing so every failed rule passes. Change only what's needed for those rules, keep everything else as it is, and return the whole listing. All the rules:\n${rulesPrompt(rc)}`,
@@ -237,7 +240,7 @@ export async function regenerateField(candidateId: string, field: ListingField, 
   if (!LISTING_FIELDS.includes(field)) throw new Error(`field: ${LISTING_FIELDS.join(", ")}`);
   const inputs = await listingInputs(candidateId);
   const run = await askModel<Partial<ListingDraft>>({
-    feature: "pl_listing", subject: `${candidateId}:${field}`, context: { ...contextOf(inputs), currentListing: current }, force: opts.force ?? true, maxTokens: 2500, system: LISTING_SYSTEM,
+    feature: "pl_listing", subject: `${candidateId}:${field}`, context: { ...contextOf(inputs), currentListing: current }, force: opts.force ?? true, maxTokens: 4000, cutOffHint: CUT_OFF_HINT, system: LISTING_SYSTEM,
     tool: { name: `listing_${field}`, description: `The listing's ${field}`, input_schema: fieldSchema(field) as never },
     instruction: `Rewrite only the ${field} of the current listing, better, keeping to these rules; leave everything else as it is.\n${rulesPrompt(ruleContext(inputs))}`,
   });

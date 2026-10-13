@@ -62,6 +62,8 @@ describe("Listing writer (FakeDb, API mocked)", () => {
     const g = await generateListing(CAND);
     expect(create).toHaveBeenCalledTimes(2);
     expect(g.call).toMatchObject({ cached: false, calls: 2, tokens: { input: 6000, output: 1500 } });
+    // Room for a full answer: 8,000 output tokens to write, 4,000 to repair.
+    expect(create.mock.calls.map((x) => (x[0] as { max_tokens: number }).max_tokens)).toEqual([8000, 4000]);
     expect(g.call.costGbp).toBeGreaterThan(0);
     // The first draft broke rules: brand first (fixed in code), the uses in the title, three paragraphs (sent to repair).
     expect(g.fixes).toContain("Title starts with Dewlens");

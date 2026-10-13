@@ -5,7 +5,7 @@ import { setListingAsin } from "@/lib/server/plQuotes";
 import { generateListing, listingView, regenerateField, restoreListing, saveListingEdit, saveListingSettings, type ListingSettings } from "@/lib/server/plListing";
 
 type Ctx = { params: Promise<{ id: string }> };
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 /** The Listing step: its inputs, settings, versions and the latest's checks (no model call). */
 export const GET = handle(async (_req: NextRequest, ctx: Ctx) => Response.json(await listingView((await ctx.params).id)));

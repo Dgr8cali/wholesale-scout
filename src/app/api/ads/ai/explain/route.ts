@@ -3,7 +3,7 @@ import { buildExplainContext, estimateTokens } from "@/lib/ads/ai";
 import { handle } from "@/lib/server/http";
 import { explainProduct, explainInput, latestAi } from "@/lib/server/adsAi";
 
-export const maxDuration = 60;
+export const maxDuration = 300;
 const asinOf = (v: unknown) => String(v ?? "").toUpperCase();
 
 /** ?asin=: the latest answer (no API call); &preview=1: the data that would be sent. */

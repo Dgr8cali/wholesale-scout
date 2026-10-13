@@ -84,12 +84,27 @@ export function strictSchema(x: unknown): Record<string, unknown> {
   return out;
 }
 
+/** The most a retry after a cut-off answer asks for (output tokens). */
+export const MAX_TOKENS_CAP = 16_000;
+
+/** An answer that stopped at max_tokens twice: the caller says what to shorten. */
+export class CutOffError extends Error {
+  constructor(hint?: string) {
+    super(`The answer was cut off (too long). ${hint ?? "Try again."}`);
+    this.name = "CutOffError";
+  }
+}
+
 const hashOf = (x: unknown) => createHash("sha256").update(JSON.stringify(x)).digest("hex").slice(0, 32);
 
 /**
- * Ask the model once for JSON in a fixed schema (structured outputs: the answer is structured,
- * never free text). The same context (hash) for the same feature and subject returns the stored answer unless
- * `force`. Every call, failed ones too, is logged with its tokens and cost.
+ * Ask the model for JSON in a fixed schema (structured outputs: the answer is structured, never
+ * free text). The same context (hash) for the same feature and subject returns the stored answer
+ * unless `force`. An answer cut off at max_tokens is retried once at double the limit (capped at
+ * 16,000); still cut off, it throws CutOffError with `cutOffHint`. Every attempt, failed ones too,
+ * is logged with its tokens and cost; only a complete answer is ever served from the cache (a
+ * failed row carries an error, and the cache reads rows without one). The run's tokens and cost
+ * add up every attempt.
  */
 export async function askModel<T>(x: {
   feature: AiFeature; subject: string; context: unknown; instruction: string;
@@ -97,6 +112,8 @@ export async function askModel<T>(x: {
   system?: string;
   tool: { name: string; description: string; input_schema: Anthropic.Tool.InputSchema };
   force?: boolean; trigger?: "user" | "schedule"; maxTokens?: number;
+  /** After "The answer was cut off (too long).": what to try ("Try again or shorten Key specs."). */
+  cutOffHint?: string;
 }): Promise<AiRun<T>> {
   const s = await aiSettings();
   const dataHash = hashOf({ context: x.context, tool: x.tool.name, model: s.model, v: 1 });
@@ -106,30 +123,41 @@ export async function askModel<T>(x: {
     if (hit) return { result: hit.result as T, cached: true, model: String(hit.model), at: String(hit.created_at), costGbp: Number(hit.cost_gbp), costUsd: Number(hit.cost_usd), tokens: { input: Number(hit.input_tokens), output: Number(hit.output_tokens) }, contextTokens: estimateTokens(x.context) };
   }
   const base = { feature: x.feature, subject: x.subject, data_hash: dataHash, model: s.model, trigger: x.trigger ?? "user" };
-  let msg: Anthropic.Message;
-  try {
-    msg = await client().messages.create({
-      model: s.model, max_tokens: x.maxTokens ?? 2000,
-      system: x.system ?? SYSTEM_PROMPT,
-      output_config: { format: { type: "json_schema", schema: strictSchema(x.tool.input_schema) } },
-      messages: [{ role: "user", content: `${x.instruction}\n\nData (JSON):\n${JSON.stringify(x.context)}` }],
-    });
-  } catch (e) {
-    must(await d.from("ads_ai_calls").insert({ ...base, error: (e as Error).message.slice(0, 500) }), "log failed call");
-    throw new Error(`The AI call failed: ${(e as Error).message}`);
+  const spent = { usd: 0, gbp: 0, input: 0, output: 0 };
+  let limit = Math.min(x.maxTokens ?? 2000, MAX_TOKENS_CAP);
+  for (let attempt = 1; ; attempt++) {
+    let msg: Anthropic.Message;
+    try {
+      msg = await client().messages.create({
+        model: s.model, max_tokens: limit,
+        system: x.system ?? SYSTEM_PROMPT,
+        output_config: { format: { type: "json_schema", schema: strictSchema(x.tool.input_schema) } },
+        messages: [{ role: "user", content: `${x.instruction}\n\nData (JSON):\n${JSON.stringify(x.context)}` }],
+      });
+    } catch (e) {
+      must(await d.from("ads_ai_calls").insert({ ...base, error: (e as Error).message.slice(0, 500) }), "log failed call");
+      throw new Error(`The AI call failed: ${(e as Error).message}`);
+    }
+    const use = msg.usage as Usage;
+    const cost = costOf(use, s, s.gbpPerUsd);
+    spent.usd += cost.usd; spent.gbp += cost.gbp; spent.input += use.input_tokens; spent.output += use.output_tokens;
+    const cutOff = msg.stop_reason === "max_tokens";
+    const text = msg.content.filter((c) => c.type === "text").map((c) => (c as Anthropic.TextBlock).text).join("");
+    let result: T | null = null;
+    // A cut-off answer is never kept, even if what arrived happens to parse.
+    if (!cutOff) try { result = text ? (JSON.parse(text) as T) : null; } catch { result = null; }
+    const retry = cutOff && attempt === 1 && limit < MAX_TOKENS_CAP;
+    const error = result ? null : cutOff ? `Cut off at ${limit} tokens (stop: max_tokens)${retry ? `: retried at ${Math.min(limit * 2, MAX_TOKENS_CAP)}` : ""}` : `No structured answer (stop: ${msg.stop_reason})`;
+    const row = {
+      ...base, input_tokens: use.input_tokens, output_tokens: use.output_tokens, cache_read_tokens: use.cache_read_input_tokens ?? 0, cache_write_tokens: use.cache_creation_input_tokens ?? 0,
+      cost_usd: cost.usd, cost_gbp: cost.gbp, result, error,
+    };
+    const saved = must(await d.from("ads_ai_calls").insert(row).select("created_at").single(), "log call") as { created_at: string };
+    if (retry) { limit = Math.min(limit * 2, MAX_TOKENS_CAP); continue; }
+    if (!result) throw cutOff ? new CutOffError(x.cutOffHint) : new Error(error!);
+    const round = (n: number, dp: number) => Math.round(n * 10 ** dp) / 10 ** dp;
+    return { result, cached: false, model: s.model, at: saved.created_at, costGbp: round(spent.gbp, 6), costUsd: round(spent.usd, 6), tokens: { input: spent.input, output: spent.output }, contextTokens: estimateTokens(x.context) };
   }
-  const use = msg.usage as Usage;
-  const cost = costOf(use, s, s.gbpPerUsd);
-  const text = msg.content.filter((c) => c.type === "text").map((c) => (c as Anthropic.TextBlock).text).join("");
-  let result: T | null = null;
-  try { result = text ? (JSON.parse(text) as T) : null; } catch { result = null; }
-  const row = {
-    ...base, input_tokens: use.input_tokens, output_tokens: use.output_tokens, cache_read_tokens: use.cache_read_input_tokens ?? 0, cache_write_tokens: use.cache_creation_input_tokens ?? 0,
-    cost_usd: cost.usd, cost_gbp: cost.gbp, result, error: result ? null : `No structured answer (stop: ${msg.stop_reason})`,
-  };
-  const saved = must(await d.from("ads_ai_calls").insert(row).select("created_at").single(), "log call") as { created_at: string };
-  if (!result) throw new Error(row.error!);
-  return { result, cached: false, model: s.model, at: saved.created_at, costGbp: cost.gbp, costUsd: cost.usd, tokens: { input: use.input_tokens, output: use.output_tokens }, contextTokens: estimateTokens(x.context) };
 }
 
 /* ===================== the inputs ===================== */
@@ -267,7 +295,7 @@ export async function targetsInput(asin: string): Promise<TargetsInput> {
 export async function explainProduct(asin: string, opts: { force?: boolean } = {}) {
   const context = buildExplainContext(await explainInput(asin));
   const run = await askModel<ExplainResult>({
-    feature: "explain", subject: asin, context, force: opts.force, maxTokens: 4000, tool: EXPLAIN_TOOL,
+    feature: "explain", subject: asin, context, force: opts.force, maxTokens: 6000, tool: EXPLAIN_TOOL,
     instruction: "Explain this product's Sponsored Products results over the period in the data: what happened, the two or three biggest drivers, and what the open proposals would change. Cite the figures you use.",
   });
   const text = [run.result.narrative, ...run.result.drivers.map((x) => x.detail), run.result.proposals_effect].join(" ");
@@ -289,7 +317,7 @@ export async function recommendTargets(asin: string, opts: { force?: boolean } =
   const input = await targetsInput(asin);
   const context = buildTargetsContext(input);
   const run = await askModel<TargetsResult>({
-    feature: "targets", subject: asin, context, force: opts.force, maxTokens: 3000, tool: TARGETS_TOOL,
+    feature: "targets", subject: asin, context, force: opts.force, maxTokens: 6000, tool: TARGETS_TOOL,
     instruction: "Propose a launch and a steady-state target ACoS (%) for this product, with a one-paragraph justification citing the figures and a confidence.",
   });
   const result = checkTargets(run.result, input.breakEvenAcos);

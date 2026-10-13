@@ -3,7 +3,7 @@ import { handle } from "@/lib/server/http";
 import { bearerIs } from "@/lib/server/secrets";
 import { scheduledReview } from "@/lib/server/adsAi";
 
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 const authorised = (req: NextRequest) => bearerIs(req.headers.get("authorization"), process.env.CRON_SECRET);
 

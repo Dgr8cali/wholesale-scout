@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { REVIEW_TOOL, TARGETS_TOOL } from "../ads/ai";
-import { __setAnthropicForTests, askModel, strictSchema } from "./adsAi";
+import { __setAnthropicForTests, askModel, CutOffError, MAX_TOKENS_CAP, strictSchema } from "./adsAi";
 import { __setDbForTests } from "./db";
 import { FakeDb } from "./fakeDb";
 
@@ -48,6 +48,57 @@ describe("the AI call (API mocked)", () => {
     await run(true);
     expect(c.create).toHaveBeenCalledTimes(2);
     expect(db.tables.ads_ai_calls).toHaveLength(2);
+  });
+
+  /** A reply that stopped at max_tokens (half a JSON object), then optionally a complete one. */
+  const cutThen = (complete: unknown | null) => {
+    const create = vi.fn(async (...args: unknown[]) => {
+      void args;
+      const cut = create.mock.calls.length === 1 || complete == null;
+      return {
+        id: "m", type: "message", role: "assistant", model: "claude-sonnet-5-5", stop_reason: cut ? "max_tokens" : "end_turn", stop_sequence: null,
+        content: [{ type: "text", text: cut ? '{"launch_target_pct": 45, "justification": "Break-e' : JSON.stringify(complete) }],
+        usage: cut ? { input_tokens: 1800, output_tokens: 3000 } : { input_tokens: 1800, output_tokens: 500 },
+      };
+    });
+    return { messages: { create }, create };
+  };
+  const limits = (c: { create: { mock: { calls: unknown[][] } } }) => c.create.mock.calls.map((x) => (x[0] as { max_tokens: number }).max_tokens);
+
+  it("a max_tokens stop: one retry at double the limit, both attempts logged, the run's cost adds both, the cut-off never cached", async () => {
+    const c = cutThen(answer);
+    __setAnthropicForTests(c as never);
+    const r = await askModel({ feature: "targets", subject: "B0H9ZKYYHZ", context: { break_even_acos_pct: 48.7 }, instruction: "Propose targets.", tool: TARGETS_TOOL, maxTokens: 3000 });
+    expect(limits(c)).toEqual([3000, 6000]);
+    expect(r).toMatchObject({ result: answer, cached: false, tokens: { input: 3600, output: 3500 } });
+    // (3,600 × $3 + 3,500 × $15) per million = $0.0633.
+    expect(r.costUsd).toBeCloseTo(0.0633, 6);
+    expect(db.tables.ads_ai_calls).toHaveLength(2);
+    expect(db.tables.ads_ai_calls[0]).toMatchObject({ result: null, error: "Cut off at 3000 tokens (stop: max_tokens): retried at 6000", output_tokens: 3000 });
+    expect(db.tables.ads_ai_calls[1]).toMatchObject({ result: answer, error: null });
+    // The cache serves the complete answer, not the cut one.
+    const again = await askModel({ feature: "targets", subject: "B0H9ZKYYHZ", context: { break_even_acos_pct: 48.7 }, instruction: "Propose targets.", tool: TARGETS_TOOL, maxTokens: 3000 });
+    expect(again).toMatchObject({ cached: true, result: answer });
+    expect(c.create).toHaveBeenCalledTimes(2);
+  });
+
+  it("cut off twice: a clear error with the caller's hint, nothing cached, the next click calls again; the retry is capped at 16,000", async () => {
+    const c = cutThen(null);
+    __setAnthropicForTests(c as never);
+    const ask = () => askModel({ feature: "pl_listing", subject: "c1", context: { x: 1 }, instruction: "Write.", tool: TARGETS_TOOL, maxTokens: 10_000, cutOffHint: "Try again or shorten Key specs." });
+    const err = await ask().catch((e) => e);
+    expect(err).toBeInstanceOf(CutOffError);
+    expect(err.message).toBe("The answer was cut off (too long). Try again or shorten Key specs.");
+    expect(limits(c)).toEqual([10_000, MAX_TOKENS_CAP]);
+    expect(db.tables.ads_ai_calls.map((x) => x.error)).toEqual(["Cut off at 10000 tokens (stop: max_tokens): retried at 16000", "Cut off at 16000 tokens (stop: max_tokens)"]);
+    expect(db.tables.ads_ai_calls.every((x) => x.result == null && x.output_tokens === 3000)).toBe(true);
+    // Not cached: the next click is a real call (two more attempts).
+    await ask().catch(() => {});
+    expect(c.create).toHaveBeenCalledTimes(4);
+    // At the cap already: no retry.
+    c.create.mockClear();
+    await askModel({ feature: "pl_listing", subject: "c2", context: {}, instruction: "Write.", tool: TARGETS_TOOL, maxTokens: 16_000 }).catch((e) => expect(e.message).toBe("The answer was cut off (too long). Try again."));
+    expect(c.create).toHaveBeenCalledTimes(1);
   });
 
   it("a failed call is logged and reported", async () => {

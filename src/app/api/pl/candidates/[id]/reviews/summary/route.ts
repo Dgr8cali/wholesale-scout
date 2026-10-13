@@ -4,7 +4,7 @@ import { handle } from "@/lib/server/http";
 import { reviewSummaryContext, summariseReviews } from "@/lib/server/plReviews";
 
 type Ctx = { params: Promise<{ id: string }> };
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 /** ?preview=1: what "Ask Claude to summarise" would send (no API call). */
 export const GET = handle(async (_req: NextRequest, ctx: Ctx) => {

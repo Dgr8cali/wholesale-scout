@@ -3,7 +3,7 @@ import { buildReviewContext, estimateTokens } from "@/lib/ads/ai";
 import { handle } from "@/lib/server/http";
 import { latestAi, monthlyReview, reviewInput } from "@/lib/server/adsAi";
 
-export const maxDuration = 60;
+export const maxDuration = 300;
 const isMonth = (m: unknown): m is string => typeof m === "string" && /^\d{4}-\d{2}$/.test(m);
 
 /** ?month=YYYY-MM: the latest review (no API call); &preview=1: the data that would be sent. */
