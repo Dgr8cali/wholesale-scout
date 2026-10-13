@@ -1,5 +1,5 @@
 -- Wholesale Scout schema, dumped by scripts/schema-backup.mjs. No data.
--- Dumped 2026-10-12T23:23:35.064Z. Safe to re-run. Restore: npm run schema:restore
+-- Dumped 2026-10-13T15:07:18.049Z. Safe to re-run. Restore: npm run schema:restore
 
 -- @section extensions
 create extension if not exists "pg_cron";
@@ -1221,7 +1221,12 @@ create table if not exists "pl_candidates" (
   "reference_pinned" boolean default false not null,
   "listing_voice" text,
   "listing_pack" text,
-  "listing_title_limit" integer
+  "listing_title_limit" integer,
+  "listing_brand" text,
+  "listing_specs" text,
+  "listing_suitable" text,
+  "listing_not_for" text,
+  "listing_avoid" text
 );
 alter table "pl_candidates" add column if not exists "id" uuid default gen_random_uuid();
 alter table "pl_candidates" add column if not exists "name" text;
@@ -1244,6 +1249,11 @@ alter table "pl_candidates" add column if not exists "reference_pinned" boolean 
 alter table "pl_candidates" add column if not exists "listing_voice" text;
 alter table "pl_candidates" add column if not exists "listing_pack" text;
 alter table "pl_candidates" add column if not exists "listing_title_limit" integer;
+alter table "pl_candidates" add column if not exists "listing_brand" text;
+alter table "pl_candidates" add column if not exists "listing_specs" text;
+alter table "pl_candidates" add column if not exists "listing_suitable" text;
+alter table "pl_candidates" add column if not exists "listing_not_for" text;
+alter table "pl_candidates" add column if not exists "listing_avoid" text;
 alter table "pl_candidates" enable row level security;
 
 create table if not exists "pl_category_tree" (
@@ -3906,3 +3916,4 @@ insert into schema_migrations (name) values ('20261006000100_pl_review_dumps_off
 insert into schema_migrations (name) values ('20261007000100_business_vat_qogita_uk.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261009000100_price_basis.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261013000100_pl_listing_drafts.sql') on conflict do nothing;
+insert into schema_migrations (name) values ('20261013000200_pl_listing_facts.sql') on conflict do nothing;

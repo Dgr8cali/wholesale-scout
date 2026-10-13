@@ -116,7 +116,18 @@ optional Claude summary runs only on a click. The Listing Writer (a Listing sect
 bullets, description, backend terms and a differentiation angle with Claude, only on a click (feature
 `pl_listing` in `ads_ai_calls`, cached by input hash), from Gate 4's themes, pick and summary, the
 attached POE capture's search terms and the linked Ads product's keyword bank, in an editable brand
-voice. Checked live in the browser: title limit (default 200, per candidate), lead term, ALL CAPS,
+voice, and the Listing section's facts (`pl_candidates.listing_brand/_specs/_suitable/_not_for/_avoid`;
+brand required; key specs start from the spec field). Competitor brands = the Settings list plus the
+page-one ASINs' brands. First-draft rules (`src/lib/pl/listingRules.ts`) are in the prompt and
+enforced after the call (brand-first Title Case title cut at a word, promo words out, CAPITALISED
+bullet headers, backend terms cleaned of title words/plurals, filler, health/body and not-for words,
+claims to avoid, then filled to 200–249 bytes from search terms, bank and uses); the Checks list holds
+it to every rule (title 120–180 with brand, top term, pack size, Individually Wrapped and top three
+uses, first 80 characters, bullets 150–250 answering Gate 4's pick and every real complaint ≥ 4%,
+specs and suitable/not-for bullets, three-paragraph description with every spec, backend bytes and
+words, claims), and anything failing gets ONE repair call (subject `<id>:repair`, logged and cached
+like the first) before the version is saved ("generated + repaired"). "Needs proof" highlights
+performance promises without blocking. Checked live in the browser: title limit (default 200, per candidate), lead term, ALL CAPS,
 promo words, capitalised bullet openers, three bullets on complaint themes, backend ≤ 249 bytes
 (cleaned of title words, brands from Settings → Private label, ASINs), compliance claims with
 rewrites, and a sortable keyword-coverage table weighted by volume. Per-field Regenerate, Copy all,

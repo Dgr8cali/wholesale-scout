@@ -58,7 +58,7 @@ export function ruleIssues(d: ListingDraft, o: { titleLimit: number; leadTerm?: 
     if (!b.trim()) { out.push({ field: "bullet", index: i, level: "error", message: "Empty" }); return; }
     if (b.length > BULLET_LIMIT) out.push({ field: "bullet", index: i, level: "error", message: `${b.length} characters: over ${BULLET_LIMIT}` });
     // Opens with a short capitalised benefit: "LEAK-PROOF LID —" or "Leak-proof lid:".
-    if (!/^[A-Z][^.:—–-]{2,40}(:|—|–| - )/.test(b.trim())) out.push({ field: "bullet", index: i, level: "warn", message: "Doesn't open with a short capitalised benefit (\"Leak-proof lid: …\")" });
+    if (!/^[A-Z][^.:—–]{2,40}(:|—|–| - )/.test(b.trim())) out.push({ field: "bullet", index: i, level: "warn", message: "Doesn't open with a short capitalised benefit (\"Leak-proof lid: …\")" });
     const promo = promoIn(b);
     if (promo.length) out.push({ field: "bullet", index: i, level: "error", message: `Promotional words: ${promo.join(", ")}` });
     if (caps(b.replace(/^[^:—–]+[:—–]/, "")).length) out.push({ field: "bullet", index: i, level: "warn", message: "ALL CAPS after the opening benefit" });
@@ -124,8 +124,13 @@ const CLAIMS: { re: RegExp; term: string; why: string; suggestion: string; certi
   { re: /\bplastic[- ]free\b/i, term: "plastic-free", why: "A green claim needing evidence", suggestion: "say what it's made of instead", certifiable: true },
 ];
 
-/** Every flagged claim and competitor brand in the draft. Green claims pass when the notes say certified. */
-export function complianceFlags(d: ListingDraft, o: { brands: string[]; notes?: string | null }): ComplianceFlag[] {
+/**
+ * Every flagged claim and competitor brand in the draft, and the candidate's own claims to avoid
+ * (always flagged). Green claims pass when the notes say certified, unless they're on that list.
+ */
+export function complianceFlags(d: ListingDraft, o: { brands: string[]; notes?: string | null; avoid?: string[] }): ComplianceFlag[] {
+  const avoid = (o.avoid ?? []).map((a) => a.trim()).filter(Boolean);
+  const avoidRe = avoid.map((a) => ({ term: a, re: new RegExp(`(?<![\\p{L}\\p{N}])${a.toLowerCase().split(/[\s-]+/).map(escape).join("[\\s-]?")}(?![\\p{L}\\p{N}])`, "iu") }));
   const certified = /certif(ied|icate|ication)/i.test(o.notes ?? "");
   const fields: { field: ListingField; index?: number; text: string }[] = [
     { field: "title", text: d.title }, ...d.bullets.map((b, i) => ({ field: "bullets" as const, index: i, text: b })),
@@ -134,8 +139,14 @@ export function complianceFlags(d: ListingDraft, o: { brands: string[]; notes?: 
   const out: ComplianceFlag[] = [];
   for (const f of fields) {
     for (const c of CLAIMS) {
-      if (c.certifiable && certified) continue;
+      const listed = avoidRe.some((a) => a.re.test(c.term));
+      if (c.certifiable && certified && !listed) continue;
       if (c.re.test(f.text)) out.push({ field: f.field, index: f.index, term: c.term, why: c.why, suggestion: c.suggestion });
+    }
+    for (const a of avoidRe) {
+      if (!a.re.test(f.text)) continue;
+      if (out.some((x) => x.field === f.field && x.index === f.index && x.term.replace(/[\s-]/g, "").toLowerCase() === a.term.replace(/[\s-]/g, "").toLowerCase())) continue;
+      out.push({ field: f.field, index: f.index, term: a.term, why: "On this candidate's Claims to avoid", suggestion: "remove it" });
     }
     for (const b of o.brands) {
       if (b.trim() && new RegExp(`(^|[^\\p{L}\\p{N}])${escape(b.trim())}([^\\p{L}\\p{N}]|$)`, "iu").test(f.text)) {

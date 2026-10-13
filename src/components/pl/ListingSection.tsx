@@ -1,6 +1,6 @@
 "use client";
 
-import { ClipboardCopyIcon, DownloadIcon, LoaderIcon, RotateCcwIcon, SparklesIcon } from "lucide-react";
+import { CheckIcon, ClipboardCopyIcon, DownloadIcon, LoaderIcon, RotateCcwIcon, SparklesIcon, XIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useDialogs } from "@/components/Dialogs";
@@ -12,13 +12,14 @@ import {
   BACKEND_BYTES, BULLET_LIMIT, DESCRIPTION_LIMIT, bytes, complianceFlags, copyAll, flatFileRow, keywordCoverage, ruleIssues,
   type CoverageRow, type ListingDraft, type ListingField,
 } from "@/lib/pl/listing";
+import { listingChecks, needsProof, requiredThemes, ruleContext } from "@/lib/pl/listingRules";
 import type { ListingInputs, ListingSettings } from "@/lib/server/plListing";
 import { api } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
 
 interface Version { id: string; version: number; source: string; outputs: ListingDraft; created_at: string }
 interface View { inputs: ListingInputs; settings: ListingSettings; versions: Version[]; latest: Version | null }
-interface Call { cached: boolean; costGbp: number; tokens: { input: number; output: number }; model: string }
+interface Call { cached: boolean; costGbp: number; tokens: { input: number; output: number }; model: string; calls?: number }
 
 const EMPTY: ListingDraft = { title: "", bullets: ["", "", "", "", ""], description: "", backend: "", differentiation: "" };
 const when = (iso: string) => new Date(iso).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
@@ -56,15 +57,18 @@ export function ListingSection({ candidateId }: { candidateId: string }) {
   const limit = settings?.titleLimit ?? inputs?.titleLimit ?? 200;
   const checks = useMemo(() => inputs ? {
     issues: ruleIssues(draft, { titleLimit: limit, leadTerm: inputs.leadTerm, themes: inputs.themes.slice(0, 6).map((t) => t.theme) }),
-    compliance: complianceFlags(draft, { brands: inputs.brands, notes: inputs.notes }),
+    compliance: complianceFlags(draft, { brands: inputs.brands, notes: inputs.notes, avoid: inputs.avoid }),
     coverage: keywordCoverage(draft, inputs.searchTerms),
+    proof: needsProof(draft),
   } : null, [draft, inputs, limit]);
+  const rc = useMemo(() => (inputs ? ruleContext({ ...inputs, titleLimit: limit }) : null), [inputs, limit]);
+  const list = useMemo(() => (rc && checks ? listingChecks(draft, rc, checks.compliance.map((c) => c.term)) : []), [draft, rc, checks]);
 
   const run = async (what: string, f: () => Promise<{ call?: Call } | unknown>, ok?: string) => {
     setBusy(what);
     try {
       const r = (await f()) as { call?: Call };
-      if (r?.call) toast.success(`${ok ?? "Written"}${r.call.cached ? " (from the cache: same inputs, no new call)" : ` · £${r.call.costGbp.toFixed(3)}, ${r.call.tokens.input.toLocaleString("en-GB")} in / ${r.call.tokens.output.toLocaleString("en-GB")} out`}`);
+      if (r?.call) toast.success(`${ok ?? "Written"}${r.call.cached ? " (from the cache: same inputs, no new call)" : ` · ${(r.call.calls ?? 1) > 1 ? `${r.call.calls} calls (draft + repair), ` : ""}£${r.call.costGbp.toFixed(3)}, ${r.call.tokens.input.toLocaleString("en-GB")} in / ${r.call.tokens.output.toLocaleString("en-GB")} out`}`);
       else if (ok) toast.success(ok);
       await load();
     } catch (e) {
@@ -97,11 +101,17 @@ export function ListingSection({ candidateId }: { candidateId: string }) {
   const flagsFor = (field: ListingField, index?: number) => checks.compliance.filter((f) => f.field === field && (index == null || f.index === index));
   const notes = (field: ListingField | "bullet", index?: number) => {
     const is = issuesFor(field, index), fs = field === "bullet" ? flagsFor("bullets", index) : flagsFor(field as ListingField);
-    if (!is.length && !fs.length) return null;
+    const ps = checks.proof.filter((p) => (field === "bullet" ? p.field === "bullets" && p.index === index : p.field === field));
+    if (!is.length && !fs.length && !ps.length) return null;
     return (
       <ul className="space-y-0.5 text-[11.5px]">
         {is.map((i, k) => <li key={`i${k}`} className={i.level === "error" ? "text-fail" : "text-warn"}>{i.message}</li>)}
         {fs.map((f, k) => <li key={`f${k}`} className="text-fail">&ldquo;{f.term}&rdquo;: {f.why}. Try {f.suggestion}.</li>)}
+        {ps.map((p, k) => (
+          <li key={`p${k}`} className="text-muted-foreground">
+            <mark className="rounded bg-warn-soft px-0.5 text-foreground">{p.sentence}</mark> <span className="text-warn">Needs proof (&ldquo;{p.phrase}&rdquo;): verify with samples before publishing.</span>
+          </li>
+        ))}
       </ul>
     );
   };
@@ -118,22 +128,36 @@ export function ListingSection({ candidateId }: { candidateId: string }) {
           <h2 className="font-heading text-base font-bold">Listing</h2>
           <p className="text-sm text-muted-foreground">The title, five bullets, description, backend search terms and the differentiation angle, written by Claude on your click from Gate 4&apos;s complaint themes and the search terms of Gates 3 and 5. Checked as you edit: Amazon&apos;s style rules, compliance, and how much of the search volume it covers. Every generation and edit is a version.</p>
         </div>
-        <Button size="sm" disabled={!!busy} onClick={() => generate(!!view.latest)}>
+        <Button size="sm" disabled={!!busy || !inputs.brand} title={inputs.brand ? undefined : "Set the brand name first"} onClick={() => generate(!!view.latest)}>
           {busy === "generate" || busy === "regenerate" ? <LoaderIcon className="animate-spin" /> : <SparklesIcon />} {view.latest ? "Regenerate all" : "Write the listing"}
         </Button>
       </div>
 
       <div className="grid gap-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
-        <label className="space-y-1 lg:col-span-2"><span className="field-label">Brand voice</span>
+        <label className="space-y-1"><span className="field-label">Brand name (required)</span>
+          <Input defaultValue={settings.brand} placeholder="The title starts with it" aria-invalid={!settings.brand.trim()} onBlur={(e) => e.target.value !== settings.brand && saveSettings({ brand: e.target.value })} /></label>
+        <label className="space-y-1"><span className="field-label">Brand voice</span>
           <Input defaultValue={settings.brandVoice} onBlur={(e) => e.target.value !== settings.brandVoice && saveSettings({ brandVoice: e.target.value })} /></label>
         <label className="space-y-1"><span className="field-label">Pack size</span>
           <Input defaultValue={settings.packSize ?? ""} placeholder="e.g. 200 wipes" onBlur={(e) => e.target.value !== (settings.packSize ?? "") && saveSettings({ packSize: e.target.value })} /></label>
         <label className="space-y-1"><span className="field-label">Title limit (characters)</span>
           <Input className="num" type="number" defaultValue={settings.titleLimit} onBlur={(e) => Number(e.target.value) !== settings.titleLimit && saveSettings({ titleLimit: Number(e.target.value) })} /></label>
+        <label className="space-y-1 sm:col-span-2"><span className="field-label">Key specs (one fact per line)</span>
+          <Textarea rows={5} className="text-xs" defaultValue={settings.specs} placeholder={"70% isopropyl alcohol\nwipe 12 × 15 cm\n200 individually wrapped sachets"} onBlur={(e) => e.target.value !== settings.specs && saveSettings({ specs: e.target.value })} /></label>
+        <div className="space-y-3 sm:col-span-2">
+          <label className="block space-y-1"><span className="field-label">Suitable for (comma list; the first three go in the title)</span>
+            <Input defaultValue={settings.suitableFor} onBlur={(e) => e.target.value !== settings.suitableFor && saveSettings({ suitableFor: e.target.value })} /></label>
+          <label className="block space-y-1"><span className="field-label">Not for (comma list)</span>
+            <Input defaultValue={settings.notFor} onBlur={(e) => e.target.value !== settings.notFor && saveSettings({ notFor: e.target.value })} /></label>
+          <label className="block space-y-1"><span className="field-label">Claims to avoid (added to the compliance list)</span>
+            <Input defaultValue={settings.avoid} onBlur={(e) => e.target.value !== settings.avoid && saveSettings({ avoid: e.target.value })} /></label>
+        </div>
       </div>
       <p className="text-xs text-muted-foreground">
         Written from: {inputs.themes.length} complaint theme{inputs.themes.length === 1 ? "" : "s"}{inputs.chosenTheme ? ` (Gate 4's pick: “${inputs.chosenTheme}”)` : ""}{inputs.summary.length ? ", the review summary" : ""} · {inputs.searchTerms.length} search term{inputs.searchTerms.length === 1 ? "" : "s"}{inputs.leadTerm ? ` (lead: “${inputs.leadTerm}”)` : ""} · {inputs.bankTerms.length} keyword-bank term{inputs.bankTerms.length === 1 ? "" : "s"} · {inputs.brands.length} competitor brands kept out.
+        {rc && requiredThemes(rc).length > 0 && <> The bullets must answer: {requiredThemes(rc).map((t) => `“${t}”`).join(", ")}.</>}
         {!inputs.themes.length && !inputs.searchTerms.length && <span className="text-warn"> Mine reviews in Gate 4 or attach an Opportunity Explorer capture first.</span>}
+        {!inputs.brand && <span className="text-warn"> Set the brand name to write the listing.</span>}
       </p>
 
       {has && (
@@ -167,6 +191,7 @@ export function ListingSection({ candidateId }: { candidateId: string }) {
           <div className="space-y-1">
             <div className="flex flex-wrap items-center gap-2"><span className="field-label">Differentiation angle</span><span className="ml-auto">{regenButton("differentiation")}</span></div>
             <Textarea rows={3} className="text-sm" value={draft.differentiation} onChange={(e) => set({ differentiation: e.target.value })} />
+            {notes("differentiation")}
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -174,6 +199,17 @@ export function ListingSection({ candidateId }: { candidateId: string }) {
             {dirty && <span className="text-xs text-muted-foreground">Unsaved edits</span>}
             <Button size="sm" variant="outline" onClick={copy}><ClipboardCopyIcon /> Copy all</Button>
             <Button size="sm" variant="outline" onClick={exportFlat} title="Seller Central flat file: item_name, bullet_point1–5, product_description, generic_keywords"><DownloadIcon /> Flat-file row</Button>
+          </div>
+
+          <div className="rounded-lg border p-3">
+            <p className="mb-1 text-sm"><b>Checks</b> <span className={cn("num", list.every((c) => c.pass) ? "text-pass" : "text-warn")}>{list.filter((c) => c.pass).length} of {list.length} passed</span>
+              <span className="text-xs text-muted-foreground"> · after each generation, anything failing goes back for one repair call</span></p>
+            <ul className="grid gap-x-4 gap-y-0.5 text-xs md:grid-cols-2">{list.map((c) => (
+              <li key={c.id} className="flex items-start gap-1.5">
+                {c.pass ? <CheckIcon className="mt-0.5 size-3.5 shrink-0 text-pass" /> : <XIcon className="mt-0.5 size-3.5 shrink-0 text-fail" />}
+                <span>{c.label}{c.detail && <span className="text-fail">: {c.detail}</span>}</span>
+              </li>
+            ))}</ul>
           </div>
 
           {checks.compliance.length > 0 && (
