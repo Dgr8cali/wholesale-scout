@@ -126,8 +126,13 @@ it to every rule (title 120–180 with brand, top term, pack size, Individually 
 uses, first 80 characters, bullets 150–250 answering Gate 4's pick and every real complaint ≥ 4%,
 specs and suitable/not-for bullets, three-paragraph description with every spec, backend bytes and
 words, claims), and anything failing gets ONE repair call (subject `<id>:repair`, logged and cached
-like the first) before the version is saved ("generated + repaired"). "Needs proof" highlights
-performance promises without blocking. Checked live in the browser: title limit (default 200, per candidate), lead term, ALL CAPS,
+like the first) before the version is saved ("generated + repaired"). No-repetition and spec-strength checks: each key spec in at most 2 bullets, bullet 4 only the specs no
+other bullet states, bullet jobs (1 pick, 2 result, 3 size/feel, 4 new specs, 5 suitable/not for), no
+3-word phrase in two bullets, no repeated title word but the product noun (a repeated one-word use is
+swapped in code for the top search-term synonym, e.g. Glasses → Spectacles), every number/timing from
+Key specs or Pack size, backend words linked to the inputs (dropped in code when not; PRODUCT_FORMS
+adds other names for the product noun). "Needs proof" highlights
+performance promises without blocking, once, under its own field. Checked live in the browser: title limit (default 200, per candidate), lead term, ALL CAPS,
 promo words, capitalised bullet openers, three bullets on complaint themes, backend ≤ 249 bytes
 (cleaned of title words, brands from Settings → Private label, ASINs), compliance claims with
 rewrites, and a sortable keyword-coverage table weighted by volume. Per-field Regenerate, Copy all,

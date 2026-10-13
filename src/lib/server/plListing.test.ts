@@ -85,8 +85,9 @@ describe("Listing writer (FakeDb, API mocked)", () => {
     expect(g.draft).toMatchObject({ version: 1, source: "generated + repaired" });
     expect(g.draft.outputs.title.startsWith("Dewlens Glasses Cleaning Wipes")).toBe(true);
     expect(g.checks.list.find((c) => c.id === "uses")).toMatchObject({ pass: true });
-    // Backend: lowercase, no ASIN, no competitor brand, no title words, filled from the search terms.
-    expect(g.draft.outputs.backend).toMatch(/^spectacle cleaner eyeglass tissue/);
+    // Backend: lowercase, no ASIN, no competitor brand, no title words, nothing these inputs don't mention
+    // ("spectacle": this candidate's search terms and uses never say it), filled from the search terms.
+    expect(g.draft.outputs.backend).toMatch(/^cleaner eyeglass tissue/);
     expect(g.draft.outputs.backend).not.toMatch(/zeiss|b0abcdefgh|glasses/);
     expect(db.tables.ads_ai_calls.map((c) => c.subject)).toEqual([CAND, `${CAND}:repair`]);
     expect(db.tables.ads_ai_calls[1]).toMatchObject({ feature: "pl_listing", input_tokens: 2000, output_tokens: 700 });

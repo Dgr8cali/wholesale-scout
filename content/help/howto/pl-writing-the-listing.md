@@ -28,18 +28,19 @@ The line under the settings says how many themes and search terms it has to work
 
 **Write the listing** sends all of that to Claude (the model set in Settings → Ads) with these rules, and the same rules are checked in code afterwards:
 
-- **Title**: the brand, then the highest-volume search term, the pack size, *Individually Wrapped* when a spec says so, and the top three uses. The brand, top term and pack size come within the first 80 characters. It aims for 120–180 characters (never over the limit), in Title Case, with no ALL CAPS words and no promo words (*best*, *#1*, *free*, *sale*, *guaranteed*).
+- **Title**: the brand, then the highest-volume search term, the pack size, *Individually Wrapped* when a spec says so, and the top three uses. The brand, top term and pack size come within the first 80 characters. It aims for 120–180 characters (never over the limit), in Title Case, with no ALL CAPS words and no promo words (*best*, *#1*, *free*, *sale*, *guaranteed*). No word appears twice except the product noun (*wipes*), which may appear twice; plurals count as the same word. When a use repeats a title word (*Glasses Wipes … for Glasses*), the second becomes the highest-volume synonym from your search terms (*Spectacles*, from *spectacle wipes*).
 - **Five bullets**, each 150–250 characters, each opening with a 2–4 word CAPITALISED header and a colon (*STAYS MOIST: …*):
-  - bullet 1 answers the theme you picked in Gate 4;
+  - each has its own job: **1** answers the theme you picked in Gate 4, **2** the cleaning result, **3** size and feel, **4** the key specs no other bullet has stated, **5** what it's suitable for and not for;
   - between them, the bullets answer every real complaint at 4% or more of negative reviews (*too dry*, *leaves streaks*, *too small*; not vague ones like *not good*), using the key specs as the evidence;
-  - one bullet lists the key specs, and one says what it's suitable for and not for.
+  - every key spec appears in some bullet, but in no more than two, and no phrase of three or more words appears in two bullets.
+- **Claims at spec strength**: no number, timing or duration unless it's in Key specs or Pack size. If the spec says *quick-drying*, the copy says *quick-drying*, not *dries in seconds*.
 - **Description**: three short paragraphs that mention every key spec once.
-- **Backend search terms**: lowercase, 200–249 bytes. Nothing already in the title (plurals count), no filler (*of, and, for, the, with, pack, a, to, in*), no competitor brands, no ASINs, no *Not for* words, and no health or body words (*eye, eyes, skin, medical*…) unless they're in Suitable for. The spare bytes are filled with synonyms and uses from your search terms, keyword bank and Suitable for list.
+- **Backend search terms**: lowercase, 200–249 bytes. Nothing already in the title (plurals count), no filler (*of, and, for, the, with, pack, a, to, in*), no competitor brands, no ASINs, no *Not for* words, and no health or body words (*eye, eyes, skin, medical*…) unless they're in Suitable for. Every word must relate to the product, its uses or the search terms: variants like *eyeglasses*, *specs*, *sachets*, *screens*, *tissues* or *premoistened* pass, but unrelated objects (*television*, *jewellery*, *telescope*) are taken out. The spare bytes are filled with words from your search terms, keyword bank and Suitable for list.
 - **Differentiation angle**: two or three sentences tying the top complaints to how this product is better.
 
 **What happens after the call:**
 
-1. **Fixed in code**: the brand moved to the front, Title Case applied, promo words taken out, the title cut at a word to the limit, bullet headers put in capitals, and the backend terms cleaned and filled.
+1. **Fixed in code**: the brand moved to the front, Title Case applied, promo words taken out, a repeated use swapped for its search-term synonym, the title cut at a word to the limit, bullet headers put in capitals, and the backend terms cleaned (unrelated words too) and filled.
 2. **Checked**: the **Checks** list holds the draft to every rule above, plus compliance.
 3. **Repaired once**: if anything still fails, a single follow-up call sends only the failures and the draft, and Claude fixes just those. Its answer is fixed in code and checked again, and that's the version saved.
 
@@ -54,7 +55,7 @@ Every field is editable, with a live counter (characters; bytes for the backend 
 - **Style**: the title over its limit or not leading with the lead term, words in ALL CAPS, promo words (*best*, *#1*, *free*, *sale*, *guaranteed*), a bullet without a capitalised benefit opener, fewer than three bullets on a complaint theme, and backend terms over 249 bytes.
 - **Compliance**, each with a suggested rewrite: *antibacterial*, *kills 99.9%*, *disinfect*, *sterile*, *medical grade*, *FDA*, *cure*, any competitor brand, and everything on the candidate's **Claims to avoid**. *Eco-friendly*, *biodegradable* and *plastic-free* are flagged unless the candidate's notes say the product is certified (or they're on Claims to avoid).
 - **Checks**: every rule from *Write it* above, passed or failed, with what's wrong.
-- **Needs proof**: any sentence that promises how the product performs (*streak-free*, *stays moist*, *quick-drying*, *3-year shelf life*, *safe on coatings*) is highlighted under its field with "verify with samples before publishing". It doesn't block anything: it's a reminder to test the samples before the listing goes live.
+- **Needs proof**: any sentence that promises how the product performs (*streak-free*, *stays moist*, *quick-drying*, *3-year shelf life*, *safe on coatings*) is highlighted once, under its own field (a bullet's under that bullet), with "verify with samples before publishing". It doesn't block anything: it's a reminder to test the samples before the listing goes live.
 
 **Regenerate** next to a field rewrites only that field, keeping the rest of your listing as it is (a new model call each time).
 

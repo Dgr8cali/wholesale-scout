@@ -101,7 +101,8 @@ export function ListingSection({ candidateId }: { candidateId: string }) {
   const flagsFor = (field: ListingField, index?: number) => checks.compliance.filter((f) => f.field === field && (index == null || f.index === index));
   const notes = (field: ListingField | "bullet", index?: number) => {
     const is = issuesFor(field, index), fs = field === "bullet" ? flagsFor("bullets", index) : flagsFor(field as ListingField);
-    const ps = checks.proof.filter((p) => (field === "bullet" ? p.field === "bullets" && p.index === index : p.field === field));
+    // Each "needs proof" note once, under its own field: a bullet's under that bullet, none under the bullets as a whole.
+    const ps = field === "bullets" ? [] : checks.proof.filter((p) => (field === "bullet" ? p.field === "bullets" && p.index === index : p.field === field));
     if (!is.length && !fs.length && !ps.length) return null;
     return (
       <ul className="space-y-0.5 text-[11.5px]">

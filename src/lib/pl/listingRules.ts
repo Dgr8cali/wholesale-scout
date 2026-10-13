@@ -115,6 +115,59 @@ export function fitTitle(title: string, limit: number): string {
   return t;
 }
 
+/** The product's noun ("wipes" in "glasses wipes"): the one word a title may say twice. */
+export const productNoun = (c: Pick<RuleContext, "product" | "leadTerm">) => words(c.product).at(-1) ?? words(c.leadTerm ?? "").at(-1) ?? "";
+
+/** Title words said more often than allowed: the brand once, the product noun twice, everything else once (plurals count as the same word). */
+export function titleRepeats(title: string, c: Pick<RuleContext, "brand" | "product" | "leadTerm">): string[] {
+  const noun = singular(productNoun(c)), brand = words(c.brand).map(singular);
+  const count = new Map<string, { n: number; as: string }>();
+  for (const w of words(title.replace(/-/g, " "))) {
+    if (SMALL.has(w) || /^\d/.test(w) || w.length < 3) continue;
+    const k = singular(w);
+    count.set(k, { n: (count.get(k)?.n ?? 0) + 1, as: count.get(k)?.as ?? w });
+  }
+  return [...count].filter(([k, v]) => v.n > (k === noun ? 2 : brand.includes(k) ? 1 : 1)).map(([, v]) => v.as);
+}
+
+/**
+ * The best other word for a use the title already says ("Glasses" → "Spectacles"): the modifier of
+ * the highest-volume search term for the same product noun ("spectacle wipes", 7,778 a month) that
+ * isn't in the title, a brand or a "not for" word; plural when the use was.
+ */
+export function synonymForUse(use: string, title: string, c: Pick<RuleContext, "searchTerms" | "brands" | "notFor" | "product" | "leadTerm">): string | null {
+  const noun = singular(productNoun(c));
+  const inTitle = words(title.replace(/-/g, " ")).map(singular);
+  const banned = new Set([...c.brands.flatMap(words), ...c.notFor.flatMap(words), ...BACKEND_FILLER, ...HEALTH_WORDS].map(singular));
+  for (const t of [...c.searchTerms].sort((a, b) => (b.volume ?? 0) - (a.volume ?? 0))) {
+    const tw = words(t.term);
+    if (tw.length !== 2 || singular(tw[1]) !== noun) continue;
+    const m = tw[0];
+    if (m.length < 4 || inTitle.includes(singular(m)) || banned.has(singular(m)) || singular(m) === singular(use)) continue;
+    const plural = /s$/i.test(use) && !/s$/.test(m) ? `${m}s` : m;
+    return titleCase(plural);
+  }
+  return null;
+}
+
+/** A one-word use the title says twice ("Glasses Wipes … for Glasses"): its later mention swapped for a search-term synonym. */
+export function swapRepeatedUses(title: string, c: Pick<RuleContext, "suitableFor" | "searchTerms" | "brands" | "notFor" | "product" | "leadTerm" | "brand">): { title: string; swapped: string[] } {
+  let t = title;
+  const swapped: string[] = [];
+  for (const use of c.suitableFor.slice(0, 3)) {
+    if (words(use).length !== 1) continue;
+    const re = new RegExp(`(?<![\\p{L}\\p{N}])${escape(use)}(?![\\p{L}\\p{N}])`, "giu");
+    const hits = [...t.matchAll(re)];
+    if (hits.length < 2) continue;
+    const syn = synonymForUse(use, t, c);
+    if (!syn) continue;
+    const last = hits[hits.length - 1];
+    t = `${t.slice(0, last.index)}${syn}${t.slice(last.index! + last[0].length)}`;
+    swapped.push(`${last[0]} → ${syn}`);
+  }
+  return { title: t, swapped };
+}
+
 /* ===================== bullets ===================== */
 
 /** "Stays moist: …" → "STAYS MOIST: …"; a dash after the header becomes a colon. Headers of 2–4 words only. */
@@ -213,7 +266,47 @@ export function specIn(text: string, spec: string): boolean {
  * "not for" words or claims to avoid; then filled toward the budget from the search terms, the
  * keyword bank and the uses, preferring words the bullets don't already carry.
  */
-export function buildBackend(raw: string, d: Pick<ListingDraft, "title" | "bullets">, c: Pick<RuleContext, "brands" | "suitableFor" | "notFor" | "avoid" | "searchTerms" | "bankTerms" | "brand">): { text: string; added: string[] } {
+/** Describe how it's carried or used, whatever the product: never an unrelated object. */
+const BACKEND_GENERIC = ["travel", "portable", "disposable", "pocket", "single", "individual", "individually"];
+
+/** Other names shoppers use for the same kind of product (by its noun): "lens tissues" are wipes too. */
+const PRODUCT_FORMS: Record<string, string[]> = {
+  wipe: ["tissue", "towelette", "cloth", "sachet"],
+  cloth: ["wipe", "towel", "rag"],
+  spray: ["mist", "cleaner", "solution"],
+  bag: ["pouch", "sack", "case"],
+  box: ["case", "container", "organiser", "organizer"],
+  mat: ["pad", "rug"],
+};
+
+/** Every word the listing is about: the product (and its other names), the top term, the search terms, the keyword bank, the uses and the specs. */
+export function inputVocabulary(c: Pick<RuleContext, "product" | "leadTerm" | "searchTerms" | "bankTerms" | "suitableFor" | "specs" | "packSize">): string[] {
+  const forms = PRODUCT_FORMS[singular(productNoun(c))] ?? [];
+  return [...new Set([c.product, c.leadTerm ?? "", c.packSize ?? "", ...forms, ...c.searchTerms.map((t) => t.term), ...c.bankTerms, ...c.suitableFor, ...c.specs].flatMap((x) => words(x.replace(/-/g, " "))).filter((w) => w.length >= 3 && !/^\d/.test(w)))];
+}
+
+/**
+ * A backend word is about the product when it is, contains or shares a 5-letter start with a word
+ * of the inputs ("eyeglasses" ← glasses, "specs" ← spectacle, "premoistened" ← moistened,
+ * "sachets" ← sachet), or describes carrying or using it (travel, portable, disposable…).
+ * "television", "jewellery", "telescope" aren't.
+ */
+export function linkedWord(w: string, vocab: string[]): boolean {
+  if (BACKEND_GENERIC.includes(w)) return true;
+  const sw = singular(w);
+  return vocab.some((x) => {
+    const sx = singular(x);
+    if (sw === sx) return true;
+    if (sx.length >= 4 && sw.includes(sx)) return true;
+    if (sw.length >= 4 && sx.includes(sw)) return true;
+    // A shared start: 5 letters, or 4 when either word is short ("specs" ← "spectacle").
+    const n = Math.min(sw.length, sx.length) <= 5 ? 4 : 5;
+    return sw.length >= 4 && sx.length >= 4 && sw.slice(0, n) === sx.slice(0, n);
+  });
+}
+
+export function buildBackend(raw: string, d: Pick<ListingDraft, "title" | "bullets">, c: Pick<RuleContext, "brands" | "suitableFor" | "notFor" | "avoid" | "searchTerms" | "bankTerms" | "brand" | "product" | "leadTerm" | "specs" | "packSize">, opts: { fill?: boolean } = {}): { text: string; added: string[] } {
+  const vocab = inputVocabulary(c);
   const allowed = new Set(c.suitableFor.flatMap(words));
   const banned = new Set([
     ...BACKEND_FILLER,
@@ -223,7 +316,7 @@ export function buildBackend(raw: string, d: Pick<ListingDraft, "title" | "bulle
     ...words(c.brand),
   ]);
   const titleWords = words(d.title);
-  const ok = (w: string) => w.length > 1 && !/^\d+%?$/.test(w) && ![...banned].some((b) => sameWord(b, w)) && !titleWords.some((t) => sameWord(t, w));
+  const ok = (w: string) => w.length > 1 && !/^\d+%?$/.test(w) && ![...banned].some((b) => sameWord(b, w)) && !titleWords.some((t) => sameWord(t, w)) && linkedWord(w, vocab);
   const base = cleanBackend(words(raw).filter(ok).join(" "), d.title, c.brands).text;
   const have = new Set(words(base));
   const bulletWords = words(d.bullets.join(" "));
@@ -232,7 +325,7 @@ export function buildBackend(raw: string, d: Pick<ListingDraft, "title" | "bulle
   const ordered = [...pool.filter((w) => !bulletWords.some((b) => sameWord(b, w))), ...pool.filter((w) => bulletWords.some((b) => sameWord(b, w)))];
   const added: string[] = [];
   let text = base;
-  for (const w of ordered) {
+  for (const w of opts.fill === false ? [] : ordered) {
     if (bytes(text) >= BACKEND_TARGET + 30) break;
     if (!ok(w) || [...have].some((h) => sameWord(h, w)) || /^b0[a-z0-9]{8}$/i.test(w)) continue;
     const brand = c.brands.some((b) => words(b).length === 1 && sameWord(words(b)[0], w));
@@ -255,6 +348,8 @@ export function enforceRules(d: ListingDraft, c: RuleContext): { draft: ListingD
   if (cased !== title) fixes.push("Title in Title Case");
   title = cased;
   if (c.brand.trim() && !title.startsWith(`${c.brand.trim()} `)) { title = brandFirst(title, c.brand); fixes.push(`Title starts with ${c.brand.trim()}`); }
+  const swap = swapRepeatedUses(title, c);
+  if (swap.swapped.length) { title = swap.title; fixes.push(`Title: ${swap.swapped.join(", ")} (a search-term synonym for a repeated word)`); }
   const fitted = fitTitle(title, c.titleLimit);
   if (fitted !== title) fixes.push(`Title cut to ${c.titleLimit} characters`);
   title = fitted;
@@ -264,6 +359,59 @@ export function enforceRules(d: ListingDraft, c: RuleContext): { draft: ListingD
   const backend = buildBackend(d.backend, { title, bullets }, c);
   if (backend.text !== before.trim()) fixes.push(`Backend terms cleaned${backend.added.length ? ` and ${backend.added.length} search words added` : ""} (${bytes(backend.text)} bytes)`);
   return { draft: { ...d, title, bullets, backend: backend.text }, fixes };
+}
+
+/* ===================== repetition and numbers ===================== */
+
+const RESULT_WORDS = /\b(clean|cleans|cleaned|cleaning|clear|clearer|streak|streaks|smear|smears|smudge|smudges|fingerprint|fingerprints|grime|dirt|residue|haze|spotless|shine)\b/i;
+const FEEL_WORDS = /\b(size|sized|cm|mm|large|larger|generous|roomy|compact|big|soft|softer|thick|thicker|gentle|texture|feel|feels|damp|moist|fabric|material|cloth)\b/i;
+const PHRASE_STOP = new Set(["a", "an", "and", "as", "at", "be", "by", "for", "from", "in", "is", "it", "its", "of", "on", "or", "so", "that", "the", "to", "with", "you", "your", "each", "every", "one", "no", "not"]);
+
+/**
+ * 3-word phrases (two of them content words) in more than one bullet, leaving out the brand, the
+ * product's name, a key spec, a use or a "not for" (those are checked on their own).
+ */
+export function repeatedPhrases(bullets: string[], c: Pick<RuleContext, "brand" | "product" | "leadTerm" | "specs" | "suitableFor" | "notFor" | "packSize">): { phrase: string; bullets: number[] }[] {
+  const exempt = [c.brand, c.product, c.leadTerm ?? "", c.packSize ?? "", ...c.specs, ...c.suitableFor, ...c.notFor].map((x) => words(x.replace(/-/g, " ")).map(singular).join(" ")).filter(Boolean);
+  const seen = new Map<string, { at: Set<number>; as: string }>();
+  bullets.forEach((b, i) => {
+    const body = b.replace(/^[^:]{0,45}:\s*/, "");
+    const raw = words(body.replace(/-/g, " "));
+    const w = raw.map(singular);
+    for (let k = 0; k + 3 <= w.length; k++) {
+      const g = w.slice(k, k + 3);
+      if (g.filter((x) => !PHRASE_STOP.has(x)).length < 2) continue;
+      const p = g.join(" ");
+      if (exempt.some((e) => e.includes(p))) continue;
+      const hit = seen.get(p) ?? { at: new Set<number>(), as: raw.slice(k, k + 3).join(" ") };
+      hit.at.add(i + 1);
+      seen.set(p, hit);
+    }
+  });
+  return [...seen.values()].filter((h) => h.at.size > 1).map((h) => ({ phrase: h.as, bullets: [...h.at].sort() }));
+}
+
+const TIME_WORDS = /\b(seconds?|secs?|minutes?|mins?|hours?|hrs?|days?|weeks?|months?|years?|instantly|instant|immediately)\b/gi;
+/**
+ * Numbers and timings the copy states that Key specs and Pack size don't ("dries in seconds" when
+ * the spec says only "quick-drying"; "99.9%"; "lasts 6 months").
+ */
+export function unsupportedNumbers(d: ListingDraft, c: Pick<RuleContext, "specs" | "packSize">): string[] {
+  const src = [...c.specs, c.packSize ?? ""].join(" ");
+  const nums = new Set(src.match(/\d+(?:[.,]\d+)?/g) ?? []);
+  const times = new Set((src.match(TIME_WORDS) ?? []).map((t) => singular(t.toLowerCase()).replace(/s$/, "")));
+  const out: string[] = [];
+  // The words before it and the rest of its word ("dries in seconds", "kills 99.9%").
+  const around = (text: string, at: number, len: number) => {
+    const before = text.slice(0, at).split(/\s+/).slice(-3).join(" ").trimStart();
+    const rest = text.slice(at + len).match(/^[^\s.,;:]*/)?.[0] ?? "";
+    return `${before}${text.slice(at, at + len)}${rest}`.trim();
+  };
+  for (const text of [d.title, ...d.bullets, d.description, d.differentiation]) {
+    for (const m of text.matchAll(/\d+(?:[.,]\d+)?/g)) if (!nums.has(m[0])) out.push(around(text, m.index!, m[0].length));
+    for (const m of text.matchAll(TIME_WORDS)) if (!times.has(singular(m[0].toLowerCase()).replace(/s$/, ""))) out.push(around(text, m.index!, m[0].length));
+  }
+  return [...new Set(out)];
 }
 
 /* ===================== checks ===================== */
@@ -297,6 +445,8 @@ export function listingChecks(d: ListingDraft, c: RuleContext, complianceTerms: 
   add("title_length", `Title ${lo}–${hi} characters`, t.length >= lo && t.length <= hi, `${t.length} characters`);
   const caps = (t.match(/\b[A-Z]{4,}\b/g) ?? []), promo = promoIn(t);
   const lowerWords = t.split(/\s+/).filter((w, i) => i > 0 && /^\p{Ll}/u.test(w) && !SMALL.has(w.replace(/[^\p{L}×]/gu, "")) && !UNITS.test(w.replace(/[,.;:)]+$/, "")));
+  const reps = titleRepeats(t, c);
+  add("title_repeats", `No repeated title words (the brand once, "${productNoun(c)}" at most twice)`, !reps.length, `Repeated: ${reps.join(", ")}`);
   add("title_style", "Title Case, no ALL CAPS, no promo words", !caps.length && !promo.length && !lowerWords.length, [caps.length && `ALL CAPS: ${caps.join(", ")}`, promo.length && `promo: ${promo.join(", ")}`, lowerWords.length && `not capitalised: ${lowerWords.slice(0, 4).join(", ")}`].filter(Boolean).join("; "));
 
   const badHead = d.bullets.map((b, i) => (HEADER.test(b.trim()) ? null : i + 1)).filter((x) => x != null);
@@ -310,13 +460,27 @@ export function listingChecks(d: ListingDraft, c: RuleContext, complianceTerms: 
     add("themes", `Bullets answer every Gate 4 complaint (${need.length})`, !unanswered.length, `Not answered: ${unanswered.join(", ")}`);
   }
   if (c.specs.length) {
-    const want = Math.min(3, c.specs.length);
-    add("specs_bullet", "A bullet lists the key specs", d.bullets.some((b) => c.specs.filter((s) => specIn(b, s)).length >= want), `No bullet has ${want} of the key specs`);
+    const inBullets = c.specs.map((sp) => ({ sp, at: d.bullets.map((b, i) => (specIn(b, sp) ? i + 1 : 0)).filter(Boolean) }));
+    const missing = inBullets.filter((x) => !x.at.length).map((x) => x.sp);
+    add("specs_covered", "Every key spec is in a bullet", !missing.length, `Missing: ${missing.join("; ")}`);
+    const over = inBullets.filter((x) => x.at.length > 2);
+    add("spec_repeats", "Each key spec in at most 2 bullets", !over.length, over.map((x) => `"${x.sp}" in bullets ${x.at.join(", ")}`).join("; "));
+    const b4 = d.bullets[3] ?? "";
+    const repeated = c.specs.filter((sp) => specIn(b4, sp) && d.bullets.some((b, i) => i !== 3 && specIn(b, sp)));
+    add("specs_bullet_new", "Bullet 4 gives the specs the other bullets don't", !repeated.length, `Already in another bullet: ${repeated.join("; ")}`);
   }
+  // Each bullet's job: 1 Gate 4's pick (checked above), 2 the cleaning result, 3 size and feel, 4 the specs not yet covered, 5 suitable for / not for.
+  const jobs: string[] = [];
+  if (d.bullets[1] != null && !RESULT_WORDS.test(d.bullets[1])) jobs.push("2 should be about the result (clean, clear, no streaks)");
+  if (d.bullets[2] != null && !FEEL_WORDS.test(d.bullets[2])) jobs.push("3 should be about size and feel");
   if (c.suitableFor.length || c.notFor.length) {
-    const ok = d.bullets.some((b) => (!c.suitableFor.length || c.suitableFor.filter((u) => hasPhrase(b, u)).length >= Math.min(2, c.suitableFor.length)) && (!c.notFor.length || c.notFor.some((n) => hasPhrase(b, n))));
-    add("suitable_bullet", "A bullet says what it's suitable for and not for", ok, "One bullet should name the uses and the Not for list");
+    const b5 = d.bullets[4] ?? "";
+    const ok = (!c.suitableFor.length || c.suitableFor.filter((u) => hasPhrase(b5, u)).length >= Math.min(2, c.suitableFor.length)) && (!c.notFor.length || c.notFor.some((n) => hasPhrase(b5, n)));
+    if (!ok) jobs.push("5 should say what it's suitable for and not for");
   }
+  add("bullet_jobs", "Each bullet has its own job (1 pick, 2 result, 3 size/feel, 4 new specs, 5 suitable/not for)", !jobs.length, `Bullet ${jobs.join("; ")}`);
+  const phrases = repeatedPhrases(d.bullets, c);
+  add("bullet_phrases", "No 3-word phrase repeated across bullets", !phrases.length, phrases.slice(0, 4).map((p) => `"${p.phrase}" (bullets ${p.bullets.join(", ")})`).join("; "));
   const paras = d.description.split(/\n\s*\n|\n/).map((p) => p.trim()).filter(Boolean);
   add("description_paragraphs", "Description in 3 short paragraphs", paras.length === 3, `${paras.length} paragraph${paras.length === 1 ? "" : "s"}`);
   if (c.specs.length) {
@@ -325,9 +489,15 @@ export function listingChecks(d: ListingDraft, c: RuleContext, complianceTerms: 
   }
   const b = bytes(d.backend);
   add("backend_bytes", `Backend terms ${BACKEND_TARGET}–${BACKEND_BYTES} bytes`, b >= BACKEND_TARGET && b <= BACKEND_BYTES, `${b} bytes`);
-  const cleaned = buildBackend(d.backend, d, { ...c, searchTerms: [], bankTerms: [], suitableFor: c.suitableFor }).text;
-  const extra = words(d.backend).filter((w) => !words(cleaned).includes(w));
+  const cleaned = buildBackend(d.backend, d, c, { fill: false }).text;
+  // Unrelated words have their own check below.
+  const vocab = inputVocabulary(c);
+  const extra = words(d.backend).filter((w) => !words(cleaned).includes(w) && linkedWord(w, vocab));
   add("backend_words", "Backend: no title words, filler, brands, ASINs or health words", !extra.length && d.backend === d.backend.toLowerCase(), extra.length ? `Remove: ${[...new Set(extra)].slice(0, 8).join(", ")}` : "Lowercase only");
+  const unsupported = unsupportedNumbers(d, c);
+  add("numbers", "Every number and timing comes from Key specs or Pack size", !unsupported.length, `Not in the specs: ${unsupported.slice(0, 5).map((u) => `"${u}"`).join(", ")}`);
+  const offTopic = [...new Set(words(d.backend).filter((w) => !linkedWord(w, vocab)))];
+  add("backend_relevance", "Backend words relate to the product, its uses or the search terms", !offTopic.length, `No link: ${offTopic.slice(0, 10).join(", ")}`);
   add("claims", "No claims to avoid or compliance flags", !complianceTerms.length, [...new Set(complianceTerms)].join(", "));
   return out;
 }
@@ -360,10 +530,11 @@ export function rulesPrompt(c: RuleContext): string {
   const need = requiredThemes(c);
   const wrapped = individuallyWrapped(c);
   return [
-    `Title: start with the brand "${c.brand}", then "${c.leadTerm ?? c.product}"; include the pack size${c.packSize ? ` (${c.packSize})` : ""}${wrapped ? " and \"Individually Wrapped\"" : ""}; name the top uses (${c.suitableFor.slice(0, 3).join(", ") || "from Suitable for"}); the brand, the top term and the pack size within the first 80 characters; ${TITLE_TARGET.min}–${Math.min(TITLE_TARGET.max, c.titleLimit)} characters (never over ${c.titleLimit}); Title Case; no ALL CAPS words; no promo words (best, #1, free, sale, guaranteed).`,
-    `Bullets: exactly five, each ${BULLET_TARGET.min}–${BULLET_TARGET.max} characters, each starting with a 2–4 word CAPITALISED header and a colon ("STAYS MOIST: …").${c.chosenTheme ? ` Bullet 1 answers "${c.chosenTheme}".` : ""}${need.length ? ` Between them the bullets must answer every one of these review complaints, using the key specs as the evidence: ${need.map((t) => `"${t}"`).join(", ")}.` : ""} One bullet lists the key specs. One bullet states what it's suitable for and what it's not for.`,
+    `Title: start with the brand "${c.brand}", then "${c.leadTerm ?? c.product}"; include the pack size${c.packSize ? ` (${c.packSize})` : ""}${wrapped ? " and \"Individually Wrapped\"" : ""}; name the top uses (${c.suitableFor.slice(0, 3).join(", ") || "from Suitable for"}); the brand, the top term and the pack size within the first 80 characters; ${TITLE_TARGET.min}–${Math.min(TITLE_TARGET.max, c.titleLimit)} characters (never over ${c.titleLimit}); no word twice except "${productNoun(c)}" (when a use repeats a title word, use a synonym from the search terms, e.g. "Spectacles" for a second "Glasses"); Title Case; no ALL CAPS words; no promo words (best, #1, free, sale, guaranteed).`,
+    `Bullets: exactly five, each ${BULLET_TARGET.min}–${BULLET_TARGET.max} characters, each starting with a 2–4 word CAPITALISED header and a colon ("STAYS MOIST: …"). Each has its own job: 1 answers ${c.chosenTheme ? `"${c.chosenTheme}"` : "the top complaint"}; 2 the cleaning result; 3 size and feel; 4 the key specs no other bullet has stated; 5 what it's suitable for and not for.${need.length ? ` Between them the bullets must answer every one of these review complaints, using the key specs as the evidence: ${need.map((t) => `"${t}"`).join(", ")}.` : ""} Every key spec appears in some bullet, but each in at most two bullets. Never repeat a phrase of three or more words from one bullet in another.`,
+    `Claims at spec strength: no number, timing or duration unless it's in the key specs or pack size (if the spec says "quick-drying", write "quick-drying", not "dries in seconds").`,
     `Description: three short paragraphs separated by a blank line, mentioning every key spec once.`,
-    `Backend terms: a list of at most 40 single lowercase words (the code joins them into ${BACKEND_TARGET}–${BACKEND_BYTES} bytes); no words already in the title (plurals count), no filler (of, and, for, the, with, pack, a, to, in), no competitor brands, no ASINs, no health or body words (eye, eyes, skin, medical) unless in Suitable for; add synonyms and use-case words not in the title or bullets.`,
+    `Backend terms: a list of at most 40 single lowercase words (the code joins them into ${BACKEND_TARGET}–${BACKEND_BYTES} bytes); no words already in the title (plurals count), no filler (of, and, for, the, with, pack, a, to, in), no competitor brands, no ASINs, no health or body words (eye, eyes, skin, medical) unless in Suitable for; add variants of the search terms and use-case words not in the title or bullets (plural/singular, joined or split forms like "eyeglasses", "premoistened"); every word must relate to the product, its uses or the search terms: no unrelated objects.`,
     `Never state any of these claims: ${[...c.avoid, "antibacterial", "kills 99.9%", "disinfects", "sterile", "medical grade", "FDA", "cures"].join(", ")}.`,
   ].join("\n");
 }
