@@ -28,14 +28,20 @@ The line under the settings says how many themes and search terms it has to work
 
 **Write the listing** sends all of that to Claude (the model set in Settings → Ads) with these rules, and the same rules are checked in code afterwards:
 
-- **Title**: the brand, then the highest-volume search term, the pack size, *Individually Wrapped* when a spec says so, and the top three uses. The brand, top term and pack size come within the first 80 characters. It aims for 120–180 characters (never over the limit), in Title Case, with no ALL CAPS words and no promo words (*best*, *#1*, *free*, *sale*, *guaranteed*). No word appears twice except the product noun (*wipes*), which may appear twice; plurals count as the same word. When a use repeats a title word (*Glasses Wipes … for Glasses*), the second becomes the highest-volume synonym from your search terms (*Spectacles*, from *spectacle wipes*).
+- **Title**: the brand, then the highest-volume search term, the pack size, *Individually Wrapped* when a spec says so, and the top three uses. The brand, top term and pack size come within the first 80 characters. It aims for 120–180 characters (never over the limit), in Title Case, with no ALL CAPS words and no promo words (*best*, *#1*, *free*, *sale*, *guaranteed*). No word appears twice except the product noun (*wipes*), which may appear twice; plurals count as the same word. A word may also appear a second time when one mention is part of one of the top 3 search phrases by volume, with at most one word between its words: *Lens Cleaning Wipes* carries *lens wipes*, so it can sit alongside *Camera Lenses*. The title should include one of those phrases besides the lead term when it fits. When a use repeats a title word (*Glasses Wipes … for Glasses*), the second becomes the highest-volume synonym from your search terms (*Spectacles*, from *spectacle wipes*).
 - **Five bullets**, each 150–250 characters, each opening with a 2–4 word CAPITALISED header and a colon (*STAYS MOIST: …*):
   - each has its own job: **1** answers the theme you picked in Gate 4, **2** the cleaning result, **3** size and feel, **4** the key specs no other bullet has stated, **5** what it's suitable for and not for;
   - between them, the bullets answer every real complaint at 4% or more of negative reviews (*too dry*, *leaves streaks*, *too small*; not vague ones like *not good*), using the key specs as the evidence;
   - every key spec appears in some bullet, but in no more than two, and no phrase of three or more words appears in two bullets.
-- **Claims at spec strength**: no number, timing or duration unless it's in Key specs or Pack size. If the spec says *quick-drying*, the copy says *quick-drying*, not *dries in seconds*.
+- **Claims at spec strength**: no number, timing or duration unless it's in Key specs or Pack size. If the spec says *quick-drying*, the copy says *quick-drying*, not *dries in seconds*. Performance claims the specs don't state are softened (*helps reduce streaks*, *designed to*, *sealed to help keep moist*), never absolute: *streak-free*, *without leaving streaks*, *never*, *always*, *guaranteed*, *100%* and *every time* are flagged unless Key specs use them. There are no claims about how it performs over time either (*as moist next year as today*).
 - **Description**: three short paragraphs that mention every key spec once.
-- **Backend search terms**: lowercase, 200–249 bytes. Nothing already in the title (plurals count), no filler (*of, and, for, the, with, pack, a, to, in*), no competitor brands, no ASINs, no *Not for* words, and no health or body words (*eye, eyes, skin, medical*…) unless they're in Suitable for. Every word must relate to the product, its uses or the search terms: variants like *eyeglasses*, *specs*, *sachets*, *screens*, *tissues* or *premoistened* pass, but unrelated objects (*television*, *jewellery*, *telescope*) are taken out. The spare bytes are filled with words from your search terms, keyword bank and Suitable for list.
+- **Backend search terms**: lowercase, 200–249 bytes. Nothing already in the title (plurals count), no filler (*of, and, for, the, with, pack, a, to, in*), no competitor brands, no ASINs, no *Not for* words, and no health or body words (*eye, eyes, skin, medical*…) unless they're in Suitable for. Every word must relate to the product, its uses or the search terms: variants like *eyeglasses*, *specs*, *sachets*, *screens*, *tissues* or *premoistened* pass, but unrelated objects (*television*, *jewellery*, *telescope*) are taken out. Under 200 bytes after cleaning, the code tops them up itself, to 200 bytes:
+
+1. the unused words of your search terms (highest volume first), keyword bank and Suitable for list;
+2. then the plural or singular of words already there (*phone*/*phones*, *tissue*/*tissues*; not *specs*, *eyewear* or *premoistened*);
+3. then other names for the product (*tissues*, *towelettes* and *cloths* for wipes).
+
+Every added word passes the same exclusions. The repair call is used only when the code can't reach 200.
 - **Differentiation angle**: two or three sentences tying the top complaints to how this product is better.
 
 **What happens after the call:**
@@ -45,6 +51,13 @@ The line under the settings says how many themes and search terms it has to work
 3. **Repaired once**: if anything still fails, a single follow-up call sends only the failures and the draft, and Claude fixes just those. Its answer is fixed in code and checked again, and that's the version saved.
 
 Whatever still fails after that shows red in Checks, for you to finish by hand or with **Regenerate** on the field.
+
+Under **Regenerate all**, the last model run stays on show:
+
+- its version and time;
+- the calls it made, with tokens in, out and thinking, and its £ cost;
+- whether a repair ran, and for which rules;
+- whether the backend terms were topped up in code.
 
 Nothing is sent until you click. Both calls are logged with their tokens and £ cost (the toast shows the total), and each is cached by its inputs: clicking again with nothing changed returns the stored answers without new calls. **Regenerate all** asks again with fresh calls.
 

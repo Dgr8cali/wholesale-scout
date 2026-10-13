@@ -131,7 +131,14 @@ other bullet states, bullet jobs (1 pick, 2 result, 3 size/feel, 4 new specs, 5 
 3-word phrase in two bullets, no repeated title word but the product noun (a repeated one-word use is
 swapped in code for the top search-term synonym, e.g. Glasses → Spectacles), every number/timing from
 Key specs or Pack size, backend words linked to the inputs (dropped in code when not; PRODUCT_FORMS
-adds other names for the product noun). "Needs proof" highlights
+adds other names for the product noun). Performance claims hedged unless Key specs
+state them (absolute_claims: streak-free, without leaving streaks, never, always, guaranteed, 100%,
+every time); a title word may repeat inside one of the top 3 search phrases (phraseAllowance, one
+word between allowed); backend top-up in code under 200 bytes (search/bank/use words by volume, then
+plural/singular variants of nouns, then PRODUCT_FORMS), repair only if still short; each run's calls,
+tokens, £, repair reasons and top-up are saved in the version (inputs.run) and shown under Regenerate
+all (listingView.lastRun). The old "N of 5 bullets answer a theme" editor note is gone (Checks owns
+it). "Needs proof" highlights
 performance promises without blocking, once, under its own field. Checked live in the browser: title limit (default 200, per candidate), lead term, ALL CAPS,
 promo words, capitalised bullet openers, three bullets on complaint themes, backend ≤ 249 bytes
 (cleaned of title words, brands from Settings → Private label, ASINs), compliance claims with

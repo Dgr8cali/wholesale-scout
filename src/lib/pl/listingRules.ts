@@ -118,16 +118,46 @@ export function fitTitle(title: string, limit: number): string {
 /** The product's noun ("wipes" in "glasses wipes"): the one word a title may say twice. */
 export const productNoun = (c: Pick<RuleContext, "product" | "leadTerm">) => words(c.product).at(-1) ?? words(c.leadTerm ?? "").at(-1) ?? "";
 
-/** Title words said more often than allowed: the brand once, the product noun twice, everything else once (plurals count as the same word). */
-export function titleRepeats(title: string, c: Pick<RuleContext, "brand" | "product" | "leadTerm">): string[] {
+/** The top 3 search terms by volume. */
+export const topTerms = (c: Pick<RuleContext, "searchTerms">, n = 3) => [...c.searchTerms].sort((a, b) => (b.volume ?? 0) - (a.volume ?? 0)).slice(0, n).map((t) => t.term);
+
+/**
+ * Words the title may say a second time because they're part of one of the top 3 search phrases
+ * there: the phrase's words in order, with at most one word between each ("Lens Cleaning Wipes"
+ * carries "lens wipes"), so "Lens" may sit alongside "Camera Lenses".
+ */
+export function phraseAllowance(title: string, c: Pick<RuleContext, "searchTerms">): Set<string> {
+  const tw = words(title.replace(/-/g, " ")).map(singular);
+  const out = new Set<string>();
+  for (const term of topTerms(c)) {
+    const pw = words(term).map(singular);
+    for (let i = 0; i < tw.length; i++) {
+      if (tw[i] !== pw[0]) continue;
+      let at = i, okay = true;
+      for (let j = 1; j < pw.length && okay; j++) {
+        const next = tw.slice(at + 1, at + 3).indexOf(pw[j]);
+        if (next < 0) okay = false; else at = at + 1 + next;
+      }
+      if (okay) { pw.forEach((w) => out.add(w)); break; }
+    }
+  }
+  return out;
+}
+
+/**
+ * Title words said more often than allowed: the brand once, the product noun twice, everything else
+ * once, or twice when one mention is part of a top-3 search phrase (plurals count as the same word).
+ */
+export function titleRepeats(title: string, c: Pick<RuleContext, "brand" | "product" | "leadTerm"> & Partial<Pick<RuleContext, "searchTerms">>): string[] {
   const noun = singular(productNoun(c)), brand = words(c.brand).map(singular);
+  const allowed = phraseAllowance(title, { searchTerms: c.searchTerms ?? [] });
   const count = new Map<string, { n: number; as: string }>();
   for (const w of words(title.replace(/-/g, " "))) {
     if (SMALL.has(w) || /^\d/.test(w) || w.length < 3) continue;
     const k = singular(w);
     count.set(k, { n: (count.get(k)?.n ?? 0) + 1, as: count.get(k)?.as ?? w });
   }
-  return [...count].filter(([k, v]) => v.n > (k === noun ? 2 : brand.includes(k) ? 1 : 1)).map(([, v]) => v.as);
+  return [...count].filter(([k, v]) => v.n > (k === noun ? 2 : brand.includes(k) ? 1 : allowed.has(k) ? 2 : 1)).map(([, v]) => v.as);
 }
 
 /**
@@ -158,7 +188,8 @@ export function swapRepeatedUses(title: string, c: Pick<RuleContext, "suitableFo
     if (words(use).length !== 1) continue;
     const re = new RegExp(`(?<![\\p{L}\\p{N}])${escape(use)}(?![\\p{L}\\p{N}])`, "giu");
     const hits = [...t.matchAll(re)];
-    if (hits.length < 2) continue;
+    // Only a repeat the rules don't allow (a second mention inside a top-3 search phrase is fine).
+    if (hits.length < 2 || !titleRepeats(t, c).some((r) => singular(r) === singular(use.toLowerCase()))) continue;
     const syn = synonymForUse(use, t, c);
     if (!syn) continue;
     const last = hits[hits.length - 1];
@@ -305,6 +336,28 @@ export function linkedWord(w: string, vocab: string[]): boolean {
   });
 }
 
+/** Nouns only used in the plural (no "spec", "binocular", "glass" for spectacles). */
+const PLURAL_ONLY = new Set(["specs", "glasses", "sunglasses", "eyeglasses", "binoculars", "goggles", "scissors", "tweezers", "pliers", "trousers", "jeans", "shorts", "tongs", "headphones", "earphones", "earbuds", "clothes"]);
+
+/** Words with no plural/singular variant worth adding: verbs and adjectives (-ed, -ing), mass nouns (-wear, -ware), plural-only nouns. */
+export const hasNumberVariant = (w: string) => w.length >= 4 && !PLURAL_ONLY.has(w) && !BACKEND_GENERIC.includes(w) && !/(ed|ing|wear|ware|ful|less|ness|ous|ive|ic|al|ly|able|ible)$/.test(w);
+
+/** The other number of a word: wipe ↔ wipes, battery ↔ batteries, box ↔ boxes, lens ↔ lenses. */
+export function otherNumber(w: string): string {
+  const one = singular(w);
+  if (one !== w) return one;
+  if (/[^aeiou]y$/.test(w)) return `${w.slice(0, -1)}ies`;
+  if (/(s|x|z|ch|sh)$/.test(w)) return `${w}es`;
+  return `${w}s`;
+}
+
+/**
+ * Backend terms cleaned (see below), then, when under 200 bytes, topped up in code until they reach
+ * 200: first the unused words of the search terms (highest volume first), the keyword bank and the
+ * uses; then the other number of the words already there and of those (wipe/wipes); then the
+ * product's other names (tissues, towelettes…). Every word added passes the same exclusions.
+ * `added` lists the top-up's words.
+ */
 export function buildBackend(raw: string, d: Pick<ListingDraft, "title" | "bullets">, c: Pick<RuleContext, "brands" | "suitableFor" | "notFor" | "avoid" | "searchTerms" | "bankTerms" | "brand" | "product" | "leadTerm" | "specs" | "packSize">, opts: { fill?: boolean } = {}): { text: string; added: string[] } {
   const vocab = inputVocabulary(c);
   const allowed = new Set(c.suitableFor.flatMap(words));
@@ -325,14 +378,20 @@ export function buildBackend(raw: string, d: Pick<ListingDraft, "title" | "bulle
   const ordered = [...pool.filter((w) => !bulletWords.some((b) => sameWord(b, w))), ...pool.filter((w) => bulletWords.some((b) => sameWord(b, w)))];
   const added: string[] = [];
   let text = base;
-  for (const w of opts.fill === false ? [] : ordered) {
-    if (bytes(text) >= BACKEND_TARGET + 30) break;
-    if (!ok(w) || [...have].some((h) => sameWord(h, w)) || /^b0[a-z0-9]{8}$/i.test(w)) continue;
-    const brand = c.brands.some((b) => words(b).length === 1 && sameWord(words(b)[0], w));
-    if (brand) continue;
+  const isBrand = (w: string) => c.brands.some((b) => words(b).length === 1 && sameWord(words(b)[0], w));
+  /** Add the word if it passes; `exact`: a variant is new unless that exact form is there. */
+  const tryAdd = (w: string, exact: boolean) => {
+    if (bytes(text) >= BACKEND_TARGET) return;
+    if (!ok(w) || /^b0[a-z0-9]{8}$/i.test(w) || isBrand(w)) return;
+    if (exact ? have.has(w) : [...have].some((h) => sameWord(h, w))) return;
     const next = text ? `${text} ${w}` : w;
-    if (bytes(next) > BACKEND_BYTES) continue;
+    if (bytes(next) > BACKEND_BYTES) return;
     text = next; have.add(w); added.push(w);
+  };
+  if (opts.fill !== false && bytes(text) < BACKEND_TARGET) {
+    for (const w of ordered) tryAdd(w, false);
+    for (const w of [...have, ...ordered]) if (hasNumberVariant(w)) tryAdd(otherNumber(w), true);
+    for (const f of PRODUCT_FORMS[singular(productNoun(c))] ?? []) { tryAdd(f, false); tryAdd(otherNumber(f), true); }
   }
   return { text, added };
 }
@@ -340,7 +399,7 @@ export function buildBackend(raw: string, d: Pick<ListingDraft, "title" | "bulle
 /* ===================== enforce ===================== */
 
 /** The fixes made in code after a model call (what can be fixed without rewriting). */
-export function enforceRules(d: ListingDraft, c: RuleContext): { draft: ListingDraft; fixes: string[] } {
+export function enforceRules(d: ListingDraft, c: RuleContext): { draft: ListingDraft; fixes: string[]; topUp: string[] } {
   const fixes: string[] = [];
   let title = d.title.trim();
   for (const p of promoIn(title)) { title = title.replace(new RegExp(`(?<![\\p{L}\\p{N}-])${escape(p)}(?![\\p{L}\\p{N}-])`, "giu"), "").replace(/\s{2,}/g, " ").trim(); fixes.push(`"${p}" taken out of the title`); }
@@ -357,8 +416,9 @@ export function enforceRules(d: ListingDraft, c: RuleContext): { draft: ListingD
   if (bullets.some((b, i) => b !== d.bullets[i].trim())) fixes.push("Bullet headers in capitals");
   const before = d.backend;
   const backend = buildBackend(d.backend, { title, bullets }, c);
-  if (backend.text !== before.trim()) fixes.push(`Backend terms cleaned${backend.added.length ? ` and ${backend.added.length} search words added` : ""} (${bytes(backend.text)} bytes)`);
-  return { draft: { ...d, title, bullets, backend: backend.text }, fixes };
+  if (backend.text !== before.trim()) fixes.push(`Backend terms cleaned (${bytes(backend.text)} bytes)`);
+  if (backend.added.length) fixes.push(`Backend topped up in code: ${backend.added.length} word${backend.added.length === 1 ? "" : "s"} added to reach ${bytes(backend.text)} bytes`);
+  return { draft: { ...d, title, bullets, backend: backend.text }, fixes, topUp: backend.added };
 }
 
 /* ===================== repetition and numbers ===================== */
@@ -389,6 +449,19 @@ export function repeatedPhrases(bullets: string[], c: Pick<RuleContext, "brand" 
     }
   });
   return [...seen.values()].filter((h) => h.at.size > 1).map((h) => ({ phrase: h.as, bullets: [...h.at].sort() }));
+}
+
+/** Absolute performance words: only when Key specs say them ("helps reduce streaks", not "streak-free"). */
+const ABSOLUTE = /\b(?:streak|smear|lint|residue|scratch|fog|smudge)[- ]?free\b|\bnever\b|\balways\b|\bguarantee[ds]?\b|\b100\s?%|\bevery time\b|\bcompletely\b|\bperfectly\b|\bwithout (?:leaving )?(?:any )?(?:streaks?|smears?|residue|lint)\b/gi;
+
+/** Absolute claims in the copy that Key specs don't make. */
+export function absoluteClaims(d: ListingDraft, c: Pick<RuleContext, "specs">): string[] {
+  const spec = c.specs.join(" ").toLowerCase();
+  const out = new Set<string>();
+  for (const text of [d.title, ...d.bullets, d.description, d.differentiation]) {
+    for (const m of text.matchAll(ABSOLUTE)) if (!spec.includes(m[0].toLowerCase())) out.add(m[0].toLowerCase());
+  }
+  return [...out];
 }
 
 const TIME_WORDS = /\b(seconds?|secs?|minutes?|mins?|hours?|hrs?|days?|weeks?|months?|years?|instantly|instant|immediately)\b/gi;
@@ -494,6 +567,8 @@ export function listingChecks(d: ListingDraft, c: RuleContext, complianceTerms: 
   const vocab = inputVocabulary(c);
   const extra = words(d.backend).filter((w) => !words(cleaned).includes(w) && linkedWord(w, vocab));
   add("backend_words", "Backend: no title words, filler, brands, ASINs or health words", !extra.length && d.backend === d.backend.toLowerCase(), extra.length ? `Remove: ${[...new Set(extra)].slice(0, 8).join(", ")}` : "Lowercase only");
+  const absolute = absoluteClaims(d, c);
+  add("absolute_claims", "Performance claims hedged (no streak-free, never, always, 100%, every time unless in Key specs)", !absolute.length, `Absolute: ${absolute.join(", ")}`);
   const unsupported = unsupportedNumbers(d, c);
   add("numbers", "Every number and timing comes from Key specs or Pack size", !unsupported.length, `Not in the specs: ${unsupported.slice(0, 5).map((u) => `"${u}"`).join(", ")}`);
   const offTopic = [...new Set(words(d.backend).filter((w) => !linkedWord(w, vocab)))];
@@ -530,9 +605,9 @@ export function rulesPrompt(c: RuleContext): string {
   const need = requiredThemes(c);
   const wrapped = individuallyWrapped(c);
   return [
-    `Title: start with the brand "${c.brand}", then "${c.leadTerm ?? c.product}"; include the pack size${c.packSize ? ` (${c.packSize})` : ""}${wrapped ? " and \"Individually Wrapped\"" : ""}; name the top uses (${c.suitableFor.slice(0, 3).join(", ") || "from Suitable for"}); the brand, the top term and the pack size within the first 80 characters; ${TITLE_TARGET.min}–${Math.min(TITLE_TARGET.max, c.titleLimit)} characters (never over ${c.titleLimit}); no word twice except "${productNoun(c)}" (when a use repeats a title word, use a synonym from the search terms, e.g. "Spectacles" for a second "Glasses"); Title Case; no ALL CAPS words; no promo words (best, #1, free, sale, guaranteed).`,
+    `Title: start with the brand "${c.brand}", then "${c.leadTerm ?? c.product}"; include the pack size${c.packSize ? ` (${c.packSize})` : ""}${wrapped ? " and \"Individually Wrapped\"" : ""}; name the top uses (${c.suitableFor.slice(0, 3).join(", ") || "from Suitable for"}); the brand, the top term and the pack size within the first 80 characters; ${TITLE_TARGET.min}–${Math.min(TITLE_TARGET.max, c.titleLimit)} characters (never over ${c.titleLimit}); no word twice except "${productNoun(c)}", or a word inside one of the top search phrases (${topTerms(c).map((t) => `"${t}"`).join(", ")}), which may sit alongside its other mention; include one of those phrases besides the lead term when it fits; when a use repeats a title word otherwise, use a synonym from the search terms (e.g. "Spectacles" for a second "Glasses"); Title Case; no ALL CAPS words; no promo words (best, #1, free, sale, guaranteed).`,
     `Bullets: exactly five, each ${BULLET_TARGET.min}–${BULLET_TARGET.max} characters, each starting with a 2–4 word CAPITALISED header and a colon ("STAYS MOIST: …"). Each has its own job: 1 answers ${c.chosenTheme ? `"${c.chosenTheme}"` : "the top complaint"}; 2 the cleaning result; 3 size and feel; 4 the key specs no other bullet has stated; 5 what it's suitable for and not for.${need.length ? ` Between them the bullets must answer every one of these review complaints, using the key specs as the evidence: ${need.map((t) => `"${t}"`).join(", ")}.` : ""} Every key spec appears in some bullet, but each in at most two bullets. Never repeat a phrase of three or more words from one bullet in another.`,
-    `Claims at spec strength: no number, timing or duration unless it's in the key specs or pack size (if the spec says "quick-drying", write "quick-drying", not "dries in seconds").`,
+    `Claims at spec strength: no number, timing or duration unless it's in the key specs or pack size (if the spec says "quick-drying", write "quick-drying", not "dries in seconds"). Soften every performance claim the key specs don't state: "helps", "designed to", "sealed to help keep" ("helps reduce streaks", never "streak-free" or "without leaving streaks"). No absolute words (streak-free, never, always, guaranteed, 100%, every time) unless the key specs use them, and no claims about how it performs over time ("as moist next year as today", "however long it sits in your bag").`,
     `Description: three short paragraphs separated by a blank line, mentioning every key spec once.`,
     `Backend terms: a list of at most 40 single lowercase words (the code joins them into ${BACKEND_TARGET}–${BACKEND_BYTES} bytes); no words already in the title (plurals count), no filler (of, and, for, the, with, pack, a, to, in), no competitor brands, no ASINs, no health or body words (eye, eyes, skin, medical) unless in Suitable for; add variants of the search terms and use-case words not in the title or bullets (plural/singular, joined or split forms like "eyeglasses", "premoistened"); every word must relate to the product, its uses or the search terms: no unrelated objects.`,
     `Never state any of these claims: ${[...c.avoid, "antibacterial", "kills 99.9%", "disinfects", "sterile", "medical grade", "FDA", "cures"].join(", ")}.`,

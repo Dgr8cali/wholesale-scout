@@ -83,12 +83,18 @@ describe("Listing writer (FakeDb, API mocked)", () => {
     expect(repairSent).toContain("failedRules");
     expect(repairSent).not.toContain("reviewSummary");
     expect(g.draft).toMatchObject({ version: 1, source: "generated + repaired" });
+    // The run is kept with the version: both calls, their tokens and cost, the repair and why, any backend top-up.
+    expect(g.run).toMatchObject({ repaired: true, input: 6000, output: 1500, thinking: 0, calls: [{ kind: "draft", input: 4000, output: 800 }, { kind: "repair", input: 2000, output: 700 }] });
+    expect(g.run.gbp).toBeCloseTo(g.call.costGbp, 6);
+    expect(g.run.failedBeforeRepair.length).toBeGreaterThan(0);
+    expect(Array.isArray(g.run.topUp)).toBe(true);
+    expect((await listingView(CAND)).lastRun).toMatchObject({ version: 1, repaired: true, calls: [{ kind: "draft" }, { kind: "repair" }] });
     expect(g.draft.outputs.title.startsWith("Dewlens Glasses Cleaning Wipes")).toBe(true);
     expect(g.checks.list.find((c) => c.id === "uses")).toMatchObject({ pass: true });
     // Backend: lowercase, no ASIN, no competitor brand, no title words, nothing these inputs don't mention
     // ("spectacle": this candidate's search terms and uses never say it), filled from the search terms.
     expect(g.draft.outputs.backend).toMatch(/^cleaner eyeglass tissue/);
-    expect(g.draft.outputs.backend).not.toMatch(/zeiss|b0abcdefgh|glasses/);
+    expect(g.draft.outputs.backend).not.toMatch(/zeiss|b0abcdefgh|\bglasses\b/);
     expect(db.tables.ads_ai_calls.map((c) => c.subject)).toEqual([CAND, `${CAND}:repair`]);
     expect(db.tables.ads_ai_calls[1]).toMatchObject({ feature: "pl_listing", input_tokens: 2000, output_tokens: 700 });
     const sent = (create.mock.calls[0][0] as { messages: { content: string }[] }).messages[0].content;
@@ -122,6 +128,8 @@ describe("Listing writer (FakeDb, API mocked)", () => {
 
     const v = await listingView(CAND);
     expect(v.versions.map((x) => x.version)).toEqual([5, 4, 3, 2, 1]);
+    // The last model run is the field rewrite (v4); the restore after it made no call.
+    expect(v.lastRun).toMatchObject({ version: 4, repaired: false, calls: [{ kind: "field", field: "description", input: 2000, output: 100 }] });
     expect(v.latest?.version).toBe(5);
   });
 

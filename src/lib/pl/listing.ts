@@ -67,10 +67,7 @@ export function ruleIssues(d: ListingDraft, o: { titleLimit: number; leadTerm?: 
     if (promo.length) out.push({ field: "bullet", index: i, level: "error", message: `Promotional words: ${promo.join(", ")}` });
     if (caps(b.replace(/^[^:—–]+[:—–]/, "")).length) out.push({ field: "bullet", index: i, level: "warn", message: "ALL CAPS after the opening benefit" });
   });
-  if (o.themes?.length) {
-    const answered = d.bullets.filter((b) => o.themes!.some((t) => themeIn(b, t))).length;
-    if (answered < 3) out.push({ field: "bullets", level: "warn", message: `${answered} of 5 bullets answer a Gate 4 complaint theme: at least three should` });
-  }
+  // Whether the bullets answer Gate 4's complaints is the Checks list's job (listingRules answersTheme): one logic, one place.
   if (d.description.length > DESCRIPTION_LIMIT) out.push({ field: "description", level: "error", message: `${d.description.length} characters: over ${DESCRIPTION_LIMIT}` });
   if (bytes(d.backend) > BACKEND_BYTES) out.push({ field: "backend", level: "error", message: `${bytes(d.backend)} bytes: over ${BACKEND_BYTES}` });
   return out;

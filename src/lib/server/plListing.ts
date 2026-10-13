@@ -42,6 +42,30 @@ export interface ListingSettings {
   avoid: string;
 }
 
+/** What a model run cost and did, kept with the version it wrote (shown under Regenerate all). */
+export interface ListingRun {
+  at: string; model: string;
+  calls: { kind: "draft" | "repair" | "field"; field?: string; cached: boolean; input: number; output: number; thinking: number; gbp: number }[];
+  /** Totals of the calls actually made (cached ones cost nothing). */
+  input: number; output: number; thinking: number; gbp: number;
+  repaired: boolean;
+  /** Words the code added to bring the backend terms to 200 bytes (empty: no top-up). */
+  topUp: string[];
+  fixes: string[];
+  failedBeforeRepair: { rule: string; problem: string }[];
+}
+
+function runOf(model: string, calls: { kind: ListingRun["calls"][number]["kind"]; field?: string; run: { cached: boolean; costGbp: number; tokens: { input: number; output: number; thinking?: number } } }[], extra: Pick<ListingRun, "topUp" | "fixes" | "failedBeforeRepair">): ListingRun {
+  const list = calls.map((c) => ({ kind: c.kind, ...(c.field ? { field: c.field } : {}), cached: c.run.cached, input: c.run.tokens.input, output: c.run.tokens.output, thinking: c.run.tokens.thinking ?? 0, gbp: c.run.costGbp }));
+  const made = list.filter((c) => !c.cached);
+  return {
+    at: now(), model, calls: list,
+    input: made.reduce((a, c) => a + c.input, 0), output: made.reduce((a, c) => a + c.output, 0), thinking: made.reduce((a, c) => a + c.thinking, 0),
+    gbp: Math.round(made.reduce((a, c) => a + c.gbp, 0) * 1e6) / 1e6,
+    repaired: calls.some((c) => c.kind === "repair"), ...extra,
+  };
+}
+
 export interface DraftRow { id: string; version: number; source: string; inputs: Partial<ListingInputs>; outputs: ListingDraft; created_at: string }
 
 const now = () => new Date().toISOString();
@@ -211,6 +235,7 @@ export async function generateListing(candidateId: string, opts: { force?: boole
   const failures = failuresOf(firstChecks.list);
   const calls = [run];
   let final = first, fixes = first.fixes;
+  // The backend top-up happens in code (enforceRules); only a backend it can't bring to 200 bytes goes to the repair call.
   // One repair call, with only what failed and the draft as it stands; the code fixes again after it.
   if (failures.length) {
     const repair = await askModel<Partial<ListingDraft>>({
@@ -226,9 +251,10 @@ export async function generateListing(candidateId: string, opts: { force?: boole
   const checks = checksOf(final.draft, inputs);
   const cached = calls.every((c) => c.cached);
   const source = `${run.cached ? "generated (cached)" : "generated"}${calls.length > 1 ? " + repaired" : ""}`;
-  const row = await saveVersion(candidateId, source, { ...inputs, run: { fixes, failedBeforeRepair: failures } } as Partial<ListingInputs>, final.draft);
+  const runInfo = runOf(run.model, calls.map((c, i) => ({ kind: i === 0 ? "draft" as const : "repair" as const, run: c })), { topUp: final.topUp.length ? final.topUp : first.topUp, fixes, failedBeforeRepair: failures });
+  const row = await saveVersion(candidateId, source, { ...inputs, run: runInfo } as Partial<ListingInputs>, final.draft);
   return {
-    draft: row, checks, fixes, failedBeforeRepair: failures,
+    draft: row, checks, fixes, failedBeforeRepair: failures, run: runInfo,
     call: {
       cached, model: run.model, calls: calls.length,
       costGbp: calls.reduce((a, c) => a + (c.cached ? 0 : c.costGbp), 0),
@@ -253,10 +279,13 @@ export async function regenerateField(candidateId: string, field: ListingField, 
     tool: { name: `listing_${field}`, description: `The listing's ${field}`, input_schema: fieldSchema(field) as never },
     instruction: `Rewrite only the ${field} of the current listing, better, keeping to these rules; leave everything else as it is.\n${rulesPrompt(ruleContext(inputs))}`,
   });
-  const merged = enforceRules(normaliseDraft({ ...current, [field]: (run.result as Record<string, unknown>)[field] ?? current[field] }, inputs.brands, inputs.titleLimit), ruleContext(inputs)).draft;
+  const enforced = enforceRules(normaliseDraft({ ...current, [field]: (run.result as Record<string, unknown>)[field] ?? current[field] }, inputs.brands, inputs.titleLimit), ruleContext(inputs));
+  const merged = enforced.draft;
   // Only the field asked for changes (the backend is cleaned against the title either way).
-  const draft: ListingDraft = { ...current, [field]: merged[field], backend: field === "title" || field === "backend" ? merged.backend : current.backend };
-  const row = await saveVersion(candidateId, `regenerated ${field}`, inputs, draft);
+  const backendChanged = field === "title" || field === "backend";
+  const draft: ListingDraft = { ...current, [field]: merged[field], backend: backendChanged ? merged.backend : current.backend };
+  const runInfo = runOf(run.model, [{ kind: "field", field, run }], { topUp: backendChanged ? enforced.topUp : [], fixes: enforced.fixes, failedBeforeRepair: [] });
+  const row = await saveVersion(candidateId, `regenerated ${field}`, { ...inputs, run: runInfo } as Partial<ListingInputs>, draft);
   return { draft: row, checks: checksOf(draft, inputs), call: { cached: run.cached, costGbp: run.costGbp, tokens: run.tokens, model: run.model } };
 }
 
@@ -285,5 +314,9 @@ export async function listingView(candidateId: string) {
   const inputs = await listingInputs(candidateId);
   const versions = must(await db().from("pl_listing_drafts").select("id, version, source, outputs, created_at").eq("candidate_id", candidateId).order("version", { ascending: false }).limit(50), "versions") as Omit<DraftRow, "inputs">[];
   const latest = versions[0] ?? null;
-  return { inputs, settings: await listingSettings(candidateId), versions, latest, checks: latest ? checksOf(latest.outputs, inputs) : null };
+  // The last model run (its version may since have been followed by edits and restores).
+  const recent = must(await db().from("pl_listing_drafts").select("version, inputs").eq("candidate_id", candidateId).order("version", { ascending: false }).limit(20), "runs") as { version: number; inputs: { run?: ListingRun } | null }[];
+  const last = recent.find((r) => r.inputs?.run?.calls);
+  const lastRun = last ? { version: last.version, ...last.inputs!.run! } : null;
+  return { inputs, settings: await listingSettings(candidateId), versions, latest, lastRun, checks: latest ? checksOf(latest.outputs, inputs) : null };
 }

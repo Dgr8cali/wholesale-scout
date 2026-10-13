@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { bytes, complianceFlags, type ListingDraft } from "./listing";
 import {
-  answersTheme, brandFirst, bulletHeader, buildBackend, enforceRules, fitTitle, inputVocabulary, isComplaint, linkedWord, listingChecks, needsProof,
+  absoluteClaims, answersTheme, brandFirst, hasNumberVariant, otherNumber, phraseAllowance, bulletHeader, buildBackend, enforceRules, fitTitle, inputVocabulary, isComplaint, linkedWord, listingChecks, needsProof,
   repeatedPhrases, swapRepeatedUses, titleRepeats, unsupportedNumbers, synonymForUse,
   parseList, parseSpecs, requiredThemes, specIn, titleCase, type RuleContext,
 } from "./listingRules";
@@ -72,10 +72,10 @@ describe("Listing rules: post-processing", () => {
     expect(bytes(r.text)).toBeLessThanOrEqual(249);
     expect(r.added.length).toBeGreaterThan(0);
     // Plurals of title words count as title words (lens/lenses too).
-    expect(buildBackend("lens lenses camera", { title: "Dewlens Wipes for Camera Lenses", bullets: [] }, { ...ctx, searchTerms: [], bankTerms: [], suitableFor: [] }).text).toBe("");
+    expect(buildBackend("lens lenses camera", { title: "Dewlens Wipes for Camera Lenses", bullets: [] }, ctx, { fill: false }).text).toBe("");
     expect(buildBackend("lens wipe screen", { title: "Dewlens Lens Wipes", bullets: [] }, ctx, { fill: false }).text).toBe("screen");
     // Skin is fine when the product is suitable for it.
-    expect(buildBackend("skin eyes", { title: "X", bullets: [] }, { ...ctx, suitableFor: ["skin"], searchTerms: [], bankTerms: [] }).text).toBe("skin");
+    expect(buildBackend("skin eyes", { title: "X", bullets: [] }, { ...ctx, suitableFor: ["skin"], searchTerms: [], bankTerms: [] }, { fill: false }).text).toBe("skin");
   });
 
   it("the byte budget: never over 249, filled from the search terms and the keyword bank, and the check says when it's short", () => {
@@ -176,7 +176,9 @@ describe("Listing rules: no repetition, claims at spec strength, relevant backen
 
   it("the title says no word twice but the product noun, and a repeated use becomes a search-term synonym", () => {
     const t = "Dewlens Glasses Wipes, 200 Wipes Individually Wrapped, Pre-Moistened Lens Cleaning Wipes for Glasses, Sunglasses and Camera Lenses";
-    expect(titleRepeats(t, ctx)).toEqual(["glasses", "wipes", "lens"]);
+    // "Lens" is allowed a second time: "Lens Cleaning Wipes" carries "lens wipes", a top-3 search term.
+    expect(titleRepeats(t, ctx)).toEqual(["glasses", "wipes"]);
+    expect(titleRepeats(t, { ...ctx, searchTerms: [] })).toEqual(["glasses", "wipes", "lens"]);
     expect(titleRepeats(good.title, ctx)).toEqual([]);
     expect(synonymForUse("Glasses", t, ctx)).toBe("Spectacles");
     const s = swapRepeatedUses(t, ctx);
@@ -205,5 +207,59 @@ describe("Listing rules: no repetition, claims at spec strength, relevant backen
     const cleaned = enforceRules(d, c).draft.backend.split(" ");
     expect(cleaned).toEqual(expect.arrayContaining(["eyeglasses", "specs", "tissues"]));
     for (const w of ["jewellery", "television", "watch", "mirror", "telescope", "microscope"]) expect(cleaned).not.toContain(w);
+  });
+});
+
+describe("Listing rules: v5 follow-ups", () => {
+  it("absolute performance claims are flagged unless Key specs make them", () => {
+    const d = { ...good, bullets: [...good.bullets.slice(0, 4), "SUITABLE FOR: glasses. Streak-free every time, never smears, always clear, 100% clean, without leaving streaks."] };
+    expect(absoluteClaims(d, ctx)).toEqual(["streak-free", "every time", "never", "always", "100%", "without leaving streaks"]);
+    expect(listingChecks(d, ctx).find((c) => c.id === "absolute_claims")).toMatchObject({ pass: false });
+    expect(absoluteClaims(good, ctx)).toEqual([]);
+    // When Key specs say it, it's a stated spec, not an absolute claim.
+    expect(absoluteClaims(d, { specs: ["streak-free formula"] })).not.toContain("streak-free");
+    expect(listingChecks(good, ctx).find((c) => c.id === "absolute_claims")!.pass).toBe(true);
+  });
+
+  it("a title word may appear twice when one mention is part of a top-3 search phrase (one word between allowed)", () => {
+    const t = "Dewlens Glasses Wipes, 200 Individually Wrapped Lens Cleaning Wipes for Spectacles, Sunglasses and Camera Lenses";
+    // Top 3 here: "glasses cleaning wipes" (not in this title), "lens wipes" (as "Lens Cleaning Wipes"), "spectacle wipes".
+    expect([...phraseAllowance(t, ctx)].sort()).toEqual(["lens", "wipe"]);
+    expect(titleRepeats(t, ctx)).toEqual([]);
+    // Not a top-3 phrase: "lens" twice is a repeat.
+    expect(titleRepeats("Dewlens Glasses Wipes for Lens Care and Camera Lenses", ctx)).toEqual(["lens"]);
+    // Two words between: not the phrase.
+    expect(phraseAllowance("Dewlens Lens Soft Cleaning Wipes", { searchTerms: [{ term: "lens wipes", volume: 1 }] }).size).toBe(0);
+    // A repeat inside an allowed phrase isn't swapped for a synonym.
+    expect(swapRepeatedUses("Dewlens Lens Wipes for Glasses, Glasses Wipes", { ...ctx, suitableFor: ["glasses"], searchTerms: [{ term: "glasses wipes", volume: 10 }, { term: "spectacle wipes", volume: 5 }] }).swapped).toEqual([]);
+  });
+
+  it("backend top-up in code: unused search words, then plural/singular variants, then the product's other names, to 200 bytes", () => {
+    expect(["wipe", "wipes", "battery", "box", "lens", "brush"].map(otherNumber)).toEqual(["wipes", "wipe", "batteries", "boxes", "lenses", "brushes"]);
+    // No variants for verbs, adjectives, mass or plural-only nouns ("eyewears", "premoisteneds", "spec", "binocular").
+    expect(["eyewear", "premoistened", "cleansing", "specs", "binoculars", "glasses", "portable"].filter(hasNumberVariant)).toEqual([]);
+    expect(["wipe", "sachet", "screen", "tissue", "cleaner", "lens"].every(hasNumberVariant)).toBe(true);
+    const c = ctx;
+    const r = buildBackend("eyeglass", { title: good.title, bullets: good.bullets }, c);
+    expect(bytes(r.text)).toBeGreaterThanOrEqual(200);
+    expect(bytes(r.text)).toBeLessThanOrEqual(249);
+    const w = r.text.split(" ");
+    // Search and bank words first (enough here to reach 200): "cleaner" from "eyeglass cleaner".
+    expect(w.slice(0, 2)).toEqual(["eyeglass", "cleaner"]);
+    expect(r.added).not.toContain("eyeglass");
+    // Run out of those (no keyword bank): then the variants of what's there, then the other names for wipes.
+    const thin = buildBackend("eyeglass", { title: good.title, bullets: good.bullets }, { ...ctx, bankTerms: [] }).text.split(" ");
+    expect(thin).toEqual(expect.arrayContaining(["eyeglass", "eyeglasses", "cleaner", "cleaners", "tissue", "tissues", "towelette"]));
+    // The same exclusions: nothing in the title, no filler, brands, health words or unrelated objects.
+    for (const x of ["glasses", "spectacles", "for", "zeiss", "eyes", "skin", "the"]) expect(w).not.toContain(x);
+    // Already 200 bytes: no top-up.
+    const full = Array.from({ length: 25 }, (_, i) => `screen${i}`).join(" ");
+    expect(buildBackend(full, { title: good.title, bullets: [] }, c).added).toEqual([]);
+    // Not enough related words to reach 200 (no keyword bank): it stops short, and the check sends it to the repair call.
+    const short = enforceRules({ ...good, backend: "eyeglass" }, { ...ctx, bankTerms: [] }).draft;
+    expect(bytes(short.backend)).toBeLessThan(200);
+    expect(listingChecks(short, { ...ctx, bankTerms: [] }).find((x) => x.id === "backend_bytes")!.pass).toBe(false);
+    // The fix list says when the top-up was used.
+    expect(enforceRules({ ...good, backend: "eyeglass" }, c).fixes.some((f) => /^Backend topped up in code: \d+ words added to reach \d+ bytes$/.test(f))).toBe(true);
   });
 });

@@ -30,10 +30,11 @@ describe("Listing Writer rules", () => {
     expect(msgs).toMatch(/Promotional words: best, free/);
   });
 
-  it("bullets: five, each opening with a capitalised benefit, three answering a Gate 4 theme", () => {
+  it("bullets: five, each opening with a capitalised benefit, no Gate 4 theme note (Checks has it)", () => {
     const bad = ruleIssues(draft({ bullets: ["just some text", "b", "c", "d"] }), { titleLimit: 200, themes: ["dries out", "lid breaks", "smell"] });
     expect(bad.map((i) => i.message)).toEqual(expect.arrayContaining(["4 bullets: five needed", "Doesn't open with a short capitalised benefit (\"Leak-proof lid: …\")"]));
-    expect(bad.some((i) => /of 5 bullets answer a Gate 4 complaint theme/.test(i.message))).toBe(true);
+    // Whether the bullets answer Gate 4's complaints is the Checks list's job only (one logic): no live note here.
+    expect(bad.some((i) => /Gate 4 complaint theme/.test(i.message))).toBe(false);
     expect(themeIn("Never dries out: sealed singly", "dries out")).toBe(true);
     expect(themeIn("Pocket size", "lid breaks")).toBe(false);
   });

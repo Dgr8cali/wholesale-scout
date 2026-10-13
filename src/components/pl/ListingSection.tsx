@@ -13,12 +13,25 @@ import {
   type CoverageRow, type ListingDraft, type ListingField,
 } from "@/lib/pl/listing";
 import { listingChecks, needsProof, requiredThemes, ruleContext } from "@/lib/pl/listingRules";
-import type { ListingInputs, ListingSettings } from "@/lib/server/plListing";
+import type { ListingInputs, ListingRun, ListingSettings } from "@/lib/server/plListing";
 import { api } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
 
 interface Version { id: string; version: number; source: string; outputs: ListingDraft; created_at: string }
-interface View { inputs: ListingInputs; settings: ListingSettings; versions: Version[]; latest: Version | null }
+interface View { inputs: ListingInputs; settings: ListingSettings; versions: Version[]; latest: Version | null; lastRun: (ListingRun & { version: number }) | null }
+
+/** "v5 · 13 Oct 23:47 · draft + repair · 6,632 in / 2,084 out / 0 thinking · £0.040 · backend topped up in code (6 words)". */
+function runLine(r: ListingRun & { version: number }): string {
+  const n = (x: number) => x.toLocaleString("en-GB");
+  const kinds = r.calls.map((c) => (c.kind === "field" ? `${c.field} rewrite` : c.kind) + (c.cached ? " (cached)" : "")).join(" + ");
+  const parts = [
+    `v${r.version}`, when(r.at), kinds,
+    r.calls.every((c) => c.cached) ? "no new call (same inputs)" : `${n(r.input)} in / ${n(r.output)} out / ${n(r.thinking)} thinking · £${r.gbp.toFixed(3)}`,
+    r.repaired ? `repair ran for: ${r.failedBeforeRepair.map((f) => f.rule).join("; ") || "failed checks"}` : "no repair needed",
+    r.topUp.length ? `backend topped up in code (${r.topUp.length} word${r.topUp.length === 1 ? "" : "s"})` : null,
+  ];
+  return parts.filter(Boolean).join(" · ");
+}
 interface Call { cached: boolean; costGbp: number; tokens: { input: number; output: number; thinking?: number }; model: string; calls?: number }
 
 const EMPTY: ListingDraft = { title: "", bullets: ["", "", "", "", ""], description: "", backend: "", differentiation: "" };
@@ -129,9 +142,12 @@ export function ListingSection({ candidateId }: { candidateId: string }) {
           <h2 className="font-heading text-base font-bold">Listing</h2>
           <p className="text-sm text-muted-foreground">The title, five bullets, description, backend search terms and the differentiation angle, written by Claude on your click from Gate 4&apos;s complaint themes and the search terms of Gates 3 and 5. Checked as you edit: Amazon&apos;s style rules, compliance, and how much of the search volume it covers. Every generation and edit is a version.</p>
         </div>
+        <div className="flex flex-col items-end gap-1">
         <Button size="sm" disabled={!!busy || !inputs.brand} title={inputs.brand ? undefined : "Set the brand name first"} onClick={() => generate(!!view.latest)}>
           {busy === "generate" || busy === "regenerate" ? <LoaderIcon className="animate-spin" /> : <SparklesIcon />} {view.latest ? "Regenerate all" : "Write the listing"}
         </Button>
+        {view.lastRun && <p className="max-w-md text-right text-[11px] text-muted-foreground">Last call: {runLine(view.lastRun)}</p>}
+        </div>
       </div>
 
       <div className="grid gap-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
