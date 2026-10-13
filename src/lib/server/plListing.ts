@@ -1,6 +1,6 @@
 import "server-only";
 import {
-  DEFAULT_BRAND_VOICE, DEFAULT_TITLE_LIMIT, LISTING_FIELDS, complianceFlags, keywordCoverage, leadTerm, normaliseDraft, ruleIssues,
+  BACKEND_WORDS_MAX, BULLET_LIMIT, DEFAULT_BRAND_VOICE, DEFAULT_TITLE_LIMIT, DESCRIPTION_LIMIT, DIFFERENTIATION_LIMIT, LISTING_FIELDS, complianceFlags, keywordCoverage, leadTerm, normaliseDraft, ruleIssues,
   type ListingDraft, type ListingField,
 } from "../pl/listing";
 import {
@@ -136,16 +136,25 @@ const LISTING_SYSTEM = `You write Amazon UK product listings for a small private
 - Use only the facts given (brand, key specs, pack size, suitable for, not for). Never invent a spec, a number, a certification or a test result.
 - Answer the review complaints given with the key specs as the evidence ("70% isopropyl alcohol dries in seconds" answers "too wet").
 - Never make biocidal, medical or unproven green claims, never name a competitor brand, never use a claim on the "claims to avoid" list, not even negated ("not plastic-free").
-- Differentiation angle: 2–3 sentences tying the top complaints to how this product is better.`;
+- Differentiation angle: 2–3 sentences tying the top complaints to how this product is better.
+- Keep to the length caps in the answer format: title ≤ 200 characters, each bullet ≤ 250, description ≤ 1,000, differentiation ≤ 400. Backend terms are a list of at most 40 single words; the code joins, dedupes, trims and fills them, so never repeat, pad or explain a word.
+- Write the answer directly: no notes, no alternatives, nothing outside the fields.`;
 
+/**
+ * The answer format, with every field capped. Structured outputs can't enforce lengths or counts,
+ * so the caps go to the model in the descriptions (strictSchema) and normaliseDraft enforces them.
+ */
 const DRAFT_SCHEMA = {
   type: "object",
   properties: {
-    title: { type: "string", description: "The product title: brand first, Title Case" },
-    bullets: { type: "array", items: { type: "string" }, description: "Exactly five bullet points, each \"HEADER IN CAPITALS: …\", 150–250 characters" },
-    description: { type: "string", description: "Three short paragraphs separated by a blank line" },
-    backend: { type: "string", description: "Backend search terms, lowercase, space-separated, 200–249 bytes" },
-    differentiation: { type: "string", description: "2–3 sentences: the complaint themes and how this product is better" },
+    title: { type: "string", maxLength: 200, description: "The product title: brand first, Title Case" },
+    bullets: { type: "array", maxItems: 5, items: { type: "string", maxLength: BULLET_LIMIT }, description: "Exactly five bullet points, each \"HEADER IN CAPITALS: …\", 150–250 characters" },
+    description: { type: "string", maxLength: DESCRIPTION_LIMIT, description: "Three short paragraphs separated by a blank line" },
+    backend: {
+      type: "array", maxItems: BACKEND_WORDS_MAX, items: { type: "string", maxLength: 30, description: "One lowercase word" },
+      description: "Backend search terms as single lowercase words, each once. The code joins, dedupes and trims them to 249 bytes and fills any spare room itself: never repeat, pad or explain a word",
+    },
+    differentiation: { type: "string", maxLength: DIFFERENTIATION_LIMIT, description: "2–3 sentences: the complaint themes and how this product is better" },
   },
 } as const;
 const fieldSchema = (f: ListingField) => ({ type: "object", properties: { [f]: (DRAFT_SCHEMA.properties as Record<string, unknown>)[f] } });
@@ -193,11 +202,11 @@ export async function generateListing(candidateId: string, opts: { force?: boole
   if (!inputs.themes.length && !inputs.searchTerms.length) throw new Error("Nothing to write from yet: mine some reviews in Gate 4 or attach an Opportunity Explorer capture first");
   const rc = ruleContext(inputs);
   const run = await askModel<Partial<ListingDraft>>({
-    feature: "pl_listing", subject: candidateId, context: contextOf(inputs), force: opts.force, maxTokens: 8000, cutOffHint: CUT_OFF_HINT, system: LISTING_SYSTEM,
+    feature: "pl_listing", subject: candidateId, context: contextOf(inputs), force: opts.force, maxTokens: 8000, cutOffHint: CUT_OFF_HINT, lean: true, system: LISTING_SYSTEM,
     tool: { name: "listing", description: "The Amazon listing", input_schema: DRAFT_SCHEMA as never },
     instruction: `Write the listing for "${inputs.product}". Hard rules:\n${rulesPrompt(rc)}`,
   });
-  const first = enforceRules(normaliseDraft(run.result, inputs.brands), rc);
+  const first = enforceRules(normaliseDraft(run.result, inputs.brands, inputs.titleLimit), rc);
   const firstChecks = checksOf(first.draft, inputs);
   const failures = failuresOf(firstChecks.list);
   const calls = [run];
@@ -205,13 +214,13 @@ export async function generateListing(candidateId: string, opts: { force?: boole
   // One repair call, with only what failed and the draft as it stands; the code fixes again after it.
   if (failures.length) {
     const repair = await askModel<Partial<ListingDraft>>({
-      feature: "pl_listing", subject: `${candidateId}:repair`, force: opts.force, maxTokens: 4000, cutOffHint: CUT_OFF_HINT, system: LISTING_SYSTEM,
+      feature: "pl_listing", subject: `${candidateId}:repair`, force: opts.force, maxTokens: 4000, cutOffHint: CUT_OFF_HINT, lean: true, system: LISTING_SYSTEM,
       context: { draft: first.draft, failedRules: failures, facts: { brand: inputs.brand, keySpecs: inputs.specs, suitableFor: inputs.suitableFor, notFor: inputs.notFor, claimsToAvoid: inputs.avoid, packSize: inputs.packSize, leadSearchTerm: inputs.leadTerm, complaintsToAnswer: requiredThemes(rc), chosenTheme: inputs.chosenTheme }, competitorBrandsToAvoid: inputs.brands.slice(0, 200) },
       tool: { name: "listing", description: "The repaired Amazon listing", input_schema: DRAFT_SCHEMA as never },
       instruction: `Repair this listing so every failed rule passes. Change only what's needed for those rules, keep everything else as it is, and return the whole listing. All the rules:\n${rulesPrompt(rc)}`,
     });
     calls.push(repair);
-    final = enforceRules(normaliseDraft({ ...first.draft, ...stripEmpty(repair.result) }, inputs.brands), rc);
+    final = enforceRules(normaliseDraft({ ...first.draft, ...stripEmpty(repair.result) }, inputs.brands, inputs.titleLimit), rc);
     fixes = [...first.fixes, ...final.fixes];
   }
   const checks = checksOf(final.draft, inputs);
@@ -223,7 +232,7 @@ export async function generateListing(candidateId: string, opts: { force?: boole
     call: {
       cached, model: run.model, calls: calls.length,
       costGbp: calls.reduce((a, c) => a + (c.cached ? 0 : c.costGbp), 0),
-      tokens: calls.reduce((a, c) => (c.cached ? a : { input: a.input + c.tokens.input, output: a.output + c.tokens.output }), { input: 0, output: 0 }),
+      tokens: calls.reduce((a, c) => (c.cached ? a : { input: a.input + c.tokens.input, output: a.output + c.tokens.output, thinking: a.thinking + (c.tokens.thinking ?? 0) }), { input: 0, output: 0, thinking: 0 }),
     },
   };
 }
@@ -240,11 +249,11 @@ export async function regenerateField(candidateId: string, field: ListingField, 
   if (!LISTING_FIELDS.includes(field)) throw new Error(`field: ${LISTING_FIELDS.join(", ")}`);
   const inputs = await listingInputs(candidateId);
   const run = await askModel<Partial<ListingDraft>>({
-    feature: "pl_listing", subject: `${candidateId}:${field}`, context: { ...contextOf(inputs), currentListing: current }, force: opts.force ?? true, maxTokens: 4000, cutOffHint: CUT_OFF_HINT, system: LISTING_SYSTEM,
+    feature: "pl_listing", subject: `${candidateId}:${field}`, context: { ...contextOf(inputs), currentListing: current }, force: opts.force ?? true, maxTokens: 4000, cutOffHint: CUT_OFF_HINT, lean: true, system: LISTING_SYSTEM,
     tool: { name: `listing_${field}`, description: `The listing's ${field}`, input_schema: fieldSchema(field) as never },
     instruction: `Rewrite only the ${field} of the current listing, better, keeping to these rules; leave everything else as it is.\n${rulesPrompt(ruleContext(inputs))}`,
   });
-  const merged = enforceRules(normaliseDraft({ ...current, [field]: (run.result as Record<string, unknown>)[field] ?? current[field] } as Partial<ListingDraft>, inputs.brands), ruleContext(inputs)).draft;
+  const merged = enforceRules(normaliseDraft({ ...current, [field]: (run.result as Record<string, unknown>)[field] ?? current[field] }, inputs.brands, inputs.titleLimit), ruleContext(inputs)).draft;
   // Only the field asked for changes (the backend is cleaned against the title either way).
   const draft: ListingDraft = { ...current, [field]: merged[field], backend: field === "title" || field === "backend" ? merged.backend : current.backend };
   const row = await saveVersion(candidateId, `regenerated ${field}`, inputs, draft);

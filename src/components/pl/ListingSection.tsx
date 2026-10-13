@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  BACKEND_BYTES, BULLET_LIMIT, DESCRIPTION_LIMIT, bytes, complianceFlags, copyAll, flatFileRow, keywordCoverage, ruleIssues,
+  BACKEND_BYTES, BULLET_LIMIT, DESCRIPTION_LIMIT, DIFFERENTIATION_LIMIT, bytes, complianceFlags, copyAll, flatFileRow, keywordCoverage, ruleIssues,
   type CoverageRow, type ListingDraft, type ListingField,
 } from "@/lib/pl/listing";
 import { listingChecks, needsProof, requiredThemes, ruleContext } from "@/lib/pl/listingRules";
@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils";
 
 interface Version { id: string; version: number; source: string; outputs: ListingDraft; created_at: string }
 interface View { inputs: ListingInputs; settings: ListingSettings; versions: Version[]; latest: Version | null }
-interface Call { cached: boolean; costGbp: number; tokens: { input: number; output: number }; model: string; calls?: number }
+interface Call { cached: boolean; costGbp: number; tokens: { input: number; output: number; thinking?: number }; model: string; calls?: number }
 
 const EMPTY: ListingDraft = { title: "", bullets: ["", "", "", "", ""], description: "", backend: "", differentiation: "" };
 const when = (iso: string) => new Date(iso).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
@@ -68,7 +68,7 @@ export function ListingSection({ candidateId }: { candidateId: string }) {
     setBusy(what);
     try {
       const r = (await f()) as { call?: Call };
-      if (r?.call) toast.success(`${ok ?? "Written"}${r.call.cached ? " (from the cache: same inputs, no new call)" : ` · ${(r.call.calls ?? 1) > 1 ? `${r.call.calls} calls (draft + repair), ` : ""}£${r.call.costGbp.toFixed(3)}, ${r.call.tokens.input.toLocaleString("en-GB")} in / ${r.call.tokens.output.toLocaleString("en-GB")} out`}`);
+      if (r?.call) toast.success(`${ok ?? "Written"}${r.call.cached ? " (from the cache: same inputs, no new call)" : ` · ${(r.call.calls ?? 1) > 1 ? `${r.call.calls} calls (draft + repair), ` : ""}£${r.call.costGbp.toFixed(3)}, ${r.call.tokens.input.toLocaleString("en-GB")} in / ${r.call.tokens.output.toLocaleString("en-GB")} out${r.call.tokens.thinking ? ` (${r.call.tokens.thinking.toLocaleString("en-GB")} of it thinking)` : ""}`}`);
       else if (ok) toast.success(ok);
       await load();
     } catch (e) {
@@ -189,7 +189,7 @@ export function ListingSection({ candidateId }: { candidateId: string }) {
             {notes("backend")}
           </div>
           <div className="space-y-1">
-            <div className="flex flex-wrap items-center gap-2"><span className="field-label">Differentiation angle</span><span className="ml-auto">{regenButton("differentiation")}</span></div>
+            <div className="flex flex-wrap items-center gap-2"><span className="field-label">Differentiation angle</span><Counter n={draft.differentiation.length} max={DIFFERENTIATION_LIMIT} /><span className="ml-auto">{regenButton("differentiation")}</span></div>
             <Textarea rows={3} className="text-sm" value={draft.differentiation} onChange={(e) => set({ differentiation: e.target.value })} />
             {notes("differentiation")}
           </div>

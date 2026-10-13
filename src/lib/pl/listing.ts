@@ -11,8 +11,12 @@ export type ListingField = (typeof LISTING_FIELDS)[number];
 
 export const DEFAULT_TITLE_LIMIT = 200;
 export const BACKEND_BYTES = 249;
-export const BULLET_LIMIT = 500;
-export const DESCRIPTION_LIMIT = 2000;
+/** The caps on what the model writes (the answer format says so; normaliseDraft enforces them). */
+export const BULLET_LIMIT = 250;
+export const DESCRIPTION_LIMIT = 1000;
+export const DIFFERENTIATION_LIMIT = 400;
+/** Backend terms come back as a list of single words, at most this many (joined, deduped and trimmed to 249 bytes in code). */
+export const BACKEND_WORDS_MAX = 40;
 export const DEFAULT_BRAND_VOICE = "premium, clean, simple, no hype";
 
 /** Words Amazon's style rules don't allow in a listing: promotional claims. */
@@ -197,11 +201,36 @@ export function leadTerm(terms: { term: string; volume?: number | null }[], prod
   return [...pool].sort((a, b) => (b.volume ?? 0) - (a.volume ?? 0))[0]?.term ?? null;
 }
 
-/** A draft as the model or an edit gives it: five bullets, strings everywhere, the backend cleaned. */
-export function normaliseDraft(x: Partial<ListingDraft> | null | undefined, brands: string[]): ListingDraft {
+/** At most `max` characters: cut after the last full sentence that fits, else at a word. */
+export function clip(text: string, max: number): string {
+  if (text.length <= max) return text;
+  const head = text.slice(0, max + 1);
+  const sentence = head.match(/^[\s\S]*[.!?](?=\s|$)/)?.[0];
+  if (sentence && sentence.length >= max * 0.6) return sentence.trim();
+  return head.replace(/\s+\S*$/, "").replace(/[\s,;:–—-]+$/, "").trim();
+}
+
+/**
+ * Backend terms as the model sends them (a list of single words, or a string from an older answer
+ * or an edit): the first 40 words, one word each.
+ */
+export function backendWords(v: unknown): string {
+  if (Array.isArray(v)) return v.filter((w): w is string => typeof w === "string").slice(0, BACKEND_WORDS_MAX).map((w) => w.trim().split(/\s+/)[0] ?? "").filter(Boolean).join(" ");
+  return typeof v === "string" ? v.trim() : "";
+}
+
+/**
+ * A draft as the model or an edit gives it: five bullets, strings everywhere, each field within its
+ * cap (title to the limit, bullets 250, description 1,000, differentiation 400), the backend
+ * cleaned. The model's answer format states the same caps.
+ */
+export function normaliseDraft(x: Partial<Omit<ListingDraft, "backend">> & { backend?: unknown } | null | undefined, brands: string[], titleLimit = DEFAULT_TITLE_LIMIT): ListingDraft {
   const s = (v: unknown) => (typeof v === "string" ? v.trim() : "");
-  const bullets = Array.isArray(x?.bullets) ? x!.bullets.map(s) : [];
+  const bullets = Array.isArray(x?.bullets) ? x!.bullets.map((b) => clip(s(b), BULLET_LIMIT)) : [];
   while (bullets.length < 5) bullets.push("");
-  const title = s(x?.title);
-  return { title, bullets: bullets.slice(0, 5), description: s(x?.description), backend: cleanBackend(s(x?.backend), title, brands).text, differentiation: s(x?.differentiation) };
+  const title = clip(s(x?.title), titleLimit);
+  return {
+    title, bullets: bullets.slice(0, 5), description: clip(s(x?.description), DESCRIPTION_LIMIT),
+    backend: cleanBackend(backendWords(x?.backend), title, brands).text, differentiation: clip(s(x?.differentiation), DIFFERENTIATION_LIMIT),
+  };
 }

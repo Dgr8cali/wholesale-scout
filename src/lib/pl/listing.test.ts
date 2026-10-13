@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BACKEND_BYTES, bytes, cleanBackend, complianceFlags, copyAll, flatFileRow, keywordCoverage, leadTerm, normaliseDraft, ruleIssues, themeIn, type ListingDraft } from "./listing";
+import { BACKEND_BYTES, bytes, cleanBackend, clip, complianceFlags, copyAll, flatFileRow, keywordCoverage, leadTerm, normaliseDraft, ruleIssues, themeIn, type ListingDraft } from "./listing";
 
 const draft = (o: Partial<ListingDraft> = {}): ListingDraft => ({
   title: "Lens Cleaning Wipes, 200 Individually Wrapped Pre-moistened Wipes for Glasses and Screens",
@@ -76,5 +76,38 @@ describe("Listing Writer rules", () => {
     const n = normaliseDraft({ title: "Lens Wipes", bullets: ["A: b"], backend: "lens Zeiss tissue" }, ["Zeiss"]);
     expect(n.bullets).toHaveLength(5);
     expect(n.backend).toBe("tissue");
+  });
+});
+
+describe("the answer's caps", () => {
+  it("backend terms as a word list: the first 40 single words, joined, deduped, cleaned and trimmed to 249 bytes", () => {
+    const list = ["spectacle", "spectacle", "eyeglass cleaner tissue", "B0ABCDEFGH", "Zeiss", ...Array.from({ length: 60 }, (_, i) => `w${i}`)];
+    const d = normaliseDraft({ title: "Dewlens Glasses Wipes", bullets: [], backend: list }, ["zeiss"]);
+    const w = d.backend.split(" ");
+    expect(w.slice(0, 2)).toEqual(["spectacle", "eyeglass"]);
+    expect(w).not.toContain("cleaner");
+    expect(w).not.toContain("zeiss");
+    expect(w).not.toContain("b0abcdefgh");
+    // Five words, then w0…w34: forty in all; w35 on is past the cap.
+    expect(w.includes("w34")).toBe(true);
+    expect(w.includes("w35")).toBe(false);
+    // The byte budget still applies within the forty.
+    expect(bytes(normaliseDraft({ title: "X", backend: Array.from({ length: 40 }, (_, i) => `longerword${i}`) }, []).backend)).toBeLessThanOrEqual(249);
+    expect(bytes(d.backend)).toBeLessThanOrEqual(249);
+    // An older answer or an edit: a string still works.
+    expect(normaliseDraft({ title: "X", backend: "lens tissue" }, []).backend).toBe("lens tissue");
+  });
+  it("title, bullets, description and differentiation within their caps, cut at a sentence or a word", () => {
+    const long = (n: number) => Array.from({ length: n }, (_, i) => `Sentence number ${i} is here.`).join(" ");
+    const d = normaliseDraft({ title: `Dewlens ${"Glasses Wipes ".repeat(30)}`, bullets: [long(30), "SHORT ONE: fine."], description: long(80), differentiation: long(30) }, []);
+    expect(d.title.length).toBeLessThanOrEqual(200);
+    expect(d.title.endsWith(" ")).toBe(false);
+    expect(d.bullets[0].length).toBeLessThanOrEqual(250);
+    expect(d.bullets[0].endsWith(".")).toBe(true);
+    expect(d.bullets[1]).toBe("SHORT ONE: fine.");
+    expect(d.description.length).toBeLessThanOrEqual(1000);
+    expect(d.differentiation.length).toBeLessThanOrEqual(400);
+    expect(normaliseDraft({ title: "A ".repeat(100) }, [], 120).title.length).toBeLessThanOrEqual(120);
+    expect(clip("One two three four five", 12)).toBe("One two");
   });
 });

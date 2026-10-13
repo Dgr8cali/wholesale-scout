@@ -23,7 +23,26 @@ export const DEFAULT_AI_MODEL = "claude-sonnet-5-5";
 /** £ per $1, to show costs in pounds (editable). */
 export const DEFAULT_USD_GBP = 0.79;
 
-export interface Usage { input_tokens: number; output_tokens: number; cache_read_input_tokens?: number | null; cache_creation_input_tokens?: number | null }
+export interface Usage {
+  input_tokens: number; output_tokens: number; cache_read_input_tokens?: number | null; cache_creation_input_tokens?: number | null;
+  /** The part of output_tokens spent thinking (billed as output, never in the answer). */
+  output_tokens_details?: { thinking_tokens?: number | null } | null;
+}
+
+/**
+ * The least thinking each model allows, for calls that only fill a fixed JSON format (the Listing
+ * Writer): Claude 5-family models think by default, and that hidden thinking is billed as output.
+ * Sonnet 5.5 refuses "disabled" but takes "between_tools" (no up-front thinking; without tools, text
+ * only); Sonnet 5, Haiku 5.5 and Opus 5 take "disabled"; Opus 5.5, Fable and Mythos can't turn it
+ * off, so effort "low". Older models don't think unless asked: nothing to send.
+ */
+export function leanThinking(model: string): { thinking?: { type: "between_tools" } | { type: "disabled" }; effort?: "low" } {
+  const id = model.replace(/-\d{8}$/, "");
+  if (id === "claude-sonnet-5-5") return { thinking: { type: "between_tools" } };
+  if (["claude-sonnet-5", "claude-haiku-5-5", "claude-opus-5"].includes(id)) return { thinking: { type: "disabled" } };
+  if (/^claude-(opus-5-5|fable-5(-1)?|mythos-5(-1)?|mythos-preview)$/.test(id)) return { effort: "low" };
+  return {};
+}
 
 export function costOf(u: Usage, price: { inUsd: number; outUsd: number }, gbpPerUsd: number): { usd: number; gbp: number } {
   const usd = (u.input_tokens * price.inUsd + u.output_tokens * price.outUsd + (u.cache_read_input_tokens ?? 0) * price.inUsd * 0.1 + (u.cache_creation_input_tokens ?? 0) * price.inUsd * 1.25) / 1_000_000;

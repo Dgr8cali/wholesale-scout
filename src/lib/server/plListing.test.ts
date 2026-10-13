@@ -61,9 +61,20 @@ describe("Listing writer (FakeDb, API mocked)", () => {
     __setAnthropicForTests({ messages: { create } } as never);
     const g = await generateListing(CAND);
     expect(create).toHaveBeenCalledTimes(2);
-    expect(g.call).toMatchObject({ cached: false, calls: 2, tokens: { input: 6000, output: 1500 } });
+    expect(g.call).toMatchObject({ cached: false, calls: 2, tokens: { input: 6000, output: 1500, thinking: 0 } });
     // Room for a full answer: 8,000 output tokens to write, 4,000 to repair.
     expect(create.mock.calls.map((x) => (x[0] as { max_tokens: number }).max_tokens)).toEqual([8000, 4000]);
+    // No up-front thinking (Sonnet 5.5: between_tools), and every field capped in the answer format.
+    const req = create.mock.calls[0][0] as { thinking: unknown; output_config: { format: { schema: { properties: Record<string, { type: string; description?: string; items?: { description?: string } }> } } } };
+    expect(create.mock.calls.every((x) => (x[0] as { thinking?: unknown }).thinking !== undefined)).toBe(true);
+    expect(req.thinking).toEqual({ type: "between_tools" });
+    const props = req.output_config.format.schema.properties;
+    expect(props.title.description).toMatch(/at most 200 characters/);
+    expect(props.bullets.items!.description).toMatch(/at most 250 characters/);
+    expect(props.description.description).toMatch(/at most 1000 characters/);
+    expect(props.differentiation.description).toMatch(/at most 400 characters/);
+    expect(props.backend).toMatchObject({ type: "array" });
+    expect(props.backend.description).toMatch(/never repeat, pad or explain.*\(at most 40 items\)/);
     expect(g.call.costGbp).toBeGreaterThan(0);
     // The first draft broke rules: brand first (fixed in code), the uses in the title, three paragraphs (sent to repair).
     expect(g.fixes).toContain("Title starts with Dewlens");

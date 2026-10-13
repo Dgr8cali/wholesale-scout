@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { REVIEW_TOOL, TARGETS_TOOL } from "../ads/ai";
+import { leanThinking, REVIEW_TOOL, TARGETS_TOOL } from "../ads/ai";
 import { __setAnthropicForTests, askModel, CutOffError, MAX_TOKENS_CAP, strictSchema } from "./adsAi";
 import { __setDbForTests } from "./db";
 import { FakeDb } from "./fakeDb";
@@ -101,6 +101,31 @@ describe("the AI call (API mocked)", () => {
     expect(c.create).toHaveBeenCalledTimes(1);
   });
 
+  it("lean calls: no up-front thinking on Sonnet 5.5 (between_tools), thinking tokens logged; other calls unchanged", async () => {
+    const c = fakeClient(answer, { input_tokens: 1800, output_tokens: 700, output_tokens_details: { thinking_tokens: 0 } } as never);
+    __setAnthropicForTests(c as never);
+    const r = await askModel({ feature: "pl_listing", subject: "c1", context: { x: 1 }, instruction: "Write.", tool: TARGETS_TOOL, lean: true });
+    const body = (c.create.mock.calls as unknown as [Record<string, unknown>][])[0][0];
+    expect(body.thinking).toEqual({ type: "between_tools" });
+    expect((body.output_config as Record<string, unknown>).effort).toBeUndefined();
+    expect(r.tokens).toEqual({ input: 1800, output: 700, thinking: 0 });
+    expect(db.tables.ads_ai_calls[0]).toMatchObject({ thinking_tokens: 0 });
+    // Not lean: the request is as before, and the thinking the API reports is logged.
+    const t = fakeClient(answer, { input_tokens: 1800, output_tokens: 6800, output_tokens_details: { thinking_tokens: 6100 } } as never);
+    __setAnthropicForTests(t as never);
+    const r2 = await run(true);
+    expect((t.create.mock.calls as unknown as [Record<string, unknown>][])[0][0].thinking).toBeUndefined();
+    expect(r2.tokens).toEqual({ input: 1800, output: 6800, thinking: 6100 });
+    expect(db.tables.ads_ai_calls[1]).toMatchObject({ output_tokens: 6800, thinking_tokens: 6100 });
+  });
+
+  it("the least thinking each model allows", () => {
+    expect(leanThinking("claude-sonnet-5-5")).toEqual({ thinking: { type: "between_tools" } });
+    for (const m of ["claude-sonnet-5", "claude-haiku-5-5", "claude-opus-5"]) expect(leanThinking(m)).toEqual({ thinking: { type: "disabled" } });
+    for (const m of ["claude-opus-5-5", "claude-fable-5-1", "claude-mythos-5", "claude-mythos-preview"]) expect(leanThinking(m)).toEqual({ effort: "low" });
+    expect(leanThinking("claude-haiku-4-5-20251001")).toEqual({});
+  });
+
   it("a failed call is logged and reported", async () => {
     __setAnthropicForTests({ messages: { create: async () => { throw new Error("overloaded"); } } });
     await expect(run()).rejects.toThrow(/The AI call failed: overloaded/);
@@ -110,6 +135,15 @@ describe("the AI call (API mocked)", () => {
   it("no key, no call", async () => {
     delete process.env.ANTHROPIC_API_KEY;
     await expect(run()).rejects.toThrow(/ANTHROPIC_API_KEY isn't set/);
+  });
+
+  it("strict schemas: length and count caps move into the description (the grammar can't enforce them)", () => {
+    const out = strictSchema({ type: "object", properties: {
+      title: { type: "string", maxLength: 200, description: "The title" },
+      words: { type: "array", maxItems: 40, items: { type: "string", maxLength: 30 } },
+    } }) as { properties: Record<string, Record<string, unknown>> };
+    expect(out.properties.title).toEqual({ type: "string", description: "The title (at most 200 characters)" });
+    expect(out.properties.words).toEqual({ type: "array", items: { type: "string", description: "(at most 30 characters)" }, description: "(at most 40 items)" });
   });
 
   it("strict schemas: closed objects, every property required, no item counts above 1", () => {

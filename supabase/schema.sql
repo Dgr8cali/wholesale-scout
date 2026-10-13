@@ -1,5 +1,5 @@
 -- Wholesale Scout schema, dumped by scripts/schema-backup.mjs. No data.
--- Dumped 2026-10-13T15:07:18.049Z. Safe to re-run. Restore: npm run schema:restore
+-- Dumped 2026-10-13T21:22:01.678Z. Safe to re-run. Restore: npm run schema:restore
 
 -- @section extensions
 create extension if not exists "pg_cron";
@@ -57,7 +57,8 @@ create table if not exists "ads_ai_calls" (
   "trigger" text default 'user'::text not null,
   "result" jsonb,
   "error" text,
-  "created_at" timestamp with time zone default now() not null
+  "created_at" timestamp with time zone default now() not null,
+  "thinking_tokens" integer default 0 not null
 );
 alter table "ads_ai_calls" add column if not exists "id" uuid default gen_random_uuid();
 alter table "ads_ai_calls" add column if not exists "feature" text;
@@ -74,6 +75,7 @@ alter table "ads_ai_calls" add column if not exists "trigger" text default 'user
 alter table "ads_ai_calls" add column if not exists "result" jsonb;
 alter table "ads_ai_calls" add column if not exists "error" text;
 alter table "ads_ai_calls" add column if not exists "created_at" timestamp with time zone default now();
+alter table "ads_ai_calls" add column if not exists "thinking_tokens" integer default 0;
 alter table "ads_ai_calls" enable row level security;
 
 create table if not exists "ads_ai_settings" (
@@ -3917,3 +3919,4 @@ insert into schema_migrations (name) values ('20261007000100_business_vat_qogita
 insert into schema_migrations (name) values ('20261009000100_price_basis.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261013000100_pl_listing_drafts.sql') on conflict do nothing;
 insert into schema_migrations (name) values ('20261013000200_pl_listing_facts.sql') on conflict do nothing;
+insert into schema_migrations (name) values ('20261013000300_ads_ai_thinking_tokens.sql') on conflict do nothing;

@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import {
   AI_MODELS, DEFAULT_AI_MODEL, DEFAULT_USD_GBP, EXPLAIN_TOOL, REVIEW_TOOL, SYSTEM_PROMPT, TARGETS_TOOL,
   buildExplainContext, buildReviewContext, buildTargetsContext, checkReview, checkTargets, costOf, estimateTokens, uncitedNumbers,
-  type ExplainInput, type ExplainResult, type ReviewInput, type ReviewResult, type TargetsInput, type TargetsResult, type Usage, type Window14,
+  leanThinking, type ExplainInput, type ExplainResult, type ReviewInput, type ReviewResult, type TargetsInput, type TargetsResult, type Usage, type Window14,
 } from "../ads/ai";
 import { dailySignals, windowOf, type DailyRow } from "../ads/daily";
 import type { BulkChange } from "../ads/bulk";
@@ -62,7 +62,8 @@ export type AiFeature = "explain" | "review" | "targets" | "pl_reviews" | "pl_li
 
 export interface AiRun<T> {
   result: T; cached: boolean; model: string; at: string; costGbp: number; costUsd: number;
-  tokens: { input: number; output: number }; contextTokens: number;
+  /** output includes thinking (billed as output); thinking is that part, when the API reports it. */
+  tokens: { input: number; output: number; thinking?: number }; contextTokens: number;
 }
 
 /**
@@ -73,10 +74,20 @@ export function strictSchema(x: unknown): Record<string, unknown> {
   if (Array.isArray(x)) return x.map(strictSchema) as never;
   if (!x || typeof x !== "object") return x as never;
   const out: Record<string, unknown> = {};
+  // The API's grammar can't enforce lengths or counts (sent, they're a 400): they go into the
+  // description for the model, and the code after the call enforces them.
+  const src = x as Record<string, unknown>;
+  const limits = [
+    src.maxLength != null && `at most ${src.maxLength} characters`,
+    src.minLength != null && `at least ${src.minLength} characters`,
+    src.maxItems != null && `at most ${src.maxItems} items`,
+    src.minItems != null && Number(src.minItems) > 1 && `at least ${src.minItems} items`,
+  ].filter(Boolean);
   for (const [k, v] of Object.entries(x)) {
-    if ((k === "minItems" && Number(v) > 1) || k === "maxItems") continue;
+    if ((k === "minItems" && Number(v) > 1) || k === "maxItems" || k === "maxLength" || k === "minLength") continue;
     out[k] = k === "properties" ? Object.fromEntries(Object.entries(v as object).map(([p, d]) => [p, strictSchema(d)])) : strictSchema(v);
   }
+  if (limits.length) out.description = `${out.description ? `${out.description} ` : ""}(${limits.join(", ")})`;
   if (out.type === "object" && out.properties) {
     out.additionalProperties = false;
     out.required = Object.keys(out.properties as object);
@@ -114,16 +125,20 @@ export async function askModel<T>(x: {
   force?: boolean; trigger?: "user" | "schedule"; maxTokens?: number;
   /** After "The answer was cut off (too long).": what to try ("Try again or shorten Key specs."). */
   cutOffHint?: string;
+  /** No up-front thinking (or the least the model allows): for calls that only fill in a format. */
+  lean?: boolean;
 }): Promise<AiRun<T>> {
   const s = await aiSettings();
-  const dataHash = hashOf({ context: x.context, tool: x.tool.name, model: s.model, v: 1 });
+  // The prompt, the format and the thinking setting are part of what's asked: change any and it's a new answer.
+  const lean = x.lean ? leanThinking(s.model) : {};
+  const dataHash = hashOf({ context: x.context, tool: x.tool.name, model: s.model, v: 1, ...(x.lean ? { ask: hashOf({ i: x.instruction, s: x.system, f: x.tool.input_schema, lean }) } : {}) });
   const d = db();
   if (!x.force) {
     const hit = (must(await d.from("ads_ai_calls").select("*").eq("feature", x.feature).eq("subject", x.subject).eq("data_hash", dataHash).is("error", null).order("created_at", { ascending: false }).limit(1), "cache") as Record<string, unknown>[])[0];
-    if (hit) return { result: hit.result as T, cached: true, model: String(hit.model), at: String(hit.created_at), costGbp: Number(hit.cost_gbp), costUsd: Number(hit.cost_usd), tokens: { input: Number(hit.input_tokens), output: Number(hit.output_tokens) }, contextTokens: estimateTokens(x.context) };
+    if (hit) return { result: hit.result as T, cached: true, model: String(hit.model), at: String(hit.created_at), costGbp: Number(hit.cost_gbp), costUsd: Number(hit.cost_usd), tokens: { input: Number(hit.input_tokens), output: Number(hit.output_tokens), thinking: Number(hit.thinking_tokens ?? 0) }, contextTokens: estimateTokens(x.context) };
   }
   const base = { feature: x.feature, subject: x.subject, data_hash: dataHash, model: s.model, trigger: x.trigger ?? "user" };
-  const spent = { usd: 0, gbp: 0, input: 0, output: 0 };
+  const spent = { usd: 0, gbp: 0, input: 0, output: 0, thinking: 0 };
   let limit = Math.min(x.maxTokens ?? 2000, MAX_TOKENS_CAP);
   for (let attempt = 1; ; attempt++) {
     let msg: Anthropic.Message;
@@ -131,7 +146,8 @@ export async function askModel<T>(x: {
       msg = await client().messages.create({
         model: s.model, max_tokens: limit,
         system: x.system ?? SYSTEM_PROMPT,
-        output_config: { format: { type: "json_schema", schema: strictSchema(x.tool.input_schema) } },
+        ...(lean.thinking ? { thinking: lean.thinking } : {}),
+        output_config: { format: { type: "json_schema", schema: strictSchema(x.tool.input_schema) }, ...(lean.effort ? { effort: lean.effort } : {}) },
         messages: [{ role: "user", content: `${x.instruction}\n\nData (JSON):\n${JSON.stringify(x.context)}` }],
       });
     } catch (e) {
@@ -140,7 +156,8 @@ export async function askModel<T>(x: {
     }
     const use = msg.usage as Usage;
     const cost = costOf(use, s, s.gbpPerUsd);
-    spent.usd += cost.usd; spent.gbp += cost.gbp; spent.input += use.input_tokens; spent.output += use.output_tokens;
+    const thinking = use.output_tokens_details?.thinking_tokens ?? 0;
+    spent.usd += cost.usd; spent.gbp += cost.gbp; spent.input += use.input_tokens; spent.output += use.output_tokens; spent.thinking += thinking;
     const cutOff = msg.stop_reason === "max_tokens";
     const text = msg.content.filter((c) => c.type === "text").map((c) => (c as Anthropic.TextBlock).text).join("");
     let result: T | null = null;
@@ -149,14 +166,14 @@ export async function askModel<T>(x: {
     const retry = cutOff && attempt === 1 && limit < MAX_TOKENS_CAP;
     const error = result ? null : cutOff ? `Cut off at ${limit} tokens (stop: max_tokens)${retry ? `: retried at ${Math.min(limit * 2, MAX_TOKENS_CAP)}` : ""}` : `No structured answer (stop: ${msg.stop_reason})`;
     const row = {
-      ...base, input_tokens: use.input_tokens, output_tokens: use.output_tokens, cache_read_tokens: use.cache_read_input_tokens ?? 0, cache_write_tokens: use.cache_creation_input_tokens ?? 0,
+      ...base, input_tokens: use.input_tokens, output_tokens: use.output_tokens, thinking_tokens: thinking, cache_read_tokens: use.cache_read_input_tokens ?? 0, cache_write_tokens: use.cache_creation_input_tokens ?? 0,
       cost_usd: cost.usd, cost_gbp: cost.gbp, result, error,
     };
     const saved = must(await d.from("ads_ai_calls").insert(row).select("created_at").single(), "log call") as { created_at: string };
     if (retry) { limit = Math.min(limit * 2, MAX_TOKENS_CAP); continue; }
     if (!result) throw cutOff ? new CutOffError(x.cutOffHint) : new Error(error!);
     const round = (n: number, dp: number) => Math.round(n * 10 ** dp) / 10 ** dp;
-    return { result, cached: false, model: s.model, at: saved.created_at, costGbp: round(spent.gbp, 6), costUsd: round(spent.usd, 6), tokens: { input: spent.input, output: spent.output }, contextTokens: estimateTokens(x.context) };
+    return { result, cached: false, model: s.model, at: saved.created_at, costGbp: round(spent.gbp, 6), costUsd: round(spent.usd, 6), tokens: { input: spent.input, output: spent.output, thinking: spent.thinking }, contextTokens: estimateTokens(x.context) };
   }
 }
 
