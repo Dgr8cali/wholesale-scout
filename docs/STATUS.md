@@ -122,7 +122,7 @@ page-one ASINs' brands. First-draft rules (`src/lib/pl/listingRules.ts`) are in 
 enforced after the call (brand-first Title Case title cut at a word, promo words out, CAPITALISED
 bullet headers, backend terms cleaned of title words/plurals, filler, health/body and not-for words,
 claims to avoid, then filled to 200–249 bytes from search terms, bank and uses); the Checks list holds
-it to every rule (title 120–180 with brand, top term, pack size, Individually Wrapped and top three
+it to every rule (title within its limit with brand, top term, pack size, Individually Wrapped and top three
 uses, first 80 characters, bullets 150–250 answering Gate 4's pick and every real complaint ≥ 4%,
 specs and suitable/not-for bullets, three-paragraph description with every spec, backend bytes and
 words, claims), and anything failing gets ONE repair call (subject `<id>:repair`, logged and cached
@@ -134,7 +134,10 @@ Key specs or Pack size, backend words linked to the inputs (dropped in code when
 adds other names for the product noun). Performance claims hedged unless Key specs
 state them (absolute_claims: streak-free, without leaving streaks, never, always, guaranteed, 100%,
 every time); a title word may repeat inside one of the top 3 search phrases (phraseAllowance, one
-word between allowed); backend top-up in code under 200 bytes (search/bank/use words by volume, then
+word between allowed); words inside the pack size phrase ("200 Wipes") or an exact top-3 search phrase
+("Lens Wipes for Glasses") don't count toward the repeat limit at all (exemptPositions, first mention
+of each); title length is a soft check (`soft: true`, amber warning below 100 characters, no hard
+minimum; over the limit stays hard), and only hard failures go to the repair call; backend top-up in code under 200 bytes (search/bank/use words by volume, then
 plural/singular variants of nouns, then PRODUCT_FORMS), repair only if still short; each run's calls,
 tokens, £, repair reasons and top-up are saved in the version (inputs.run) and shown under Regenerate
 all (listingView.lastRun). The old "N of 5 bullets answer a theme" editor note is gone (Checks owns

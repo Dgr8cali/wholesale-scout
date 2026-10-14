@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckIcon, ClipboardCopyIcon, DownloadIcon, LoaderIcon, RotateCcwIcon, SparklesIcon, XIcon } from "lucide-react";
+import { CheckIcon, ClipboardCopyIcon, DownloadIcon, LoaderIcon, RotateCcwIcon, SparklesIcon, TriangleAlertIcon, XIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useDialogs } from "@/components/Dialogs";
@@ -219,12 +219,13 @@ export function ListingSection({ candidateId }: { candidateId: string }) {
           </div>
 
           <div className="rounded-lg border p-3">
-            <p className="mb-1 text-sm"><b>Checks</b> <span className={cn("num", list.every((c) => c.pass) ? "text-pass" : "text-warn")}>{list.filter((c) => c.pass).length} of {list.length} passed</span>
-              <span className="text-xs text-muted-foreground"> · after each generation, anything failing goes back for one repair call</span></p>
+            <p className="mb-1 text-sm"><b>Checks</b> <span className={cn("num", list.every((c) => c.pass || c.soft) ? "text-pass" : "text-warn")}>{list.filter((c) => c.pass).length} of {list.length} passed</span>
+              {list.some((c) => !c.pass && c.soft) && <span className="num text-warn"> · {list.filter((c) => !c.pass && c.soft).length} warning{list.filter((c) => !c.pass && c.soft).length === 1 ? "" : "s"}</span>}
+              <span className="text-xs text-muted-foreground"> · after each generation, any hard failure goes back for one repair call (warnings don&rsquo;t)</span></p>
             <ul className="grid gap-x-4 gap-y-0.5 text-xs md:grid-cols-2">{list.map((c) => (
               <li key={c.id} className="flex items-start gap-1.5">
-                {c.pass ? <CheckIcon className="mt-0.5 size-3.5 shrink-0 text-pass" /> : <XIcon className="mt-0.5 size-3.5 shrink-0 text-fail" />}
-                <span>{c.label}{c.detail && <span className="text-fail">: {c.detail}</span>}</span>
+                {c.pass ? <CheckIcon className="mt-0.5 size-3.5 shrink-0 text-pass" /> : c.soft ? <TriangleAlertIcon className="mt-0.5 size-3.5 shrink-0 text-warn" /> : <XIcon className="mt-0.5 size-3.5 shrink-0 text-fail" />}
+                <span>{c.label}{c.detail && <span className={c.soft ? "text-warn" : "text-fail"}>: {c.detail}</span>}</span>
               </li>
             ))}</ul>
           </div>

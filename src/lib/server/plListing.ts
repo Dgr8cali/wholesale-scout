@@ -214,7 +214,8 @@ export function checksOf(d: ListingDraft, i: ListingInputs) {
   };
 }
 
-const failuresOf = (list: ListingCheck[]) => list.filter((c) => !c.pass).map((c) => ({ rule: c.label, problem: c.detail ?? "failed" }));
+/** Hard failures only: soft checks (a short title) are warnings and never go to the repair call. */
+const failuresOf = (list: ListingCheck[]) => list.filter((c) => !c.pass && !c.soft).map((c) => ({ rule: c.label, problem: c.detail ?? "failed" }));
 
 /**
  * Write the listing (on your click only): one model call, cached by its inputs (the same inputs

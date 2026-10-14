@@ -145,18 +145,40 @@ export function phraseAllowance(title: string, c: Pick<RuleContext, "searchTerms
 }
 
 /**
+ * Title word positions that don't count toward the repeat limit: the first mention of the pack size
+ * phrase ("200 Wipes") and the first mention of each top-3 search phrase, word for word
+ * ("Lens Wipes for Glasses"; plurals count as the same word).
+ */
+export function exemptPositions(title: string, c: Partial<Pick<RuleContext, "searchTerms" | "packSize">>): Set<number> {
+  const tw = words(title.replace(/-/g, " ")).map(singular);
+  const out = new Set<number>();
+  const phrases = [c.packSize ?? "", ...topTerms({ searchTerms: c.searchTerms ?? [] })].map((p) => words(p.replace(/-/g, " ")).map(singular)).filter((p) => p.length > 1);
+  for (const pw of phrases) {
+    for (let i = 0; i + pw.length <= tw.length; i++) {
+      if (pw.every((w, j) => tw[i + j] === w)) { pw.forEach((_, j) => out.add(i + j)); break; }
+    }
+  }
+  return out;
+}
+
+/**
  * Title words said more often than allowed: the brand once, the product noun twice, everything else
  * once, or twice when one mention is part of a top-3 search phrase (plurals count as the same word).
+ * Words inside the pack size phrase or an exact top-3 search phrase aren't counted at all.
  */
-export function titleRepeats(title: string, c: Pick<RuleContext, "brand" | "product" | "leadTerm"> & Partial<Pick<RuleContext, "searchTerms">>): string[] {
+export function titleRepeats(title: string, c: Pick<RuleContext, "brand" | "product" | "leadTerm"> & Partial<Pick<RuleContext, "searchTerms" | "packSize">>): string[] {
   const noun = singular(productNoun(c)), brand = words(c.brand).map(singular);
-  const allowed = phraseAllowance(title, { searchTerms: c.searchTerms ?? [] });
+  const exempt = exemptPositions(title, c);
+  // A phrase said word for word is already exempt; the second-mention allowance is for the looser matches ("Lens Cleaning Wipes").
+  const tw = ` ${words(title.replace(/-/g, " ")).map(singular).join(" ")} `;
+  const loose = topTerms({ searchTerms: c.searchTerms ?? [] }).filter((t) => !tw.includes(` ${words(t).map(singular).join(" ")} `));
+  const allowed = phraseAllowance(title, { searchTerms: (c.searchTerms ?? []).filter((t) => loose.includes(t.term)) });
   const count = new Map<string, { n: number; as: string }>();
-  for (const w of words(title.replace(/-/g, " "))) {
-    if (SMALL.has(w) || /^\d/.test(w) || w.length < 3) continue;
+  words(title.replace(/-/g, " ")).forEach((w, i) => {
+    if (exempt.has(i) || SMALL.has(w) || /^\d/.test(w) || w.length < 3) return;
     const k = singular(w);
     count.set(k, { n: (count.get(k)?.n ?? 0) + 1, as: count.get(k)?.as ?? w });
-  }
+  });
   return [...count].filter(([k, v]) => v.n > (k === noun ? 2 : brand.includes(k) ? 1 : allowed.has(k) ? 2 : 1)).map(([, v]) => v.as);
 }
 
@@ -489,12 +511,16 @@ export function unsupportedNumbers(d: ListingDraft, c: Pick<RuleContext, "specs"
 
 /* ===================== checks ===================== */
 
-export interface ListingCheck { id: string; label: string; pass: boolean; detail?: string }
+/** A check that fails; `soft` ones are warnings (amber) that never go to the repair call. */
+export interface ListingCheck { id: string; label: string; pass: boolean; soft?: boolean; detail?: string }
+
+/** Below this many characters the title gets a soft warning (no hard minimum). */
+export const TITLE_SHORT = 100;
 
 /** Every first-draft rule, passed or failed, in the order the Listing section shows them. */
 export function listingChecks(d: ListingDraft, c: RuleContext, complianceTerms: string[] = []): ListingCheck[] {
   const out: ListingCheck[] = [];
-  const add = (id: string, label: string, pass: boolean, detail?: string) => out.push({ id, label, pass, ...(detail && !pass ? { detail } : {}) });
+  const add = (id: string, label: string, pass: boolean, detail?: string, soft?: boolean) => out.push({ id, label, pass, ...(soft ? { soft } : {}), ...(detail && !pass ? { detail } : {}) });
   const brand = c.brand.trim();
   const t = d.title;
   add("brand_first", "Title starts with the brand", !!brand && t.startsWith(`${brand} `), brand ? `It should start with "${brand}"` : "No brand name set");
@@ -514,12 +540,13 @@ export function listingChecks(d: ListingDraft, c: RuleContext, complianceTerms: 
   const key = [brand, c.leadTerm, packNum].filter(Boolean) as string[];
   const late = key.filter((k) => !(k === packNum ? (first80.match(/\d+/g) ?? ([] as string[])).includes(k) : hasPhrase(first80, k) || first80.includes(k)));
   add("first_80", "Brand, top term and pack size in the first 80 characters", !late.length, `After character 80: ${late.join(", ")}`);
-  const hi = Math.min(TITLE_TARGET.max, c.titleLimit), lo = Math.min(TITLE_TARGET.min, Math.round(c.titleLimit * 0.6));
-  add("title_length", `Title ${lo}–${hi} characters`, t.length >= lo && t.length <= hi, `${t.length} characters`);
+  add("title_limit", `Title within ${c.titleLimit} characters`, t.length <= c.titleLimit, `${t.length} characters`);
+  // Length below the target is only a warning: shorter titles are fine, and it never goes to the repair call.
+  add("title_length", `Title ${TITLE_SHORT} characters or more (aim for ${TITLE_TARGET.min}–${Math.min(TITLE_TARGET.max, c.titleLimit)})`, t.length >= Math.min(TITLE_SHORT, c.titleLimit), `${t.length} characters: a little short, longer is optional`, true);
   const caps = (t.match(/\b[A-Z]{4,}\b/g) ?? []), promo = promoIn(t);
   const lowerWords = t.split(/\s+/).filter((w, i) => i > 0 && /^\p{Ll}/u.test(w) && !SMALL.has(w.replace(/[^\p{L}×]/gu, "")) && !UNITS.test(w.replace(/[,.;:)]+$/, "")));
   const reps = titleRepeats(t, c);
-  add("title_repeats", `No repeated title words (the brand once, "${productNoun(c)}" at most twice)`, !reps.length, `Repeated: ${reps.join(", ")}`);
+  add("title_repeats", `No repeated title words (the brand once, "${productNoun(c)}" at most twice; the pack size and exact top search phrases don't count)`, !reps.length, `Repeated: ${reps.join(", ")}`);
   add("title_style", "Title Case, no ALL CAPS, no promo words", !caps.length && !promo.length && !lowerWords.length, [caps.length && `ALL CAPS: ${caps.join(", ")}`, promo.length && `promo: ${promo.join(", ")}`, lowerWords.length && `not capitalised: ${lowerWords.slice(0, 4).join(", ")}`].filter(Boolean).join("; "));
 
   const badHead = d.bullets.map((b, i) => (HEADER.test(b.trim()) ? null : i + 1)).filter((x) => x != null);
@@ -605,7 +632,7 @@ export function rulesPrompt(c: RuleContext): string {
   const need = requiredThemes(c);
   const wrapped = individuallyWrapped(c);
   return [
-    `Title: start with the brand "${c.brand}", then "${c.leadTerm ?? c.product}"; include the pack size${c.packSize ? ` (${c.packSize})` : ""}${wrapped ? " and \"Individually Wrapped\"" : ""}; name the top uses (${c.suitableFor.slice(0, 3).join(", ") || "from Suitable for"}); the brand, the top term and the pack size within the first 80 characters; ${TITLE_TARGET.min}–${Math.min(TITLE_TARGET.max, c.titleLimit)} characters (never over ${c.titleLimit}); no word twice except "${productNoun(c)}", or a word inside one of the top search phrases (${topTerms(c).map((t) => `"${t}"`).join(", ")}), which may sit alongside its other mention; include one of those phrases besides the lead term when it fits; when a use repeats a title word otherwise, use a synonym from the search terms (e.g. "Spectacles" for a second "Glasses"); Title Case; no ALL CAPS words; no promo words (best, #1, free, sale, guaranteed).`,
+    `Title: start with the brand "${c.brand}", then "${c.leadTerm ?? c.product}"; include the pack size${c.packSize ? ` (${c.packSize})` : ""}${wrapped ? " and \"Individually Wrapped\"" : ""}; name the top uses (${c.suitableFor.slice(0, 3).join(", ") || "from Suitable for"}); the brand, the top term and the pack size within the first 80 characters; aim for ${TITLE_TARGET.min}–${Math.min(TITLE_TARGET.max, c.titleLimit)} characters (never over ${c.titleLimit}); no word twice except "${productNoun(c)}" (words inside the pack size or an exact top search phrase don't count), or a word inside one of the top search phrases (${topTerms(c).map((t) => `"${t}"`).join(", ")}), which may sit alongside its other mention; include one of those phrases besides the lead term when it fits; when a use repeats a title word otherwise, use a synonym from the search terms (e.g. "Spectacles" for a second "Glasses"); Title Case; no ALL CAPS words; no promo words (best, #1, free, sale, guaranteed).`,
     `Bullets: exactly five, each ${BULLET_TARGET.min}–${BULLET_TARGET.max} characters, each starting with a 2–4 word CAPITALISED header and a colon ("STAYS MOIST: …"). Each has its own job: 1 answers ${c.chosenTheme ? `"${c.chosenTheme}"` : "the top complaint"}; 2 the cleaning result; 3 size and feel; 4 the key specs no other bullet has stated; 5 what it's suitable for and not for.${need.length ? ` Between them the bullets must answer every one of these review complaints, using the key specs as the evidence: ${need.map((t) => `"${t}"`).join(", ")}.` : ""} Every key spec appears in some bullet, but each in at most two bullets. Never repeat a phrase of three or more words from one bullet in another.`,
     `Claims at spec strength: no number, timing or duration unless it's in the key specs or pack size (if the spec says "quick-drying", write "quick-drying", not "dries in seconds"). Soften every performance claim the key specs don't state: "helps", "designed to", "sealed to help keep" ("helps reduce streaks", never "streak-free" or "without leaving streaks"). No absolute words (streak-free, never, always, guaranteed, 100%, every time) unless the key specs use them, and no claims about how it performs over time ("as moist next year as today", "however long it sits in your bag").`,
     `Description: three short paragraphs separated by a blank line, mentioning every key spec once.`,

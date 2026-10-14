@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { bytes, complianceFlags, type ListingDraft } from "./listing";
 import {
-  absoluteClaims, answersTheme, brandFirst, hasNumberVariant, otherNumber, phraseAllowance, bulletHeader, buildBackend, enforceRules, fitTitle, inputVocabulary, isComplaint, linkedWord, listingChecks, needsProof,
+  absoluteClaims, answersTheme, exemptPositions, brandFirst, hasNumberVariant, otherNumber, phraseAllowance, bulletHeader, buildBackend, enforceRules, fitTitle, inputVocabulary, isComplaint, linkedWord, listingChecks, needsProof,
   repeatedPhrases, swapRepeatedUses, titleRepeats, unsupportedNumbers, synonymForUse,
   parseList, parseSpecs, requiredThemes, specIn, titleCase, type RuleContext,
 } from "./listingRules";
@@ -177,8 +177,10 @@ describe("Listing rules: no repetition, claims at spec strength, relevant backen
   it("the title says no word twice but the product noun, and a repeated use becomes a search-term synonym", () => {
     const t = "Dewlens Glasses Wipes, 200 Wipes Individually Wrapped, Pre-Moistened Lens Cleaning Wipes for Glasses, Sunglasses and Camera Lenses";
     // "Lens" is allowed a second time: "Lens Cleaning Wipes" carries "lens wipes", a top-3 search term.
-    expect(titleRepeats(t, ctx)).toEqual(["glasses", "wipes"]);
-    expect(titleRepeats(t, { ...ctx, searchTerms: [] })).toEqual(["glasses", "wipes", "lens"]);
+    // "200 Wipes" is the pack size, so its "Wipes" isn't counted: the other two are the product noun's two.
+    expect(titleRepeats(t, ctx)).toEqual(["glasses"]);
+    expect(titleRepeats(t, { ...ctx, searchTerms: [] })).toEqual(["glasses", "lens"]);
+    expect(titleRepeats(t, { ...ctx, packSize: null })).toEqual(["glasses", "wipes"]);
     expect(titleRepeats(good.title, ctx)).toEqual([]);
     expect(synonymForUse("Glasses", t, ctx)).toBe("Spectacles");
     const s = swapRepeatedUses(t, ctx);
@@ -261,5 +263,46 @@ describe("Listing rules: v5 follow-ups", () => {
     expect(listingChecks(short, { ...ctx, bankTerms: [] }).find((x) => x.id === "backend_bytes")!.pass).toBe(false);
     // The fix list says when the top-up was used.
     expect(enforceRules({ ...good, backend: "eyeglass" }, c).fixes.some((f) => /^Backend topped up in code: \d+ words added to reach \d+ bytes$/.test(f))).toBe(true);
+  });
+});
+
+describe("Listing rules: v6's title", () => {
+  // v6 (14 Oct): the repair call ran for these two and couldn't fix them.
+  const v6Title = "Dewlens Glasses Wipes, 200 Wipes Individually Wrapped, Lens Wipes for Glasses, Sunglasses, Camera Lenses, Binoculars";
+  const v6: RuleContext = {
+    ...ctx, leadTerm: "glasses wipes", packSize: "200 wipes",
+    searchTerms: [
+      { term: "glasses wipes", volume: 40982 }, { term: "lens wipes for glasses", volume: 11061 }, { term: "lens wipes", volume: 8406 },
+      { term: "spectacle wipes", volume: 7778 }, { term: "zeiss lens wipes", volume: 6027 },
+    ],
+  };
+  const check = (t: string, id: string, c = v6) => listingChecks({ ...good, title: t }, c).find((x) => x.id === id)!;
+
+  it("words inside the pack size and exact top-3 search phrases don't count toward the repeat limit", () => {
+    // "Glasses Wipes", "200 Wipes" and "Lens Wipes for Glasses" are all exempt: wipes ×4 and glasses ×2 pass.
+    expect(exemptPositions(v6Title, v6).size).toBe(2 + 2 + 4);
+    expect(titleRepeats(v6Title, v6)).toEqual([]);
+    expect(check(v6Title, "title_repeats").pass).toBe(true);
+    // Each phrase is exempt once: a second "Lens Wipes for Glasses" counts.
+    expect(titleRepeats(`${v6Title}, Lens Wipes for Glasses, Glasses`, v6)).toEqual(expect.arrayContaining(["glasses"]));
+    // Without the phrases (not a top-3 term), the repeats are back.
+    expect(titleRepeats(v6Title, { ...v6, searchTerms: [], packSize: null })).toEqual(expect.arrayContaining(["wipes", "glasses"]));
+    // Nothing to swap: the repeats are allowed.
+    expect(swapRepeatedUses(v6Title, v6).swapped).toEqual([]);
+  });
+
+  it("a title under 100 characters is a soft warning, never a failure sent to repair", () => {
+    expect(v6Title.length).toBeLessThan(120);
+    const len = check(v6Title, "title_length");
+    expect(len).toMatchObject({ pass: v6Title.length >= 100, soft: true });
+    const short = check("Dewlens Glasses Wipes, 200 Wipes Individually Wrapped", "title_length");
+    expect(short).toMatchObject({ pass: false, soft: true });
+    expect(short.detail).toMatch(/^53 characters/);
+    // Over the limit is still a hard failure.
+    expect(check(v6Title, "title_limit", { ...v6, titleLimit: 80 })).toMatchObject({ pass: false });
+    expect(check(v6Title, "title_limit", { ...v6, titleLimit: 80 }).soft).toBeUndefined();
+    // v6's title leaves no hard title failures.
+    const hard = listingChecks({ ...good, title: v6Title }, v6).filter((x) => x.id.startsWith("title") && !x.pass && !x.soft);
+    expect(hard).toEqual([]);
   });
 });
