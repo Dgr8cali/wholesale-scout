@@ -5,8 +5,12 @@
 ## Workflow
 
 - Update `docs/STATUS.md` in every commit that changes features (what's built, backlog, rough edges).
-- After every commit in this repo, run `git push origin main` immediately, and in the report confirm the push succeeded with the commit hash and "pushed".
+- After every commit in this repo, run `git push origin main` immediately, then `make deploy` (builds and restarts the app on the Netcup server; Vercel is no longer used). In the report confirm the push succeeded with the commit hash and "pushed", and that the deploy ended with "==> up".
 - If the push is rejected, run `git pull --rebase origin main`, re-run the tests (`npm test`), and push again.
-- When the commit includes a migration (`supabase/migrations/`), run `npm run migrate` before pushing.
+- When the commit includes a migration (`supabase/migrations/`), run `make migrate` before pushing (applies it to the server's database over an SSH tunnel; `npm run migrate` alone will not reach it).
 - Never push with failing tests or a failing build (`npm test`, `npm run build`).
 - Never commit `.env.local` (or any other env file holding secrets).
+
+## Hosting
+
+The app runs on the Netcup server (https://ws.dgr8cali.co.uk) with self-hosted Supabase (https://db.dgr8cali.co.uk), not Vercel/Supabase Cloud. Server files: `infra/`. Secrets live in `~/wholesale-scout/.env` on the server (not in the repo). See `infra/env.server.example`.
