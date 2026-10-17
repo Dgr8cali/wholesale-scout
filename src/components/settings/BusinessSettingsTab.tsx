@@ -14,7 +14,7 @@ import { PRICE_BASES, PRICE_BASIS_LABEL, type PriceBasis } from "@/lib/screening
 import { api } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
 
-interface Business { vatRegistered: boolean; vatRate: number; qogitaRegion: "UK" | "EU"; priceBasis: PriceBasis }
+interface Business { vatRegistered: boolean; vatRate: number; qogitaRegion: "UK" | "EU"; priceBasis: PriceBasis; launchCapital: number }
 interface Change { id: string; runId: string; asin: string | null; title: string | null; before: number | null; after: number | null; change: number }
 interface Status { job: { id: string; started_at: string; basis: string } | null; pending: number; runs: number; done: boolean; changed: number; top: Change[] }
 
@@ -135,8 +135,17 @@ export function BusinessSettingsTab() {
         <p className="text-xs text-muted-foreground">Each supplier&apos;s <b>Supplier prices are: ex-VAT / inc-VAT</b> is on its page under <Link className="text-brand underline" href="/suppliers">Suppliers</Link>.</p>
       </section>
 
+      <section className="panel space-y-4 p-4 sm:p-5">
+        <div className="space-y-1">
+          <h2 className="section-label">Private label</h2>
+          <p className="max-w-3xl text-sm text-muted-foreground">The capital a whole launch must fit, with its 10% buffer: Gatekeeper&apos;s Gate 7 and scorecard line 9, and the budget bar on the Launch checklist. A candidate&apos;s own <b>Capital for this launch (£)</b> in Gate 7 takes priority when set.</p>
+        </div>
+        <label className="block max-w-xs space-y-1.5"><span className="field-label">Launch capital (£)</span>
+          <Input className="num" type="number" min={1} step="any" value={b.launchCapital} onChange={(e) => setB({ ...b, launchCapital: Number(e.target.value) })} /></label>
+      </section>
+
       <div className="flex flex-wrap items-center gap-2">
-        <Button disabled={busy || !changed} onClick={save}>{busy && <LoaderIcon className="animate-spin" />} Save</Button>
+        <Button disabled={busy || !changed || !(b.launchCapital > 0)} onClick={save}>{busy && <LoaderIcon className="animate-spin" />} Save</Button>
         {changed && <span className="text-sm text-muted-foreground">Unsaved changes</span>}
       </div>
 

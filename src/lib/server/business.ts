@@ -1,5 +1,6 @@
 import "server-only";
 import { PRICE_BASES, withDefaults, type PriceBasis, type ProfileConfig } from "../screening/config";
+import { DEFAULT_LAUNCH_CAPITAL } from "../pl/gatekeeper";
 import { db, must } from "./db";
 
 /**
@@ -11,8 +12,11 @@ export interface BusinessSettings {
   vatRegistered: boolean; vatRate: number; qogitaRegion: "UK" | "EU";
   /** The price profit is worked out at, for every screening (the profiles' scoringPrice). */
   priceBasis: PriceBasis;
+  /** The capital a private-label launch must fit (Gate 7), unless a candidate sets its own. */
+  launchCapital: number;
 }
-export const DEFAULT_BUSINESS: BusinessSettings = { vatRegistered: true, vatRate: 20, qogitaRegion: "UK", priceBasis: "lower90" };
+export const DEFAULT_BUSINESS: BusinessSettings = { vatRegistered: true, vatRate: 20, qogitaRegion: "UK", priceBasis: "lower90", launchCapital: DEFAULT_LAUNCH_CAPITAL };
+const isCapital = (v: unknown) => v != null && v !== "" && Number.isFinite(Number(v)) && Number(v) > 0;
 const isBasis = (v: unknown): v is PriceBasis => typeof v === "string" && (PRICE_BASES as string[]).includes(v);
 
 export async function businessSettings(): Promise<BusinessSettings> {
@@ -24,6 +28,7 @@ export async function businessSettings(): Promise<BusinessSettings> {
     vatRate: typeof m.vatRate === "number" && m.vatRate >= 0 && m.vatRate < 100 ? m.vatRate : DEFAULT_BUSINESS.vatRate,
     qogitaRegion: m.qogitaRegion === "EU" ? "EU" : "UK",
     priceBasis: isBasis(m.priceBasis) ? m.priceBasis : DEFAULT_BUSINESS.priceBasis,
+    launchCapital: isCapital(m.launchCapital) ? Number(m.launchCapital) : DEFAULT_BUSINESS.launchCapital,
   };
 }
 
@@ -44,6 +49,7 @@ export async function saveBusinessSettings(patch: Partial<BusinessSettings>): Pr
     vatRate: patch.vatRate != null && Number.isFinite(Number(patch.vatRate)) && Number(patch.vatRate) >= 0 && Number(patch.vatRate) < 100 ? Number(patch.vatRate) : cur.vatRate,
     qogitaRegion: patch.qogitaRegion === "EU" ? "EU" : patch.qogitaRegion === "UK" ? "UK" : cur.qogitaRegion,
     priceBasis: isBasis(patch.priceBasis) ? patch.priceBasis : cur.priceBasis,
+    launchCapital: isCapital(patch.launchCapital) ? Number(patch.launchCapital) : cur.launchCapital,
   };
   const at = new Date().toISOString();
   must(await d.from("business_settings").upsert(Object.entries(next).map(([key, value]) => ({ key, value, updated_at: at })), { onConflict: "key" }), "save business settings");

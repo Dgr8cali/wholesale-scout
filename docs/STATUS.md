@@ -26,7 +26,10 @@ purchases, Received into a Stock bucket). The extension shows the verdict on pro
 pages, reads competitor stock on request, looks up dangerous goods in Seller Central, captures
 Opportunity Explorer niches and runs manual rank checks.
 
-**Business (Settings → Business).** `business_settings`: VAT registered (default yes) and rate (20%),
+**Business (Settings → Business).** `business_settings`: Launch capital (`launchCapital`, £1,000
+default; moved from Private label's `budget` setting by migration 20261017000100) for Gate 7, scorecard
+line 9 and the launch budget bar, overridden per candidate by Gate 7's "Capital for this launch (£)"
+field (`capital`, `capitalFor()`; the check's label shows the figure and its source). VAT registered (default yes) and rate (20%),
 written into every screening profile's fees and applied by loadProfile, and to Private label's
 settings (Gate 6: revenue ÷ 1.2, fees ex-VAT with DSF, margins on revenue, VAT payable as info; a
 quote's landed cost excludes the reclaimed import VAT). `profitOnVatBasis` is the rule; results store

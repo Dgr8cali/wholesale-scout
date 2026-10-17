@@ -36,6 +36,8 @@ With no current Buy Box (suppressed, no offers) every basis falls back to the 90
 
 **Qogita region**: **UK (GBP)** (default) or **EU (EUR)**, which Qogita account the app's login is. See [Qogita](/help/pages/qogita).
 
+**Launch capital (£)** (default £1,000): the capital a whole private-label launch, with its 10% buffer, must fit. It's used by [Private label](/help/pages/private-label)'s Gate 7, scorecard line 9 (*Launch fits capital*) and the budget bar on the [launch checklist](/help/howto/pl-launch-checklist). A candidate's own **Capital for this launch (£)** in Gate 7 takes priority when it's set.
+
 ## The profile bar
 
 On the **Gates**, **Score**, **Fees** and **Profiles** tabs a bar sits at the top. Those four tabs all edit one [profile](/help/concepts/profiles) at a time.
@@ -158,7 +160,7 @@ Filter sets are saved from a run's filter bar with **Save current filters…** a
 
 ## Private label tab
 
-The thresholds and cost assumptions for [Private label](/help/pages/private-label), shared by every candidate. They are budget available, VAT rate (set on the **Business** tab, with VAT registration), digital services fee, inbound shipping per unit, prep per unit, average months in storage, returns allowance, min price multiple, min launch margin, min steady margin and min profit per unit. Each shows its default. **Save** applies them to every candidate straight away. The fees themselves come from the rate card on the **Fees** tab. There's no peak-rate switch here: Private label uses the peak rates in October–December automatically.
+The thresholds and cost assumptions for [Private label](/help/pages/private-label), shared by every candidate. They are VAT rate (set on the **Business** tab, with VAT registration, as is the launch capital), digital services fee, inbound shipping per unit, prep per unit, average months in storage, returns allowance, min price multiple, min launch margin, min steady margin and min profit per unit. Each shows its default. **Save** applies them to every candidate straight away. The fees themselves come from the rate card on the **Fees** tab. There's no peak-rate switch here: Private label uses the peak rates in October–December automatically.
 
 ## Ads tab
 

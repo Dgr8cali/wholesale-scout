@@ -111,13 +111,13 @@ export const GATES: GateDef[] = [
       { k: "photography", label: "Photography", type: "num", unit: "£" },
       { k: "trademark", label: "UK trademark", type: "num", unit: "£", hint: "£170; can follow launch" },
       { k: "launchAds", label: "Launch advertising, 60 days", type: "num", unit: "£" },
+      { k: "capital", label: "Capital for this launch (£)", type: "num", unit: "£", hint: "Blank: Launch capital in Settings → Business" },
     ] },
 ];
 
 export const FIELD_KEYS = new Set(GATES.flatMap((g) => g.fields.map((f) => f.k)));
 
 export const SETTINGS_DEF = [
-  { k: "budget", label: "Budget available", unit: "£", d: 1000 },
   { k: "vat", label: "VAT rate", unit: "%", d: 20 },
   { k: "dst", label: "Digital services fee on fees", unit: "%", d: 2 },
   { k: "inbound", label: "Inbound shipping to FBA", unit: "£/unit", d: 0.30 },
@@ -132,11 +132,20 @@ export const SETTINGS_DEF = [
 
 export type SettingKey = (typeof SETTINGS_DEF)[number]["k"];
 /**
- * The settings; `vatRegistered` (1 or 0) comes from Settings → Business, not from these (and `vat`
- * follows the business's VAT rate). Unset, Gate 6 works as Gatekeeper did: not registered.
+ * The settings; `vatRegistered` (1 or 0) and `budget` (the launch capital) come from Settings →
+ * Business, not from these (and `vat` follows the business's VAT rate). Unset, Gate 6 works as
+ * Gatekeeper did: not registered.
  */
-export type Settings = Record<SettingKey, number> & { vatRegistered?: number };
-export const DEFAULT_SETTINGS = Object.fromEntries(SETTINGS_DEF.map((s) => [s.k, s.d])) as Settings;
+export type Settings = Record<SettingKey, number> & { budget: number; vatRegistered?: number };
+/** Settings → Business → Launch capital, until it's set. */
+export const DEFAULT_LAUNCH_CAPITAL = 1000;
+export const DEFAULT_SETTINGS = { ...Object.fromEntries(SETTINGS_DEF.map((s) => [s.k, s.d])), budget: DEFAULT_LAUNCH_CAPITAL } as Settings;
+
+/** The capital Gate 7 holds this launch to: the candidate's own figure when set, else the business's. */
+export function capitalFor(f: Fields, S: Settings): { amount: number; own: boolean } {
+  const own = num(f.capital);
+  return own != null && own > 0 ? { amount: own, own: true } : { amount: S.budget, own: false };
+}
 
 /** Gatekeeper's sell-price band, unless the candidate sets its own in Gate 0. */
 export const DEFAULT_PRICE_BAND = { min: 18, max: 35 };
@@ -277,7 +286,7 @@ export function econ(f: Fields, S: Settings, cat: string, card: RateCard, date: 
   };
 }
 
-export interface Budget { stock: number | null; sub: number; buffer: number; total: number; budget: number; ratio: number }
+export interface Budget { stock: number | null; sub: number; buffer: number; total: number; budget: number; ratio: number; ownCapital: boolean }
 
 export function budget(f: Fields, S: Settings): Budget | null {
   const units = num(f.units), landed = num(f.landed);
@@ -286,7 +295,8 @@ export function budget(f: Fields, S: Settings): Budget | null {
   const stock = units != null && landed != null ? units * landed : null;
   const sub = (stock || 0) + items.reduce<number>((a, b) => a + (b || 0), 0);
   const total = sub * 1.1;
-  return { stock, sub, buffer: sub * 0.1, total, budget: S.budget, ratio: total / S.budget };
+  const cap = capitalFor(f, S);
+  return { stock, sub, buffer: sub * 0.1, total, budget: cap.amount, ratio: total / cap.amount, ownCapital: cap.own };
 }
 
 /* ===================== gates ===================== */
@@ -378,7 +388,7 @@ export function gateChecks(g: GateId, f: Fields, S: Settings, cat: string, card:
     }
     case "g7": {
       if (!b) { R("Enter the launch lines", E, ""); break; }
-      R(`Whole launch fits ${money(S.budget)} with buffer`, st(b.total <= S.budget, b.total <= S.budget * 1.15), money(b.total));
+      R(`Whole launch fits £${b.budget.toLocaleString("en-GB", { maximumFractionDigits: 2 })} with buffer (${b.ownCapital ? "this launch's capital" : "launch capital, Settings → Business"})`, st(b.total <= b.budget, b.total <= b.budget * 1.15), money(b.total));
       R("Landed cost known (Gate 0)", num(f.landed) == null ? E : "pass", "");
       break;
     }
@@ -423,7 +433,7 @@ export function scorecard(f: Fields, S: Settings, cat: string, card: RateCard, d
   rows.push({ n: 6, label: "Long-tail keywords (300–2,000)", pts: lt == null ? null : lt < 5 ? 0 : lt < 10 ? 1 : lt <= 15 ? 2 : 3, why: ["Under 5", "5–9", "10–15", "15+"] });
   rows.push({ n: 7, label: "Price multiple (sell ÷ landed)", pts: e.multiple == null ? null : e.multiple < 3 ? 0 : e.multiple < 3.5 ? 1 : e.multiple <= 4 ? 2 : 3, why: ["Under 3×", "3–3.5×", "3.5–4×", "Over 4×"], structural: true });
   rows.push({ n: 8, label: "Steady-state net margin", pts: e.mS == null ? null : e.mS < 25 ? 0 : e.mS < 30 ? 1 : e.mS <= 35 ? 2 : 3, why: ["Under 25%", "25–30%", "30–35%", "Over 35%"] });
-  rows.push({ n: 9, label: "Launch fits capital", pts: b == null ? null : b.total > S.budget * 1.15 ? 0 : b.total > S.budget ? 1 : b.total > S.budget * 0.9 ? 2 : 3, why: ["No", "With cuts", "Just", "Comfortably"] });
+  rows.push({ n: 9, label: "Launch fits capital", pts: b == null ? null : b.total > b.budget * 1.15 ? 0 : b.total > b.budget ? 1 : b.total > b.budget * 0.9 ? 2 : 3, why: ["No", "With cuts", "Just", "Comfortably"] });
   let rp: number | null = null;
   if (f.amazonBrand || f.amazonSeller || f.offerTrend || f.bbTrend || t3 != null) {
     const major = f.amazonBrand === "yes" || f.amazonSeller === "yes" || (t3 != null && t3 > 60);

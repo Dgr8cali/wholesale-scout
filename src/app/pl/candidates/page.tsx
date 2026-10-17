@@ -105,7 +105,7 @@ function Candidates() {
           </div>
           <div className="panel p-3 text-xs text-muted-foreground">
             <h2 className="mb-1.5 text-sm font-bold text-foreground">Thresholds</h2>
-            Budget {list.settings.budget.toLocaleString("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: 0 })}, min multiple {list.settings.minMultiple}×, steady margin {list.settings.minSteadyMargin}%.{" "}
+            Launch capital {list.settings.budget.toLocaleString("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: 0 })}, min multiple {list.settings.minMultiple}×, steady margin {list.settings.minSteadyMargin}%.{" "}
             <Link className="font-medium text-brand hover:underline" href="/settings?tab=pl">Change in Settings</Link>
             <p className="mt-2">Rate card: {list.card.name}. Peak rates apply automatically in October–December.</p>
           </div>

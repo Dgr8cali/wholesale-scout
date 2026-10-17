@@ -103,7 +103,7 @@ You type **landed cost** (Gate 0), or write it from a supplier quote (Quotes, ch
 
 ### Gate 7: Launch budget (you)
 
-First order units, samples, inspection, photography, trademark and launch ads. A 10% buffer is added. It must fit your budget.
+First order units, samples, inspection, photography, trademark and launch ads. A 10% buffer is added. The whole launch must fit your capital: **Launch capital (£)** in Settings → Business (default £1,000), or this candidate's own **Capital for this launch (£)** when you set it. The check's label shows the figure in use and where it came from: *Whole launch fits £1,500 with buffer (this launch's capital)*. It passes at or under the capital and warns up to 15% over. Scorecard line 9 (*Launch fits capital*) and the launch checklist's budget bar use the same figure.
 
 ## Gates, scorecard and verdict
 

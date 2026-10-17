@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { UK_RATE_CARD_2026_07 } from "../fees/rateCard";
-import { DEFAULT_SETTINGS, econ, evaluate, GATES, gateChecks, priceBand, scorecard, SETTINGS_DEF, verdict, gateStatus, type Fields, type Settings } from "./gatekeeper";
+import { budget, capitalFor, DEFAULT_SETTINGS, econ, evaluate, GATES, gateChecks, priceBand, scorecard, SETTINGS_DEF, verdict, gateStatus, type Fields, type Settings } from "./gatekeeper";
 
 /**
  * Gatekeeper's own functions, run from docs/gatekeeper-reference.html: everything from the schema
@@ -178,11 +178,12 @@ describe("demand from bought in past month (the port's own rule)", () => {
 describe("Gatekeeper port", () => {
   it("has the same gates, fields and settings", () => {
     // The app's own additions (not in the reference): Gate 4's six words as text, for the RFQ.
-    const APP_ONLY = new Set(["sixWordsText", "bestTermConv", "bandMin", "bandMax", "targetExworks", "maxMoq", "productUnit", "spec"]);
+    const APP_ONLY = new Set(["sixWordsText", "bestTermConv", "bandMin", "bandMax", "targetExworks", "maxMoq", "productUnit", "spec", "capital"]);
     expect(GATES.map((g) => [g.id, g.fields.filter((f) => !APP_ONLY.has(f.k)).map((f) => [f.k, f.type, f.opts ?? null])]))
       .toEqual(ref.GATES.map((g) => [g.id, g.fields.map((f) => [f.k, f.type, f.opts ?? null])]));
-    // Every setting but the Q4 switch (peak rates now follow the date).
-    expect(SETTINGS_DEF.map((s) => [s.k, s.d])).toEqual(ref.SETTINGS_DEF.filter((s) => s.k !== "q4").map((s) => [s.k, s.d]));
+    // Every setting but the Q4 switch (peak rates now follow the date) and the budget (Settings → Business → Launch capital, same default).
+    expect(SETTINGS_DEF.map((s) => [s.k, s.d])).toEqual(ref.SETTINGS_DEF.filter((s) => s.k !== "q4" && s.k !== "budget").map((s) => [s.k, s.d]));
+    expect(DEFAULT_SETTINGS.budget).toBe(ref.SETTINGS_DEF.find((s) => s.k === "budget")!.d);
   });
 
   it("reads the same rate tables as the app's July 2026 card", () => {
@@ -216,7 +217,9 @@ describe("Gatekeeper port", () => {
       });
       // Gatekeeper leaves two details as numbers (it renders them as text); the port keeps text.
       const asText = (rows: unknown[]) => (rows as { detail: unknown }[]).map((x) => ({ ...x, detail: String(x.detail) }));
-      expect(ours.gates.map((g) => g.rows)).toEqual(theirsGates.map((g) => asText(g.rows)));
+      // Gate 7's label shows the capital in whole pounds and says where it came from ("Whole launch fits £1,000 with buffer (launch capital, Settings → Business)"); its own test is below.
+      const sameLabel = (rows: { label: string }[]) => rows.map((x) => ({ ...x, label: x.label.replace(/^Whole launch fits £.* with buffer.*$/, "Whole launch fits capital with buffer") }));
+      expect(ours.gates.map((g) => sameLabel(g.rows))).toEqual(theirsGates.map((g) => sameLabel(asText(g.rows) as unknown as { label: string }[])));
       expect(ours.gates.map((g) => g.status)).toEqual(theirsGates.map((g) => g.status));
       const sc = ref.scorecard(f, S, cat);
       // The app's reads-only lines (search-term conversion) are outside Gatekeeper's ten.
@@ -270,5 +273,30 @@ describe("Gatekeeper port", () => {
     expect(verdict(full, [{ status: "pass" }, { status: "fail" }]).title).toBe("Strong score, but a gate failed");
     expect(verdict(full, [{ status: "pass" }, { status: "warn" }]).title).toBe("Order samples");
     expect(gateStatus(gateChecks("g6", {}, DEFAULT_SETTINGS, "Home Products", card))).toBe("empty");
+  });
+});
+
+describe("Gate 7's capital", () => {
+  const f: Fields = { units: "300", landed: "2.50", samples: "60", inspection: "150", photography: "200", trademark: "170", launchAds: "400" };
+  // (750 + 980) × 1.1 = 1,903.
+  const g7 = (f2: Fields, S: Settings = DEFAULT_SETTINGS) => gateChecks("g7", f2, S, "Home Products", card)[0];
+
+  it("uses the business's launch capital, £1,000 by default, and shows it in the label", () => {
+    expect(capitalFor(f, DEFAULT_SETTINGS)).toEqual({ amount: 1000, own: false });
+    expect(g7(f)).toMatchObject({ label: "Whole launch fits £1,000 with buffer (launch capital, Settings → Business)", status: "fail" });
+    const S = { ...DEFAULT_SETTINGS, budget: 2000 };
+    expect(g7(f, S)).toMatchObject({ label: "Whole launch fits £2,000 with buffer (launch capital, Settings → Business)", status: "pass" });
+    expect(budget(f, S)).toMatchObject({ budget: 2000, ownCapital: false });
+  });
+
+  it("a candidate's own capital takes priority when set", () => {
+    const own = { ...f, capital: "1700" };
+    expect(capitalFor(own, { ...DEFAULT_SETTINGS, budget: 5000 })).toEqual({ amount: 1700, own: true });
+    // 1,903 is within 15% over 1,700: a warning.
+    expect(g7(own, { ...DEFAULT_SETTINGS, budget: 5000 })).toMatchObject({ label: "Whole launch fits £1,700 with buffer (this launch's capital)", status: "warn" });
+    expect(scorecard(own, { ...DEFAULT_SETTINGS, budget: 5000 }, "Home Products", card).rows.find((r) => r.n === 9)!.pts).toBe(1);
+    // Blank or zero falls back to the business's.
+    expect(capitalFor({ ...f, capital: "" }, DEFAULT_SETTINGS).own).toBe(false);
+    expect(capitalFor({ ...f, capital: "0" }, DEFAULT_SETTINGS).own).toBe(false);
   });
 });

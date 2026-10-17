@@ -73,9 +73,9 @@ export async function plSettings(): Promise<Settings> {
   const rows = (must(res, "private label settings") as { key: string; value: number }[]);
   const out = { ...DEFAULT_SETTINGS };
   for (const r of rows) if (r.key in out) out[r.key as keyof Settings] = Number(r.value);
-  // VAT registration and rate are the business's (Settings → Business).
+  // VAT registration and rate, and the launch capital, are the business's (Settings → Business).
   const b = await businessSettings();
-  return { ...out, vat: b.vatRate, vatRegistered: b.vatRegistered ? 1 : 0 };
+  return { ...out, vat: b.vatRate, vatRegistered: b.vatRegistered ? 1 : 0, budget: b.launchCapital };
 }
 
 export async function savePlSettings(input: Partial<Record<string, unknown>>): Promise<Settings> {

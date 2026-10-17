@@ -15,7 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import type { RateCard } from "@/lib/fees/rateCard";
 import { defaultReference, listingAge, monthlySales, priceOf } from "@/lib/pl/fill";
 import { adsDefaults, withAdsDefaults } from "@/lib/pl/adsDefaults";
-import { budget, econ, evaluate, money, pct, referralOptions, type Evaluation, type FieldDef, type GateDef, type GateResult, type Settings, type Status, type Waiver } from "@/lib/pl/gatekeeper";
+import { budget, capitalFor, econ, evaluate, money, pct, referralOptions, type Evaluation, type FieldDef, type GateDef, type GateResult, type Settings, type Status, type Waiver } from "@/lib/pl/gatekeeper";
 import { api } from "@/lib/ui/client";
 import { ago } from "@/lib/ui/when";
 import { TERM_SIGNAL_LABEL } from "@/lib/pl/termConversion";
@@ -202,7 +202,7 @@ export function Workspace({ id, settings, card, adsCpc, onChanged, onDeleted }: 
       <WaiversPanel waivers={data.waivers ?? []} ev={ev} onUnwaive={unwaive} />
       <CandidateExtras
         c={{ id, name: c.name, niche_keyword: c.niche_keyword, category: c.category, sell: fields.sell?.value ? Number(fields.sell.value) : null, fields }}
-        status={c.status as PlStatus} verdictTitle={ev.v.title} budget={settings.budget}
+        status={c.status as PlStatus} verdictTitle={ev.v.title} budget={capitalFor(valuesOf(fields), settings).amount}
         onFieldsChanged={async () => { const d = await load(); if (d) onChanged(id, { fields: d.fields }); }}
         onStatus={(s) => { setData((d) => d && { ...d, candidate: { ...d.candidate, status: s } }); onChanged(id, { status: s }); }} />
       <div className="flex flex-wrap items-center gap-2">
@@ -631,13 +631,13 @@ function GateExtras({ g, data, fields, settings, card, onSave, onAsinsChanged }:
   if (g.id === "g7") {
     const b = budget(f, settings);
     if (!b) return <p className="rounded-lg bg-surface-2 px-3 py-2.5 text-xs text-muted-foreground">Enter the launch lines to total the launch.</p>;
-    const tone: Status = b.total <= settings.budget ? "pass" : b.total <= settings.budget * 1.15 ? "warn" : "fail";
+    const tone: Status = b.total <= b.budget ? "pass" : b.total <= b.budget * 1.15 ? "warn" : "fail";
     return (
       <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
         <Readout label="Stock" value={money(b.stock)} sub="units × landed" />
         <Readout label="Subtotal" value={money(b.sub)} />
         <Readout label="10% buffer" value={money(b.buffer)} />
-        <Readout label="Whole launch" value={money(b.total)} sub={`${(b.ratio * 100).toFixed(0)}% of ${money(settings.budget)}`} tone={tone} />
+        <Readout label="Whole launch" value={money(b.total)} sub={`${(b.ratio * 100).toFixed(0)}% of ${money(b.budget)}${b.ownCapital ? " (this launch)" : ""}`} tone={tone} />
       </div>
     );
   }

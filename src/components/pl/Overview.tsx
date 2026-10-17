@@ -6,7 +6,7 @@ import { SortTh, useSortable } from "@/components/SortableTable";
 import { ErrorState } from "@/components/States";
 import { Skeleton } from "@/components/ui/skeleton";
 import { withAdsDefaults } from "@/lib/pl/adsDefaults";
-import { evaluate } from "@/lib/pl/gatekeeper";
+import { capitalFor, evaluate } from "@/lib/pl/gatekeeper";
 import type { PlStatus } from "@/lib/pl/launch";
 import { priceMultiple } from "@/lib/pl/quotes";
 import { api } from "@/lib/ui/client";
@@ -91,7 +91,7 @@ export function PlOverview({ mode }: { mode: "quotes" | "launch" }) {
           </div>
           <CandidateExtras key={sel.c.id} show={mode}
             c={{ id: sel.c.id, name: sel.c.name, niche_keyword: sel.c.niche_keyword, category: sel.c.category, sell: sel.sell, fields: sel.c.fields }}
-            status={sel.c.status as PlStatus} verdictTitle={sel.ev.v.title} budget={list.settings.budget}
+            status={sel.c.status as PlStatus} verdictTitle={sel.ev.v.title} budget={capitalFor(valuesOf(sel.c.fields), list.settings).amount}
             onFieldsChanged={load} onStatus={() => load()} />
         </div>
       )}

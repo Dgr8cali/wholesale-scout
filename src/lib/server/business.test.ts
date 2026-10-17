@@ -20,7 +20,7 @@ describe("business settings", () => {
   });
 
   it("defaults to VAT registered at 20% and the UK Qogita account", async () => {
-    expect(await businessSettings()).toEqual({ vatRegistered: true, vatRate: 20, qogitaRegion: "UK", priceBasis: "lower90" });
+    expect(await businessSettings()).toEqual({ vatRegistered: true, vatRate: 20, qogitaRegion: "UK", priceBasis: "lower90", launchCapital: 1000 });
   });
 
   it("a change of VAT basis is written into every profile, and loadProfile follows the business", async () => {
@@ -34,7 +34,11 @@ describe("business settings", () => {
     // A profile saved on the old basis still loads on the business's.
     (fake.tables.profiles[0].config as { fees: { vatRegistered: boolean } }).fees.vatRegistered = false;
     expect((await loadProfile("p1")).config.fees.vatRegistered).toBe(true);
-    expect((await saveBusinessSettings({ qogitaRegion: "EU", vatRate: 999 })).settings).toEqual({ vatRegistered: true, vatRate: 20, qogitaRegion: "EU", priceBasis: "lower90" });
+    expect((await saveBusinessSettings({ qogitaRegion: "EU", vatRate: 999 })).settings).toEqual({ vatRegistered: true, vatRate: 20, qogitaRegion: "EU", priceBasis: "lower90", launchCapital: 1000 });
+    // Launch capital: saved when positive, ignored otherwise; no profile is touched.
+    expect(await saveBusinessSettings({ launchCapital: 2500 })).toMatchObject({ settings: { launchCapital: 2500 }, profilesUpdated: 0 });
+    expect((await saveBusinessSettings({ launchCapital: -5 })).settings.launchCapital).toBe(2500);
+    expect((await businessSettings()).launchCapital).toBe(2500);
     // A new price basis is written into every profile too, and loadProfile follows it.
     expect(await saveBusinessSettings({ priceBasis: "current" })).toMatchObject({ settings: { priceBasis: "current" }, profilesUpdated: 2 });
     expect(fake.tables.profiles.every((p) => (p.config as { scoringPrice: string }).scoringPrice === "current")).toBe(true);
