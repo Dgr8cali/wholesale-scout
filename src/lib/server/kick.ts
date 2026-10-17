@@ -1,5 +1,5 @@
 import "server-only";
-import { waitUntil } from "@vercel/functions";
+import { after as waitUntil } from "next/server";
 
 const auth = (): Record<string, string> =>
   process.env.APP_PASSWORD ? { authorization: `Basic ${btoa(`worker:${process.env.APP_PASSWORD}`)}` } : {};

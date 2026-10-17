@@ -2,6 +2,8 @@ import type { NextConfig } from "next";
 import { LEGACY_REDIRECTS } from "./src/lib/workspaces";
 
 const nextConfig: NextConfig = {
+  // Self-hosted (Coolify/Docker): ship only the traced server bundle; see Dockerfile.
+  output: "standalone",
   // The help centre reads its markdown at request time.
   outputFileTracingIncludes: {
     "/help": ["./content/help/**/*"],

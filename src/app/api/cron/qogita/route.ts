@@ -1,4 +1,4 @@
-import { waitUntil } from "@vercel/functions";
+import { after as waitUntil } from "next/server";
 import type { NextRequest } from "next/server";
 import { handle } from "@/lib/server/http";
 import { bearerIs } from "@/lib/server/secrets";
