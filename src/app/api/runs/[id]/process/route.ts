@@ -17,8 +17,10 @@ const GIVE_UP_MS = 60 * 60_000;
  */
 export const POST = handle(async (req: NextRequest, ctx: { params: Promise<{ id: string }> }) => {
   const { id } = await ctx.params;
-  // 40 s of work inside the 60 s limit; processRun won't start a batch it can't finish.
-  const progress = await processRun(id, { budgetMs: 40_000 });
+  // 40 s of work inside Vercel's 60 s limit by default. Self-hosted there is no limit: set
+  // RUN_BUDGET_MS (e.g. 600000 for 10 minutes) and a call keeps working, waiting for Keepa
+  // tokens in place, instead of parking every waiting row and calling itself again each minute.
+  const progress = await processRun(id, { budgetMs: Number(process.env.RUN_BUDGET_MS) || 40_000 });
   // Hand on only under a lease; without one, two workers could take the same rows.
   // Not its turn on Keepa and nothing else to do: it waits; the run ahead hands over when done.
   const waitingForTurn = progress.keepaTurn && !progress.keepaTurn.mine && progress.waiting.amazon === 0;

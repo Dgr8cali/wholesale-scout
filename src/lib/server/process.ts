@@ -1295,7 +1295,7 @@ export async function processRun(runId: string, opts: { budgetMs?: number } = {}
     }
 
     // Park what's left, with what it has collected so far.
-    await mapLimit([...q.lookup, ...q.keepa, ...q.account], 10, (row) => safely(row, () => park(row)));
+    await parkAll(runId, [...q.lookup, ...q.keepa, ...q.account]);
   } finally {
     const p = await runProgress(runId);
     // A watchlist re-check that just finished: record the conditions and send the digest (once).
@@ -1351,18 +1351,35 @@ function route(row: Row, q: Queues, env: StageEnv) {
 }
 
 /** Save a row that's still in progress: its inputs so far, still pending. */
-async function park(row: Row) {
-  const inputs: StoredInputs = {
+function parkedInputs(row: Row): StoredInputs {
+  return {
     v: 1, stage: row.stage, match: row.match, market: row.market, hazmat: row.hazmat,
     restriction: row.restriction, amazonFees: row.amazonFees, lookup: row.lookup, sellers: row.sellers, notes: row.dataNotes,
     qogita: row.qogita,
   };
-  must(await db().from("results").update({ inputs, status: "pending", updated_at: new Date().toISOString() }).eq("id", row.resultId), "park");
 }
 
-/** Save verdicts in parallel. */
-async function finishAll(items: { row: Row; run: GateRun; ctx: ScreenContext }[], cfg: ProfileConfig) {
-  await mapLimit(items, 10, ({ row, run, ctx }) => safely(row, () => finalize(row, run, cfg, ctx)));
+async function park(row: Row) {
+  must(await db().from("results").update({ inputs: parkedInputs(row), status: "pending", updated_at: new Date().toISOString() }).eq("id", row.resultId), "park");
+}
+
+/**
+ * Park many rows in one request per 200 (an upsert on id updates only the columns given), so a
+ * budget's end costs a handful of requests rather than one per waiting row. A batch that fails
+ * falls back to parking its rows one by one, so one bad row never loses the others.
+ */
+async function parkAll(runId: string, rows: Row[]) {
+  for (const c of chunks(rows, 200)) {
+    const now = new Date().toISOString();
+    const payload = c.map((row) => ({ id: row.resultId, run_id: runId, product_id: row.product.id, inputs: parkedInputs(row), status: "pending", updated_at: now }));
+    const res = await db().from("results").upsert(payload, { onConflict: "id" });
+    if (res.error) await mapLimit(c, 10, (row) => safely(row, () => park(row)));
+  }
+}
+
+/** Save verdicts: one request per 200 rows (saveResults), falling back to one by one on a failed batch. */
+async function finishAll(runId: string, items: { row: Row; run: GateRun; ctx: ScreenContext }[], cfg: ProfileConfig) {
+  await saveResults(runId, items, cfg);
   return items.length;
 }
 
@@ -1530,7 +1547,7 @@ async function stageLookup(rows: Row[], env: StageEnv): Promise<StageOut & { add
     else next.push(row);
   }
 
-  const finished = await finishAll(done, cfg);
+  const finished = await finishAll(env.runId, done, cfg);
   const added = addedIds.length
     ? await loadRows(must(await d.from("results").select("id, product_id, offer_id, inputs").in("id", addedIds), "added") as PendingRow[], maxAgeMs(cfg))
     : [];
@@ -1616,7 +1633,7 @@ async function stageKeepa(rows: Row[], env: StageEnv): Promise<StageOut & { defe
     if (mid.failedGate && !env.fetchAll) done.push({ row, run: mid, ctx });
     else next.push(row);
   }
-  return { finished: await finishAll(done, cfg), next, deferred, waitUntil, tokens };
+  return { finished: await finishAll(env.runId, done, cfg), next, deferred, waitUntil, tokens };
 }
 
 /** Stage 3: your account — gating in parallel, Amazon's fees 20 at a time, sellers, verdict. */
@@ -1733,7 +1750,7 @@ async function stageAccount(rows: Row[], env: StageEnv): Promise<StageOut> {
     const ctx = context(row, card, rules, cfg, approved);
     return { row, run: runGates(ctx, cfg), ctx };
   });
-  return { finished: await finishAll(done, cfg), next: stage2 };
+  return { finished: await finishAll(env.runId, done, cfg), next: stage2 };
 }
 
 /**
