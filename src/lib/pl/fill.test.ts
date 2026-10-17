@@ -139,3 +139,40 @@ describe("Opportunity Explorer", () => {
     expect([growthBand(-8), growthBand(2), growthBand(12), growthBand(null)]).toEqual(["declining", "flat", "growing", null]);
   });
 });
+
+describe("Gate 1's review depth reads the newest third of page one", () => {
+  // Six incumbents from 2018 with 2,000 reviews, three entrants from 2025–26 selling beside them.
+  const old = Array.from({ length: 6 }, (_, i) => asin({ asin: `B0OLD0000${i}`, position: i + 1, review_count: 2000, first_seen: "2018-03-01T00:00:00Z" }));
+  const young = [
+    asin({ asin: "B0NEW00001", position: 7, review_count: 300, first_seen: "2025-11-01T00:00:00Z" }),
+    asin({ asin: "B0NEW00002", position: 8, review_count: 250, first_seen: "2026-02-01T00:00:00Z" }),
+    asin({ asin: "B0NEW00003", position: 9, review_count: 120, first_seen: "2026-05-01T00:00:00Z" }),
+  ];
+
+  it("scores the newest third, not the incumbents, and the caption shows both reads", () => {
+    const r = reviewsBand([...old, ...young])!;
+    expect(r.value).toBe("2");
+    expect(r.why).toBe("Newest third (3 of 9): most 200–500 (0 over 1,000 · 0 500–1,000 · 2 200–500 · 1 under 200) · all listings: most over 1,000");
+  });
+
+  it("takes at least 3 listings, and a third (rounded up) of a longer page", () => {
+    expect(reviewsBand([old[0], ...young])!.why).toMatch(/^Newest third \(3 of 4\)/);
+    const twelve = [...old, ...young, ...old.slice(0, 3).map((a, i) => ({ ...a, asin: `B0MID0000${i}`, first_seen: "2024-01-01T00:00:00Z" }))];
+    expect(reviewsBand(twelve)!.why).toMatch(/^Newest third \(4 of 12\): most 200–500 \(1 over 1,000/);
+  });
+
+  it("keeps the 150-a-month qualifier: two entrants under 200 selling 150+ is 'several under 200 selling well'", () => {
+    const sellers = [young[0], { ...young[1], review_count: 90 }, { ...young[2], review_count: 60 }];
+    expect(reviewsBand([...old, ...sellers])!.value).toBe("3");
+  });
+
+  it("falls back to all listings when first-seen dates are missing for more than a third, and says so", () => {
+    const undated = [...old.slice(0, 2), ...old.slice(2).map((a) => ({ ...a, first_seen: null })), ...young];
+    const r = reviewsBand(undated)!;
+    expect(r.value).toBe("0");
+    expect(r.why).toBe("All listings (first-seen dates missing for 4 of 9): most over 1,000 (6 over 1,000 · 0 500–1,000 · 2 200–500 · 1 under 200)");
+    // Exactly a third undated: still the newest third of the dated ones.
+    const third = [...old.slice(0, 3), ...old.slice(3).map((a) => ({ ...a, first_seen: null })), ...young];
+    expect(reviewsBand(third)!.why).toMatch(/^Newest third \(3 of 9\): most 200–500/);
+  });
+});

@@ -157,11 +157,19 @@ export async function getCandidate(id: string) {
   if (!candidate) return null;
   const list = (must(asins, "asins") as Record<string, unknown>[]).map(asinRow);
   const latestPoe = ((must(poe, "poe") as PoeSnapshot[])[0]) ?? null;
-  const fields = (await fieldsOf([id])).get(id) ?? {};
+  let fields = (await fieldsOf([id])).get(id) ?? {};
   const waivers = (await waiversOf([id])).get(id) ?? [];
   // Why each automatic value is what it is, worked out again from the stored data.
   const why: Record<string, string> = {};
-  for (const [k, v] of Object.entries(keepaFill(list, priceBand(valuesOfFields(fields))))) why[k] = v.why;
+  const fresh = keepaFill(list, priceBand(valuesOfFields(fields)));
+  for (const [k, v] of Object.entries(fresh)) why[k] = v.why;
+  // Gate 1's review depth is read from the newest third of page one (Oct 2026): a band filled from
+  // Keepa under the old all-listings read is brought in line from the stored ASINs (never yours).
+  const rb = fields.reviewsBand;
+  if (fresh.reviewsBand && rb && rb.source === "keepa" && rb.value !== fresh.reviewsBand.value) {
+    await applyAuto(id, { reviewsBand: fresh.reviewsBand }, "keepa");
+    fields = (await fieldsOf([id])).get(id) ?? {};
+  }
   if (latestPoe) for (const [k, v] of Object.entries(poeFill(latestPoe as unknown as PoeExtract))) why[k] = v.why;
   const ref = list.find((a) => a.is_reference) ?? list[0];
   return { candidate, fields, asins: list, poe: latestPoe, why, waivers, refRank: ref ? await rankYear(ref.asin) : null };

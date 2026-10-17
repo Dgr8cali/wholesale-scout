@@ -45,8 +45,8 @@ export const GATES: GateDef[] = [
   { id: "g1", n: "1", title: "Find the market", tool: "Keepa · page-one ASINs",
     blurb: "The top listings for the niche. You are judging whether {capital} can buy a place on page one.",
     fields: [
-      // Fixed bands, whatever the capital: see reviewsBand() in fill.ts for the proposals (not applied).
-      { k: "reviewsBand", label: "Reviews on page one", type: "sel", opts: [["", "—"], ["0", "Most over 1,000"], ["1", "Most 500–1,000"], ["2", "Most 200–500"], ["3", "Several under 200 selling well"]] },
+      // Read from the newest third of page one by first-seen date (fill.ts reviewsBand); Gatekeeper's bands, unchanged.
+      { k: "reviewsBand", label: "Reviews on page one", type: "sel", opts: [["", "—"], ["0", "Newest third: most over 1,000"], ["1", "Newest third: most 500–1,000"], ["2", "Newest third: most 200–500"], ["3", "Newest third: several under 200 selling well"]] },
       { k: "avgRating", label: "Average rating, page one", type: "num", step: "0.1", hint: "3.8–4.3 leaves room" },
       { k: "top10Sales", label: "Top-10 monthly sales, each", type: "num", unit: "units", hint: "Median of the listings" },
       { k: "top3Share", label: "Top 3 revenue share", type: "num", unit: "%", hint: "Under 50%" },
@@ -339,7 +339,7 @@ export function gateChecks(g: GateId, f: Fields, S: Settings, cat: string, card:
     }
     case "g1": {
       const rb = f.reviewsBand === "" || f.reviewsBand == null ? null : +f.reviewsBand, ar = num(f.avgRating), ts = num(f.top10Sales), t3 = num(f.top3Share);
-      R("Page-one reviews mostly under 500", rb == null ? E : st(rb >= 2, rb >= 1), "");
+      R("Page-one reviews mostly under 500 (newest third)", rb == null ? E : st(rb >= 2, rb >= 1), "");
       R("Average rating 3.8–4.3", ar == null ? E : st(ar >= 3.8 && ar <= 4.3, ar >= 3.6 && ar <= 4.5), ar == null ? "" : ar.toFixed(1));
       R("Top-10 each 300+ / month", ts == null ? E : st(ts >= 300, ts >= 150), ts == null ? "" : fmt(ts));
       R("Top 3 hold under 50%", t3 == null ? E : st(t3 <= 50, t3 <= 60), t3 == null ? "" : `${t3}%`);
@@ -430,7 +430,7 @@ export function scorecard(f: Fields, S: Settings, cat: string, card: RateCard, d
   const rd = num(f.rankDrops), sv = num(f.sv360), lt = num(f.longtail), t3 = num(f.top3Share), fc = num(f.fixCostPct);
   const band = (v: number | null, cuts: number[]) => (v == null ? null : v < cuts[0] ? 0 : v < cuts[1] ? 1 : v < cuts[2] ? 2 : 3);
   const rows: ScoreRow[] = [];
-  rows.push({ n: 1, label: "Page-one review depth", pts: rb, why: ["Most over 1,000", "Most 500–1,000", "Most 200–500", "Several under 200 selling well"], structural: true });
+  rows.push({ n: 1, label: "Page-one review depth", pts: rb, why: ["Newest third: most over 1,000", "Newest third: most 500–1,000", "Newest third: most 200–500", "Newest third: several under 200 selling well"], structural: true });
   const bought = num(f.bought);
   rows.push(bought != null
     ? { n: 2, label: "Demand (bought in past month)", pts: band(bought, [50, 200, 500]), why: ["Under 50/mo", "50–199", "200–499", "500+"] }
@@ -467,8 +467,9 @@ export function verdict(sc: Scorecard, gates: { status: Status }[]): Verdict {
   if (sc.total >= 24 && fails === 0) return { cls: "pass", title: "Order samples", text: `${sc.total}/30 with every gate clear. Get three quotes, order samples from two suppliers, and decide the differentiation before the container ships.` };
   if (sc.total >= 24) return { cls: "warn", title: "Strong score, but a gate failed", text: `${sc.total}/30 — yet ${fails} gate${fails > 1 ? "s" : ""} failed outright. Fix the failing gate or drop it; the score doesn't override a failed gate.` };
   if (sc.total >= 18) {
-    const weakStructural = sc.rows.filter((r) => r.structural && r.pts != null && r.pts <= 1).map((r) => r.n);
-    if (weakStructural.length) return { cls: "fail", title: "Drop it", text: `${sc.total}/30, and the weak lines are structural (${weakStructural.join(", ")}). Review depth, demand stability, price multiple and competitive risk can't be fixed by trying harder.` };
+    // Only the structural lines that actually scored low (0 or 1), by name, not all four.
+    const weak = sc.rows.filter((r) => r.structural && r.pts != null && r.pts <= 1);
+    if (weak.length) return { cls: "fail", title: "Drop it", text: `${sc.total}/30, and the weak line${weak.length > 1 ? "s are" : " is"} structural: ${weak.map((r) => `${r.n}. ${r.label} (${r.pts}/3)`).join(", ")}. ${weak.length > 1 ? "They" : "It"} can't be fixed by trying harder.` };
     return { cls: "warn", title: "Samples only if you can move the weak lines", text: `${sc.total}/30. The low scores are on lines you can influence (volume, keywords, budget). Improve them or drop it — don't order on hope.` };
   }
   return { cls: "fail", title: "Drop it", text: `${sc.total}/30. However much you like it.` };

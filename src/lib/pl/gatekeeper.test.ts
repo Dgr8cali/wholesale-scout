@@ -179,7 +179,9 @@ describe("Gatekeeper port", () => {
   it("has the same gates, fields and settings", () => {
     // The app's own additions (not in the reference): Gate 4's six words as text, for the RFQ.
     const APP_ONLY = new Set(["sixWordsText", "bestTermConv", "bandMin", "bandMax", "targetExworks", "maxMoq", "productUnit", "spec", "capital"]);
-    expect(GATES.map((g) => [g.id, g.fields.filter((f) => !APP_ONLY.has(f.k)).map((f) => [f.k, f.type, f.opts ?? null])]))
+    // Gate 1's review bands read the newest third of page one: same bands, labels say so.
+    const opts = (o: string[][] | undefined) => o?.map(([v, l]) => [v, l.replace(/^Newest third: m/, "M").replace(/^Newest third: s/, "S")]) ?? null;
+    expect(GATES.map((g) => [g.id, g.fields.filter((f) => !APP_ONLY.has(f.k)).map((f) => [f.k, f.type, opts(f.opts as string[][] | undefined)])]))
       .toEqual(ref.GATES.map((g) => [g.id, g.fields.map((f) => [f.k, f.type, f.opts ?? null])]));
     // Every setting but the Q4 switch (peak rates now follow the date) and the budget (Settings → Business → Launch capital, same default).
     expect(SETTINGS_DEF.map((s) => [s.k, s.d])).toEqual(ref.SETTINGS_DEF.filter((s) => s.k !== "q4" && s.k !== "budget").map((s) => [s.k, s.d]));
@@ -218,13 +220,18 @@ describe("Gatekeeper port", () => {
       // Gatekeeper leaves two details as numbers (it renders them as text); the port keeps text.
       const asText = (rows: unknown[]) => (rows as { detail: unknown }[]).map((x) => ({ ...x, detail: String(x.detail) }));
       // Gate 7's label shows the capital in whole pounds and says where it came from ("Whole launch fits £1,000 with buffer (launch capital, Settings → Business)"); its own test is below.
-      const sameLabel = (rows: { label: string }[]) => rows.map((x) => ({ ...x, label: x.label.replace(/^Whole launch fits £.* with buffer.*$/, "Whole launch fits capital with buffer") }));
+      // Gate 1's review check says it reads the newest third.
+      const sameLabel = (rows: { label: string }[]) => rows.map((x) => ({ ...x, label: x.label.replace(/^Whole launch fits £.* with buffer.*$/, "Whole launch fits capital with buffer").replace(" (newest third)", "") }));
       expect(ours.gates.map((g) => sameLabel(g.rows))).toEqual(theirsGates.map((g) => sameLabel(asText(g.rows) as unknown as { label: string }[])));
       expect(ours.gates.map((g) => g.status)).toEqual(theirsGates.map((g) => g.status));
       const sc = ref.scorecard(f, S, cat);
       // The app's reads-only lines (search-term conversion) are outside Gatekeeper's ten.
-      expect({ ...ours.sc, rows: ours.sc.rows.filter((r) => !r.info) }).toEqual(sc);
-      expect(ours.v).toEqual(ref.verdict(sc, theirsGates));
+      const why = (rows: { why: string[] }[]) => rows.map((r) => ({ ...r, why: r.why.map((w) => w.replace(/^Newest third: m/, "M").replace(/^Newest third: s/, "S")) }));
+      expect({ ...ours.sc, rows: why(ours.sc.rows.filter((r) => !r.info)) }).toEqual(sc);
+      // The structural "Drop it" names only the weak structural lines; same class and title.
+      const theirV = ref.verdict(sc, theirsGates) as { cls: string; title: string; text: string };
+      if (/structural/.test(theirV.text)) expect({ ...ours.v, text: ours.v.text.split(", and the weak")[0] }).toEqual({ ...theirV, text: theirV.text.split(", and the weak")[0] });
+      else expect(ours.v).toEqual(theirV);
 
       const e = econ(f, ours_S, cat, card, date), t = ref.econ(f, S, cat);
       expect(e?.peak ?? peakOn(date)).toBe(peakOn(date));
@@ -316,5 +323,23 @@ describe("copy follows the effective capital", () => {
     for (const g of GATES) expect(gateBlurb(g, {}, { ...DEFAULT_SETTINGS, budget: 4200 }), g.id).not.toMatch(/£1,000|{capital}/);
     expect(capitalText(1000)).toBe("£1,000");
     expect(capitalText(1250.5)).toBe("£1,250.50");
+  });
+});
+
+describe("the verdict names only the weak structural lines", () => {
+  const rows = scorecard({}, DEFAULT_SETTINGS, "Home Products", card).rows.filter((r) => !r.info);
+  const with_ = (pts: Record<number, number>) => ({ rows: rows.map((r) => ({ ...r, pts: pts[r.n] ?? 2 })), total: 20, answered: 10 });
+
+  it("lists the structural lines that scored 0 or 1, not all four", () => {
+    const v = verdict(with_({ 1: 1, 3: 3, 7: 3, 10: 3 }), [{ status: "pass" }]);
+    expect(v).toMatchObject({ cls: "fail", title: "Drop it" });
+    expect(v.text).toBe("20/30, and the weak line is structural: 1. Page-one review depth (1/3). It can't be fixed by trying harder.");
+    expect(v.text).not.toMatch(/demand stability|price multiple|competitive risk/i);
+    const two = verdict(with_({ 1: 1, 3: 3, 7: 0, 10: 2 }), [{ status: "pass" }]);
+    expect(two.text).toBe("20/30, and the weak lines are structural: 1. Page-one review depth (1/3), 7. Price multiple (sell ÷ landed) (0/3). They can't be fixed by trying harder.");
+  });
+
+  it("no weak structural line: the movable-lines verdict", () => {
+    expect(verdict(with_({ 1: 2, 3: 3, 7: 2, 10: 2 }), [{ status: "pass" }]).title).toBe("Samples only if you can move the weak lines");
   });
 });

@@ -48,7 +48,7 @@ An automatic field is read-only, with the figures it came from underneath it. Cl
 
 | Field | How it's filled |
 |---|---|
-| Reviews on page one | From the review counts: most over 1,000; else most 500 or more; else, when two or more listings under 200 reviews each sell 150+ a month, "several under 200 selling well"; else "most 200–500". "Most" means more than half. |
+| Reviews on page one | From the review counts of the **newest third** of the page-one listings by the date Keepa first saw them (at least 3 listings; a third rounded up on a longer page), so a page of old incumbents with new entrants selling beside them is judged on the entrants. The bands are Gatekeeper's: most over 1,000; else most 500 or more; else, when two or more of those listings under 200 reviews each sell 150+ a month, "several under 200 selling well"; else "most 200–500". "Most" means more than half. The caption shows both reads, such as *Newest third (3 of 8): most 200–500 · all listings: most over 500*. When first-seen dates are missing for more than a third of the listings, it reads all of them and the caption says so (*All listings (first-seen dates missing for 4 of 9): …*). Gate 1's **Page-one reviews mostly under 500** check and scorecard line 1 use the same read. |
 | Average rating | The mean of the listings' star ratings. |
 | Top-10 monthly sales, each | The median of the listings' sales a month. A listing's sales follow the wholesale rule: a fast seller (90-day average rank under 5,000) uses Amazon's bought-in-past-month, because rank drops undercount it. Otherwise it's the highest of rank drops (90-day ÷ 3), Keepa's 30-day drops and bought-in-past-month. |
 | Top 3 revenue share | The top three listings' share of the listings' summed monthly sales. With three ASINs or fewer this is always 100%, so add more. |
@@ -118,7 +118,7 @@ The **verdict** appears once all ten lines are scored:
 | **Order samples** | 24 or more with no gate failed. |
 | **Strong score, but a gate failed** | 24 or more, but at least one gate failed. Fix the gate or drop it. |
 | **Samples only if you can move the weak lines** | 18–23, and the weak lines (1 point or less) aren't structural. |
-| **Drop it** | 18–23 with a weak structural line, or under 18. |
+| **Drop it** | 18–23 with a weak structural line, or under 18. The verdict names only the structural lines that scored 1 point or less, with their score (*1. Page-one review depth (1/3)*), not all four. |
 
 ### Waiving a gate
 

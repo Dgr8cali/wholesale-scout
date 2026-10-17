@@ -31,9 +31,13 @@ default; moved from Private label's `budget` setting by migration 20261017000100
 line 9 and the launch budget bar, overridden per candidate by Gate 7's "Capital for this launch (£)"
 field (`capital`, `capitalFor()`; the check's label shows the figure and its source). Copy follows the
 effective capital too (`gateBlurb()` fills Gate 1's "{capital}", `capitalText()`; the Candidates intro
-uses the business figure). Proposals in comments, not applied: review-depth bands (fill.ts
-reviewsBand: dampened sqrt scale, or preferably a newest-third / under-600-selling read of page one),
-max first order from capital × 0.6 ÷ landed (supplierScore.ts maxMoqOf), RFQ tiers from it (quotes.ts). VAT registered (default yes) and rate (20%),
+uses the business figure). Gate 1's review depth (fill.ts reviewsBand) reads the newest third of page one by first_seen
+(at least 3 listings; all listings, said in the caption, when > ⅓ lack first_seen), Gatekeeper's bands
+and 150/month qualifier unchanged; the caption shows both reads; the check, dropdown labels and
+scorecard line 1 say "newest third". A Keepa-filled band saved under the old read is refilled
+from the stored ASINs when the candidate is opened (candidateDetail; never over a manual value), so
+the candidate list shows the old band for a candidate until it's opened or Keepa-refreshed. The structural "Drop it" verdict names only the structural lines
+scoring ≤ 1. Proposals in comments, not applied: max first order from capital × 0.6 ÷ landed (supplierScore.ts maxMoqOf), RFQ tiers from it (quotes.ts). VAT registered (default yes) and rate (20%),
 written into every screening profile's fees and applied by loadProfile, and to Private label's
 settings (Gate 6: revenue ÷ 1.2, fees ex-VAT with DSF, margins on revenue, VAT payable as info; a
 quote's landed cost excludes the reclaimed import VAT). `profitOnVatBasis` is the rule; results store

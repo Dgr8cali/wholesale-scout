@@ -74,28 +74,41 @@ export function monthlySales(a: PlAsin): { value: number | null; why: string } {
 /** The listing's price: the Buy Box, else the lowest new offer. */
 export const priceOf = (a: PlAsin) => a.buybox_price ?? a.price;
 
-/*
- * Proposal, not applied (Oct 2026): these bands (1,000 / 500 / 200 reviews, 150 a month) are fixed
- * at Gatekeeper's £1,000 launch. Review barriers don't scale 1:1 with money (£3,000 doesn't climb
- * 3,000-review listings), so not linear scaling. Two alternatives:
- *  (a) dampened scale: bands × sqrt(effective capital ÷ 1000), capped at 2×, rounded to the nearest
- *      50 (£2,000 → 1,400 / 700 / 300; £4,000+ → 2,000 / 1,000 / 400);
- *  (b) preferred: keep the bands fixed but read page one differently: score review depth on the
- *      newest third of page one (by first_seen), or on "listings under 600 reviews selling 1,000+ a
- *      month", so a bimodal page (old incumbents and new entrants both selling) isn't scored as
- *      "most over 1,000".
- * The option labels (Gate 1's field) and scorecard line 1's reasons in gatekeeper.ts must follow.
- */
-export function reviewsBand(asins: PlAsin[]): Filled | null {
+/** The bands in words, for the caption ("most 200–500"). */
+const BAND_WORDS = ["most over 1,000", "most over 500", "most 200–500", "several under 200 selling well"];
+
+/** One read of page one's reviews: the band (Gatekeeper's: over 1,000 / 500+ / several under 200 selling 150+ a month / else 200–500). */
+function bandOf(asins: PlAsin[]): { value: string; dist: string } | null {
   const counts = asins.map((a) => a.review_count).filter((c): c is number => c != null);
   if (!counts.length) return null;
   const share = (pred: (c: number) => boolean) => counts.filter(pred).length / counts.length;
   const under200Selling = asins.filter((a) => a.review_count != null && a.review_count < 200 && (monthlySales(a).value ?? 0) >= 150).length;
   const dist = `${counts.filter((c) => c > 1000).length} over 1,000 · ${counts.filter((c) => c >= 500 && c <= 1000).length} 500–1,000 · ${counts.filter((c) => c >= 200 && c < 500).length} 200–500 · ${counts.filter((c) => c < 200).length} under 200`;
-  if (share((c) => c > 1000) > 0.5) return { value: "0", why: `Most over 1,000 (${dist})` };
-  if (share((c) => c >= 500) > 0.5) return { value: "1", why: `Most 500 or more (${dist})` };
-  if (under200Selling >= 2) return { value: "3", why: `${under200Selling} listings under 200 reviews sell 150+ a month (${dist})` };
-  return { value: "2", why: `Most under 500 (${dist})` };
+  const value = share((c) => c > 1000) > 0.5 ? "0" : share((c) => c >= 500) > 0.5 ? "1" : under200Selling >= 2 ? "3" : "2";
+  return { value, dist };
+}
+
+/**
+ * Gate 1's review depth, read from the newest third of page one by first-seen date (at least 3
+ * listings), so a page of old incumbents with new entrants selling beside them isn't scored on the
+ * incumbents. The bands are Gatekeeper's, unchanged. With first-seen dates missing for more than a
+ * third of the listings, it reads all of them and says so. The caption shows both reads:
+ * "Newest third (3 of 8): most 200–500 · all listings: most over 500".
+ */
+export function reviewsBand(asins: PlAsin[]): Filled | null {
+  const withCounts = asins.filter((a) => a.review_count != null);
+  const all = bandOf(withCounts);
+  if (!all) return null;
+  const n = withCounts.length;
+  const undated = withCounts.filter((a) => !a.first_seen || !Number.isFinite(Date.parse(a.first_seen))).length;
+  if (undated > n / 3) {
+    return { value: all.value, why: `All listings (first-seen dates missing for ${undated} of ${n}): ${BAND_WORDS[+all.value]} (${all.dist})` };
+  }
+  const take = Math.min(n, Math.max(3, Math.ceil(n / 3)));
+  const newest = withCounts.filter((a) => a.first_seen && Number.isFinite(Date.parse(a.first_seen)))
+    .sort((a, b) => Date.parse(b.first_seen!) - Date.parse(a.first_seen!) || a.position - b.position).slice(0, take);
+  const read = bandOf(newest)!;
+  return { value: read.value, why: `Newest third (${newest.length} of ${n}): ${BAND_WORDS[+read.value]} (${read.dist}) · all listings: ${BAND_WORDS[+all.value]}` };
 }
 
 /** The fields Gate 2 takes from the reference listing (what changing the reference re-runs). */
