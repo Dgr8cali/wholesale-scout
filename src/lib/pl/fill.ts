@@ -74,6 +74,18 @@ export function monthlySales(a: PlAsin): { value: number | null; why: string } {
 /** The listing's price: the Buy Box, else the lowest new offer. */
 export const priceOf = (a: PlAsin) => a.buybox_price ?? a.price;
 
+/*
+ * Proposal, not applied (Oct 2026): these bands (1,000 / 500 / 200 reviews, 150 a month) are fixed
+ * at Gatekeeper's £1,000 launch. Review barriers don't scale 1:1 with money (£3,000 doesn't climb
+ * 3,000-review listings), so not linear scaling. Two alternatives:
+ *  (a) dampened scale: bands × sqrt(effective capital ÷ 1000), capped at 2×, rounded to the nearest
+ *      50 (£2,000 → 1,400 / 700 / 300; £4,000+ → 2,000 / 1,000 / 400);
+ *  (b) preferred: keep the bands fixed but read page one differently: score review depth on the
+ *      newest third of page one (by first_seen), or on "listings under 600 reviews selling 1,000+ a
+ *      month", so a bimodal page (old incumbents and new entrants both selling) isn't scored as
+ *      "most over 1,000".
+ * The option labels (Gate 1's field) and scorecard line 1's reasons in gatekeeper.ts must follow.
+ */
 export function reviewsBand(asins: PlAsin[]): Filled | null {
   const counts = asins.map((a) => a.review_count).filter((c): c is number => c != null);
   if (!counts.length) return null;

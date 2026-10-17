@@ -1,11 +1,11 @@
 ---
 title: "Private label: how Gatekeeper works"
-summary: Should ~£1,000 launch your own product into a niche? Eight gates, a 10-line scorecard and a verdict, with Keepa and Opportunity Explorer filling most of the numbers.
+summary: Should your launch capital (default £1,000) launch your own product into a niche? Eight gates, a 10-line scorecard and a verdict, with Keepa and Opportunity Explorer filling most of the numbers.
 synonyms: [gatekeeper, private label, pl, own brand, product launch, niche research, opportunity explorer, poe, scorecard, launch budget]
 route: /pl
 order: 7
 ---
-Private label answers one question: should you spend about £1,000 launching your own product into this niche? It is Gatekeeper, moved into Wholesale Scout, with two changes to the fees so they agree with the rest of the app: storage carries VAT and the digital services fee, and peak rates follow the calendar (see [Gate 6](#gate-6-unit-economics-the-rate-card-then-you)). A candidate must clear **every gate** and **score well**. A good score never overrides a failed gate.
+Private label answers one question: should you spend your launch capital (default £1,000) launching your own product into this niche? The capital is **Launch capital (£)** in Settings → Business, or a candidate's own **Capital for this launch (£)** in Gate 7; Gate 1's description and the Candidates page show the figure in use. It is Gatekeeper, moved into Wholesale Scout, with two changes to the fees so they agree with the rest of the app: storage carries VAT and the digital services fee, and peak rates follow the calendar (see [Gate 6](#gate-6-unit-economics-the-rate-card-then-you)). A candidate must clear **every gate** and **score well**. A good score never overrides a failed gate.
 
 You used to type about 45 numbers per candidate from Jungle Scout, Keepa and Seller Central. Here Keepa and the Chrome extension fill most of them. Jungle Scout isn't used.
 

@@ -194,7 +194,13 @@ export function targetExworks(f: { targetExworks?: string | null; landed?: strin
   return f.landed && Number.isFinite(landed) && landed > 0 ? { value: Math.round((landed / 1.4) * 100) / 100, derived: true } : { value: null, derived: true };
 }
 
-/** The most we'd order first: Gate 6's own, else 1,000. */
+/**
+ * The most we'd order first: Gate 6's own, else 1,000.
+ * Proposal, not applied (Oct 2026): derive the default from the launch instead of a fixed 1,000:
+ * effective capital (capitalFor) × 0.6 (stock's share of a launch, Gate 7) ÷ landed cost, at least
+ * 100, rounded down to the nearest 50 (£1,000 at £2.50 landed → 240 → 200). Needs the capital and
+ * landed cost passed in; quotes.ts's RFQ tiers would follow it.
+ */
 export const maxMoqOf = (f: { maxMoq?: string | null }) => {
   const n = Number(f.maxMoq);
   return f.maxMoq && Number.isFinite(n) && n > 0 ? Math.round(n) : 1000;

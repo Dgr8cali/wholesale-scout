@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { UK_RATE_CARD_2026_07 } from "../fees/rateCard";
-import { budget, capitalFor, DEFAULT_SETTINGS, econ, evaluate, GATES, gateChecks, priceBand, scorecard, SETTINGS_DEF, verdict, gateStatus, type Fields, type Settings } from "./gatekeeper";
+import { budget, capitalFor, capitalText, DEFAULT_SETTINGS, gateBlurb, econ, evaluate, GATES, gateChecks, priceBand, scorecard, SETTINGS_DEF, verdict, gateStatus, type Fields, type Settings } from "./gatekeeper";
 
 /**
  * Gatekeeper's own functions, run from docs/gatekeeper-reference.html: everything from the schema
@@ -298,5 +298,23 @@ describe("Gate 7's capital", () => {
     // Blank or zero falls back to the business's.
     expect(capitalFor({ ...f, capital: "" }, DEFAULT_SETTINGS).own).toBe(false);
     expect(capitalFor({ ...f, capital: "0" }, DEFAULT_SETTINGS).own).toBe(false);
+  });
+});
+
+describe("copy follows the effective capital", () => {
+  const g1 = GATES.find((g) => g.id === "g1")!;
+
+  it("Gate 1's description names the candidate's capital: its own, else the business's", () => {
+    expect(g1.blurb).not.toMatch(/£1,000/);
+    expect(gateBlurb(g1, {}, DEFAULT_SETTINGS)).toBe("The top listings for the niche. You are judging whether £1,000 can buy a place on page one.");
+    expect(gateBlurb(g1, {}, { ...DEFAULT_SETTINGS, budget: 2500 })).toMatch(/whether £2,500 can buy/);
+    expect(gateBlurb(g1, { capital: "1750.5" }, { ...DEFAULT_SETTINGS, budget: 2500 })).toMatch(/whether £1,750\.50 can buy/);
+    expect(gateBlurb(g1, { capital: "" }, { ...DEFAULT_SETTINGS, budget: 3000 })).toMatch(/whether £3,000 can buy/);
+  });
+
+  it("no gate's copy hardcodes £1,000 any more", () => {
+    for (const g of GATES) expect(gateBlurb(g, {}, { ...DEFAULT_SETTINGS, budget: 4200 }), g.id).not.toMatch(/£1,000|{capital}/);
+    expect(capitalText(1000)).toBe("£1,000");
+    expect(capitalText(1250.5)).toBe("£1,250.50");
   });
 });

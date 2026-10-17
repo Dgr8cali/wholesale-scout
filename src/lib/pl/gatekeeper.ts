@@ -43,8 +43,9 @@ export const GATES: GateDef[] = [
       { k: "differentiable", label: "Differentiable without re-tooling?", type: "yn" },
     ] },
   { id: "g1", n: "1", title: "Find the market", tool: "Keepa · page-one ASINs",
-    blurb: "The top listings for the niche. You are judging whether £1,000 can buy a place on page one.",
+    blurb: "The top listings for the niche. You are judging whether {capital} can buy a place on page one.",
     fields: [
+      // Fixed bands, whatever the capital: see reviewsBand() in fill.ts for the proposals (not applied).
       { k: "reviewsBand", label: "Reviews on page one", type: "sel", opts: [["", "—"], ["0", "Most over 1,000"], ["1", "Most 500–1,000"], ["2", "Most 200–500"], ["3", "Several under 200 selling well"]] },
       { k: "avgRating", label: "Average rating, page one", type: "num", step: "0.1", hint: "3.8–4.3 leaves room" },
       { k: "top10Sales", label: "Top-10 monthly sales, each", type: "num", unit: "units", hint: "Median of the listings" },
@@ -140,6 +141,15 @@ export type Settings = Record<SettingKey, number> & { budget: number; vatRegiste
 /** Settings → Business → Launch capital, until it's set. */
 export const DEFAULT_LAUNCH_CAPITAL = 1000;
 export const DEFAULT_SETTINGS = { ...Object.fromEntries(SETTINGS_DEF.map((s) => [s.k, s.d])), budget: DEFAULT_LAUNCH_CAPITAL } as Settings;
+
+/** A capital figure in whole pounds where it is whole: "£1,000", "£1,250.50". */
+export const capitalText = (amount: number) => {
+  const d = Number.isInteger(amount) ? 0 : 2;
+  return `£${amount.toLocaleString("en-GB", { minimumFractionDigits: d, maximumFractionDigits: d })}`;
+};
+
+/** A gate's description, with "{capital}" as this candidate's effective capital (its own, else the business's). */
+export const gateBlurb = (g: Pick<GateDef, "blurb">, f: Fields, S: Settings) => g.blurb.replaceAll("{capital}", capitalText(capitalFor(f, S).amount));
 
 /** The capital Gate 7 holds this launch to: the candidate's own figure when set, else the business's. */
 export function capitalFor(f: Fields, S: Settings): { amount: number; own: boolean } {
@@ -388,7 +398,7 @@ export function gateChecks(g: GateId, f: Fields, S: Settings, cat: string, card:
     }
     case "g7": {
       if (!b) { R("Enter the launch lines", E, ""); break; }
-      R(`Whole launch fits £${b.budget.toLocaleString("en-GB", { maximumFractionDigits: 2 })} with buffer (${b.ownCapital ? "this launch's capital" : "launch capital, Settings → Business"})`, st(b.total <= b.budget, b.total <= b.budget * 1.15), money(b.total));
+      R(`Whole launch fits ${capitalText(b.budget)} with buffer (${b.ownCapital ? "this launch's capital" : "launch capital, Settings → Business"})`, st(b.total <= b.budget, b.total <= b.budget * 1.15), money(b.total));
       R("Landed cost known (Gate 0)", num(f.landed) == null ? E : "pass", "");
       break;
     }

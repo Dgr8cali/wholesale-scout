@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
-import { evaluate, referralOptions } from "@/lib/pl/gatekeeper";
+import { capitalText, evaluate, referralOptions } from "@/lib/pl/gatekeeper";
 import { withAdsDefaults } from "@/lib/pl/adsDefaults";
 import { priceMultiple } from "@/lib/pl/quotes";
 import { api } from "@/lib/ui/client";
@@ -59,7 +59,7 @@ function Candidates() {
     <div className="space-y-4">
       <div>
         <h1 className="page-title">Candidates</h1>
-        <p className="text-sm text-muted-foreground">Should ~£1,000 launch your own product into this niche? A candidate must clear every gate <em>and</em> score well; a good score never overrides a failed gate.</p>
+        <p className="text-sm text-muted-foreground">Should ~{list ? capitalText(list.settings.budget) : "your launch capital"} launch your own product into this niche? A candidate must clear every gate <em>and</em> score well; a good score never overrides a failed gate.</p>
       </div>
       <div className="grid items-start gap-5 lg:grid-cols-[260px_1fr]">
         <aside className="flex flex-col gap-3.5 lg:sticky lg:top-[calc(var(--app-header,56px)+12px)]">

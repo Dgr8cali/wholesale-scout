@@ -119,6 +119,8 @@ export function rfqText(x: { name: string; nicheKeyword?: string | null; categor
     ...(x.weightG ? [`- Packed weight about ${x.weightG} g`] : []),
     `- My logo on the product and the packaging (please say how: print, engraving or label, and any extra cost)`,
     ``,
+    // Proposal, not applied (Oct 2026): tiers from the max first order (supplierScore.ts maxMoqOf's
+    // proposed capital-based default, M): round(M ÷ 2), M and 2 × M, each rounded to the nearest 50.
     `Quantities: please quote the unit price (ex-works, and FOB if you can) at 300, 500 and 1,000 units, with your MOQ.`,
     ``,
     `Packaging`,

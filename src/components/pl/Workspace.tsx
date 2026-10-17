@@ -15,7 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import type { RateCard } from "@/lib/fees/rateCard";
 import { defaultReference, listingAge, monthlySales, priceOf } from "@/lib/pl/fill";
 import { adsDefaults, withAdsDefaults } from "@/lib/pl/adsDefaults";
-import { budget, capitalFor, econ, evaluate, money, pct, referralOptions, type Evaluation, type FieldDef, type GateDef, type GateResult, type Settings, type Status, type Waiver } from "@/lib/pl/gatekeeper";
+import { budget, capitalFor, econ, gateBlurb, evaluate, money, pct, referralOptions, type Evaluation, type FieldDef, type GateDef, type GateResult, type Settings, type Status, type Waiver } from "@/lib/pl/gatekeeper";
 import { api } from "@/lib/ui/client";
 import { ago } from "@/lib/ui/when";
 import { TERM_SIGNAL_LABEL } from "@/lib/pl/termConversion";
@@ -179,7 +179,7 @@ export function Workspace({ id, settings, card, adsCpc, onChanged, onDeleted }: 
           </div>
           {open.has(g.id) && (
             <div className={cn("flex flex-col gap-3.5 border-l-[3px] px-4 pt-3.5 pb-4", TONE[status].border)}>
-              <p className="max-w-[70ch] text-sm text-ink-2">{g.blurb}</p>
+              <p className="max-w-[70ch] text-sm text-ink-2">{gateBlurb(g, valuesOf(fields), settings)}</p>
               <div className="grid grid-cols-1 gap-x-3.5 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
                 {g.fields.map((fd) => (
                   <FieldRow key={fd.k} def={fd} field={fields[fd.k]} why={data.why[fd.k]} onSave={saveField}
