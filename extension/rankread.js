@@ -2,6 +2,8 @@
 // run's progress panel with its Stop button. Injected by ranks.js; nothing here runs on its own.
 (() => {
   if (globalThis.__wsRank) return;
+  // The mark (the app's public/logo.svg); this script runs without shared.js.
+  const LOGO = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="16" height="16"><rect width="64" height="64" rx="14" fill="#2F7F8C"/><circle cx="27" cy="27" r="15" fill="none" stroke="#fff" stroke-width="5"/><line x1="38" y1="38" x2="51" y2="51" stroke="#fff" stroke-width="6" stroke-linecap="round"/><rect x="19" y="28" width="4" height="7" rx="1" fill="#F2B544"/><rect x="25" y="24" width="4" height="11" rx="1" fill="#F2B544"/><rect x="31" y="19" width="4" height="16" rx="1" fill="#F2B544"/></svg>';
   const isSponsored = (el) =>
     el.classList.contains("AdHolder")
     || !!el.querySelector(".puis-sponsored-label-text, .s-sponsored-label-text, .puis-sponsored-label-info-icon, a[href*='/sspa/click'], [data-component-type='sp-sponsored-result']")
@@ -36,7 +38,7 @@
     const head = s.running
       ? `Checking ${done + 1} of ${s.keywords.length}: “${esc(s.keywords[Math.min(done, s.keywords.length - 1)] || "")}”${s.status ? `<div style="color:#71717a">${esc(s.status)}</div>` : ""}`
       : s.stopped ? `Stopped after ${done} of ${s.keywords.length}.` : `Done: ${done} of ${s.keywords.length} checked.`;
-    el.innerHTML = `<div style="font-weight:700;margin-bottom:4px">Wholesale Scout · rank check ${esc(s.asin)}</div>
+    el.innerHTML = `<div style="font-weight:700;margin-bottom:4px;display:flex;align-items:center;gap:6px"><span style="display:inline-flex;width:16px;height:16px">${LOGO}</span>Wholesale Scout · rank check ${esc(s.asin)}</div>
       <div style="margin-bottom:6px">${head}</div>
       ${s.error ? `<div style="color:#b91c1c;margin-bottom:6px">${esc(s.error)}</div>` : ""}
       ${!s.running && s.saved != null ? `<div style="color:#15803d;margin-bottom:6px">Saved ${s.saved} to the app.</div>` : ""}

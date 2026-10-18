@@ -1,13 +1,14 @@
 import { AlertTriangleIcon, RotateCwIcon } from "lucide-react";
 import type { ReactNode } from "react";
+import { Logo } from "@/components/Logo";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-/** Nothing here yet: an icon, what's missing, what to do about it. */
+/** Nothing here yet: an icon (the logo when none fits better), what's missing, what to do about it. */
 export function EmptyState({ icon, title, children, action, className }: { icon?: ReactNode; title: ReactNode; children?: ReactNode; action?: ReactNode; className?: string }) {
   return (
     <div className={cn("panel flex flex-col items-center gap-3 px-6 py-14 text-center", className)}>
-      {icon && <span className="flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground [&_svg]:size-5">{icon}</span>}
+      {icon ? <span className="flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground [&_svg]:size-5">{icon}</span> : <Logo size={40} className="opacity-90" />}
       <div className="max-w-md">
         <p className="section-title">{title}</p>
         {children && <p className="mt-1 text-sm text-muted-foreground">{children}</p>}

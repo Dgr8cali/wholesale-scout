@@ -71,7 +71,7 @@
       .concat(unread ? [`stars not read ${unread}`] : []).join(" · ");
     const low = list.filter((r) => r.stars != null && r.stars <= 3).length;
     p.replaceChildren(
-      ws.h("strong", { text: "Wholesale Scout · Private label" }),
+      ws.brand("Wholesale Scout · Private label"),
       ws.h("div", { text: `${cap.asin}: ${list.length} review${list.length === 1 ? "" : "s"} captured over ${cap.pages.length} page${cap.pages.length === 1 ? "" : "s"}${onPage != null ? ` (${onPage} on this page)` : ""}.` }),
       stars ? ws.h("div", { style: "color:#52525b;font-size:12px", text: `${stars}. Gate 4 mines the ${low} at 1–3★.` }) : null,
       ws.h("div", { style: "color:#71717a;font-size:12px", text: "Click through more pages (filter to critical reviews for Gate 4) and they're added here. Nothing is sent until you click." }),

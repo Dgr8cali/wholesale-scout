@@ -32,7 +32,7 @@
         ws.h("input", { type: "radio", name: "ws-dg", value, checked: status === value, onchange: () => { status = value; } }), label,
       ]);
       bar.replaceChildren(
-        ws.h("strong", { text: `Wholesale Scout · DG for ${asin}:` }),
+        ws.brand(`Wholesale Scout · DG for ${asin}:`),
         choice("hazmat", "Hazmat"), choice("not_hazmat", "Not hazmat"), choice("unknown", "Unknown"),
         ws.h("span", { style: "color:#71717a;flex:1;min-width:200px;font-size:12px", text: detail ? `Read on the page: “${detail}”` : "Nothing found yet: pick what Seller Central says." }),
         ws.h("button", {

@@ -98,7 +98,7 @@
   function render() {
     panel.replaceChildren();
     const top = ws.h("div", { class: "row between" }, [
-      ws.h("strong", { text: "Wholesale Scout" }),
+      ws.brand("Wholesale Scout"),
       ws.h("button", { class: "b", title: "Collapse", text: "×", onclick: toggle }),
     ]);
     panel.append(top);

@@ -4,6 +4,7 @@ import { SearchIcon } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { usePageCrumbs } from "@/components/Crumbs";
+import { Logo } from "@/components/Logo";
 import { Input } from "@/components/ui/input";
 import { anchor, HELP_WORKSPACES, search, type SearchDoc } from "@/lib/help/catalog";
 
@@ -15,7 +16,7 @@ export function HelpHome({ docs, sections }: { docs: SearchDoc[]; sections: stri
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <div className="space-y-1">
-        <h1 className="page-title">Help</h1>
+        <h1 className="page-title flex items-center gap-2.5"><Logo size={32} /> Help</h1>
         <p className="text-sm text-muted-foreground">How each page, gate and number works, written from the app as it is. Every page&apos;s <b>?</b> (top bar) opens its article.</p>
       </div>
       <div className="relative">

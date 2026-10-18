@@ -36,7 +36,7 @@
     const cand = await remembered();
     const p = shell();
     p.replaceChildren(
-      ws.h("strong", { text: "Wholesale Scout · Supplier Scout" }),
+      ws.brand("Wholesale Scout · Supplier Scout"),
       ws.h("div", { text: `${seen} supplier listing${seen === 1 ? "" : "s"} on this page${r.tradeAssurance ? " (Trade Assurance filter on)" : ""}.` }),
       r.unparsed.length ? ws.h("div", { style: "color:#b45309;font-size:12px", text: `${r.unparsed.length} card${r.unparsed.length === 1 ? "" : "s"} couldn't be read (logged in the console).` }) : null,
       ws.h("div", { style: "color:#71717a;font-size:12px", text: "Send each results page you want: they add up on the candidate. Nothing is sent until you click." }),

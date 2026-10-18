@@ -5,9 +5,11 @@ it (what's built, the backlog, the rough edges). Last updated: 9 Oct 2026 (Price
 
 Wholesale Scout is a single-user Amazon UK seller's workbench: Next.js 16 (App Router, `proxy.ts`
 password gate), Supabase (Postgres, RLS on, service-role access from the server only), Vercel
-hosting, a Chrome extension (`extension/`, 0.5.6), and the Help centre in `content/help`. It has
+hosting, a Chrome extension (`extension/`, 0.6.0), and the Help centre in `content/help`. It has
 four workspaces (switch at the top of the sidebar, Alt+Shift+W); Home, Settings and Help are
 shared.
+
+**Logo** (18 Oct 2026): the master mark is `public/logo.svg` (teal tile, magnifier, amber bars), drawn by `<Logo size>` (`src/components/Logo.tsx`, alt "Wholesale Scout") in the sidebar header, the Help centre header, and as the default mark of an `EmptyState` given no icon. Favicon and app icons by Next's file conventions: `src/app/favicon.ico` (16/32/48), `icon.svg`, `apple-icon.png` (180, full-bleed teal: iOS rounds it), and `manifest.ts` (Wholesale Scout / Scout, theme #2F7F8C, `public/icon-192.png` and `icon-512.png`). The proxy serves those files without the password (a browser fetches the manifest without credentials). The extension (0.6.0) uses the same mark: `extension/icons/` 16/32/48/128 for its icon and toolbar button, the popup's heading, and a 16 px mark in every panel heading (built as SVG nodes, so no page's CSP blocks it). There's no login page to put it on: the password is the browser's own Basic-auth dialog.
 
 ## Workspaces
 

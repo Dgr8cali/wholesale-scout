@@ -95,7 +95,7 @@
     const { title } = describe();
     const isSent = niche && sent === niche;
     p.replaceChildren(
-      ws.h("strong", { text: "Wholesale Scout · Private label" }),
+      ws.brand("Wholesale Scout · Private label"),
       niche
         ? ws.h("div", { text: `Niche captured: ${title || "title not found (sent anyway)"}` })
         : ws.h("div", { style: "color:#b45309", text: "No niche data yet. Open a niche; its page loads it (getNiche)." }),

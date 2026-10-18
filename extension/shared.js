@@ -30,6 +30,21 @@
       setTimeout(() => note.remove(), 12_000);
     } catch { /* the page went away */ }
   };
+  /** The Wholesale Scout mark (the app's public/logo.svg), built as SVG nodes so no page's CSP or Trusted Types can block it. */
+  ws.logo = (size = 16) => {
+    const NS = "http://www.w3.org/2000/svg";
+    const el = (tag, attrs) => { const n = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v); return n; };
+    const svg = el("svg", { viewBox: "0 0 64 64", width: size, height: size, role: "img", "aria-label": "Wholesale Scout", style: "flex:none;vertical-align:middle" });
+    svg.append(
+      el("rect", { width: 64, height: 64, rx: 14, fill: "#2F7F8C" }),
+      el("circle", { cx: 27, cy: 27, r: 15, fill: "none", stroke: "#fff", "stroke-width": 5 }),
+      el("line", { x1: 38, y1: 38, x2: 51, y2: 51, stroke: "#fff", "stroke-width": 6, "stroke-linecap": "round" }),
+      ...[[19, 28, 7], [25, 24, 11], [31, 19, 16]].map(([x, y, h]) => el("rect", { x, y, width: 4, height: h, rx: 1, fill: "#F2B544" })),
+    );
+    return svg;
+  };
+  /** A panel's heading: the mark, then "Wholesale Scout · …". */
+  ws.brand = (text) => { const s = document.createElement("strong"); s.style.cssText = "display:inline-flex;align-items:center;gap:6px"; s.append(ws.logo(16), document.createTextNode(text)); return s; };
   /** A message to the extension; never throws: { ok: false, error: "stale" } once it's gone. */
   ws.send = (msg) => new Promise((resolve) => {
     const stale = () => { ws.staleNotice(); resolve({ ok: false, error: "stale" }); };

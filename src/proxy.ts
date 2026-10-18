@@ -77,6 +77,8 @@ function timingSafeEqual(a: string, b: string) {
   return diff === 0;
 }
 
+// The logo, icons and web manifest are served without the password: browsers fetch the manifest
+// without credentials, and they're only the public mark.
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon\\.svg|apple-icon\\.png|icon-192\\.png|icon-512\\.png|logo\\.svg|manifest\\.webmanifest).*)"],
 };

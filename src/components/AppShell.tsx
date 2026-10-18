@@ -8,6 +8,7 @@ import {
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, Fragment, useCallback, useContext, useEffect, useState, type ComponentType, type CSSProperties, type ReactNode } from "react";
+import { Logo } from "@/components/Logo";
 import { WorkspaceSwitcher } from "@/components/WorkspaceSwitcher";
 import { isSwitchShortcut, nextWorkspace, SHARED_NAV, workspace, workspaceCookie, workspaceForPath, type NavItem, type WorkspaceId } from "@/lib/workspaces";
 import { CrumbsProvider, useCrumbs } from "@/components/Crumbs";
@@ -110,7 +111,7 @@ function AppSidebar() {
           <SidebarMenuItem>
             <SidebarMenuButton asChild size="lg" tooltip="Wholesale Scout">
               <Link href="/">
-                <span className="flex size-8 flex-none items-center justify-center rounded-lg bg-brand text-sm font-bold text-brand-foreground">WS</span>
+                <Logo size={32} />
                 <span className="truncate font-semibold tracking-tight">Wholesale Scout</span>
               </Link>
             </SidebarMenuButton>
