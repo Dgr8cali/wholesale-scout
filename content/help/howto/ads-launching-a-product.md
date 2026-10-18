@@ -25,12 +25,12 @@ Start from an **Ads product** or a **private-label candidate**:
 
 | Campaign | Targets | Bid | Budget |
 |---|---|---|---|
-| **<ASIN> Auto – <date>** | Close match and substitutes on; loose match and complements off | × 1.0 | 30% |
-| **<ASIN> Broad – <date>** | The head terms, broad | × 0.8 | 20% |
-| **<ASIN> Exact – <date>** | The head terms, exact | × 1.0 | 40% |
-| **<ASIN> PT – <date>** | The competitor ASINs (product targeting) | × 0.9 | 10% |
+| **<ASIN> Auto - <date>** | Close match and substitutes on; loose match and complements off | × 1.0 | 30% |
+| **<ASIN> Broad - <date>** | The head terms, broad | × 0.8 | 20% |
+| **<ASIN> Exact - <date>** | The head terms, exact | × 1.0 | 40% |
+| **<ASIN> PT - <date>** | The competitor ASINs (product targeting) | × 0.9 | 10% |
 
-Each has one ad group with the product ad, "Dynamic bids – down only", and a top-of-search adjustment of 0% to start. With no head terms or no competitors, that campaign is left out and its share of the budget goes to the others. Amazon's minimum is £1 a day per campaign.
+Each has one ad group with the product ad, "Dynamic bids - down only", and a top-of-search adjustment of 0% to start ("Placement Top"). Names and Amazon's fixed values are written in plain ASCII, with a hyphen, not a dash: Amazon rejects any other character there ("invalid characters"), and the sheet isn't written if one slips in. With no head terms or no competitors, that campaign is left out and its share of the budget goes to the others. Amazon's minimum is £1 a day per campaign.
 
 **Create launch sheet** saves it under [Proposals → Exports](/help/howto/ads-rules-and-proposals) as a Launch batch, to download and upload in Campaign manager → Bulk operations → Upload. New campaigns have no IDs yet, so the sheet links its rows by the campaign's and ad group's names, as Amazon's bulk format allows.
 

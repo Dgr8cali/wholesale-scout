@@ -184,6 +184,43 @@ export type BulkChange =
 
 const money = (n: number) => n.toFixed(2);
 
+/**
+ * The bidding strategy as the upload takes it: "Dynamic bids - down only", "Dynamic bids - up and
+ * down", "Fixed bid". Amazon's export writes them with an en dash, which the upload rejects, so a
+ * strategy read from an import is mapped back here.
+ */
+export function uploadStrategy(s: string): string {
+  const plain = s.replace(/[\u2010-\u2015\u2212]/g, "-").replace(/\s+/g, " ").trim();
+  const known = ["Dynamic bids - down only", "Dynamic bids - up and down", "Fixed bid"].find((k) => k.toLowerCase() === plain.toLowerCase());
+  return known ?? plain;
+}
+
+const PLACEMENTS: Record<string, string> = { top: "Top", "rest of search": "Rest Of Search", "product page": "Product Page", "amazon business": "Amazon Business" };
+/** "top" or the export's "Placement top" → the upload's "Placement Top". */
+export function uploadPlacement(p: string): string {
+  const key = p.replace(/^placement\s+/i, "").trim().toLowerCase();
+  return `Placement ${PLACEMENTS[key] ?? key.replace(/\b\w/g, (c) => c.toUpperCase())}`;
+}
+
+/** Columns Amazon matches exactly (names, IDs standing in for new entities' names, and fixed values): ASCII only. */
+const ASCII_COLUMNS: BulkColumn[] = ["Product", "Entity", "Operation", "Campaign ID", "Ad group ID", "Campaign name", "Ad group name", "State", "Targeting type", "Match type", "Bidding strategy", "Placement"];
+
+/**
+ * What would make Amazon reject the upload: a character outside ASCII in a name or a fixed-value
+ * column (an en dash in a campaign name is "invalid characters"). Empty when the sheet is fine.
+ */
+export function bulkProblems(changes: BulkChange[]): string[] {
+  const out = new Set<string>();
+  for (const r of changes.flatMap(bulkRows)) {
+    for (const k of ASCII_COLUMNS) {
+      const v = r[k];
+      const bad = v ? [...v].filter((ch) => ch.charCodeAt(0) > 0x7e || ch.charCodeAt(0) < 0x20) : [];
+      if (bad.length) out.add(`${r.Entity} ${k} "${v}" has ${[...new Set(bad)].map((ch) => `"${ch}" (U+${ch.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0")})`).join(", ")}: Amazon accepts only plain ASCII there`);
+    }
+  }
+  return [...out];
+}
+
 type BulkRow = Partial<Record<BulkColumn, string>>;
 
 /** A change as rows of BULK_COLUMNS: only the columns Amazon reads for it; informational columns blank. */
@@ -191,8 +228,8 @@ export function bulkRows(c: BulkChange): BulkRow[] {
   if (c.kind === "create_campaign") {
     const p = { Product: "Sponsored Products", Operation: "Create", "Campaign ID": c.name };
     return [
-      { ...p, Entity: "Campaign", "Campaign name": c.name, "Start date": c.startDate.replace(/-/g, ""), "Targeting type": c.targetingType ?? "Manual", State: "enabled", "Daily budget": money(c.dailyBudget), "Bidding strategy": c.biddingStrategy },
-      ...(c.placements ?? []).map((x) => ({ ...p, Entity: "Bidding adjustment", "Bidding strategy": c.biddingStrategy, Placement: x.placement.startsWith("Placement") ? x.placement : `Placement ${x.placement}`, Percentage: String(Math.round(x.percentage)) })),
+      { ...p, Entity: "Campaign", "Campaign name": c.name, "Start date": c.startDate.replace(/-/g, ""), "Targeting type": c.targetingType ?? "Manual", State: "enabled", "Daily budget": money(c.dailyBudget), "Bidding strategy": uploadStrategy(c.biddingStrategy) },
+      ...(c.placements ?? []).map((x) => ({ ...p, Entity: "Bidding adjustment", "Bidding strategy": uploadStrategy(c.biddingStrategy), Placement: uploadPlacement(x.placement), Percentage: String(Math.round(x.percentage)) })),
       { ...p, Entity: "Ad group", "Ad group ID": c.adGroupName, "Ad group name": c.adGroupName, State: "enabled", "Ad Group Default Bid": money(c.defaultBid) },
       { ...p, Entity: "Product ad", "Ad group ID": c.adGroupName, SKU: c.sku, State: "enabled" },
       ...c.keywords.map((k) => ({ ...p, Entity: "Keyword", "Ad group ID": c.adGroupName, "Keyword text": k.text, "Match type": k.matchType, Bid: money(k.bid), State: "enabled" })),
@@ -217,7 +254,7 @@ function bulkRow(c: Exclude<BulkChange, { kind: "create_campaign" }>): BulkRow {
     case "campaign_state":
       return { ...base, Entity: "Campaign", Operation: "Update", State: c.state };
     case "placement":
-      return { ...base, Entity: "Bidding adjustment", Operation: "Update", "Bidding strategy": c.biddingStrategy, Placement: c.placement.startsWith("Placement") ? c.placement : `Placement ${c.placement}`, Percentage: String(Math.round(c.percentage)) };
+      return { ...base, Entity: "Bidding adjustment", Operation: "Update", "Bidding strategy": uploadStrategy(c.biddingStrategy), Placement: uploadPlacement(c.placement), Percentage: String(Math.round(c.percentage)) };
     case "create_keyword":
       return { ...base, Entity: "Keyword", Operation: "Create", "Ad group ID": c.adGroupId, "Keyword text": c.text, "Match type": c.matchType, Bid: money(c.bid), State: "enabled" };
     case "create_negative":
@@ -245,6 +282,8 @@ export const BULK_UPLOAD_SHEETS = [BULK_CAMPAIGNS_SHEET] as const;
  * whole upload (docs/samples/ads/bulk-error-report.xlsx), so the export's other sheets are left out.
  */
 export function writeBulk(changes: BulkChange[]): XLSX.WorkBook {
+  const problems = bulkProblems(changes);
+  if (problems.length) throw new Error(`The bulk sheet would be rejected: ${problems.join("; ")}`);
   const wb = XLSX.utils.book_new();
   const rows = changes.flatMap(bulkRows).map((r) => BULK_COLUMNS.map((k) => r[k] ?? ""));
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([[...BULK_COLUMNS], ...rows]), BULK_CAMPAIGNS_SHEET);

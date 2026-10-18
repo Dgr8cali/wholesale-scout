@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import * as XLSX from "xlsx";
-import { BULK_CAMPAIGNS_SHEET, BULK_COLUMNS, BULK_UPLOAD_SHEETS, bulkRangeFromFileName, parseBulk, writeBulk, writeBulkFile } from "./bulk";
+import { BULK_CAMPAIGNS_SHEET, BULK_COLUMNS, BULK_UPLOAD_SHEETS, bulkProblems, bulkRangeFromFileName, parseBulk, uploadPlacement, uploadStrategy, writeBulk, writeBulkFile, type BulkChange } from "./bulk";
 import { buildLaunch } from "./launch";
 
 const file = readFileSync(join(__dirname, "../../../docs/samples/ads/bulk-template.xlsx"));
@@ -93,7 +93,7 @@ describe("writeBulk (Phase 2's upload)", () => {
     expect(rows.map((r) => `${r.Entity}/${r.Operation}`)).toEqual(["Keyword/Update", "Keyword/Update", "Campaign/Update", "Bidding adjustment/Update", "Keyword/Create", "Negative keyword/Create"]);
     for (const r of rows) for (const k of BULK_COLUMNS.filter((c) => /Informational only|^(Impressions|Clicks|Spend|Sales|Orders|Units|ACOS|CPC|ROAS)$/.test(c))) expect(r[k]).toBe("");
     expect(rows[0]).toMatchObject({ "Keyword ID": "2", Bid: "0.45", "Campaign ID": AD_READY });
-    expect(rows[3]).toMatchObject({ Placement: "Placement top", Percentage: "25" });
+    expect(rows[3]).toMatchObject({ Placement: "Placement Top", Percentage: "25" });
   });
 
   it("reads back through the parser", () => {
@@ -139,5 +139,45 @@ describe("writeBulk: new campaigns and product targeting", () => {
     expect(rows[0]).toMatchObject({ "Start date": "20261003", "Targeting type": "Manual", "Daily budget": "5.00" });
     expect(rows[3]).toMatchObject({ "Keyword text": "pill box", "Match type": "Exact", Bid: "0.67" });
     expect(rows[4]).toMatchObject({ "Product Targeting ID": "8", Bid: "0.20" });
+  });
+});
+
+// Amazon's second rejection: "campaign name has invalid characters" (an en dash), and the export's
+// en-dash bidding strategy isn't a value the upload takes.
+describe("the upload's exact values, ASCII only", () => {
+  const camp = (over: Partial<Extract<BulkChange, { kind: "create_campaign" }>> = {}): BulkChange => ({
+    kind: "create_campaign", name: "B0HM8FBX3T Auto - 2026-10-19", dailyBudget: 3.33, biddingStrategy: "Dynamic bids – down only", startDate: "2026-10-19",
+    adGroupName: "Auto ad group", defaultBid: 0.4, sku: "SKU-1", keywords: [], targetingType: "Auto", placements: [{ placement: "top", percentage: 0 }], ...over,
+  });
+
+  it("maps the export's strategies and placements to the upload's", () => {
+    expect(uploadStrategy("Dynamic bids – down only")).toBe("Dynamic bids - down only");
+    expect(uploadStrategy("Dynamic bids — up and down")).toBe("Dynamic bids - up and down");
+    expect(uploadStrategy("fixed bid")).toBe("Fixed bid");
+    expect(["top", "Placement top", "rest of search", "product page", "Amazon Business"].map(uploadPlacement))
+      .toEqual(["Placement Top", "Placement Top", "Placement Rest Of Search", "Placement Product Page", "Placement Amazon Business"]);
+  });
+
+  it("writes a campaign from imported (en-dash) values with plain hyphens", () => {
+    const rows = XLSX.utils.sheet_to_json<Record<string, string>>(writeBulk([camp()]).Sheets[BULK_CAMPAIGNS_SHEET], { defval: "", raw: false });
+    expect(rows.slice(0, 2).map((r) => [r.Entity, r["Bidding strategy"], r.Placement])).toEqual([["Campaign", "Dynamic bids - down only", ""], ["Bidding adjustment", "Dynamic bids - down only", "Placement Top"]]);
+    const placement = { kind: "placement" as const, campaignId: "1", biddingStrategy: "Dynamic bids – up and down", placement: "rest of search", percentage: 10 };
+    expect(bulkProblems([camp(), placement])).toEqual([]);
+  });
+
+  it("rejects a non-ASCII character in a name or fixed value before export, and says which", () => {
+    const bad = camp({ name: "B0HM8FBX3T Auto – 2026-10-19" });
+    expect(bulkProblems([bad])[0]).toBe('Campaign Campaign ID "B0HM8FBX3T Auto – 2026-10-19" has "–" (U+2013): Amazon accepts only plain ASCII there');
+    expect(bulkProblems([bad]).some((p) => p.includes("Campaign name"))).toBe(true);
+    expect(bulkProblems([camp({ adGroupName: "Café group" })]).some((p) => p.startsWith('Ad group Ad group name "Café group"'))).toBe(true);
+    expect(() => writeBulk([bad])).toThrow(/would be rejected/);
+    // Keyword text isn't a name: a keyword can be any word shoppers type.
+    expect(bulkProblems([{ kind: "create_keyword", campaignId: "1", adGroupId: "g", text: "café pill box", matchType: "Exact", bid: 0.5 }])).toEqual([]);
+  });
+
+  it("a launch sheet has no problems", () => {
+    const l = buildLaunch({ asin: "B0HM8FBX3T", sku: "SKU-1", price: 9.99, competitorAsins: ["B0AAAAAAA1"], dailyBudget: 10, targetAcos: 0.3, steadyTargetAcos: null, startingBid: 0.4, startDate: "2026-10-19", headTerms: ["lens wipes"] });
+    expect(l.campaigns.map((c) => c.name)).toEqual(["B0HM8FBX3T Auto - 2026-10-19", "B0HM8FBX3T Broad - 2026-10-19", "B0HM8FBX3T Exact - 2026-10-19", "B0HM8FBX3T PT - 2026-10-19"]);
+    expect(bulkProblems(l.changes)).toEqual([]);
   });
 });

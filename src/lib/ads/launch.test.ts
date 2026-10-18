@@ -12,8 +12,8 @@ describe("buildLaunch", () => {
   const l = buildLaunch(dog);
   it("four campaigns, budget 30/20/40/10, bids × 1 / 0.8 / 1 / 0.9", () => {
     expect(l.campaigns.map((c) => [c.name, c.budget, c.bid])).toEqual([
-      ["B0H9ZH3RV5 Auto – 2026-10-05", 6, 0.44], ["B0H9ZH3RV5 Broad – 2026-10-05", 4, 0.35],
-      ["B0H9ZH3RV5 Exact – 2026-10-05", 8, 0.44], ["B0H9ZH3RV5 PT – 2026-10-05", 2, 0.4],
+      ["B0H9ZH3RV5 Auto - 2026-10-05", 6, 0.44], ["B0H9ZH3RV5 Broad - 2026-10-05", 4, 0.35],
+      ["B0H9ZH3RV5 Exact - 2026-10-05", 8, 0.44], ["B0H9ZH3RV5 PT - 2026-10-05", 2, 0.4],
     ]);
   });
 
@@ -21,13 +21,13 @@ describe("buildLaunch", () => {
     const rows = XLSX.utils.sheet_to_json<Record<string, string>>(writeBulk(l.changes).Sheets[BULK_CAMPAIGNS_SHEET], { defval: "", raw: false });
     expect(rows.every((r) => r.Operation === "Create")).toBe(true);
     const of = (name: string) => rows.filter((r) => r["Campaign ID"] === name);
-    expect(of("B0H9ZH3RV5 Auto – 2026-10-05").map((r) => `${r.Entity}:${r["Product targeting expression"] || r.Placement || ""}:${r.State}`)).toEqual([
-      "Campaign::enabled", "Bidding adjustment:Placement top:", "Ad group::enabled", "Product ad::enabled",
+    expect(of("B0H9ZH3RV5 Auto - 2026-10-05").map((r) => `${r.Entity}:${r["Product targeting expression"] || r.Placement || ""}:${r.State}`)).toEqual([
+      "Campaign::enabled", "Bidding adjustment:Placement Top:", "Ad group::enabled", "Product ad::enabled",
       "Product targeting:close-match:enabled", "Product targeting:substitutes:enabled", "Product targeting:loose-match:paused", "Product targeting:complements:paused",
     ]);
-    expect(of("B0H9ZH3RV5 Auto – 2026-10-05")[0]).toMatchObject({ "Targeting type": "Auto", "Daily budget": "6.00", "Start date": "20261005" });
-    expect(of("B0H9ZH3RV5 Exact – 2026-10-05").filter((r) => r.Entity === "Keyword").map((r) => `${r["Keyword text"]}|${r["Match type"]}|${r.Bid}`)).toEqual(dog.headTerms.map((t) => `${t}|Exact|0.44`));
-    expect(of("B0H9ZH3RV5 PT – 2026-10-05").filter((r) => r.Entity === "Product targeting").map((r) => r["Product targeting expression"])).toEqual(['asin="B0AAAAAAA1"', 'asin="B0AAAAAAA2"']);
+    expect(of("B0H9ZH3RV5 Auto - 2026-10-05")[0]).toMatchObject({ "Targeting type": "Auto", "Daily budget": "6.00", "Start date": "20261005" });
+    expect(of("B0H9ZH3RV5 Exact - 2026-10-05").filter((r) => r.Entity === "Keyword").map((r) => `${r["Keyword text"]}|${r["Match type"]}|${r.Bid}`)).toEqual(dog.headTerms.map((t) => `${t}|Exact|0.44`));
+    expect(of("B0H9ZH3RV5 PT - 2026-10-05").filter((r) => r.Entity === "Product targeting").map((r) => r["Product targeting expression"])).toEqual(['asin="B0AAAAAAA1"', 'asin="B0AAAAAAA2"']);
     expect(rows.filter((r) => r.Entity === "Product ad").every((r) => r.SKU === "DOGBELT-2PK")).toBe(true);
   });
 

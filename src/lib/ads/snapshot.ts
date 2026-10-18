@@ -149,7 +149,7 @@ export function diffSnapshot(snap: Snapshot, s: EntityState): BulkChange[] {
     const was = snap.placements.find((x) => x.campaignId === p.campaignId && placeKey(x.placement) === placeKey(p.placement));
     if (was && !near(was.percentage ?? 0, p.percentage ?? 0)) {
       const camp = s.campaigns.find((x) => x.campaignId === p.campaignId);
-      out.push({ kind: "placement", campaignId: p.campaignId, biddingStrategy: camp?.biddingStrategy ?? "Dynamic bids – down only", placement: p.placement, percentage: was.percentage ?? 0 });
+      out.push({ kind: "placement", campaignId: p.campaignId, biddingStrategy: camp?.biddingStrategy ?? "Dynamic bids - down only", placement: p.placement, percentage: was.percentage ?? 0 });
     }
   }
   return out;

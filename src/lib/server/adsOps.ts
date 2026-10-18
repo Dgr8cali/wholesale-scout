@@ -1,5 +1,5 @@
 import "server-only";
-import { bulkRows, describeChange, type BulkChange } from "../ads/bulk";
+import { bulkProblems, bulkRows, describeChange, type BulkChange } from "../ads/bulk";
 import { launchNoteAsin, planDiscard, type LaunchUndo } from "../ads/discard";
 import { buildLaunch, type LaunchInput } from "../ads/launch";
 import { diffSnapshot, restoresFor, revertChanges, takeSnapshot, type EntityState, type Snapshot } from "../ads/snapshot";
@@ -48,6 +48,9 @@ export type BatchKind = "proposals" | "revert" | "restore" | "launch";
 
 /** A bulk sheet: its changes, the values its updates replace (for reverting it), and notes. */
 export async function createBatch(kind: BatchKind, changes: BulkChange[], opts: { before?: BulkChange[]; notes?: string[]; reverts?: string | null; proposals?: number; undo?: LaunchUndo } = {}) {
+  // Checked before it's saved, so a sheet Amazon would reject is never a batch.
+  const problems = bulkProblems(changes);
+  if (problems.length) throw new Error(`The bulk sheet would be rejected: ${problems.join("; ")}`);
   const d = db();
   const day = today();
   // The next number after the day's highest, so a discarded batch's label isn't reused.

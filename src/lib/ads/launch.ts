@@ -29,8 +29,8 @@ export interface Launch { changes: BulkChange[]; campaigns: LaunchCampaign[]; pl
 
 export const LAUNCH_SPLIT = { Auto: 0.3, Broad: 0.2, Exact: 0.4, PT: 0.1 } as const;
 export const LAUNCH_BID = { Auto: 1, Broad: 0.8, Exact: 1, PT: 0.9 } as const;
-/** As Amazon's bulk export writes it. */
-export const LAUNCH_STRATEGY = "Dynamic bids – down only";
+/** As Amazon's bulk upload takes it (ASCII hyphen: the export writes an en dash, the upload rejects it). */
+export const LAUNCH_STRATEGY = "Dynamic bids - down only";
 
 const r2 = (v: number) => Math.round(Number((v * 100).toFixed(6))) / 100;
 const addDays = (d: string, n: number) => new Date(Date.parse(`${d}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
@@ -48,7 +48,7 @@ export function buildLaunch(i: LaunchInput): Launch {
   // A campaign left out: its share goes to the others in proportion.
   const total = kinds.reduce((a, k) => a + LAUNCH_SPLIT[k], 0);
   const campaigns: LaunchCampaign[] = kinds.map((k) => ({
-    name: `${i.asin} ${k} – ${i.startDate}`, kind: k,
+    name: `${i.asin} ${k} - ${i.startDate}`, kind: k,
     budget: Math.max(1, r2((i.dailyBudget * LAUNCH_SPLIT[k]) / total)), share: LAUNCH_SPLIT[k] / total,
     bid: Math.max(0.02, r2(i.startingBid * LAUNCH_BID[k])),
     targets: k === "PT" ? asins : k === "Auto" ? ["close-match", "substitutes"] : terms,
