@@ -15,8 +15,6 @@ import { date as parseDate, num as parseNum } from "./parse";
 
 export const BULK_CAMPAIGNS_SHEET = "Sponsored Products Campaigns";
 export const BULK_TERMS_SHEET = "SP Search Term Report";
-export const BULK_PORTFOLIOS_SHEET = "Portfolios";
-export const BULK_VERSION_SHEET = "Sheet3";
 
 /**
  * The bulk sheet's columns, in the exact order of Amazon's export (docs/samples/ads/bulk-template.xlsx):
@@ -34,8 +32,6 @@ export const BULK_COLUMNS = [
   "Impressions", "Clicks", "Click-through rate", "Spend", "Sales", "Orders", "Units", "Conversion rate", "ACOS", "CPC", "ROAS",
 ] as const;
 export type BulkColumn = (typeof BULK_COLUMNS)[number];
-
-export const PORTFOLIO_COLUMNS = ["Product", "Entity", "Operation", "Portfolio ID", "Portfolio name", "Budget amount", "Budget currency code", "Budget policy", "Budget start date", "Budget end date", "State (Informational only)", "In Budget (Informational only)"];
 
 /* ===================== reading ===================== */
 
@@ -239,16 +235,19 @@ function bulkRow(c: Exclude<BulkChange, { kind: "create_campaign" }>): BulkRow {
   }
 }
 
+/** The sheets an upload has: only these. */
+export const BULK_UPLOAD_SHEETS = [BULK_CAMPAIGNS_SHEET] as const;
+
 /**
- * The bulk upload: Portfolios (header only), "Sponsored Products Campaigns" in the export's exact
- * column order with one row per change, and the "Sheet3" version sheet, as in Amazon's template.
+ * The bulk upload: the "Sponsored Products Campaigns" sheet alone, in the export's exact column
+ * order with one row per change. Amazon validates every sheet in the file, and one whose first
+ * three headers aren't Product, Entity, Operation (the export's "Sheet3" version sheet) fails the
+ * whole upload (docs/samples/ads/bulk-error-report.xlsx), so the export's other sheets are left out.
  */
 export function writeBulk(changes: BulkChange[]): XLSX.WorkBook {
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([PORTFOLIO_COLUMNS]), BULK_PORTFOLIOS_SHEET);
   const rows = changes.flatMap(bulkRows).map((r) => BULK_COLUMNS.map((k) => r[k] ?? ""));
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([[...BULK_COLUMNS], ...rows]), BULK_CAMPAIGNS_SHEET);
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Version", "Version (1.0)"]]), BULK_VERSION_SHEET);
   return wb;
 }
 

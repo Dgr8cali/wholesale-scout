@@ -2,7 +2,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import * as XLSX from "xlsx";
-import { BULK_CAMPAIGNS_SHEET, BULK_COLUMNS, bulkRangeFromFileName, parseBulk, writeBulk, writeBulkFile } from "./bulk";
+import { BULK_CAMPAIGNS_SHEET, BULK_COLUMNS, BULK_UPLOAD_SHEETS, bulkRangeFromFileName, parseBulk, writeBulk, writeBulkFile } from "./bulk";
+import { buildLaunch } from "./launch";
 
 const file = readFileSync(join(__dirname, "../../../docs/samples/ads/bulk-template.xlsx"));
 const bulk = parseBulk(new Uint8Array(file), { fileName: "bulk-template.xlsx", dateFrom: "2026-08-10", dateTo: "2026-10-02" });
@@ -81,15 +82,13 @@ describe("writeBulk (Phase 2's upload)", () => {
     { kind: "create_negative", campaignId: AD_READY, adGroupId: "1", text: "pill organiser", matchType: "Negative exact" },
   ] as const;
 
-  it("writes the template's sheets and exact column order, informational columns blank", () => {
+  it("writes the template's campaigns sheet in its exact column order, informational columns blank", () => {
     const wb = XLSX.read(writeBulkFile([...changes]), { type: "array" });
-    expect(wb.SheetNames).toEqual(["Portfolios", BULK_CAMPAIGNS_SHEET, "Sheet3"]);
+    expect(wb.SheetNames).toEqual([BULK_CAMPAIGNS_SHEET]);
     const template = XLSX.read(file, { type: "buffer" });
     const header = (w: XLSX.WorkBook, n: string) => XLSX.utils.sheet_to_json<string[]>(w.Sheets[n], { header: 1 })[0];
     expect(header(wb, BULK_CAMPAIGNS_SHEET)).toEqual(header(template, BULK_CAMPAIGNS_SHEET));
     expect(header(wb, BULK_CAMPAIGNS_SHEET)).toEqual([...BULK_COLUMNS]);
-    expect(header(wb, "Portfolios")).toEqual(header(template, "Portfolios"));
-    expect(header(wb, "Sheet3")).toEqual(header(template, "Sheet3"));
     const rows = XLSX.utils.sheet_to_json<Record<string, string>>(wb.Sheets[BULK_CAMPAIGNS_SHEET], { defval: "", raw: false });
     expect(rows.map((r) => `${r.Entity}/${r.Operation}`)).toEqual(["Keyword/Update", "Keyword/Update", "Campaign/Update", "Bidding adjustment/Update", "Keyword/Create", "Negative keyword/Create"]);
     for (const r of rows) for (const k of BULK_COLUMNS.filter((c) => /Informational only|^(Impressions|Clicks|Spend|Sales|Orders|Units|ACOS|CPC|ROAS)$/.test(c))) expect(r[k]).toBe("");
@@ -101,7 +100,28 @@ describe("writeBulk (Phase 2's upload)", () => {
     const b = parseBulk(new Uint8Array(writeBulkFile([...changes])), { dateFrom: "2026-10-02", dateTo: "2026-10-02" });
     expect(b.keywords.map((k) => k.text)).toContain("weekly pill box");
     expect(b.negatives[0]).toMatchObject({ text: "pill organiser", matchType: "Negative exact" });
-    expect(writeBulk([]).SheetNames).toHaveLength(3);
+    expect(writeBulk([]).SheetNames).toEqual([BULK_CAMPAIGNS_SHEET]);
+  });
+
+  // Amazon rejects the whole file when any sheet doesn't start Product, Entity, Operation
+  // (docs/samples/ads/bulk-error-report.xlsx: the export's "Sheet3" did that to the first launch upload).
+  it("every exported workbook, proposals or launch, has only the upload sheets, each starting Product, Entity, Operation", () => {
+    const launch = buildLaunch({
+      asin: "B0HM8FBX3T", sku: "SKU-1", price: 9.99, competitorAsins: ["B0AAAAAAA1"], dailyBudget: 10, targetAcos: 0.3, steadyTargetAcos: null,
+      startingBid: 0.4, startDate: "2026-10-19", headTerms: ["lens wipes", "glasses wipes"],
+    }).changes;
+    for (const sheet of [[...changes], launch, []]) {
+      const wb = XLSX.read(writeBulkFile(sheet), { type: "array" });
+      expect(wb.SheetNames).toEqual([...BULK_UPLOAD_SHEETS]);
+      for (const n of wb.SheetNames) expect(XLSX.utils.sheet_to_json<string[]>(wb.Sheets[n], { header: 1 })[0].slice(0, 3)).toEqual(["Product", "Entity", "Operation"]);
+    }
+  });
+
+  it("Amazon's error report for the first upload names Sheet3 as the only error", () => {
+    const report = XLSX.read(readFileSync(join(__dirname, "../../../docs/samples/ads/bulk-error-report.xlsx")), { type: "buffer" });
+    expect(report.SheetNames).toEqual(["Upload processing summary", BULK_CAMPAIGNS_SHEET, "Sheet3"]);
+    const errors = XLSX.utils.sheet_to_json<Record<string, string>>(report.Sheets.Sheet3, { defval: "" });
+    expect(errors).toEqual([expect.objectContaining({ "Original sheet": "Sheet3", "Error type": "Input error", "Error code": "Invalid headers" })]);
   });
 });
 
