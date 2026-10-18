@@ -1,6 +1,6 @@
 "use client";
 
-import { CameraIcon, DownloadIcon, History, Undo2Icon } from "lucide-react";
+import { CameraIcon, DownloadIcon, History, Trash2Icon, Undo2Icon } from "lucide-react";
 import Link from "next/link";
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -77,6 +77,22 @@ export default function AdsExportsPage() {
       toast.error((e as Error).message);
     }
   };
+  const discard = async (b: Batch) => {
+    const what = b.kind === "proposals" ? "Its proposals go back to open, refreshed with the latest numbers." : b.kind === "launch" ? "The launch plan and the product's phase go back to what they were before it." : "";
+    if (!(await confirm({
+      title: `Discard ${b.label}?`,
+      description: `Only use this if you didn't upload the file to Amazon. The batch is deleted here and nothing is written for Amazon. ${what}`.trim(),
+      confirmLabel: "Discard batch", destructive: true,
+    }))) return;
+    try {
+      const r = await api<{ label: string; notes: string[] }>(`/api/ads/exports/${b.id}/discard`, { method: "POST" });
+      toast.success(`${r.label} discarded`, r.notes.length ? { description: r.notes.join(". ") } : undefined);
+      setOpen(null);
+      await load();
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
   const restore = async (s: Snap) => {
     if (!(await confirm({ title: `Write the sheet back to "${s.label}"?`, description: "Bids, states, budgets and placement percentages that differ from the snapshot go back to it; keywords and campaigns added since are paused. Compared with the data last imported.", confirmLabel: "Write restore sheet" }))) return;
     try {
@@ -94,7 +110,7 @@ export default function AdsExportsPage() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="max-w-3xl">
           <h1 className="page-title">Bulk exports</h1>
-          <p className="text-sm text-muted-foreground">Each bulk sheet: approved proposals, launches, reverts and restores. Upload it in Amazon Ads (Campaign manager → Bulk operations → Upload), then mark it uploaded here. Before a sheet is written, the current value of everything it changes is saved, so any batch can be reverted.</p>
+          <p className="text-sm text-muted-foreground">Each bulk sheet: approved proposals, launches, reverts and restores. Upload it in Amazon Ads (Campaign manager → Bulk operations → Upload), then mark it uploaded here. Before a sheet is written, the current value of everything it changes is saved, so any batch can be reverted. A batch you never uploaded can be discarded instead.</p>
         </div>
         <Button variant="outline" asChild><Link href="/ads/proposals">Proposals</Link></Button>
       </div>
@@ -123,6 +139,7 @@ export default function AdsExportsPage() {
                     <Button size="xs" variant="outline" asChild><a href={`/api/ads/exports/${b.id}`}><DownloadIcon /> Download</a></Button>{" "}
                     {b.uploaded_at ? <Button size="xs" variant="ghost" onClick={() => mark(b, false)}>Undo</Button> : <Button size="xs" onClick={() => mark(b, true)}>Mark batch as uploaded</Button>}{" "}
                     <Button size="xs" variant="ghost" onClick={() => revert(b)} title="Write the inverse sheet"><Undo2Icon /> Revert this batch</Button>
+                    {!b.uploaded_at && <>{" "}<Button size="xs" variant="ghost" className="text-fail" onClick={() => discard(b)} title="Only if the file wasn't uploaded to Amazon"><Trash2Icon /> Discard (never uploaded)</Button></>}
                   </td>
                 </tr>
                 {open === b.id && (

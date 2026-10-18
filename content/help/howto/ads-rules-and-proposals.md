@@ -1,7 +1,7 @@
 ---
 title: "Ads: rules and proposals"
 summary: The thirteen Ads rules, how proposals are raised, approved, skipped and snoozed, and how to export the approved changes as a bulk sheet and upload it in Amazon Ads.
-synonyms: [ads rules, proposals, smoothed conversion, smoothing, bayesian, lookback, window, whitelist, blacklist, keyword lists, listing health, tacos mode, n-gram, ngram, stock guard, days of cover, inventory, organic rank, revert, rollback, snapshot, restore, harvest, negative keywords, negative exact, negative phrase, bid down, bid up, pause keyword, placement adjustment, budget, revive, bulk sheet, bulk upload, bulk operations, approve, snooze]
+synonyms: [ads rules, proposals, discard, never uploaded, delete batch, smoothed conversion, smoothing, bayesian, lookback, window, whitelist, blacklist, keyword lists, listing health, tacos mode, n-gram, ngram, stock guard, days of cover, inventory, organic rank, revert, rollback, snapshot, restore, harvest, negative keywords, negative exact, negative phrase, bid down, bid up, pause keyword, placement adjustment, budget, revive, bulk sheet, bulk upload, bulk operations, approve, snooze]
 workspace: ads
 order: 2
 ---
@@ -88,5 +88,7 @@ They're grouped by product, then rule, and filtered by rule, confidence or campa
 ## Reverting a batch, and snapshots
 
 Before any batch is written, the current value of everything it changes (bid, state, budget, placement percentage) is saved with it. **Revert this batch** writes the inverse sheet as a new batch, linked to the original: Update rows putting the saved values back. A bulk file can't delete, so keywords and campaigns the batch created are paused and negatives it created are archived (a negative can't be paused). Those are found by their text in the latest import; until a bulk export made after the upload has been imported, they can't be found, and the revert batch's notes list them.
+
+**Discard (never uploaded)** is for a batch whose file you didn't upload to Amazon (check Campaign manager first). It needs no Amazon data: the batch is deleted here, and what writing it did here is undone. A proposals batch's proposals go back to open, refreshed with the latest numbers, or dropped when their rule no longer fires. A launch's plan and the product's phase go back to what they were before it; for a launch made before 18 Oct 2026 nothing was recorded, so the plan is deleted and the product goes to its steady phase. A batch marked uploaded can't be discarded (Undo the mark first if it really wasn't), nor one with a revert sheet (discard that first). Use **Revert this batch** for anything you did upload.
 
 **Snapshot now** (on Exports) saves every keyword's bid and state, every budget, ad-group bid, target and placement percentage as last imported, with a label. **Restore snapshot** compares it with the latest import and writes the sheet back to it: values that differ are put back, and keywords, targets and campaigns added since are paused. The last 20 snapshots are kept. Both compare against the data last imported, so import a fresh bulk export first if you've uploaded changes since.

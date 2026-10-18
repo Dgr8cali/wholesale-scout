@@ -1,5 +1,6 @@
 import "server-only";
 import { bulkRows, describeChange, type BulkChange } from "../ads/bulk";
+import { launchNoteAsin, planDiscard, type LaunchUndo } from "../ads/discard";
 import { buildLaunch, type LaunchInput } from "../ads/launch";
 import { diffSnapshot, restoresFor, revertChanges, takeSnapshot, type EntityState, type Snapshot } from "../ads/snapshot";
 import { SpApiError, getSpApi } from "../spapi/client";
@@ -46,14 +47,16 @@ export async function entityState(): Promise<EntityState> {
 export type BatchKind = "proposals" | "revert" | "restore" | "launch";
 
 /** A bulk sheet: its changes, the values its updates replace (for reverting it), and notes. */
-export async function createBatch(kind: BatchKind, changes: BulkChange[], opts: { before?: BulkChange[]; notes?: string[]; reverts?: string | null; proposals?: number } = {}) {
+export async function createBatch(kind: BatchKind, changes: BulkChange[], opts: { before?: BulkChange[]; notes?: string[]; reverts?: string | null; proposals?: number; undo?: LaunchUndo } = {}) {
   const d = db();
   const day = today();
-  const sameDay = must(await d.from("ads_export_batches").select("id").gte("created_at", `${day}T00:00:00Z`), "batches") as { id: string }[];
-  const label = `${day} #${sameDay.length + 1}`;
+  // The next number after the day's highest, so a discarded batch's label isn't reused.
+  const sameDay = must(await d.from("ads_export_batches").select("label").gte("created_at", `${day}T00:00:00Z`), "batches") as { label: string }[];
+  const label = `${day} #${Math.max(0, ...sameDay.map((b) => Number(/#(\d+)$/.exec(b.label)?.[1] ?? 0))) + 1}`;
   const before = opts.before ?? restoresFor(changes, await entityState()).restores;
   const row = must(await d.from("ads_export_batches").insert({
     kind, label, changes, before, notes: opts.notes ?? [], reverts: opts.reverts ?? null, proposals: opts.proposals ?? 0, rows: changes.flatMap(bulkRows).length,
+    ...(opts.undo ? { undo: opts.undo } : {}),
   }).select("id, label, rows").single(), "batch") as { id: string; label: string; rows: number };
   return row;
 }
@@ -66,6 +69,32 @@ export async function revertBatch(id: string) {
   const r = revertChanges(b.changes, b.before ?? [], state);
   if (!r.changes.length) throw new Error(r.unresolved.length ? r.unresolved.join(". ") : "Nothing to revert");
   return { ...(await createBatch("revert", r.changes, { before: restoresFor(r.changes, state).restores, notes: [`Reverts ${b.label}`, ...r.unresolved], reverts: b.id })), unresolved: r.unresolved };
+}
+
+/**
+ * Discard a batch that was never uploaded to Amazon: it's gone from Exports, and what writing it
+ * did here is undone (its proposals open again; a launch's plan and phase as they were). Nothing
+ * in the account changed, so no Amazon data is needed.
+ */
+export async function discardBatch(id: string): Promise<{ label: string; notes: string[] }> {
+  const d = db();
+  const b = must(await d.from("ads_export_batches").select("id, kind, label, uploaded_at, notes, undo").eq("id", id).maybeSingle(), "batch") as
+    { id: string; kind: BatchKind; label: string; uploaded_at: string | null; notes: string[]; undo: LaunchUndo | null } | null;
+  if (!b) throw new Error("No such batch");
+  const reverter = must(await d.from("ads_export_batches").select("label").eq("reverts", id).limit(1), "reverts") as { label: string }[];
+  const asin = b.undo?.asin ?? launchNoteAsin(b.notes);
+  const plan = b.kind === "launch" && asin
+    ? (must(await d.from("ads_launch_plans").select("asin, batch_id").eq("asin", asin).maybeSingle(), "launch plan") as { asin: string; batch_id: string | null } | null)
+    : null;
+  const p = planDiscard({ kind: b.kind, label: b.label, uploadedAt: b.uploaded_at, revertedBy: reverter[0]?.label ?? null, undo: b.undo, plan: plan && { asin: plan.asin, batchId: plan.batch_id }, noteAsin: launchNoteAsin(b.notes) }, id);
+  if (!p.ok) throw new Error(p.error);
+  const now = new Date().toISOString();
+  if (p.reopenProposals) must(await d.from("ads_proposals").update({ status: "open", batch_id: null, before: null, hold_until: null, updated_at: now }).eq("batch_id", id), "reopen proposals");
+  if (p.plan?.action === "delete") must(await d.from("ads_launch_plans").delete().eq("asin", p.plan.asin).eq("batch_id", id), "delete launch plan");
+  if (p.plan?.action === "restore") must(await d.from("ads_launch_plans").upsert(p.plan.row!, { onConflict: "asin" }), "restore launch plan");
+  if (p.phase) await saveAdsProduct(p.phase.asin, { phase: p.phase.to });
+  must(await d.from("ads_export_batches").delete().eq("id", id), "discard batch");
+  return { label: b.label, notes: p.notes };
 }
 
 /* ===================== snapshots ===================== */
@@ -335,7 +364,13 @@ export async function createLaunch(input: LaunchInput) {
   if (!/^[A-Z0-9]{10}$/.test(input.asin)) throw new Error("An ASIN is 10 letters and digits");
   const l = buildLaunch(input);
   if (!input.sku.trim()) throw new Error("The SKU is needed for the product ads");
-  const batch = await createBatch("launch", l.changes, { before: [], notes: [`Launch of ${input.asin} at £${input.price.toFixed(2)}, ${l.campaigns.length} campaigns`, ...l.warnings] });
+  // What the launch replaces here, so a launch that's never uploaded can be discarded.
+  const [prod, prior] = await Promise.all([
+    db().from("ads_products").select("phase").eq("asin", input.asin).maybeSingle(),
+    db().from("ads_launch_plans").select("*").eq("asin", input.asin).maybeSingle(),
+  ]);
+  const undo: LaunchUndo = { asin: input.asin, phase: (prod.data as { phase: "launch" | "steady" } | null)?.phase ?? null, plan: (prior.data as Record<string, unknown> | null) ?? null };
+  const batch = await createBatch("launch", l.changes, { before: [], undo, notes: [`Launch of ${input.asin} at £${input.price.toFixed(2)}, ${l.campaigns.length} campaigns`, ...l.warnings] });
   must(await db().from("ads_launch_plans").upsert({ asin: input.asin, start_date: input.startDate, input, campaigns: l.campaigns, plan: l.plan, batch_id: batch.id }, { onConflict: "asin" }), "save launch plan");
   await saveAdsProduct(input.asin, { phase: "launch" });
   return { batch, ...l };

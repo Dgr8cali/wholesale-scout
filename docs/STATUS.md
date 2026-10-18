@@ -169,8 +169,8 @@ Campaign Manager grid, daily Campaign and Placement reports). The dashboard is p
 keywords with organic rank sparklines, search terms), with campaigns assigned or archived at the
 bottom. Thirteen rules (harvest, negatives, bids, pause, placement, budget, revive, n-gram
 negative/winner, stock guard, ranked, slipping) raise proposals to approve, skip or snooze; the
-approved export as a bulk sheet in Amazon's own column order, as batches that can be reverted,
-with snapshots to restore. Also: n-grams, the launcher (Auto/Broad/Exact/PT Create sheet and a
+approved export as a bulk sheet in Amazon's own column order, as batches that can be reverted
+(or discarded when never uploaded: proposals reopen, a launch's plan and phase go back), with snapshots to restore. Also: n-grams, the launcher (Auto/Broad/Exact/PT Create sheet and a
 60-day plan), extension rank checks. Phase 5: bids use a smoothed conversion ((orders + k × product's) ÷ (clicks
 + k), k = 20 in Settings → Ads), shown raw and smoothed in every reason (Bid down, Bid up's ceiling,
 Harvest's cap, the launcher's starting bid: the higher of that and the account CPC × 0.8, both shown); each rule has its own lookback window (7/14/30/60 days);
@@ -233,7 +233,7 @@ StockPilot data is imported (3 items). Ads days of cover and the stock guard cou
 ## Known rough edges
 
 - **Extension 0.5.6** fixes what it could put in chrome://extensions → Errors (an uncaught "Amazon took over 30 s to load" when a rank-check tab was closed, uncaught background errors, unchecked `lastError` in the popup, the reviews parser's warning on product pages, whose new `reviewTitle`/`reviewText` markup it couldn't read). Checked in a scratch Chromium with the shipped and fixed copies; old entries stay listed until **Clear all**.
-- **Ads bulk sheets haven't been uploaded to Amazon yet**: the format follows Amazon's export column for column, but acceptance is unproven until the first upload. Batch "2026-10-02 #1" (7 proposals) waits to be uploaded. Batch "2026-10-02 #3" (the dog seat belt 2-pack launch) has the SKU `REPLACE-WITH-2PACK-SKU`: re-create it on Ads → Launch with the real SKU (and the 2-pack's own ASIN once it exists); B0H9ZH3RV5 is in its launch phase because of it.
+- **Ads bulk sheets haven't been uploaded to Amazon yet**: the format follows Amazon's export column for column, but acceptance is unproven until the first upload. Batch "2026-10-02 #1" (7 proposals) waits to be uploaded.
 - **Daily Ads reports** are parsed against a sample in Amazon's format: the first real daily Campaign/Placement export confirms the column names.
 - **Bid up, Budget, Revive** need the daily Campaign report imported; impression share, hourly budget timing and keyword-level days need the Ads API.
 - **Keepa's salesRankDrops** undercounts fast sellers: Niche Hunt's direct mode filters on monthlySold instead, and the Niches incumbent check costs up to about 83 tokens a niche (a finder page per distinct search term, and the finder returns ASINs only, so 25 are detailed to read titles and sales).
