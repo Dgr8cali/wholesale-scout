@@ -190,6 +190,10 @@ narrative per product), Recommend targets (launch and steady ACoS, Apply writes 
 monthly review on Ads → Review (per product, account-wide, did applied batches work, three ranked
 recommendations mapped to rules; optional schedule on the 1st, off by default). Every call is
 logged in `ads_ai_calls` with tokens and £ cost; answers are cached per data hash.
+The product picker on Dashboard, Proposals, Keywords, N-grams and Launch reads `?asin=` (the URL is the
+source of truth; picking rewrites it; `useAdsProduct` in `src/components/ads/ProductPicker.tsx`); an `?asin=`
+with no ads data is listed as "no ads data yet" rather than the picker showing another product. Keywords
+lists launch-only products too (19 Oct 2026: `?asin=B0HM8FBX3T` showed B0H9ZKYYHZ in the picker).
 
 **Stock: track what you hold.** Your own items (stock_items) in three buckets: self-ship and TikTok
 FBT are ledgers of movements (received, sale, return, adjustment, transfer); Amazon FBA is SP-API's

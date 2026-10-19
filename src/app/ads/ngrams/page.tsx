@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { usePageCrumbs } from "@/components/Crumbs";
 import { EmptyState, ErrorState } from "@/components/States";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
@@ -23,11 +23,14 @@ const day = (d: string) => new Date(d).toLocaleDateString("en-GB", { day: "numer
 
 /** Ads → N-grams: every search term's words and word pairs, summed per product. */
 export default function AdsNgramsPage() {
+  return <Suspense><AdsNgrams /></Suspense>;
+}
+
+function AdsNgrams() {
   usePageCrumbs([{ label: "Ads", href: "/ads/dashboard" }, { label: "N-grams" }]);
   const [d, setD] = useState<NgramData | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [stored, setAsin] = useAdsProduct(d?.products.map((p) => p.asin) ?? []);
-  const asin = stored || d?.products[0]?.asin || "";
+  const [asin, setAsin] = useAdsProduct(d?.products.map((p) => p.asin) ?? [], { all: false, ready: !!d });
   const [size, setSize] = useState<"" | "1" | "2">("");
   useEffect(() => { api<NgramData>("/api/ads/ngrams").then(setD).catch((e: Error) => setError(e.message)); }, []);
   const filtered = useMemo(() => (d?.rows ?? []).filter((r) => (!asin || r.asin === asin) && (!size || String(r.size) === size)), [d, asin, size]);

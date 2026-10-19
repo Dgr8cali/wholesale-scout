@@ -2,7 +2,7 @@
 
 import { CheckIcon, ClockIcon, DownloadIcon, LoaderIcon, Undo2Icon, XIcon } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { usePageCrumbs } from "@/components/Crumbs";
 import { EmptyState, ErrorState } from "@/components/States";
@@ -29,6 +29,10 @@ const CONF_RANK: Record<Confidence, number> = { high: 3, medium: 2, low: 1 };
 
 /** Ads → Proposals: what the rules suggest, to approve, skip or snooze, and export as a bulk sheet. */
 export default function AdsProposalsPage() {
+  return <Suspense><AdsProposals /></Suspense>;
+}
+
+function AdsProposals() {
   usePageCrumbs([{ label: "Ads", href: "/ads/dashboard" }, { label: "Proposals" }]);
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -37,7 +41,7 @@ export default function AdsProposalsPage() {
   const [campaign, setCampaign] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const productIds = useMemo(() => [...new Set((data?.proposals ?? []).map((p) => p.asin).filter((a): a is string => !!a))].sort(), [data]);
-  const [pick, setPick] = useAdsProduct(productIds);
+  const [pick, setPick] = useAdsProduct(productIds, { ready: !!data });
 
   const [grams, setGrams] = useState<NgramData | null>(null);
   const load = useCallback(() => api<Data>("/api/ads/proposals").then(setData).catch((e: Error) => setError(e.message)), []);
@@ -112,7 +116,7 @@ export default function AdsProposalsPage() {
       </div>
 
       <div className="flex flex-wrap items-end gap-3">
-        {productIds.length > 1 && <ProductPicker products={productIds.map((asin) => ({ asin }))} value={pick} onChange={setPick} />}
+        {(productIds.length > 1 || (!!pick && !productIds.includes(pick))) && <ProductPicker products={productIds.map((asin) => ({ asin }))} value={pick} onChange={setPick} />}
         <label className="space-y-1"><span className="field-label">Rule</span>
           <NativeSelect value={rule} onChange={(e) => setRule(e.target.value as "" | RuleId)}>
             <NativeSelectOption value="">All rules</NativeSelectOption>

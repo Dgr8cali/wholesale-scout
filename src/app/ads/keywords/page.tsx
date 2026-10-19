@@ -1,22 +1,32 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { KeywordBank } from "@/components/ads/KeywordBank";
+import { ProductPicker, useAdsProduct } from "@/components/ads/ProductPicker";
 import { usePageCrumbs } from "@/components/Crumbs";
 import { ErrorState } from "@/components/States";
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/lib/ui/client";
 
-/** Ads → Keywords: the keyword bank, product by product. */
+interface Dash { asins: { asin: string; title: string | null }[]; plans: { asin: string }[]; looks: Record<string, { title: string | null }> }
+
 export default function AdsKeywordsPage() {
+  return <Suspense><AdsKeywords /></Suspense>;
+}
+
+/** Ads → Keywords: the keyword bank, product by product (?asin= picks it; the picker rewrites it). */
+function AdsKeywords() {
   usePageCrumbs([{ label: "Ads", href: "/ads/dashboard" }, { label: "Keywords" }]);
   const [products, setProducts] = useState<{ asin: string; title: string | null }[] | null>(null);
-  const [asin, setAsin] = useState<string>(() => (typeof window === "undefined" ? "" : new URLSearchParams(window.location.search).get("asin") ?? ""));
   const [error, setError] = useState<string | null>(null);
+  const [asin, setAsin] = useAdsProduct(products?.map((p) => p.asin) ?? [], { all: false, ready: !!products });
   useEffect(() => {
-    api<{ asins: { asin: string; title: string | null }[]; looks: Record<string, { title: string | null }> }>("/api/ads/dashboard")
-      .then((r) => { const ps = r.asins.map((a) => ({ asin: a.asin, title: r.looks?.[a.asin]?.title ?? a.title })); setProducts(ps); setAsin((cur) => cur || ps[0]?.asin || ""); })
+    api<Dash>("/api/ads/dashboard")
+      .then((r) => {
+        // The dashboard's products: those with campaigns, then those only launching (a plan, no campaign data yet).
+        const launchOnly = (r.plans ?? []).filter((p) => !r.asins.some((a) => a.asin === p.asin));
+        setProducts([...r.asins.map((a) => ({ asin: a.asin, title: r.looks?.[a.asin]?.title ?? a.title })), ...launchOnly.map((p) => ({ asin: p.asin, title: r.looks?.[p.asin]?.title ?? null }))]);
+      })
       .catch((e: Error) => setError(e.message));
   }, []);
   if (error) return <ErrorState title="Couldn't load the products" message={error} />;
@@ -28,13 +38,9 @@ export default function AdsKeywordsPage() {
           <h1 className="page-title">Keyword bank</h1>
           <p className="text-sm text-muted-foreground">One place per product for every term worth knowing: Opportunity Explorer&apos;s search terms (from a linked private-label candidate), harvested terms, n-gram winners, rank-tracked terms and your own. Each with its searches a month, what the ads made of it, its organic rank and where it stands. <b>Add as exact</b> and <b>Add as negative</b> queue approved proposals for the next bulk sheet; <b>Track rank</b> adds it to the rank checks. The launcher&apos;s head terms come from here.</p>
         </div>
-        {products.length > 0 && (
-          <NativeSelect value={asin} onChange={(e) => setAsin(e.target.value)} aria-label="Product">
-            {products.map((p) => <NativeSelectOption key={p.asin} value={p.asin}>{p.asin}{p.title ? ` · ${p.title.slice(0, 50)}` : ""}</NativeSelectOption>)}
-          </NativeSelect>
-        )}
+        {(products.length > 0 || asin) && <ProductPicker products={products} value={asin} onChange={setAsin} all={false} />}
       </div>
-      {!products.length ? <p className="panel p-4 text-sm text-muted-foreground">No product has ad campaigns yet.</p> : asin && <KeywordBank key={asin} asin={asin} />}
+      {!products.length && !asin ? <p className="panel p-4 text-sm text-muted-foreground">No product has ad campaigns yet.</p> : asin && <KeywordBank key={asin} asin={asin} />}
     </div>
   );
 }

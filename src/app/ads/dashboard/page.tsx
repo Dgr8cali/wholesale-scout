@@ -2,7 +2,7 @@
 
 import { ChevronRightIcon, FileUpIcon, LoaderIcon } from "lucide-react";
 import Link from "next/link";
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { usePageCrumbs } from "@/components/Crumbs";
 import { EmptyState, ErrorState } from "@/components/States";
@@ -68,6 +68,10 @@ const SOURCE_LABEL: Record<string, string> = {
 
 /** Ads → Dashboard: per ASIN, per campaign and per search term, with break-even ACoS beside the actual. */
 export default function AdsDashboardPage() {
+  return <Suspense><AdsDashboard /></Suspense>;
+}
+
+function AdsDashboard() {
   usePageCrumbs([{ label: "Ads", href: "/ads/dashboard" }, { label: "Dashboard" }]);
   const [d, setD] = useState<Dash | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -96,6 +100,7 @@ function Dashboard({ d, load }: { d: Dash; load: () => void }) {
   const products = [...d.asins.map((a) => ({ asin: a.asin, title: d.looks?.[a.asin]?.title ?? a.title })), ...launchOnly.map((p) => ({ asin: p.asin, title: d.looks?.[p.asin]?.title ?? null }))];
   const [pick, setPick] = useAdsProduct(products.map((p) => p.asin));
   const shown = (asin: string) => !pick || pick === asin;
+  const unlisted = !!pick && !products.some((p) => p.asin === pick);
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -107,12 +112,13 @@ function Dashboard({ d, load }: { d: Dash; load: () => void }) {
           </p>
         </div>
         <div className="flex flex-wrap items-end gap-2">
-          {products.length > 1 && <ProductPicker products={products} value={pick} onChange={setPick} />}
+          {(products.length > 1 || unlisted) && <ProductPicker products={products} value={pick} onChange={setPick} />}
           <FetchStock onDone={load} />
           <Button asChild variant="outline"><Link href="/ads/imports"><FileUpIcon /> Import reports</Link></Button>
         </div>
       </div>
 
+      {unlisted && <p className="panel p-4 text-sm text-muted-foreground"><span className="num">{pick}</span> has no ads data yet: no imported campaign and no launch plan. <button type="button" className="text-brand underline" onClick={() => setPick("")}>Show all products</button></p>}
       {!products.length && <p className="panel p-4 text-sm text-muted-foreground">No campaign is linked to a product yet: assign one below. Then see <Link className="text-brand underline" href="/help/ads-playbook">Ads: the playbook</Link> for the weekly loop.</p>}
       {d.asins.filter((a) => shown(a.asin)).map((a) => (
         <ProductSection key={a.asin} asin={a.asin} look={d.looks?.[a.asin]} stock={d.stock[a.asin]} plan={d.plans.find((p) => p.asin === a.asin)} onSaved={load}

@@ -2,8 +2,10 @@
 
 import { DownloadIcon, LoaderIcon, RocketIcon } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
+import { asinOf } from "@/components/ads/ProductPicker";
 import { usePageCrumbs } from "@/components/Crumbs";
 import { ErrorState } from "@/components/States";
 import { Button } from "@/components/ui/button";
@@ -49,10 +51,24 @@ const day = (d: string) => new Date(d).toLocaleDateString("en-GB", { day: "numer
 
 /** Ads → Launch: a product's four launch campaigns as a bulk Create sheet, with the 60-day plan. */
 export default function AdsLaunchPage() {
+  return <Suspense><AdsLaunch /></Suspense>;
+}
+
+function AdsLaunch() {
   usePageCrumbs([{ label: "Ads", href: "/ads/dashboard" }, { label: "Launch" }]);
   const [pick, setPick] = useState<Picker | null>(null);
   const [form, setForm] = useState<Form | null>(null);
-  const [source, setSource] = useState("");
+  // The URL is the source of truth: ?candidateId=… (from a private-label candidate's launch checklist, with
+  // its ?asin=) or ?asin=…; "Start from" shows it and rewrites it.
+  const params = useSearchParams();
+  const router = useRouter();
+  const candidateId = params.get("candidateId") ?? "";
+  const urlAsin = asinOf(params.get("asin"));
+  const source = candidateId ? `cand:${candidateId}` : urlAsin ? `asin:${urlAsin}` : "";
+  const pickSource = (v: string) => {
+    const [k, id] = v.split(":");
+    router.replace(k === "asin" ? `/ads/launch?asin=${id}` : k === "cand" ? `/ads/launch?candidateId=${encodeURIComponent(id)}` : "/ads/launch", { scroll: false });
+  };
   const [preview, setPreview] = useState<Preview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -60,11 +76,10 @@ export default function AdsLaunchPage() {
 
   const loadDefaults = useCallback((q: string) => api<Picker>(`/api/ads/launch${q}`).then((r) => { setPick(r); setForm(toForm(r.defaults)); setPreview(null); setMade(null); }).catch((e: Error) => setError(e.message)), []);
   useEffect(() => {
-    // From a private-label candidate's launch checklist: ?candidateId=…&asin=… prefill the head terms, competitors and listing.
-    const q = new URLSearchParams(window.location.search);
-    const params = [q.get("candidateId") ? `candidateId=${encodeURIComponent(q.get("candidateId")!)}` : null, q.get("asin") ? `asin=${encodeURIComponent(q.get("asin")!)}` : null].filter(Boolean);
-    loadDefaults(params.length ? `?${params.join("&")}` : "");
-  }, [loadDefaults]);
+    // ?candidateId=…&asin=… prefill the head terms, competitors and listing.
+    const q = [candidateId ? `candidateId=${encodeURIComponent(candidateId)}` : null, urlAsin ? `asin=${urlAsin}` : null].filter(Boolean);
+    loadDefaults(q.length ? `?${q.join("&")}` : "");
+  }, [loadDefaults, candidateId, urlAsin]);
   useEffect(() => {
     if (!form) return;
     const t = setTimeout(() => {
@@ -106,8 +121,10 @@ export default function AdsLaunchPage() {
       </div>
       <div className="flex flex-wrap items-end gap-3">
         <label className="space-y-1"><span className="field-label">Start from</span>
-          <NativeSelect value={source} onChange={(e) => { setSource(e.target.value); const [k, v] = e.target.value.split(":"); loadDefaults(k === "asin" ? `?asin=${v}` : k === "cand" ? `?candidateId=${v}` : ""); }}>
+          <NativeSelect value={source} onChange={(e) => pickSource(e.target.value)} aria-label="Start from">
             <NativeSelectOption value="">— pick a product —</NativeSelectOption>
+            {urlAsin && !candidateId && !pick.products.some((p) => p.asin === urlAsin) && <NativeSelectOption value={`asin:${urlAsin}`}>{urlAsin} · not an Ads product yet</NativeSelectOption>}
+            {candidateId && !pick.candidates.some((c) => c.id === candidateId) && <NativeSelectOption value={`cand:${candidateId}`}>A candidate that isn&apos;t listed</NativeSelectOption>}
             <optgroup label="Ads products">{pick.products.map((p) => <NativeSelectOption key={p.asin} value={`asin:${p.asin}`}>{p.asin}{p.title ? ` · ${p.title.slice(0, 40)}` : ""}</NativeSelectOption>)}</optgroup>
             <optgroup label="Private-label candidates">{pick.candidates.map((c) => <NativeSelectOption key={c.id} value={`cand:${c.id}`}>{c.name}</NativeSelectOption>)}</optgroup>
           </NativeSelect></label>
