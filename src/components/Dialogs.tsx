@@ -76,7 +76,7 @@ export function DialogsProvider({ children }: { children: ReactNode }) {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => finish(false)}>Cancel</AlertDialogCancel>
-            <AlertDialogAction variant={confirmState?.destructive ? "destructive" : "default"} onClick={() => finish(true)}>
+            <AlertDialogAction variant={confirmState?.destructive ? "danger" : "primary"} onClick={() => finish(true)}>
               {confirmState?.confirmLabel ?? "Confirm"}
             </AlertDialogAction>
           </AlertDialogFooter>

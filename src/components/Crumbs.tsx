@@ -14,11 +14,12 @@ export function CrumbsProvider({ children }: { children: ReactNode }) {
 
 export const useCrumbs = () => useContext(Ctx).crumbs;
 
-/** Show these breadcrumbs in the top bar while the calling page is mounted. */
-export function usePageCrumbs(crumbs: Crumb[]) {
+/** Show these breadcrumbs above the page while the calling page is mounted (null: leave them alone). */
+export function usePageCrumbs(crumbs: Crumb[] | null) {
   const { setCrumbs } = useContext(Ctx);
-  const key = JSON.stringify(crumbs);
+  const key = crumbs ? JSON.stringify(crumbs) : null;
   useEffect(() => {
+    if (key === null) return;
     setCrumbs(JSON.parse(key));
     return () => setCrumbs([]);
   }, [key, setCrumbs]);

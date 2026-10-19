@@ -19,6 +19,10 @@ tokens in `src/app/globals.css` (one source of truth: the logo teal #2F7F8C as p
 pass/warn/fail/empty, brand, surface-2, ink-2, line-strong are aliases of the new ones); IBM Plex Sans for all text and IBM Plex Mono
 (`.num`, tabular) for figures, Bricolage removed; a 12/13/14/15/18/22/28 type scale (`text-xs/meta/sm/base/lg/xl/2xl`, nothing else);
 radius 10px inputs and buttons, 14px cards (`panel`, Card), chips round. The extension (0.7.0) uses the same teal and Plex.
+Building blocks (`src/components/ui`): Button primary/secondary/ghost/danger (default/outline/destructive alias them), 40px / 32px
+(`sm`), `loading` = spinner + "…"; `PageHeader` (crumbs, title = the menu label, one subtitle line, `info` InfoTip, the primary
+action); `InfoTip`; `DataTable` (TanStack v9 sorting + pagination, 50 a page, phone cards); `EmptyState` (`States.tsx`);
+`StatusChip`/`Verdict` (`verdictTone()` maps every verdict word to good/warn/bad/neutral, with an icon); `Kpi`.
 Phases 3–5 to do.
 
 ## Workspaces
