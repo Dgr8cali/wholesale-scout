@@ -158,7 +158,7 @@ export default function HomePage() {
           </Section>
           <Section load={pl} skeleton={<StatSkeleton />}>
             {(p) => (
-              <Stat icon={<TelescopeIcon />} label="Last Niche Hunt" href="/pl/niche-hunt"
+              <Stat icon={<TelescopeIcon />} label="Last Niche Hunt" href="/pl/niches?tab=find"
                 value={p.lastHunt ? when(p.lastHunt.created_at) : "—"}
                 hint={p.lastHunt ? `${p.lastHunt.status === "done" ? "done" : p.lastHunt.status} · ${p.lastHunt.token_cost.toLocaleString("en-GB")} tokens` : "no hunt yet"} />
             )}

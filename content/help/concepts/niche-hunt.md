@@ -4,9 +4,8 @@ summary: Private label's Niche Hunt asks Keepa's Product Finder for products tha
 synonyms: [niche hunt, niche finder, private label hunt, find niches, product finder, gatekeeper hunt, niche ideas, direct mode, leaf mode, token cap]
 order: 6
 workspace: pl
-route: /pl/niche-hunt
 ---
-Niche Hunt is a page in the [Private label](/help/pages/private-label) workspace (**Private label → Niche Hunt**). Instead of guessing a niche, you ask Keepa's Product Finder for products that already pass Gate 0 and Gate 1, and group them by leaf browse category: a leaf (such as "Cutlery Trays" or "Shaving Mirrors") is Amazon's own grouping of like products, and each leaf is a niche. It uses the same Keepa client, token ledger and stored categories as the wholesale [Hunt](/help/pages/hunt).
+Niche Hunt is the **Find niches** tab of **Private label → Niches** (`/pl/niches?tab=find`; the old `/pl/niche-hunt` address opens it). Instead of guessing a niche, you ask Keepa's Product Finder for products that already pass Gate 0 and Gate 1, and group them by leaf browse category: a leaf (such as "Cutlery Trays" or "Shaving Mirrors") is Amazon's own grouping of like products, and each leaf is a niche. It uses the same Keepa client, token ledger and stored categories as the wholesale [Hunt](/help/pages/hunt).
 
 There are two modes, picked at the top of the filters.
 

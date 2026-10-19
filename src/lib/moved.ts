@@ -21,6 +21,8 @@ export const MOVED: Moved[] = [
   // 2. Favourites + Watchlist → Shortlist (the same starred products; two tabs of tools).
   { from: "/favourites", to: "/shortlist?tab=products" },
   { from: "/watchlist", to: "/shortlist?tab=watching" },
+  // 3. Niche Hunt → Niches → Find niches.
+  { from: "/pl/niche-hunt", to: "/pl/niches?tab=find" },
 ];
 
 /** Where an old address now lives (path + query), or null when it hasn't moved. */

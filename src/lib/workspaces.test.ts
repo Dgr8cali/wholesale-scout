@@ -31,7 +31,7 @@ describe("workspaces", () => {
     expect(main("wholesale")).toEqual(["Runs", "New run", "Products", "Suppliers", "Shortlist", "Tracker"]);
     expect(more("wholesale")).toEqual(["Sellers", "Brands", "Plan"]);
     expect(main("pl")).toEqual(["Candidates", "Niches", "Suppliers", "Quotes"]);
-    expect(more("pl")).toEqual(["Niche Hunt", "Launch checklist"]);
+    expect(more("pl")).toEqual(["Launch checklist"]);
     expect(main("ads")).toEqual(["Dashboard", "Proposals", "Launch", "Keywords"]);
     expect(more("ads")).toEqual(["Imports", "Rules", "N-grams", "Review"]);
     expect(main("stock")).toEqual(["Levels", "Orders", "Reorder"]);
