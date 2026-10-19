@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { BulkBar } from "@/components/BulkBar";
-import { usePageCrumbs } from "@/components/Crumbs";
 import { useDialogs } from "@/components/Dialogs";
 import { FilterBar, type FilterOptions } from "@/components/FilterBar";
 import { Detail } from "@/components/results/Detail";
@@ -47,8 +46,8 @@ function stub(f: Item["favourite"]): Result {
 }
 
 /** Favourites on the results table: columns, resizing, sparklines, the drawer and the bulk bar. */
-export default function FavouritesPage() {
-  usePageCrumbs([{ label: "Favourites" }]);
+/** Shortlist → Products: every starred product with its latest result, to re-screen or export. */
+export function FavouritesTab() {
   const router = useRouter();
   const { confirm } = useDialogs();
   const [items, setItems] = useState<Item[] | null>(null);
@@ -206,7 +205,6 @@ export default function FavouritesPage() {
   const header = (
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div>
-        <h1 className="page-title">Favourites</h1>
         <p className="text-sm text-muted-foreground">
           {all.length} product{all.length === 1 ? "" : "s"}, each with its latest result from any run
           {all.some((x) => x.item.outdated) && <> · <span className="text-warn">{all.filter((x) => x.item.outdated).length} outdated</span> (over 7 days old)</>}

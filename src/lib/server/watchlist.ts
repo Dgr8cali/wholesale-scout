@@ -205,8 +205,8 @@ export async function finishWatchRun(runId: string): Promise<{ checked: number; 
 async function sendDigest(alerts: WatchAlert[], subject: string) {
   const url = appUrl();
   const line = (a: WatchAlert) => `${a.title ?? a.asin ?? a.ean}: ${a.detail}`;
-  const html = `<p>${escapeHtml(subject)}</p><ul>${alerts.map((a) => `<li><b>${escapeHtml(a.title ?? a.asin ?? a.ean)}</b>${a.asin ? ` (<a href="https://www.amazon.co.uk/dp/${a.asin}">${a.asin}</a>)` : ""}: ${escapeHtml(a.detail)}${a.run_id ? ` · <a href="${url}/runs/${a.run_id}">open</a>` : ""}</li>`).join("")}</ul><p><a href="${url}/watchlist">Watchlist</a></p>`;
-  const text = `${subject}\n\n${alerts.map((a) => `- ${line(a)}`).join("\n")}\n\n${url}/watchlist`;
+  const html = `<p>${escapeHtml(subject)}</p><ul>${alerts.map((a) => `<li><b>${escapeHtml(a.title ?? a.asin ?? a.ean)}</b>${a.asin ? ` (<a href="https://www.amazon.co.uk/dp/${a.asin}">${a.asin}</a>)` : ""}: ${escapeHtml(a.detail)}${a.run_id ? ` · <a href="${url}/runs/${a.run_id}">open</a>` : ""}</li>`).join("")}</ul><p><a href="${url}/shortlist?tab=watching">Shortlist → Watching</a></p>`;
+  const text = `${subject}\n\n${alerts.map((a) => `- ${line(a)}`).join("\n")}\n\n${url}/shortlist?tab=watching`;
   const r = await sendEmail({ subject, html, text });
   if (!r.sent) console.warn(`[watchlist] alert email not sent: ${r.reason}`);
   return r;

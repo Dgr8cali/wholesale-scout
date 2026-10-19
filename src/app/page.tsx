@@ -127,11 +127,11 @@ export default function HomePage() {
             )}
           </Section>
           <Section load={alerts} skeleton={<StatSkeleton />}>
-            {(a) => <Stat icon={<BellIcon />} label="Watchlist: now passes" href="/watchlist" value={a.count}
+            {(a) => <Stat icon={<BellIcon />} label="Watchlist: now passes" href="/shortlist?tab=watching" value={a.count}
               hint={a.count ? "passed, met a condition or found a supplier" : "nothing new in the last 14 days"} />}
           </Section>
           <Section load={favs} skeleton={<StatSkeleton />}>
-            {(f) => <Stat icon={<StarIcon />} label="Favourites needing refresh" href="/favourites"
+            {(f) => <Stat icon={<StarIcon />} label="Favourites needing refresh" href="/shortlist"
               value={f.items.filter((x) => x.outdated).length} hint={`of ${f.items.length} favourites`} />}
           </Section>
           <Section load={brands} skeleton={<StatSkeleton />}>
@@ -298,7 +298,7 @@ export default function HomePage() {
             <CardHeader>
               <CardTitle>Favourites needing refresh</CardTitle>
               <CardDescription>Last screened over a week ago.</CardDescription>
-              <CardAction><Button variant="ghost" size="sm" asChild><Link href="/favourites">Favourites <ArrowRightIcon /></Link></Button></CardAction>
+              <CardAction><Button variant="ghost" size="sm" asChild><Link href="/shortlist">Favourites <ArrowRightIcon /></Link></Button></CardAction>
             </CardHeader>
             <CardContent>
               <Section load={favs} skeleton={<ListSkeleton rows={3} />}>

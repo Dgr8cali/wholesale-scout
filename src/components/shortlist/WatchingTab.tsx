@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { usePageCrumbs } from "@/components/Crumbs";
 import { EmptyState, ErrorState } from "@/components/States";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -30,8 +29,8 @@ const KIND: Record<WatchAlert["kind"], { label: string; variant: "pass" | "brand
   supplier: { label: "Supplier found", variant: "warn" },
 };
 
-export default function WatchlistPage() {
-  usePageCrumbs([{ label: "Watchlist" }]);
+/** Shortlist → Watching: the same starred products, with what would make each a buy, the weekly re-check and its alerts. */
+export function WatchingTab() {
   const router = useRouter();
   const [data, setData] = useState<{ items: Item[]; alerts: WatchAlert[]; email: boolean } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -73,14 +72,7 @@ export default function WatchlistPage() {
 
   const header = (
     <div className="flex flex-wrap items-start justify-between gap-3">
-      <div>
-        <h1 className="page-title">Watchlist</h1>
-        <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-          Products you&apos;re waiting on, each with what would make it a buy. Every Sunday they&apos;re re-checked (Keepa only where the
-          history is over 7 days old; gating refreshed) and anything that now passes or meets its condition is listed here and emailed.
-          Add one from a result&apos;s details; a starred product without a condition is simply re-checked weekly.
-        </p>
-      </div>
+      <p className="text-sm text-muted-foreground">Re-checked every Sunday; anything that now passes or meets its condition is listed here and emailed.</p>
       <Button variant="outline" onClick={recheck} disabled={busy}><RefreshCwIcon className={cn(busy && "animate-spin")} /> Re-check now</Button>
     </div>
   );

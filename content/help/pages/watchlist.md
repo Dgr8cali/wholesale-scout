@@ -1,10 +1,12 @@
 ---
-title: Watchlist
+title: "Shortlist: Watching"
 summary: Products you're waiting on, each with the condition that would make it a buy, re-checked every Sunday with an email digest.
 synonyms: [watch, alert, flip condition, notify, weekly re-check, email digest, now passes]
-route: /watchlist
+workspace: wholesale
 order: 10
 ---
+*Where: **Wholesale → Shortlist → Watching** (the old Watchlist page): the same starred products as [Products](/help/pages/favourites), with their conditions.*
+
 The Watchlist holds products that aren't a buy yet but might become one. Each has a condition, such as "Buy Box ≥ £24.50" or "Brand approved". Every Sunday the whole list is re-checked. Anything that now passes, or meets its condition, is listed under **Now passes** and emailed to you.
 
 Every favourite is on the watchlist. A starred product with no condition is simply re-checked each week ("Re-check weekly"). See [Favourites](/help/pages/favourites).

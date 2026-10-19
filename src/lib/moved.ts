@@ -18,6 +18,9 @@ export const MOVED: Moved[] = [
   { from: "/qogita", to: "/new-run?tab=qogita" },
   { from: "/hunt", to: "/new-run?tab=hunt" },
   { from: "/sellers/scan", to: "/new-run?tab=seller" },
+  // 2. Favourites + Watchlist → Shortlist (the same starred products; two tabs of tools).
+  { from: "/favourites", to: "/shortlist?tab=products" },
+  { from: "/watchlist", to: "/shortlist?tab=watching" },
 ];
 
 /** Where an old address now lives (path + query), or null when it hasn't moved. */

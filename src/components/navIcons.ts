@@ -1,6 +1,6 @@
 import {
   ArrowLeftRightIcon, AwardIcon, BanknoteIcon, CalendarCheckIcon, ChartPieIcon, CircleHelpIcon, CirclePlusIcon, ClipboardListIcon,
-  EyeIcon, FactoryIcon, FileSpreadsheetIcon, FileUpIcon, FlaskConicalIcon, HouseIcon, LayoutDashboardIcon,
+  FactoryIcon, FileSpreadsheetIcon, FileUpIcon, FlaskConicalIcon, HouseIcon, LayoutDashboardIcon,
   LightbulbIcon, ListChecksIcon, ListFilterIcon, ListTodoIcon, PackagePlusIcon, PackageSearchIcon, ReceiptTextIcon, RepeatIcon, RocketIcon,
   SettingsIcon, StarIcon, StoreIcon, TelescopeIcon, TextSearchIcon, TrendingUpIcon, TruckIcon, WarehouseIcon,
   WholeWordIcon, type LucideIcon,
@@ -9,9 +9,9 @@ import {
 /** Each page's own icon. "?" is Help's alone. */
 export const NAV_ICON: Record<string, LucideIcon> = {
   "/": HouseIcon, "/settings": SettingsIcon, "/help": CircleHelpIcon,
-  "/runs": ListChecksIcon, "/products": PackageSearchIcon, "/suppliers": TruckIcon, "/watchlist": EyeIcon, "/tracker": TrendingUpIcon,
+  "/runs": ListChecksIcon, "/products": PackageSearchIcon, "/suppliers": TruckIcon, "/shortlist": StarIcon, "/tracker": TrendingUpIcon,
   "/new-run": CirclePlusIcon, "/sellers": StoreIcon, "/brands": AwardIcon,
-  "/favourites": StarIcon, "/plan": ClipboardListIcon,
+  "/plan": ClipboardListIcon,
   "/pl/candidates": FlaskConicalIcon, "/pl/niches": ChartPieIcon, "/pl/suppliers": FactoryIcon, "/pl/quotes": ReceiptTextIcon,
   "/pl/niche-hunt": TelescopeIcon, "/pl/launch": ListTodoIcon,
   "/ads/dashboard": LayoutDashboardIcon, "/ads/proposals": LightbulbIcon, "/ads/launch": RocketIcon, "/ads/keywords": TextSearchIcon,

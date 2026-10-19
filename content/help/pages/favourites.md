@@ -1,10 +1,12 @@
 ---
-title: Favourites
+title: "Shortlist: Products"
 summary: The products you've starred, each with its latest result from any run, your notes, and one-click re-screening.
 synonyms: [star, starred, shortlist, saved products, bookmarks, notes]
-route: /favourites
+route: /shortlist
 order: 9
 ---
+*Where: **Wholesale → Shortlist → Products** (the old Favourites page). The same starred products are on the [Watching](/help/pages/watchlist) tab.*
+
 Favourites collects every product you've starred in one table. Each row shows the product's latest result from any run, with your note. From here you can re-screen them, export them, and put them on the [Watchlist](/help/pages/watchlist).
 
 ## Adding and removing favourites
