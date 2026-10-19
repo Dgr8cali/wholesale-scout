@@ -20,7 +20,7 @@ import { APPROVAL_STATUSES, STATUS_LABELS, type ApprovalStatus } from "@/lib/bra
 import { api, gbp, when } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
 import { ApplyKit } from "@/components/documents/ApplyKit";
-import { Documents } from "@/components/documents/Documents";
+import { DocumentUploader } from "@/components/documents/Documents";
 
 type Product = BrandProduct & { bestOffer: { supplier: string; unitCostGbp: number; moq: number | null; seenAt: string } | null; runId: string | null };
 
@@ -164,7 +164,7 @@ export default function BrandPage() {
         </section>
       </div>
 
-      <Documents brand={{ name: b.brand }} />
+      <DocumentUploader brand={{ name: b.brand }} />
 
       <section className="space-y-2">
         <h2 className="section-label">Products across all runs <span className="font-normal text-muted-foreground">· best offer per EAN</span></h2>

@@ -1,7 +1,8 @@
 "use client";
 
-import { DownloadIcon, FileTextIcon, LoaderIcon, Trash2Icon, UploadIcon } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { DownloadIcon, FileTextIcon, Trash2Icon } from "lucide-react";
+import { FileDrop } from "@/components/ui/file-drop";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useDialogs } from "@/components/Dialogs";
 import { Badge } from "@/components/ui/badge";
@@ -56,7 +57,7 @@ export function DocumentLine({ d, onDelete }: { d: DocumentRow; onDelete?: () =>
  * Documents kept for a brand or a supplier (invoices, SDS, brand letters…), with an upload
  * form: type, date and note per file. On a supplier's page an upload can name the brands on it.
  */
-export function Documents({ brand, supplier, suppliers = [] }: {
+export function DocumentUploader({ brand, supplier, suppliers = [] }: {
   brand?: { name: string }; supplier?: { id: string; name: string };
   /** On a brand's page: its suppliers, to say which one an invoice is from. */
   suppliers?: { id: string; name: string }[];
@@ -69,7 +70,6 @@ export function Documents({ brand, supplier, suppliers = [] }: {
   const [brands, setBrands] = useState("");
   const [from, setFrom] = useState("");
   const [busy, setBusy] = useState(false);
-  const input = useRef<HTMLInputElement>(null);
   const q = brand ? `brand=${encodeURIComponent(brand.name)}` : `supplier=${supplier!.id}`;
   const load = useCallback(() => { api<{ documents: DocumentRow[] }>(`/api/documents?${q}`).then((r) => setDocs(r.documents)).catch((e: Error) => toast.error(e.message)); }, [q]);
   useEffect(load, [load]);
@@ -120,10 +120,7 @@ export function Documents({ brand, supplier, suppliers = [] }: {
           </NativeSelect>
         )}
       </div>
-      <input ref={input} type="file" multiple className="hidden" aria-hidden="true" onChange={(e) => { if (e.target.files?.length) void upload(e.target.files); e.target.value = ""; }} />
-      <Button variant="outline" disabled={busy} onClick={() => input.current?.click()}>
-        {busy ? <LoaderIcon className="animate-spin" /> : <UploadIcon />} Attach files
-      </Button>
+      <FileDrop size="compact" multiple busy={busy} onFiles={(f) => void upload(f)} title="Attach files" hint="drop them here, or click to choose" />
     </section>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
-import { CheckIcon, FileSpreadsheetIcon, Trash2Icon, UploadIcon } from "lucide-react";
+import { CheckIcon, FileSpreadsheetIcon, Trash2Icon } from "lucide-react";
+import { FileDrop } from "@/components/ui/file-drop";
 import { useRouter } from "next/navigation";
 import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
@@ -342,14 +343,8 @@ export function UploadSource() {
 
       {step === 0 && (
         <div className="space-y-4">
-          <label className="panel flex cursor-pointer flex-col items-center gap-2 border-2 border-dashed px-6 py-12 text-center transition-colors hover:border-brand hover:bg-brand-soft/40"
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={(e) => { e.preventDefault(); addFiles(e.dataTransfer.files); }}>
-            <span className="flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground"><UploadIcon className="size-5" /></span>
-            <span className="section-title">Drop price lists here, or choose files</span>
-            <span className="text-sm text-muted-foreground">.xlsx, .xls, .csv · up to {MAX_FILE_BYTES / 1024 / 1024} MB each, {MAX_ROWS.toLocaleString("en-GB")} rows per upload</span>
-            <input type="file" multiple accept=".xlsx,.xls,.csv,.tsv,.txt" className="sr-only" onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
-          </label>
+          <FileDrop onFiles={(f) => addFiles(f)} multiple accept=".xlsx,.xls,.csv,.tsv,.txt" title="Drop price lists here, or choose files"
+            hint={<>.xlsx, .xls, .csv · up to {MAX_FILE_BYTES / 1024 / 1024} MB each, {MAX_ROWS.toLocaleString("en-GB")} rows per upload</>} />
           {files.length > 0 && (
             <ul className="panel divide-y">
               {files.map((f) => (

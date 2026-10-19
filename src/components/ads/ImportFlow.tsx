@@ -1,7 +1,8 @@
 "use client";
 
 import { FileUpIcon, LoaderIcon, Undo2Icon, UploadIcon, XIcon } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { FileDrop } from "@/components/ui/file-drop";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useDialogs } from "@/components/Dialogs";
 import { Button } from "@/components/ui/button";
@@ -12,7 +13,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { parseBulk, type ParsedBulk } from "@/lib/ads/bulk";
 import { parseReport, REPORT_LABEL, type ParsedReport, type ReportType } from "@/lib/ads/parse";
 import { api } from "@/lib/ui/client";
-import { cn } from "@/lib/utils";
 
 interface Picked { name: string; text: string; parsed: ParsedReport | null; error: string | null }
 /** A bulk export (.xlsx): read here for the preview, sent as is; its date range is given here. */
@@ -31,9 +31,7 @@ const LABEL: Record<string, string> = { ...REPORT_LABEL, bulk: "Bulk export" };
 export function ImportFlow({ onImported }: { onImported: () => void }) {
   const [picked, setPicked] = useState<Picked[]>([]);
   const [bulks, setBulks] = useState<PickedBulk[]>([]);
-  const [over, setOver] = useState(false);
   const [busy, setBusy] = useState(false);
-  const input = useRef<HTMLInputElement>(null);
 
   const add = async (files: FileList | File[]) => {
     const list = [...files];
@@ -96,16 +94,8 @@ export function ImportFlow({ onImported }: { onImported: () => void }) {
   };
   return (
     <div className="space-y-5">
-      <div
-        onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)}
-        onDrop={(e) => { e.preventDefault(); setOver(false); add(e.dataTransfer.files); }}
-        onClick={() => input.current?.click()} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") input.current?.click(); }}
-        className={cn("panel flex cursor-pointer flex-col items-center gap-2 border-2 border-dashed px-6 py-10 text-center", over && "border-brand bg-brand-soft")}>
-        <FileUpIcon className="size-6 text-muted-foreground" />
-        <p className="text-sm font-medium">Drop the bulk export (.xlsx) or CSV reports here, or click to choose</p>
-        <p className="text-xs text-muted-foreground">Nothing is imported until you confirm.</p>
-        <input ref={input} type="file" accept=".xlsx,.csv,text/csv" multiple hidden onChange={(e) => { if (e.target.files) add(e.target.files); e.target.value = ""; }} />
-      </div>
+      <FileDrop onFiles={(f) => add(f)} multiple accept=".xlsx,.csv,text/csv" icon={<FileUpIcon />}
+        title="Drop the bulk export (.xlsx) or CSV reports here, or click to choose" hint="Nothing is imported until you confirm." />
 
       {(picked.length > 0 || bulks.length > 0) && (
         <section className="space-y-3">

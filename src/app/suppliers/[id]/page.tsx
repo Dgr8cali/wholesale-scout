@@ -21,7 +21,7 @@ import { MARKETPLACES, SUPPLIER_KIND_LABEL, SUPPLIER_KINDS, trackingText } from 
 import { BUCKET_LABEL, type Bucket } from "@/lib/stock/levels";
 import { PURCHASE_STATUSES } from "@/lib/tracker";
 import { api, gbp, when } from "@/lib/ui/client";
-import { Documents } from "@/components/documents/Documents";
+import { DocumentUploader } from "@/components/documents/Documents";
 
 interface Detail {
   supplier: SupplierRecord;
@@ -164,7 +164,7 @@ export default function SupplierPage() {
 
       <StockSection data={data} />
 
-      <Documents supplier={{ id: s.id, name: s.name }} />
+      <DocumentUploader supplier={{ id: s.id, name: s.name }} />
 
       <div className="grid gap-4 lg:grid-cols-3">
         <section className="min-w-0 space-y-2 lg:col-span-2" aria-label="Best products">

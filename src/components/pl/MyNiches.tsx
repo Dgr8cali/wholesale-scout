@@ -1,6 +1,7 @@
 "use client";
 
-import { ChevronRightIcon, LoaderIcon, SearchIcon, UploadIcon } from "lucide-react";
+import { ChevronRightIcon, LoaderIcon, SearchIcon } from "lucide-react";
+import { FileDrop } from "@/components/ui/file-drop";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
@@ -141,11 +142,7 @@ function ImportCard({ imports, onImported }: { imports: Imp[]; onImported: () =>
     <section className="panel space-y-3 p-4">
       <h2 className="text-sm font-semibold">Import a category</h2>
       <div className="flex flex-wrap items-end gap-3">
-        <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-dashed px-4 py-3 text-sm hover:bg-surface-2"
-          onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); read(e.dataTransfer.files[0]); }}>
-          <UploadIcon className="size-4" /> {file ? file.name : "Drop the Opportunity Explorer CSV, or choose it"}
-          <input type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => read(e.target.files?.[0])} />
-        </label>
+        <FileDrop size="compact" onFiles={(f) => read(f[0])} accept=".csv,text/csv" title={file ? file.name : "Drop the Opportunity Explorer CSV, or choose it"} />
         <label className="space-y-1"><span className="field-label">Opportunity Explorer category</span>
           <NativeSelect className="w-64" value={pick} onChange={(e) => { setPick(e.target.value); setPreview(null); }}>
             <NativeSelectOption value="">Pick the category…</NativeSelectOption>

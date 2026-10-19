@@ -1,8 +1,9 @@
 "use client";
 
 import { FileUpIcon, LoaderIcon, UploadIcon } from "lucide-react";
+import { FileDrop } from "@/components/ui/file-drop";
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { usePageCrumbs } from "@/components/Crumbs";
 import { SortTh, useSortable } from "@/components/SortableTable";
@@ -43,8 +44,6 @@ function Importer({ kind }: { kind: Kind }) {
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [asins, setAsins] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
-  const [over, setOver] = useState(false);
-  const input = useRef<HTMLInputElement>(null);
   const body = (s: Src, extra: Record<string, unknown> = {}) => (s.kind === "stockpilot" ? { kind: s.kind, raw: s.raw, ...extra } : { kind: s.kind, text: s.text, ...extra });
 
   const pick = async (files: FileList | null) => {
@@ -83,18 +82,11 @@ function Importer({ kind }: { kind: Kind }) {
 
   return (
     <div className="space-y-4">
-      <div onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)} onDrop={(e) => { e.preventDefault(); setOver(false); pick(e.dataTransfer.files); }}
-        onClick={() => input.current?.click()} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") input.current?.click(); }}
-        className={cn("panel flex cursor-pointer flex-col items-center gap-2 border-2 border-dashed px-6 py-8 text-center", over && "border-brand bg-brand-soft")}>
-        {busy ? <LoaderIcon className="size-6 animate-spin text-muted-foreground" /> : <FileUpIcon className="size-6 text-muted-foreground" />}
-        <p className="text-sm font-medium">{kind === "stockpilot" ? "Drop the stockpilot_workspaces export (.json), or click to choose" : "Drop a CSV of items, or click to choose"}</p>
-        <p className="max-w-2xl text-xs text-muted-foreground">
-          {kind === "stockpilot"
-            ? "The table's raw rows: products, sales, restocks, adjustments, transfers and returns. Opening balances are set so each item ends at StockPilot's levels; its FBA quantities are left to SP-API and its photos left out."
-            : "One item per row. Columns StockPilot used work: product_name, sku, cost_price, stock_quantity, reorder_level, supplier, supplier_website, photo_url (and plain names like name, unit cost, quantity). Quantities become opening balances in Self-ship."}
-        </p>
-        <input ref={input} type="file" accept={kind === "stockpilot" ? ".json,application/json" : ".csv,text/csv"} hidden onChange={(e) => { pick(e.target.files); e.target.value = ""; }} />
-      </div>
+      <FileDrop onFiles={(f) => pick(f)} busy={busy} icon={<FileUpIcon />} accept={kind === "stockpilot" ? ".json,application/json" : ".csv,text/csv"}
+        title={kind === "stockpilot" ? "Drop the stockpilot_workspaces export (.json), or click to choose" : "Drop a CSV of items, or click to choose"}
+        hint={kind === "stockpilot"
+          ? "The table's raw rows: products, sales, restocks, adjustments, transfers and returns. Opening balances are set so each item ends at StockPilot's levels; its FBA quantities are left to SP-API and its photos left out."
+          : "One item per row. Columns StockPilot used work: product_name, sku, cost_price, stock_quantity, reorder_level, supplier, supplier_website, photo_url (and plain names like name, unit cost, quantity). Quantities become opening balances in Self-ship."} />
       {preview && src && <PreviewTable src={src} preview={preview} asins={asins} setAsins={setAsins} busy={busy} onImport={run} />}
     </div>
   );
