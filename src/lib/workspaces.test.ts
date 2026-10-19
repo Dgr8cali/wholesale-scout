@@ -28,13 +28,13 @@ describe("workspaces", () => {
     ]);
     const main = (id: Parameters<typeof workspace>[0]) => workspace(id).nav.filter((n) => !n.more).map((n) => n.label);
     const more = (id: Parameters<typeof workspace>[0]) => workspace(id).nav.filter((n) => n.more).map((n) => n.label);
-    expect(main("wholesale")).toEqual(["Runs", "New run", "Products", "Suppliers", "Shortlist", "Tracker"]);
+    expect(main("wholesale")).toEqual(["Runs", "New run", "Products", "Suppliers", "Shortlist"]);
     expect(more("wholesale")).toEqual(["Sellers", "Brands", "Plan"]);
     expect(main("pl")).toEqual(["Candidates", "Niches", "Suppliers", "Quotes"]);
     expect(more("pl")).toEqual(["Launch checklist"]);
     expect(main("ads")).toEqual(["Dashboard", "Proposals", "Launch", "Search terms"]);
     expect(more("ads")).toEqual(["Rules", "Review"]);
-    expect(main("stock")).toEqual(["Levels", "Orders", "Reorder"]);
+    expect(main("stock")).toEqual(["Levels", "Purchases", "Reorder"]);
     expect(more("stock")).toEqual(["Movements", "Sales", "Import"]);
     // A group's main pages come before its More.
     for (const w of WORKSPACES) expect(w.nav.findIndex((n) => n.more)).toBe(w.nav.filter((n) => !n.more).length);

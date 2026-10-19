@@ -35,7 +35,6 @@ export const WORKSPACES: Workspace[] = [
       { href: "/products", label: "Products" },
       { href: "/suppliers", label: "Suppliers" },
       { href: "/shortlist", label: "Shortlist" },
-      { href: "/tracker", label: "Tracker" },
       { href: "/sellers", label: "Sellers", more: true },
       { href: "/brands", label: "Brands", more: true },
       { href: "/plan", label: "Plan", more: true },
@@ -66,7 +65,7 @@ export const WORKSPACES: Workspace[] = [
     id: "stock", label: "Stock", tagline: "Track what you hold", landing: "/stock/levels",
     nav: [
       { href: "/stock/levels", label: "Levels" },
-      { href: "/stock/orders", label: "Orders" },
+      { href: "/stock/purchases", label: "Purchases" },
       { href: "/stock/reorder", label: "Reorder" },
       { href: "/stock/movements", label: "Movements", more: true },
       { href: "/stock/sales", label: "Sales", more: true },

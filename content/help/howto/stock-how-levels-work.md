@@ -17,7 +17,7 @@ order: 1
 
 Self-ship and TikTok levels are the **sum of their movements**. Every change is a dated movement with a sign:
 
-- **Received**: goods in, at a unit cost. Marking a purchase **Received** in the [Tracker](/help/pages/tracker) asks which bucket, and adds the receipt.
+- **Received**: goods in, at a unit cost. Marking a purchase **Received** in the [Purchases](/help/pages/tracker) asks which bucket, and adds the receipt.
 - **Sale**: out, when you record a sale outside Amazon.
 - **Return**: units of a sale back into a bucket.
 - **Adjustment**: a signed correction with a reason (stock count, damage, loss, sample).
@@ -39,7 +39,7 @@ For each item:
 - **Suggested quantity** = 30 days of demand (Settings → Stock's days-of-cover target).
 - **Due** at or under the reorder point; **soon** within a week of it; **ok** otherwise; **no demand** when nothing sold.
 
-**Create purchase** opens the Tracker's purchase form with the item, its supplier and the suggested quantity filled in. When it arrives, mark it **Received** and choose the bucket.
+**Create purchase** opens Purchases's purchase form with the item, its supplier and the suggested quantity filled in. When it arrives, mark it **Received** and choose the bucket.
 
 ## With Ads and Private label
 

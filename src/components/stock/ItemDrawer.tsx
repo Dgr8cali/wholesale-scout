@@ -151,7 +151,7 @@ export function ItemDrawer({ row, onClose, onChanged }: { row: ItemLevels | null
 
             {orders.length > 0 && (
               <section className="space-y-2">
-                <div className="flex items-center"><h3 className="text-sm font-semibold">Orders</h3><Link href="/tracker" className="ml-auto text-xs text-brand hover:underline">Tracker →</Link></div>
+                <div className="flex items-center"><h3 className="text-sm font-semibold">Orders</h3><Link href="/stock/purchases" className="ml-auto text-xs text-brand hover:underline">Purchases →</Link></div>
                 <table className="w-full text-xs"><tbody>{orders.slice(0, 10).map((o) => (
                   <tr key={o.id} className="border-t align-top">
                     <td className="py-1 pr-2 whitespace-nowrap">{o.ordered_on}</td>

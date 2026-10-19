@@ -56,7 +56,7 @@ export default function StockReorderPage() {
             </tr></thead>
             <tbody>{s.rows.map((r) => {
               const R = r.reorder;
-              const href = `/tracker?new=stock&item=${r.item.id}&qty=${R.suggestedQty}${r.item.supplier_id ? `&supplier=${r.item.supplier_id}` : ""}`;
+              const href = `/stock/purchases?new=stock&item=${r.item.id}&qty=${R.suggestedQty}${r.item.supplier_id ? `&supplier=${r.item.supplier_id}` : ""}`;
               return (
                 <tr key={r.item.id} className="border-b last:border-b-0">
                   <td className="px-2 py-1.5"><Link href={`/stock/levels?item=${r.item.id}`} className="font-medium hover:underline">{r.item.name}</Link><div className="num text-xs text-muted-foreground">{r.item.sku}</div></td>

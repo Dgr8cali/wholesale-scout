@@ -32,6 +32,9 @@ export const MOVED: Moved[] = [
   // 7. Keywords and N-grams (and the Dashboard's search terms) → Search terms, one ?asin= for every tab.
   { from: "/ads/keywords", to: "/ads/search-terms?tab=keywords" },
   { from: "/ads/ngrams", to: "/ads/search-terms?tab=ngrams" },
+  // 8. Tracker + Stock → Orders → Stock → Purchases (the same purchase records, shown once).
+  { from: "/tracker", to: "/stock/purchases" },
+  { from: "/stock/orders", to: "/stock/purchases" },
 ];
 
 /** Where an old address now lives (path + query), or null when it hasn't moved. */

@@ -23,30 +23,30 @@ Amazon's own sales come from the orders sync, so they're never typed in either. 
 | **Levels** | Every item: units per bucket and in all, value at cost, days of cover (per bucket and in all, at the last 30 days' sales), and a status: **ok**, **low** (at or under its low-stock level) or **out**. Click an item for its drawer: details (editable, with **+ New supplier**), its orders (with **Receive** on the open ones), listings, its level over the last 30 days, its movements, and **Record sale**, **Receive**, **Adjust**, **Transfer** and **Return**. **New item** adds one; **Record a new order** records an order (below). Tick items to **Archive selected**; **Show archived** lists archived items to Restore or delete permanently |
 | **Movements** | The ledger: every receipt, sale, return, adjustment and transfer, filtered by item, bucket, kind and dates, with each receipt's order (a link when its page is known) and supplier, and **Export CSV**. Each row can be edited or deleted; **Audit log** lists every edit and delete |
 | **Sales** | Sales outside Amazon (eBay, TikTok Shop, your website, in person), each with its cost and profit at the moment it was recorded, filtered by channel |
-| **Orders** | Every purchase of a stock item, however it was recorded (here, the Tracker, a product page): image, item, supplier, status, quantity, unit cost (and the price in its currency), total, order number (a link when its page is known) with tracking, ordered and expected dates. **Open** shows what's on order (with its landed total), **All** everything. Each row has **Receive** (open orders), **Edit** and **Delete** (open orders only). **Record a new order** adds one |
+| **Purchases** | Every purchase, however it was recorded (here, a product page, the Plan, Reorder), with Purchases's prediction-vs-actual columns: image, item, supplier, status, quantity, unit cost (and the price in its currency), total, order number (a link when its page is known) with tracking, ordered and expected dates. **Open** shows what's on order (with its landed total), **All** everything. Each row has **Receive** (open orders), **Edit** and **Delete** (open orders only). **Record a new order** adds one |
 | **Reorder** | When each item needs ordering again and how many: the reorder point, the suggested quantity, and **due** / **soon** / **ok**. **Create purchase** opens the order form ready filled |
 | **Import** | From StockPilot (its raw table export) or a CSV of items, previewed before anything is written: [Stock: importing from StockPilot](/help/howto/stock-importing-from-stockpilot) |
 
 **Settings → Stock** holds the low-stock default (10 units), the days of cover a reorder buys (30) and the reorder lead-time buffer (7 days). Home has a Stock row: value at cost, units by bucket, items low or out, and reorders due.
 
-## Orders: from ordered to received
+## Purchases: from ordered to received
 
-**Record a new order** (on Levels, and on the [Tracker](/help/pages/tracker) as **Record a stock order**) records what you've ordered before it arrives:
+**Record a new order** (on Levels, and on the [Purchases](/help/pages/tracker) as **Record a stock order**) records what you've ordered before it arrives:
 
 1. **Item**: pick one, or **+ New item** (SKU, name, optional ASIN), added when you save.
 2. **Supplier**: pick one, or **+ New supplier** (below).
 3. **Quantity** and the **cost per unit**: landed, in £; or, with another **Currency** (USD, EUR, CNY), the unit price in that currency and **£ per 1** of it (USD at 0.79 means $1 = £0.79). The £ figure is worked out and shown.
 4. **Order id** (the supplier's order or reference number) and **Order link** (the order's page on their site, such as an Alibaba, 1688 or eBay order), **Ordered on**, **Expected**, and the **Carrier** and **Tracking number** if you have them. Notes are optional.
 
-It goes in the Tracker as **Ordered**, and shows under **Orders** in the item's drawer with its order number (a link when the page is known), expected date and tracking. When it arrives, click **Receive** there (or set it to Received on the Tracker) and choose the bucket: its units go in as a receipt at the landed cost, carrying the order number and link, the supplier, the order date, the tracking and the currency. Receiving it twice doesn't add it twice.
+It goes in Purchases as **Ordered**, and shows under **Orders** in the item's drawer with its order number (a link when the page is known), expected date and tracking. When it arrives, click **Receive** there (or set it to Received on Purchases) and choose the bucket: its units go in as a receipt at the landed cost, carrying the order number and link, the supplier, the order date, the tracking and the currency. Receiving it twice doesn't add it twice.
 
-**Receive** on an item without an order in the Tracker (a delivery you didn't record, an opening count) takes the supplier and, under **The order**, the same order fields; a unit cost in another currency is turned into £ at the rate.
+**Receive** on an item without an order in Purchases (a delivery you didn't record, an opening count) takes the supplier and, under **The order**, the same order fields; a unit cost in another currency is turned into £ at the rate.
 
-An order is one record wherever it shows: Stock → Orders, the item's drawer, the Tracker and the product page. **Edit** (on any of them) changes the item, supplier, quantity, unit cost (£ landed, or the price in another currency at its rate, which sets the £), order number and link, dates, tracking and notes. Once it's been received, its receipt in Stock follows the edit (quantity, unit cost, item, supplier, order details). **Delete** is there while it's still Ordered; one that's been received needs its receipt deleted first (Movements), which sets it back to Ordered.
+An order is one record wherever it shows: Stock → Purchases, the item's drawer, Purchases and the product page. **Edit** (on any of them) changes the item, supplier, quantity, unit cost (£ landed, or the price in another currency at its rate, which sets the £), order number and link, dates, tracking and notes. Once it's been received, its receipt in Stock follows the edit (quantity, unit cost, item, supplier, order details). **Delete** is there while it's still Ordered; one that's been received needs its receipt deleted first (Movements), which sets it back to Ordered.
 
 ### Every purchase belongs to a stock item
 
-A purchase recorded on a product page (**Your purchases → Record a purchase**) finds the stock item with that ASIN, or makes one, before it's saved: the title, image, brand, package size and weight and the catalogue product come from the catalogue, and the purchase's supplier and cost fill the item's if they're empty (an archived item with that ASIN is restored). So it's the same record as one recorded here, and shows on Stock → Orders. An item's picture comes from the catalogue product or the Ads product, then Amazon's catalogue through SP-API (all free), and only then Keepa (1 token); an item nothing has a picture of isn't looked up again.
+A purchase recorded on a product page (**Your purchases → Record a purchase**) finds the stock item with that ASIN, or makes one, before it's saved: the title, image, brand, package size and weight and the catalogue product come from the catalogue, and the purchase's supplier and cost fill the item's if they're empty (an archived item with that ASIN is restored). So it's the same record as one recorded here, and shows on Stock → Purchases. An item's picture comes from the catalogue product or the Ads product, then Amazon's catalogue through SP-API (all free), and only then Keepa (1 token); an item nothing has a picture of isn't looked up again.
 
 ## A new supplier from Stock
 
@@ -64,14 +64,14 @@ Every level is the sum of its movements, so a mistake is corrected by editing or
 |---|---|
 | A sale | Its sale on Stock → Sales, and any returns of it |
 | A transfer (either half) | The other half: the units are back where they came from |
-| A receipt from an order | Nothing else is deleted, but the order goes back to **Ordered** in the Tracker (the confirm and the message say so); Receive it again when it's right |
+| A receipt from an order | Nothing else is deleted, but the order goes back to **Ordered** in Purchases (the confirm and the message say so); Receive it again when it's right |
 | A return | Its sale can take that return again |
 
 Tick several rows and **Delete selected** to delete them together (each with what goes with it).
 
 **Delete a sale** on Stock → Sales: its movement (and returns) go too. **Delete an order** in an item's drawer (the bin beside Receive) while it hasn't been received; one that's been received needs its receipt deleted first. **Delete a listing** in the drawer: sales already recorded keep their cost.
 
-**Delete an item** (Delete item in its drawer, or the bin on its Levels row) archives it: the confirm shows how many movements, sales, listings and orders it has, and all of them are kept. Archived items are hidden from Levels, Reorder and Home. **Show archived** on Levels lists them with **Restore**, and **Delete permanently**, which removes the item with its movements, sales, listings and orders (in the Tracker too). Only an archived item can be deleted permanently. Tick several items for **Archive selected**, or, among archived ones, **Restore selected** and **Delete permanently**.
+**Delete an item** (Delete item in its drawer, or the bin on its Levels row) archives it: the confirm shows how many movements, sales, listings and orders it has, and all of them are kept. Archived items are hidden from Levels, Reorder and Home. **Show archived** on Levels lists them with **Restore**, and **Delete permanently**, which removes the item with its movements, sales, listings and orders (in Purchases too). Only an archived item can be deleted permanently. Tick several items for **Archive selected**, or, among archived ones, **Restore selected** and **Delete permanently**.
 
 **Negative.** Deleting or editing can leave a bucket below 0 (a receipt deleted under a sale, say). That's allowed, so you can correct things in any order, but the movement after which the bucket went below 0 shows a red **negative** chip on Movements, and the bucket's figure on Levels shows one too, until it's put right: receive the missing stock, adjust, or edit the movement.
 

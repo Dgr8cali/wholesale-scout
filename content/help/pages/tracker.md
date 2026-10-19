@@ -1,17 +1,19 @@
 ---
-title: Tracker
+title: Purchases
 summary: What you've bought, the app's prediction frozen at that moment, and what actually happened, so you can see how far to trust the app.
 synonyms: [purchases, orders, bought, inventory, predicted vs actual, results, outcomes, accuracy, p&l]
-route: /tracker
+route: /stock/purchases
 order: 12
 ---
+*Where: **Stock → Purchases**. This page was Purchases (Wholesale) and Stock → Purchases: the same purchase records, now shown once; `/tracker` and `/stock/orders` open it.*
+
 The tracker keeps every purchase with the app's prediction as it stood when you bought, and compares it with what actually happened once the stock is live. Over time it tells you how accurate the app is for you, and where it's optimistic.
 
 ## Recording a purchase
 
 Three ways:
 
-- **Record a purchase** at the top of the Tracker (or Products): type the ASIN, Amazon link, EAN or name; the product's page opens with the form ready. A product the app hasn't seen is checked first (a few Keepa tokens).
+- **Record a purchase** at the top of Purchases (or Products): type the ASIN, Amazon link, EAN or name; the product's page opens with the form ready. A product the app hasn't seen is checked first (a few Keepa tokens).
 
 - **On a product's page**, under **Your purchases**: **Record a purchase**, then the units, the landed cost per unit (filled in from the cheapest supplier; change it to what you actually paid landed), the supplier, the order date and an optional note. **Save**.
 - **On [Plan](/help/pages/plan)**, after placing a supplier's order: **Record as bought** on that supplier's group records every line with its quantity and landed cost, dated today.
@@ -22,11 +24,11 @@ The prediction is frozen then, from the product's latest screening: sell price, 
 
 Each purchase has a status: **Ordered** → **Received** → **Sent to Amazon** → **Live** → **Closed** (sold out or written off). Change it on the product's page; the date each status was reached is kept.
 
-Every purchase belongs to a [stock item](/help/pages/stock#every-purchase-belongs-to-a-stock-item): recording one on a product page finds the item by ASIN, or makes it from the catalogue (title, image, brand, package data, supplier). The Tracker and the product page show each purchase's title and image from its stock item (the catalogue product for older rows), and **Stock →** opens the item.
+Every purchase belongs to a [stock item](/help/pages/stock#every-purchase-belongs-to-a-stock-item): recording one on a product page finds the item by ASIN, or makes it from the catalogue (title, image, brand, package data, supplier). Purchases and the product page show each purchase's title and image from its stock item (the catalogue product for older rows), and **Stock →** opens the item.
 
-**Edit** on a purchase (on the Tracker, the product's page, Stock → Orders and the item's drawer: the same record everywhere) changes the item, supplier, quantity, unit cost and the supplier's side: the **order id** and **order link** (shown as a link on the row), the order and **expected** dates, the **carrier** and **tracking number**, and the **currency** with its rate and unit price when not GBP, plus notes. Receiving a stock purchase carries the order number onto the Stock receipt, and an edit after that changes the receipt too. **Delete** is offered while a purchase is still Ordered. **Record a stock order** records an order of a stock item: see [Stock: orders](/help/pages/stock#orders-from-ordered-to-received).
+**Edit** on a purchase (on Purchases, the product's page, Stock → Purchases and the item's drawer: the same record everywhere) changes the item, supplier, quantity, unit cost and the supplier's side: the **order id** and **order link** (shown as a link on the row), the order and **expected** dates, the **carrier** and **tracking number**, and the **currency** with its rate and unit price when not GBP, plus notes. Receiving a stock purchase carries the order number onto the Stock receipt, and an edit after that changes the receipt too. **Delete** is offered while a purchase is still Ordered. **Record a stock order** records an order of a stock item: see [Stock: orders](/help/pages/stock#purchases-from-ordered-to-received).
 
-## The Tracker page
+## Purchases page
 
 - **Money in stock**: units × landed for everything not closed.
 - **Predicted profit / month**: next month's profit on open purchases, from the frozen profit per unit at your share, never counting more units than you bought.
@@ -39,7 +41,7 @@ The table lists each purchase (open ones, or all with **All, with closed**): the
 
 ## Where the actual figures come from
 
-Every night after 2am (and when you click **Sync now** at the top of the Tracker), the app reads your own Amazon data through SP-API:
+Every night after 2am (and when you click **Sync now** at the top of Purchases), the app reads your own Amazon data through SP-API:
 
 | What | From | Used for |
 |---|---|---|
@@ -55,11 +57,11 @@ The actual fees go through the same fee engine as the prediction (digital servic
 
 The SP-API app doesn't currently have two permissions, so these aren't shown: your **Buy Box share** (needs the Brand Analytics role) and the **exact fees charged on each order** (needs the Finance and Accounting role; Amazon's fee estimate at your selling price stands in). Add those roles to the app in Seller Central's Developer Central and re-authorise it to get them.
 
-The line at the top of the Tracker says when the figures were last read; hover it for any error from the last sync.
+The line at the top of Purchases says when the figures were last read; hover it for any error from the last sync.
 
 ## How accurate the app has been (calibration)
 
-Once a purchase has been live 30 days, or has sold out, it counts towards the accuracy panel on the Tracker. For each figure the panel shows how far actual was from predicted: the median, the range of the middle half, and how many purchases it's based on:
+Once a purchase has been live 30 days, or has sold out, it counts towards the accuracy panel on Purchases. For each figure the panel shows how far actual was from predicted: the median, the range of the middle half, and how many purchases it's based on:
 
 - **Your sales a month vs your-share**: your real pace against the app's [your share](/help/reference/glossary#your-share), measured against the uncorrected estimate even if a correction was in force when you bought.
 - **Sell price**, **Fees per unit** and **Profit per unit**.

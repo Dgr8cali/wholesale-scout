@@ -64,7 +64,7 @@ A line with its own MOQ uses that MOQ, not the MOV. A change to the MOV applies 
 
 ### Stock
 
-What [Stock](/help/pages/stock) holds from this supplier: the **items** that name them (each opens on Stock → Levels), their **orders** (every purchase from them, newest first: date, item, order number as a link when its page is known, with tracking, units, landed cost (and the price in its currency), status and, while ordered, the expected date), and any **receipts** typed on Receive without an order in the Tracker. Every table sorts by its columns.
+What [Stock](/help/pages/stock) holds from this supplier: the **items** that name them (each opens on Stock → Levels), their **orders** (every purchase from them, newest first: date, item, order number as a link when its page is known, with tracking, units, landed cost (and the price in its currency), status and, while ordered, the expected date), and any **receipts** typed on Receive without an order in Purchases. Every table sorts by its columns.
 
 ### Best products
 

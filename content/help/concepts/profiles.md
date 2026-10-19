@@ -150,4 +150,4 @@ See [Runs](/help/pages/runs) and [Change a threshold](/help/howto/change-a-thres
 
 ## Calibration
 
-A profile also holds a your-share correction learnt from your own sales, 1 until you apply one from the [Tracker](/help/pages/tracker#how-accurate-the-app-has-been-calibration). It multiplies every your-share figure the profile screens with.
+A profile also holds a your-share correction learnt from your own sales, 1 until you apply one from [Purchases](/help/pages/tracker#how-accurate-the-app-has-been-calibration). It multiplies every your-share figure the profile screens with.

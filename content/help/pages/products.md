@@ -7,9 +7,9 @@ order: 5
 ---
 **Products** in the sidebar lists every product the app has screened, one per ASIN, newest screening first, with its latest verdict on your default profile, sell price, [max landed](/help/reference/glossary#max-landed), FBA sellers, [your share](/help/reference/glossary#your-share) a month and when it was screened. Search by name, brand, ASIN or EAN; filter by **Pass**, **Warn** or **Fail**, or **Bought** (products you've recorded a purchase of); 50 a page. Click a product for its page.
 
-Each product's page, at `/products/<ASIN>`, brings together every run, supplier price, Keepa history and document the app has for it. You can also reach it from **Product page →** in a row's details, the product's name in the details drawer, the Brands, Watchlist, Plan and Tracker pages, the extension's **Open in app**, or the search box in the top bar (an ASIN or Amazon link opens the page; an EAN or words of the name list matches).
+Each product's page, at `/products/<ASIN>`, brings together every run, supplier price, Keepa history and document the app has for it. You can also reach it from **Product page →** in a row's details, the product's name in the details drawer, the Brands, Shortlist, Plan and Purchases pages, the extension's **Open in app**, or the search box in the top bar (an ASIN or Amazon link opens the page; an EAN or words of the name list matches).
 
-**Record a purchase** (on Products and the [Tracker](/help/pages/tracker)) asks which product (ASIN, Amazon link, EAN or name) and opens its page with the purchase form ready. A product the app hasn't seen yet is checked first (a few Keepa tokens; it appears in Runs as an ASIN check).
+**Record a purchase** (on Products and the [Purchases](/help/pages/tracker)) asks which product (ASIN, Amazon link, EAN or name) and opens its page with the purchase form ready. A product the app hasn't seen yet is checked first (a few Keepa tokens; it appears in Runs as an ASIN check).
 
 ## The decision
 
@@ -38,7 +38,7 @@ When it needs approval, **Apply kit** gathers the brand's documents and the chea
 
 ## Your purchases
 
-Record what you buy here (see [Tracker](/help/pages/tracker)): the prediction is frozen with it, and once the stock is live the actual sell price, fees, profit and sales appear beside it.
+Record what you buy here (see [Purchases](/help/pages/tracker)): the prediction is frozen with it, and once the stock is live the actual sell price, fees, profit and sales appear beside it.
 
 ## Last 12 months
 

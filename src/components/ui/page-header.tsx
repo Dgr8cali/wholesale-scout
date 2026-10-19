@@ -29,7 +29,7 @@ export function PageHeader({ title, subtitle, info, actions, crumbs, className }
         </div>
         {subtitle && <p className="mt-1 text-sm text-muted-foreground sm:truncate">{subtitle}</p>}
       </div>
-      {actions && <div className="flex flex-none flex-wrap items-center gap-2">{actions}</div>}
+      {actions && <div className="flex max-w-full min-w-0 flex-wrap items-center gap-2">{actions}</div>}
     </header>
   )
 }

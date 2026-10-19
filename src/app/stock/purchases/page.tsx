@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { VatTag } from "@/components/VatTag";
 import { useEffect, useMemo, useState } from "react";
-import { usePageCrumbs } from "@/components/Crumbs";
 import { ProductThumb } from "@/components/ProductThumb";
 import { EmptyState, ErrorState } from "@/components/States";
 import { Card, CardContent } from "@/components/ui/card";
@@ -25,6 +24,7 @@ import { OrderDeleteButton, OrderEditButton, OrderLine } from "@/components/trac
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
 
 type Row = Purchase & { actuals?: Actuals | null };
 /** A purchase's title and image: its stock item's, else (older rows) the catalogue product's. */
@@ -47,15 +47,17 @@ function pctOff(pred: number | null | undefined, act: number | null | undefined)
   return Math.round(((act - pred) / Math.abs(pred)) * 100);
 }
 
-/** Everything you've bought: status, money in, the prediction and (once live) how it's going. */
-export default function TrackerPage() {
-  usePageCrumbs([{ label: "Tracker" }]);
+/**
+ * Stock → Purchases (the old Tracker and Stock → Orders: the same purchase records): everything you've
+ * bought, its status and order, money in, the prediction frozen at purchase and (once live) how it's going.
+ */
+export default function PurchasesPage() {
   const [rows, setRows] = useState<Row[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [show, setShow] = useState<"open" | "all">("open");
   const [nonce, setNonce] = useState(0);
   const [vatReg, setVatReg] = useState<boolean | null>(null);
-  // From Stock → Reorder: ?new=stock&item=<id>&qty=<n>&supplier=<id> opens a prefilled purchase.
+  // From Stock → Reorder: ?new=stock&item=<id>&qty=<n>&supplier=<id> opens a prefilled purchase (also via the old /tracker).
   const [stockNew, setStockNew] = useState<{ item: string; qty: number | null; supplier: string | null } | null>(() => {
     if (typeof window === "undefined") return null;
     const q = new URLSearchParams(window.location.search);
@@ -92,8 +94,24 @@ export default function TrackerPage() {
   });
   const shown = sorting.rows;
 
-  if (error) return <ErrorState title="Couldn't load the tracker" message={error} />;
-  if (!rows) return <Skeleton className="h-64" />;
+  const header = (
+    <PageHeader
+      title="Purchases"
+      crumbs={[{ label: "Stock", href: "/stock/levels" }, { label: "Purchases" }]}
+      subtitle="What you've bought, and the prediction against what happened."
+      info={<>
+        <p>Every purchase, one record each, whether recorded here, on a product page, from the Plan or from Stock → Reorder (this page was the Tracker and Stock → Orders).</p>
+        <p>Set a purchase to <b>Received</b> to put its units into a Stock bucket, with its order number on the receipt. Profit and sales show predicted (frozen when you bought) · actual (from Amazon&apos;s reports once the stock is live).</p>
+      </>}
+      actions={<>
+        <SyncStatus onSynced={() => setNonce((n) => n + 1)} />
+        <RecordPurchaseDialog variant="outline" />
+        <Button onClick={() => setStockNew({ item: "", qty: null, supplier: null })}>Record a stock order</Button>
+      </>}
+    />
+  );
+  if (error) return <div className="space-y-6">{header}<ErrorState title="Couldn't load the purchases" message={error} /></div>;
+  if (!rows) return <div className="space-y-6">{header}<Skeleton className="h-64 rounded-xl" /></div>;
 
   const open = rows.filter((p) => p.status !== "closed");
   const invested = open.reduce((s, p) => s + p.units * p.landed_gbp, 0);
@@ -104,19 +122,9 @@ export default function TrackerPage() {
   for (const p of open) counts.set(p.status, (counts.get(p.status) ?? 0) + 1);
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="page-title">Tracker</h1>
-          <p className="text-sm text-muted-foreground">What you&apos;ve bought, the app&apos;s prediction when you bought it, and what Amazon says actually happened.</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <SyncStatus onSynced={() => setNonce((n) => n + 1)} />
-          <Button variant="outline" onClick={() => setStockNew({ item: "", qty: null, supplier: null })}>Record a stock order</Button>
-          <RecordPurchaseDialog />
-        </div>
-      </div>
-      {stockNew && <StockPurchaseDialog open itemId={stockNew.item || null} qty={stockNew.qty} supplierId={stockNew.supplier} onOpenChange={(o) => { if (!o) { setStockNew(null); window.history.replaceState(null, "", "/tracker"); } }} onSaved={() => setNonce((n) => n + 1)} />}
+    <div className="space-y-6">
+      {header}
+      {stockNew && <StockPurchaseDialog open itemId={stockNew.item || null} qty={stockNew.qty} supplierId={stockNew.supplier} onOpenChange={(o) => { if (!o) { setStockNew(null); window.history.replaceState(null, "", "/stock/purchases"); } }} onSaved={() => setNonce((n) => n + 1)} />}
       {receiving && <ReceiveDialog open units={receiving.units} onOpenChange={(o) => { if (!o) setReceiving(null); }} onReceive={(bucket) => { const p = receiving; setReceiving(null); setStatus(p, "received", bucket); }} />}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
