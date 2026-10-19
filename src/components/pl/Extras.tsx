@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { LaunchStep, PlStatus } from "@/lib/pl/launch";
@@ -33,7 +34,9 @@ export function CandidateExtras({ c, status, verdictTitle, budget, show = "both"
   const launchOn = show === "launch" || (show === "both" && (verdictTitle === "Order samples" || status === "samples" || status === "launched"));
   return (
     <>
-      {show !== "launch" && <SuppliersSection candidateId={c.id} onQuoted={load} />}
+      {/* On Suppliers & quotes → Quotes the supplier table is the Suppliers tab, not repeated here. */}
+      {show === "both" && <SuppliersSection candidateId={c.id} onQuoted={load} />}
+      {show === "quotes" && <p className="text-sm"><Link className="font-medium text-primary hover:underline" href={`/pl/suppliers?candidate=${c.id}`}>{c.name}&apos;s Alibaba suppliers →</Link> <span className="text-muted-foreground">to message with the RFQ, then Add quote</span></p>}
       {show !== "launch" && <QuotesSection key={`q${v}`} c={c} quotes={x.quotes} chosenQuote={x.chosenQuote} onChanged={load} onFieldsChanged={() => { onFieldsChanged(); load(); }} />}
       {show === "both" && <ListingSection candidateId={c.id} />}
       {launchOn && (

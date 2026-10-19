@@ -5,7 +5,7 @@ synonyms: [quotes, supplier quote, landed cost, rfq, request for quotation, alib
 workspace: pl
 order: 3
 ---
-**Private label → Quotes** lists every candidate with its quotes, chosen landed cost and price multiple (sort by any column); pick one to work on its quotes. Each candidate's page has the same **Quotes** section under its scorecard.
+**Private label → Suppliers & quotes → Quotes** (the old Quotes page; `/pl/quotes` opens it) lists every candidate with its quotes, chosen landed cost and price multiple (sort by any column); pick one to work on its quotes. Each candidate's page has the same **Quotes** section under its scorecard.
 
 ## Asking for quotes: RFQ text
 

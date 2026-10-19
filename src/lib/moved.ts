@@ -35,6 +35,8 @@ export const MOVED: Moved[] = [
   // 8. Tracker + Stock → Orders → Stock → Purchases (the same purchase records, shown once).
   { from: "/tracker", to: "/stock/purchases" },
   { from: "/stock/orders", to: "/stock/purchases" },
+  // 9. Private label Quotes → the Quotes tab of Suppliers & quotes.
+  { from: "/pl/quotes", to: "/pl/suppliers?tab=quotes" },
 ];
 
 /** Where an old address now lives (path + query), or null when it hasn't moved. */

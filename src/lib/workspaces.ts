@@ -45,8 +45,7 @@ export const WORKSPACES: Workspace[] = [
     nav: [
       { href: "/pl/candidates", label: "Candidates" },
       { href: "/pl/niches", label: "Niches" },
-      { href: "/pl/suppliers", label: "Suppliers" },
-      { href: "/pl/quotes", label: "Quotes" },
+      { href: "/pl/suppliers", label: "Suppliers & quotes" },
       { href: "/pl/launch", label: "Launch checklist", more: true },
     ],
   },

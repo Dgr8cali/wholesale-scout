@@ -30,7 +30,7 @@ describe("workspaces", () => {
     const more = (id: Parameters<typeof workspace>[0]) => workspace(id).nav.filter((n) => n.more).map((n) => n.label);
     expect(main("wholesale")).toEqual(["Runs", "New run", "Products", "Suppliers", "Shortlist"]);
     expect(more("wholesale")).toEqual(["Sellers", "Brands", "Plan"]);
-    expect(main("pl")).toEqual(["Candidates", "Niches", "Suppliers", "Quotes"]);
+    expect(main("pl")).toEqual(["Candidates", "Niches", "Suppliers & quotes"]);
     expect(more("pl")).toEqual(["Launch checklist"]);
     expect(main("ads")).toEqual(["Dashboard", "Proposals", "Launch", "Search terms"]);
     expect(more("ads")).toEqual(["Rules", "Review"]);
