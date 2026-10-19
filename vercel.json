@@ -3,18 +3,11 @@
   "regions": [
     "dub1"
   ],
-  "crons": [
+  "redirects": [
     {
-      "path": "/api/cron/qogita",
-      "schedule": "0 3 * * *"
-    },
-    {
-      "path": "/api/cron/watchlist",
-      "schedule": "0 6 * * 0"
-    },
-    {
-      "path": "/api/cron/ads-review",
-      "schedule": "0 6 1 * *"
+      "source": "/:path*",
+      "destination": "https://ws.dgr8cali.co.uk/:path*",
+      "permanent": true
     }
   ]
 }

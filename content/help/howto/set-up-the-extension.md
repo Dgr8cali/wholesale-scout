@@ -13,7 +13,7 @@ You need:
 
 - Google Chrome on a computer.
 - The app's code on that computer. The extension lives in its `extension/` folder.
-- Your app's address, for example `https://wholesale-scout.vercel.app` (or `http://localhost:3000` if you're running it locally).
+- Your app's address, `https://ws.dgr8cali.co.uk` (or `http://localhost:3000` if you're running it locally).
 - The app's password: the value of `APP_PASSWORD`, which is the same password the app asks you for.
 
 ## Install it

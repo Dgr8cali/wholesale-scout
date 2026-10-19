@@ -1,11 +1,11 @@
 ---
 title: Add an environment variable
-summary: Every environment variable the app reads, what it does, and how to set it locally and on Vercel.
-synonyms: [env, env var, secret, api key, configuration, vercel, env.local, credentials]
+summary: Every environment variable the app reads, what it does, and how to set it locally and on the server.
+synonyms: [env, env var, secret, api key, configuration, server, netcup, vercel, env.local, credentials]
 order: 7
 workspace: general
 ---
-Keys and passwords (Supabase, Amazon SP-API, Keepa, Qogita, email) aren't stored in the app's database or code. They're environment variables: set in `.env.local` on your computer, and in the Vercel project for the live app.
+Keys and passwords (Supabase, Amazon SP-API, Keepa, Qogita, email) aren't stored in the app's database or code. They're environment variables: set in `.env.local` on your computer, and in `~/wholesale-scout/.env` on the server for the live app (https://ws.dgr8cali.co.uk).
 
 ## Set one locally
 
@@ -18,13 +18,15 @@ Keys and passwords (Supabase, Amazon SP-API, Keepa, Qogita, email) aren't stored
 
 3. Stop `npm run dev` and start it again. The app only reads the file when it starts.
 
-`npm run migrate` reads `.env.local` too, for `DATABASE_URL`.
+`make migrate` reads `.env.local` too, for `DATABASE_URL` (the server's database through the SSH tunnel it opens).
 
-## Set one on Vercel
+## Set one on the server
 
-1. In Vercel, open the project, then **Settings** → **Environment Variables**.
-2. Enter the name and value, choose the environments (Production, and Preview if you use it), and save.
-3. Redeploy: **Deployments** → the latest deployment → **Redeploy**. A running deployment doesn't see new or changed variables until it is redeployed.
+1. SSH to the server and open `~/wholesale-scout/.env` (the template is `infra/env.server.example`).
+2. Add one line per variable, `NAME=value`. Docker Compose reads this file and treats `$` as the start of a variable, so write a `$` in a value as `$$`.
+3. Run `make deploy` from your computer. The running app doesn't see new or changed variables until it is restarted.
+
+The app moved off Vercel on 17 Oct 2026; `wholesale-scout.vercel.app` now only redirects here.
 
 ## Check it worked
 
@@ -38,7 +40,7 @@ The status dots in the top bar show **Supabase**, **SP-API**, **Gating** and **K
 |---|---|
 | `SUPABASE_URL` | Your Supabase project's URL. Without it and the key, every page that loads data fails with "SUPABASE_URL and SUPABASE_SERVICE_KEY must be set". |
 | `SUPABASE_SERVICE_KEY` | Supabase's service-role key, used by the server only. |
-| `APP_PASSWORD` | The password the browser asks for (any username). The extension and scripts send it as a bearer token. In production, without it every page says "Set APP_PASSWORD in the Vercel project to open Wholesale Scout."; locally the app runs open. |
+| `APP_PASSWORD` | The password the browser asks for (any username). The extension and scripts send it as a bearer token. In production, without it every page says "Set APP_PASSWORD in the server's .env to open Wholesale Scout."; locally the app runs open. |
 
 ### Amazon SP-API
 
@@ -69,7 +71,7 @@ The status dots in the top bar show **Supabase**, **SP-API**, **Gating** and **K
 
 | Variable | What it's for |
 |---|---|
-| `CRON_SECRET` | Lets Vercel Cron call `/api/cron/…` without the app password. Needed for the nightly Qogita pull (03:00) and the weekly watchlist check (Sunday 06:00); without it those calls are refused. |
+| `CRON_SECRET` | Lets the server's crontab call `/api/cron/…` without the app password (it reads the secret from `~/wholesale-scout/.cron.env`, single-quoted, with `$$` written as `$`). Needed for the nightly Qogita pull (03:00) and the weekly watchlist check (Sunday 06:00); without it those calls are refused. |
 | `WATCHDOG_SECRET` | Optional. The bearer secret Supabase's watchdog job uses to call `/api/cron/watchdog`, which restarts runs that have stalled. The same value goes in Supabase Vault as `watchdog_secret`, with the app's watchdog address as `watchdog_url`. `CRON_SECRET` is accepted there too. |
 
 ### Email alerts
@@ -79,18 +81,18 @@ The status dots in the top bar show **Supabase**, **SP-API**, **Gating** and **K
 | `RESEND_API_KEY` | Your Resend API key. With `ALERT_EMAIL_TO`, [watchlist](/help/pages/watchlist) alerts are emailed; without both, alerts stay on the Watchlist page. |
 | `ALERT_EMAIL_TO` | Where alerts go. Several addresses can be separated by commas. |
 | `ALERT_EMAIL_FROM` | Optional. The sender. Defaults to `Wholesale Scout <onboarding@resend.dev>`, which only delivers to your own Resend account's address until you verify a domain. |
-| `APP_URL` | Optional. The app's address used in email links. Falls back to Vercel's production address, then `https://wholesale-scout.vercel.app`. |
+| `APP_URL` | Optional. The app's address used in email links. Falls back to `https://ws.dgr8cali.co.uk`. |
 
 ### Database migrations
 
 | Variable | What it's for |
 |---|---|
-| `DATABASE_URL` | The Postgres connection string for `npm run migrate` (Supabase → **Connect** → Session pooler). Only the migration script uses it; set it in `.env.local`. |
+| `DATABASE_URL` | The Postgres connection string `make migrate` uses: the server's database through its SSH tunnel (`127.0.0.1:5433`). Only the migration script uses it; set it in `.env.local`. |
 
 ### Set for you
 
-`NODE_ENV` (set by Next.js) and `VERCEL_PROJECT_PRODUCTION_URL` (set by Vercel) are read by the app, but you don't set them.
+`NODE_ENV` (set by Next.js) is read by the app, but you don't set it.
 
 ## Keep secrets secret
 
-Never paste keys into help articles, issues, chat or commits. `.env.local` stays on your computer; Vercel keeps its copy encrypted. If a key leaks, make a new one at the provider, update it in both places and redeploy.
+Never paste keys into help articles, issues, chat or commits. `.env.local` stays on your computer; the server's `.env` is readable only by its owner. If a key leaks, make a new one at the provider, update it in both places and redeploy.

@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { __setDbForTests } from "./lib/server/db";
-import { proxy } from "./proxy";
+import { proxy, vercelRedirect } from "./proxy";
 
 // Wrong passwords are counted in the database: a stand-in that blocks at 10.
 const failures = new Map<string, number>();
@@ -72,5 +72,15 @@ describe("password gate", () => {
     expect(last).toBe(429);
     expect((await proxy(req("/api/extension/ping", "Bearer pw", "192.0.2.50"))).status).toBe(200);
     expect((await proxy(req("/api/extension/check?asin=B000000001", "Bearer pw", "192.0.2.51"))).status).toBe(200);
+  });
+
+  it("sends everything on the old Vercel address to the same path on the server (308), before the password", async () => {
+    expect(vercelRedirect("wholesale-scout.vercel.app", "/ads/proposals?tab=open")).toBe("https://ws.dgr8cali.co.uk/ads/proposals?tab=open");
+    expect(vercelRedirect("wholesale-scout-git-main-akin.vercel.app", "/")).toBe("https://ws.dgr8cali.co.uk/");
+    expect(vercelRedirect("ws.dgr8cali.co.uk", "/")).toBeNull();
+    expect(vercelRedirect("notvercel.app.example.com", "/")).toBeNull();
+    const r = await proxy(new NextRequest("https://wholesale-scout.vercel.app/api/plan?x=1", { method: "POST", headers: { host: "wholesale-scout.vercel.app" } }));
+    expect(r.status).toBe(308);
+    expect(r.headers.get("location")).toBe("https://ws.dgr8cali.co.uk/api/plan?x=1");
   });
 });

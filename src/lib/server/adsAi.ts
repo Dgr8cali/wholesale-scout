@@ -53,7 +53,7 @@ export function __setAnthropicForTests(c: MessagesClient | null) { testClient = 
 function client(): MessagesClient {
   if (testClient) return testClient;
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error("ANTHROPIC_API_KEY isn't set (.env.local and Vercel)");
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY isn't set (.env.local and the server's .env)");
   return new Anthropic({ apiKey });
 }
 

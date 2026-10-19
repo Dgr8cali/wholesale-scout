@@ -15,7 +15,7 @@ Click the extension's icon in the Chrome toolbar to open its settings:
 
 | Setting | Default | What it does |
 |---|---|---|
-| **App URL** | `https://wholesale-scout.vercel.app` | Your app's address. "https://" is added if you leave it off. |
+| **App URL** | `https://ws.dgr8cali.co.uk` | Your app's address. "https://" is added if you leave it off. A saved `wholesale-scout.vercel.app` (the old address, which only redirects now) is moved to it automatically. |
 | **APP_PASSWORD** | empty | The password the app asks for. It's stored on this computer only (in Chrome's local extension storage) and sent only to your app. |
 | **Seller Central DG page** | `https://sellercentral.amazon.co.uk/product-search/search?q={asin}` | The page **Look up** opens, with `{asin}` replaced. If another Seller Central page shows you the dangerous-goods classification, paste its address here. |
 | **Check product pages automatically** | on | The panel checks each product page as soon as it opens. When it's off, the panel shows a **Check** button instead. |

@@ -9,7 +9,7 @@ export const maxDuration = 60;
 const authorised = (req: NextRequest) => bearerIs(req.headers.get("authorization"), process.env.CRON_SECRET);
 
 /**
- * Weekly watchlist re-check (Vercel Cron, Sundays; see vercel.json): starts a run of every
+ * Weekly watchlist re-check (the server's crontab, Sundays 06:00): starts a run of every
  * watched product. When it finishes, the conditions are recorded and one digest is emailed.
  */
 export const GET = handle(async (req: NextRequest) => {

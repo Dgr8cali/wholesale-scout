@@ -3,7 +3,8 @@
 Amazon UK wholesale research: supplier price lists, Qogita pulls, ASIN checks, seller scans and
 Keepa hunts in; a screened, scored shortlist and an order out.
 
-Next.js 16 (app router), TypeScript, Tailwind 4, Supabase Postgres + Storage, Vercel. How to use
+Next.js 16 (app router), TypeScript, Tailwind 4, self-hosted Supabase Postgres + Storage, on a Netcup server
+(https://ws.dgr8cali.co.uk; `infra/`, `make deploy`). How to use
 the app is in the app itself: **Help** in the sidebar (articles in `content/help/`). This file is
 the setup guide for a fresh clone.
 
@@ -12,7 +13,7 @@ the setup guide for a fresh clone.
 | Service | For | Required |
 | --- | --- | --- |
 | Supabase project | Database (Postgres), file storage (documents) | yes |
-| Vercel project | Hosting, crons | yes (or any Node host for local use) |
+| A Linux server with Docker | Hosting (the app and self-hosted Supabase), crons (crontab). Files in `infra/`. Vercel was retired on 17 Oct 2026: `wholesale-scout.vercel.app` only redirects to the server | yes (or any Node host for local use) |
 | Amazon SP-API app (UK) | Catalog match, Buy Box, offers, fees, gating | yes, for real screening |
 | Keepa API key | Sales history, Product Finder (Hunt), seller storefronts | recommended |
 | Qogita buyer account | Qogita pulls, cart, Find on Qogita | optional |
@@ -30,14 +31,14 @@ Node 20 or later.
 
 ## 3. Environment variables
 
-Set these in Vercel → Settings → Environment Variables (Production, and Preview if you use it),
-and in `.env.local` for local work (`vercel env pull .env.local` fetches the Development ones).
-After changing one in Vercel, redeploy. Never commit `.env.local`.
+Set these in `~/wholesale-scout/.env` on the server (template: `infra/env.server.example`; write a
+`$` as `$$`, Docker Compose reads the file) and in `.env.local` for local work. After changing one
+on the server, `make deploy`. Never commit `.env.local`.
 
 | Variable | What it's for | Required |
 | --- | --- | --- |
 | `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` | Every database and storage call. Only the service key is used, server-side: RLS is on with no policies. | yes |
-| `DATABASE_URL` | `npm run migrate` and the schema backup (Supabase → Connect → Session pooler URI). Local only; the app doesn't use it. | for migrations |
+| `DATABASE_URL` | `make migrate` and the schema backup: the server's database through the SSH tunnel `make migrate` opens (`127.0.0.1:5433`). Local only; the app doesn't use it. | for migrations |
 | `APP_PASSWORD` | The password gate (browser asks once, any username; scripts and the extension send `Authorization: Bearer <password>`). Production refuses to serve without it. | yes |
 | `SPAPI_CLIENT_ID`, `SPAPI_CLIENT_SECRET`, `SPAPI_REFRESH_TOKEN` | SP-API (LWA app credentials and the refresh token from authorising it on your seller account). | yes |
 | `SPAPI_SELLER_ID` | Gating checks: your merchant token (Seller Central → Settings → Account Info). | for gating |
@@ -45,8 +46,8 @@ After changing one in Vercel, redeploy. Never commit `.env.local`.
 | `KEEPA_API_KEY` | Keepa (64 characters). Anything else keeps the stub, where history gates say "not checked"; `KEEPA_MODE=stub` forces it. | recommended |
 | `QOGITA_EMAIL`, `QOGITA_PASSWORD` | Qogita pulls, the cart, Find on Qogita. | optional |
 | `RESEND_API_KEY`, `ALERT_EMAIL_TO` | Watchlist digest email. | optional |
-| `ALERT_EMAIL_FROM`, `APP_URL` | Sender and the link base in that email (defaults: Resend's test sender, the Vercel production URL). | no |
-| `CRON_SECRET` | Vercel sends it to the crons (`/api/cron/*`). Vercel sets it when you add one; the routes refuse other callers. | for crons |
+| `ALERT_EMAIL_FROM`, `APP_URL` | Sender and the link base in that email (defaults: Resend's test sender, `https://ws.dgr8cali.co.uk`). | no |
+| `CRON_SECRET` | The server's crontab sends it to the crons (`/api/cron/*`), from `~/wholesale-scout/.cron.env` (single-quoted, `$$` written as `$`); the routes refuse other callers. | for crons |
 | `WATCHDOG_SECRET` | The Supabase watchdog's bearer token (see 5). | for the watchdog |
 
 The help article **Add an environment variable** lists the same with more detail.
@@ -54,8 +55,8 @@ The help article **Add an environment variable** lists the same with more detail
 ## 4. Database
 
 ```
-npm run migrate                    # applies supabase/migrations/*.sql in order, each once
-npm run migrate -- --status        # what's applied and pending
+make migrate                       # applies supabase/migrations/*.sql to the server's DB, each once
+make migrate-status                # what's applied and pending
 ```
 
 Every migration is safe to re-run. On first use the app seeds the four profiles (First order is
@@ -72,8 +73,9 @@ on paid plans; Database → Backups).
 
 ## 5. Crons and the watchdog
 
-- **Vercel crons** (`vercel.json`): Qogita nightly re-pulls at 03:00 UTC, the watchlist re-check on
-  Sundays at 06:00 UTC. They need `CRON_SECRET`.
+- **Crons** (the server's crontab, `curl` with `CRON_SECRET`): Qogita nightly re-pulls at 03:00,
+  the watchlist re-check on Sundays at 06:00, the Ads review on the 1st at 06:00. Output goes to
+  `~/wholesale-scout/cron.log`.
 - **Watchdog** (Supabase `pg_cron`, every minute, created by a migration): restarts a run whose
   processing chain has died, so runs finish with no browser open. It reads two Supabase Vault
   secrets; add them once in the SQL editor:
@@ -85,8 +87,9 @@ on paid plans; Database → Backups).
 
   Without them the job does nothing.
 
-Functions run in Dublin (`dub1`, `vercel.json`), next to a Supabase project in eu-west-1. If your
-project is elsewhere, set `regions` to the Vercel region nearest to it.
+`vercel.json` is left only to redirect the old Vercel deployment (every path, 308) to the server;
+it has no crons, so the old deployment doesn't run jobs against the Supabase Cloud project kept
+as a rollback.
 
 ## 6. The Chrome extension
 

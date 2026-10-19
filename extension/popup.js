@@ -1,6 +1,6 @@
 // Settings: the app's URL and password (kept in chrome.storage.local on this computer only),
 // the Seller Central DG page, and a connection test.
-const DEFAULTS = { appUrl: "https://wholesale-scout.vercel.app", password: "", dgUrl: "https://sellercentral.amazon.co.uk/product-search/search?q={asin}", autoCheck: true, showDebug: false, poeOtherMarkets: false };
+const DEFAULTS = { appUrl: "https://ws.dgr8cali.co.uk", password: "", dgUrl: "https://sellercentral.amazon.co.uk/product-search/search?q={asin}", autoCheck: true, showDebug: false, poeOtherMarkets: false };
 const $ = (id) => document.getElementById(id);
 /**
  * A message to the background, as a promise. It always reads chrome.runtime.lastError, so a
@@ -20,6 +20,11 @@ const bg = (message) => new Promise((resolve) => {
 const msg = (text, ok) => { $("msg").textContent = text; $("msg").className = ok ? "ok" : "err"; };
 
 chrome.storage.local.get(DEFAULTS, (s) => {
+  // The old Vercel address only redirects now (dropping the password): moved to the new one.
+  if (/^https?:\/\/wholesale-scout\.vercel\.app\/*$/i.test(String(s.appUrl))) {
+    s.appUrl = DEFAULTS.appUrl;
+    chrome.storage.local.set({ appUrl: s.appUrl });
+  }
   $("appUrl").value = s.appUrl;
   $("password").value = s.password;
   $("dgUrl").value = s.dgUrl;

@@ -92,7 +92,7 @@ export default function WatchlistPage() {
       {header}
       {!data.email && (
         <p className="flex items-center gap-2 rounded-md bg-warn-soft px-3 py-2 text-sm text-warn">
-          <MailWarningIcon className="size-4 flex-none" /> Email alerts are off: set RESEND_API_KEY and ALERT_EMAIL_TO in Vercel. Alerts still show here.
+          <MailWarningIcon className="size-4 flex-none" /> Email alerts are off: set RESEND_API_KEY and ALERT_EMAIL_TO in the server&apos;s .env. Alerts still show here.
         </p>
       )}
 

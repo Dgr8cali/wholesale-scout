@@ -8,7 +8,7 @@ export const maxDuration = 300;
 const authorised = (req: NextRequest) => bearerIs(req.headers.get("authorization"), process.env.CRON_SECRET);
 
 /**
- * The monthly Ads review (Vercel Cron, the 1st at 06:00 UTC; see vercel.json): reviews last month,
+ * The monthly Ads review (the server's crontab, the 1st at 06:00): reviews last month,
  * only when Settings → Ads has the schedule on (it's off by default). Otherwise it does nothing.
  */
 export const GET = handle(async (req: NextRequest) => {

@@ -2,7 +2,7 @@
 // it by message; it adds the password (Bearer APP_PASSWORD) and calls the app you configured.
 
 const DEFAULTS = {
-  appUrl: "https://wholesale-scout.vercel.app",
+  appUrl: "https://ws.dgr8cali.co.uk",
   password: "",
   // Seller Central page to open for a DG look-up; {asin} is replaced.
   dgUrl: "https://sellercentral.amazon.co.uk/product-search/search?q={asin}",
@@ -41,8 +41,16 @@ async function syncPoeMarketsNow() {
 chrome.runtime.onInstalled.addListener(() => { syncPoeMarkets(); });
 chrome.runtime.onStartup.addListener(() => { syncPoeMarkets(); });
 
+// The app moved off Vercel (17 Oct 2026); the old address only redirects, and a redirect drops the
+// password. A saved old address is moved to the new one.
+const OLD_APP_URL = /^https?:\/\/wholesale-scout\.vercel\.app\/*$/i;
+
 async function settings() {
   const s = await chrome.storage.local.get(DEFAULTS);
+  if (OLD_APP_URL.test(String(s.appUrl))) {
+    s.appUrl = DEFAULTS.appUrl;
+    await chrome.storage.local.set({ appUrl: s.appUrl });
+  }
   return { ...DEFAULTS, ...s, appUrl: String(s.appUrl || DEFAULTS.appUrl).replace(/\/+$/, "") };
 }
 

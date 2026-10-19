@@ -10,7 +10,7 @@ export const maxDuration = 60;
 const authorised = (req: NextRequest) => bearerIs(req.headers.get("authorization"), process.env.CRON_SECRET);
 
 /**
- * Nightly Qogita re-pull (Vercel Cron, see vercel.json). Each call re-pulls one due preset
+ * Nightly Qogita re-pull (the server's crontab, 03:00; see infra/). Each call re-pulls one due preset
  * and, while more are due, calls itself again for the next.
  */
 export const GET = handle(async (req: NextRequest) => {

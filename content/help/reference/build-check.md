@@ -5,7 +5,7 @@ synonyms: [build, deploy, ci, prebuild, checks, backlog, supabase advisor, secur
 order: 2
 workspace: general
 ---
-Every change goes through the same checks before it's pushed, and Vercel deploys `main` once it is.
+Every change goes through the same checks before it's pushed, and `make deploy` builds and restarts it on the server once it is.
 
 ## What the build runs
 
@@ -16,7 +16,7 @@ Every change goes through the same checks before it's pushed, and Vercel deploys
 | Tests | `npm test` | Any failing test. Never pushed while one fails. |
 | Lint | `npm run lint` | Lint errors. |
 
-When a change includes a database migration (`supabase/migrations/`), it is applied with `npm run migrate` before the push, so the deployed code never meets a database without its columns. After a schema change, `npm run schema:backup` refreshes `supabase/schema.sql`.
+When a change includes a database migration (`supabase/migrations/`), it is applied with `make migrate` (the server's database, over an SSH tunnel) before the push, so the deployed code never meets a database without its columns. After a schema change, `npm run schema:backup` refreshes `supabase/schema.sql`.
 
 ## Database security
 

@@ -12,7 +12,7 @@ export function emailConfigured(): boolean {
 
 /** The app's public address, for links in emails. */
 export function appUrl(): string {
-  const u = process.env.APP_URL ?? (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : "https://wholesale-scout.vercel.app");
+  const u = process.env.APP_URL ?? "https://ws.dgr8cali.co.uk";
   return u.replace(/\/$/, "");
 }
 

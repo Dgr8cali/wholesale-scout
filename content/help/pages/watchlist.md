@@ -84,4 +84,4 @@ This is one row per watched product:
 
 ## Email digest
 
-One email per re-check lists every new alert, with links to Amazon, the run and the watchlist. "Supplier found" alerts are emailed as soon as they happen. Email is sent through Resend and needs `RESEND_API_KEY` and `ALERT_EMAIL_TO` (several addresses can be separated by commas). `ALERT_EMAIL_FROM` is optional. Without them the page shows "Email alerts are off: set RESEND_API_KEY and ALERT_EMAIL_TO in Vercel. Alerts still show here." See [Add an environment variable](/help/howto/add-an-env-var).
+One email per re-check lists every new alert, with links to Amazon, the run and the watchlist. "Supplier found" alerts are emailed as soon as they happen. Email is sent through Resend and needs `RESEND_API_KEY` and `ALERT_EMAIL_TO` (several addresses can be separated by commas). `ALERT_EMAIL_FROM` is optional. Without them the page shows "Email alerts are off: set RESEND_API_KEY and ALERT_EMAIL_TO in the server's .env. Alerts still show here." See [Add an environment variable](/help/howto/add-an-env-var).

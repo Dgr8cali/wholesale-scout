@@ -18,11 +18,11 @@ Wholesale Scout's verdict on Amazon UK, where you browse:
 3. Click **Load unpacked** and choose this `extension/` folder.
 4. Pin it: puzzle-piece icon → pin **Wholesale Scout**.
 5. Click its icon, then enter:
-   - **App URL**: `https://wholesale-scout.vercel.app` (or `http://localhost:3000` in development)
+   - **App URL**: `https://ws.dgr8cali.co.uk` (or `http://localhost:3000` in development)
    - **APP_PASSWORD**: the same password the app asks for
 6. Click **Save** (Chrome asks to allow access to the app's address: allow it), then **Test connection**. It should say "Connected".
 
-Since 0.6.0 the extension's icon, toolbar button, popup and panel headings carry the Wholesale Scout mark (`icons/`). After pulling a new version of the repo, click the reload arrow on the extension's card in `chrome://extensions`, then refresh any Amazon, Seller Central or Alibaba tabs already open. Until you do, the extension's old scripts in those tabs can no longer reach it: since 0.5.3 they stop quietly (no "Extension context invalidated" errors), hide their panels, and show "Wholesale Scout was updated — refresh this page to use it."
+Since 0.6.1 the default App URL is `https://ws.dgr8cali.co.uk`, and a saved `wholesale-scout.vercel.app` is moved to it automatically (the old address only redirects now, and a redirect drops the password). Since 0.6.0 the extension's icon, toolbar button, popup and panel headings carry the Wholesale Scout mark (`icons/`). After pulling a new version of the repo, click the reload arrow on the extension's card in `chrome://extensions`, then refresh any Amazon, Seller Central or Alibaba tabs already open. Until you do, the extension's old scripts in those tabs can no longer reach it: since 0.5.3 they stop quietly (no "Extension context invalidated" errors), hide their panels, and show "Wholesale Scout was updated — refresh this page to use it."
 
 The password is kept in `chrome.storage.local` on this computer only and sent to your app as `Authorization: Bearer …`. Nothing is sent anywhere else.
 

@@ -2,21 +2,35 @@ import { NextResponse, type NextRequest } from "next/server";
 import { db } from "@/lib/server/db";
 import { authBlockedUntil, clientIp, EXTENSION_LIMITS, overLimit, recordAuthFailure } from "@/lib/server/rateLimit";
 
+/** Where the app lives (Netcup) since the 17 Oct 2026 cutover. */
+export const APP_HOME = "https://ws.dgr8cali.co.uk";
+
 /**
- * Password gate until Supabase Auth lands. Set APP_PASSWORD in Vercel; the browser asks
- * once (any username). Without it, production refuses to serve, because the app can
+ * The old Vercel deployment still answers on *.vercel.app and talks to Supabase Cloud (kept as
+ * the rollback): every request there is sent to the same path here, so it can't write to it.
+ * vercel.json redirects first; this is the backstop.
+ */
+export function vercelRedirect(host: string | null, pathAndQuery: string): string | null {
+  return host && /(^|\.)vercel\.app(:\d+)?$/i.test(host) ? `${APP_HOME}${pathAndQuery}` : null;
+}
+
+/**
+ * Password gate until Supabase Auth lands. Set APP_PASSWORD in the server's .env; the browser
+ * asks once (any username). Without it, production refuses to serve, because the app can
  * call your seller account's SP-API.
  */
 export async function proxy(req: NextRequest) {
+  const moved = vercelRedirect(req.headers.get("host"), req.nextUrl.pathname + req.nextUrl.search);
+  if (moved) return NextResponse.redirect(moved, 308);
   const password = process.env.APP_PASSWORD;
   if (!password) {
     if (process.env.NODE_ENV === "production") {
-      return new NextResponse("Set APP_PASSWORD in the Vercel project to open Wholesale Scout.", { status: 503 });
+      return new NextResponse("Set APP_PASSWORD in the server's .env to open Wholesale Scout.", { status: 503 });
     }
     return NextResponse.next();
   }
   const auth = req.headers.get("authorization") ?? "";
-  // Vercel Cron can't send the password; it sends the CRON_SECRET as a bearer token instead.
+  // The server's crontab can't send the password; it sends the CRON_SECRET as a bearer token instead.
   // The watchdog (Supabase pg_cron) uses its own WATCHDOG_SECRET the same way.
   if (req.nextUrl.pathname.startsWith("/api/cron/")) {
     for (const secret of [process.env.CRON_SECRET, process.env.WATCHDOG_SECRET]) {
