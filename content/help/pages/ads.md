@@ -5,14 +5,13 @@ synonyms: [ads, sponsored products, ppc, acos, advertising, campaigns, bids, neg
 route: /ads
 order: 20
 ---
-**Ads** is the third workspace, next to Wholesale and Private label, for running and tuning Sponsored Products. **Dashboard** and **Imports** work today, from the bulk export (or CSV reports) you download from Amazon Ads: see [Ads: importing reports](/help/howto/ads-importing-reports). **Rules** and **Proposals** turn that data into changes you approve and upload as a bulk sheet: see [Ads: rules and proposals](/help/howto/ads-rules-and-proposals). Once Amazon Ads API access is approved, approved changes can be applied directly.
+**Ads** is the third workspace, next to Wholesale and Private label, for running and tuning Sponsored Products. **Dashboard** works today, from the bulk export (or CSV reports) you download from Amazon Ads: see [Ads: importing reports](/help/howto/ads-importing-reports). **Rules** and **Proposals** turn that data into changes you approve and upload as a bulk sheet: see [Ads: rules and proposals](/help/howto/ads-rules-and-proposals). Once Amazon Ads API access is approved, approved changes can be applied directly.
 
 ## The pages
 
 | Page | What it does |
 |---|---|
-| **Dashboard** | Per product: spend, sales, ACoS beside break-even ACoS, profit after ads, cost per order, CPC, conversion, CTR. The same per campaign. Search terms with a status chip (Converting, Over target, Watch, Waste). |
-| **Imports** | Drop the bulk export (.xlsx): campaigns, placements, keywords with IDs, negatives, product ads and search terms with the keyword that matched, in one file. CSV reports (search term, campaign, Campaign Manager export) work too. Each file is previewed before you import. Re-importing doesn't double anything. |
+| **Dashboard** | Per product: spend, sales, ACoS beside break-even ACoS, profit after ads, cost per order, CPC, conversion, CTR. The same per campaign. Search terms with a status chip (Converting, Over target, Watch, Waste). **Import** (top right) opens the import: drop the bulk export (.xlsx) with campaigns, placements, keywords with IDs, negatives, product ads and search terms, or CSV reports; each file is previewed before you import, and re-importing doesn't double anything. The **Imports history** tab lists every import, each undoable. |
 | **Rules** | Thirteen rules (harvest, negatives, bids, pause, placements, budgets, revive, n-grams, stock guard, organic rank): thresholds, on/off, mode, and a dry run showing what each would propose now. |
 | **Proposals** | The changes your rules suggest, grouped by product and rule, with the reason in real numbers and a confidence. Approve, skip or snooze; export the approved ones as a bulk sheet to upload in Amazon Ads. Nothing changes in Amazon Ads without your upload. |
 | **N-grams** | Every search term's words and word pairs, with spend, orders, ACoS and waste per product; Rules 9 and 10 act on them. |

@@ -59,11 +59,13 @@ to the new page and tab, keeping their query string: `src/lib/moved.ts` (`MOVED`
 | `/favourites` | `/shortlist?tab=products` |
 | `/watchlist` | `/shortlist?tab=watching` |
 | `/pl/niche-hunt` | `/pl/niches?tab=find` (`/private-label?tab=hunt` gets there via it) |
+| `/ads/imports` | `/ads/dashboard?tab=imports` (`?import=1` opens the Import sheet) |
 
 New run (`src/app/new-run`, the sources in `src/components/newrun/`) is one page with a tab per source; Runs has a New run
 button; ⌘K's Check an ASIN opens its tab prefilled.
 Shortlist (`src/app/shortlist`, `src/components/shortlist/`): Favourites and Watchlist were the same records (the `favourites` table; the old `watchlist` table is unused), so one page with two tabs of tools: Products (latest result, re-screen, export) and Watching (condition, weekly re-check, alerts). The alert email links to the Watching tab.
 Niches (`src/app/pl/niches`; My niches is `src/components/pl/MyNiches.tsx`, Find niches the unchanged `NicheHunt`): tabs My niches (Opportunity Explorer) and Find niches (Niche Hunt).
+Ads Dashboard: **Import** in the header opens the import in a sheet (`ImportFlow` in `src/components/ads/ImportFlow.tsx`: the old Imports page's reading and `/api/ads/import` calls, unchanged), and an Imports history tab (`ImportsHistory`, undo confirms).
 To do: phase 3b, restyle every remaining page (the other pages onto PageHeader / DataTable / InfoTip, one verdict vocabulary, page titles = menu labels:
 Keyword bank → Keywords, Launch → Launch checklist, …), phase 4 (Private label Launch + Ads Launch, the candidate page, one results table for Run detail / Brand detail / Products) and phase 5 (polish).
 

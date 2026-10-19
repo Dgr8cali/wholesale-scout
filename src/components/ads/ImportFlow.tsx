@@ -1,12 +1,11 @@
 "use client";
 
-import { FileUpIcon, LoaderIcon, UploadIcon, XIcon } from "lucide-react";
-import Link from "next/link";
+import { FileUpIcon, LoaderIcon, Undo2Icon, UploadIcon, XIcon } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { usePageCrumbs } from "@/components/Crumbs";
 import { useDialogs } from "@/components/Dialogs";
 import { Button } from "@/components/ui/button";
+import { DataTable, type DataColumn } from "@/components/ui/data-table";
 import { Input } from "@/components/ui/input";
 import { SortTh, useSortable } from "@/components/SortableTable";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -25,24 +24,16 @@ const gbp = (v: number) => `£${v.toFixed(2)}`;
 const base64 = (u: Uint8Array) => { let s = ""; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode(...u.subarray(i, i + 0x8000)); return btoa(s); };
 const LABEL: Record<string, string> = { ...REPORT_LABEL, bulk: "Bulk export" };
 
-/** Ads → Imports: drop an Amazon Ads bulk export (or CSV reports), see what was read, import. */
-export default function AdsImportsPage() {
-  usePageCrumbs([{ label: "Ads", href: "/ads/dashboard" }, { label: "Imports" }]);
+/**
+ * Ads → Dashboard → Import (a sheet): drop an Amazon Ads bulk export (or CSV reports), see what was
+ * read, import. The reading and the import calls are exactly the old Imports page's.
+ */
+export function ImportFlow({ onImported }: { onImported: () => void }) {
   const [picked, setPicked] = useState<Picked[]>([]);
   const [bulks, setBulks] = useState<PickedBulk[]>([]);
-  const [past, setPast] = useState<ImportRow[] | null>(null);
-  const ps = useSortable("ads.imports", past ?? [], {
-    imported: { value: (i) => i.imported_at, kind: "date" }, file: { value: (i) => i.file_name, kind: "text" },
-    report: { value: (i) => LABEL[i.report_type] ?? i.report_type, kind: "text" }, rows: { value: (i) => i.rows, kind: "number" },
-    covers: { value: (i) => i.date_from, kind: "date" },
-  });
   const [over, setOver] = useState(false);
   const [busy, setBusy] = useState(false);
   const input = useRef<HTMLInputElement>(null);
-  const { confirm } = useDialogs();
-
-  const loadPast = useCallback(() => api<{ imports: ImportRow[] }>("/api/ads/imports").then((r) => setPast(r.imports)).catch(() => setPast([])), []);
-  useEffect(() => { loadPast(); }, [loadPast]);
 
   const add = async (files: FileList | File[]) => {
     const list = [...files];
@@ -96,29 +87,15 @@ export default function AdsImportsPage() {
       if (cpc != null) toast.success(`CPC for private label's estimate now £${cpc.toFixed(2)}.`);
       setPicked([]);
       setBulks([]);
-      loadPast();
+      onImported();
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
       setBusy(false);
     }
   };
-  const undo = async (i: ImportRow) => {
-    if (!(await confirm({ title: `Undo the import of ${i.file_name}?`, description: "The rows it last wrote are removed. Rows a later import of the same data wrote stay.", confirmLabel: "Undo", destructive: true }))) return;
-    await api(`/api/ads/imports?id=${i.id}`, { method: "DELETE" });
-    loadPast();
-  };
-
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="page-title">Imports</h1>
-          <p className="text-sm text-muted-foreground">The bulk export from Amazon Ads (Campaign manager → Bulk operations, with the search term data) gives everything in one file: campaigns, placements, ad groups, keywords with their IDs and bids, negatives, product ads (which map campaigns to ASINs) and search terms with the keyword that matched. CSV reports still work: Search term, Campaign, the Campaign Manager grid, and the <b>daily</b> Campaign and Placement reports (time unit Daily), which the Bid up, Budget and Revive rules need. Importing the same data again doesn&apos;t double it.</p>
-        </div>
-        <Button asChild variant="outline"><Link href="/ads/dashboard">Dashboard</Link></Button>
-      </div>
-
       <div
         onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)}
         onDrop={(e) => { e.preventDefault(); setOver(false); add(e.dataTransfer.files); }}
@@ -143,31 +120,33 @@ export default function AdsImportsPage() {
         </section>
       )}
 
-      <section className="space-y-2">
-        <h2 className="section-label">Past imports</h2>
-        {!past ? <Skeleton className="h-24 rounded-lg" /> : !past.length ? <p className="text-sm text-muted-foreground">None yet.</p> : (
-          <div className="overflow-x-auto rounded-lg border">
-            <table className="w-full text-sm">
-              <thead><tr className="border-b text-left text-xs tracking-wide text-muted-foreground uppercase">
-                <SortTh {...ps.th("imported")} className="px-2 py-1.5">Imported</SortTh><SortTh {...ps.th("file")} className="px-2 py-1.5">File</SortTh>
-                <SortTh {...ps.th("report")} className="px-2 py-1.5">Report</SortTh><SortTh {...ps.th("rows")} numeric className="px-2 py-1.5 text-right">Rows</SortTh>
-                <SortTh {...ps.th("covers")} className="px-2 py-1.5">Covers</SortTh><th />
-              </tr></thead>
-              <tbody>{ps.rows.map((i) => (
-                <tr key={i.id} className="border-b last:border-b-0">
-                  <td className="px-2 py-1.5 whitespace-nowrap">{new Date(i.imported_at).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</td>
-                  <td className="px-2 py-1.5">{i.file_name}</td>
-                  <td className="px-2 py-1.5">{LABEL[i.report_type] ?? i.report_type}</td>
-                  <td className="num px-2 py-1.5 text-right">{i.rows}</td>
-                  <td className="px-2 py-1.5 text-muted-foreground">{i.date_from ? `${day(i.date_from)} – ${day(i.date_to)}` : "range not given"}</td>
-                  <td className="px-2 py-1.5 text-right"><Button variant="ghost" size="xs" className="text-fail hover:text-fail" onClick={() => undo(i)}>Undo</Button></td>
-                </tr>
-              ))}</tbody>
-            </table>
-          </div>
-        )}
-      </section>
     </div>
+  );
+}
+
+/** Ads → Dashboard → Imports history: every import, newest first, each one undoable. */
+export function ImportsHistory({ refresh = 0 }: { refresh?: number }) {
+  const [past, setPast] = useState<ImportRow[] | null>(null);
+  const { confirm } = useDialogs();
+  const loadPast = useCallback(() => api<{ imports: ImportRow[] }>("/api/ads/imports").then((r) => setPast(r.imports)).catch(() => setPast([])), []);
+  useEffect(() => { loadPast(); }, [loadPast, refresh]);
+  const undo = async (i: ImportRow) => {
+    if (!(await confirm({ title: `Undo the import of ${i.file_name}?`, description: "The rows it last wrote are removed. Rows a later import of the same data wrote stay.", confirmLabel: "Undo import", destructive: true }))) return;
+    await api(`/api/ads/imports?id=${i.id}`, { method: "DELETE" });
+    loadPast();
+  };
+  if (!past) return <Skeleton className="h-24 rounded-xl" />;
+  const columns: DataColumn<ImportRow>[] = [
+    { id: "file", header: "File", mobile: "title", sortValue: (i) => i.file_name, cell: (i) => <span className="font-medium break-all">{i.file_name}</span> },
+    { id: "imported", header: "Imported", mobile: 1, sortValue: (i) => i.imported_at, cell: (i) => <span className="whitespace-nowrap">{new Date(i.imported_at).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span> },
+    { id: "report", header: "Report", mobile: 2, sortValue: (i) => LABEL[i.report_type] ?? i.report_type, cell: (i) => LABEL[i.report_type] ?? i.report_type },
+    { id: "rows", header: "Rows", numeric: true, sortValue: (i) => i.rows, cell: (i) => i.rows.toLocaleString("en-GB") },
+    { id: "covers", header: "Covers", sortValue: (i) => i.date_from, cell: (i) => <span className="text-muted-foreground">{i.date_from ? `${day(i.date_from)} – ${day(i.date_to)}` : "range not given"}</span> },
+    { id: "undo", header: <span className="sr-only">Undo</span>, mobile: 3, className: "text-right", cell: (i) => <Button variant="danger" size="sm" onClick={() => undo(i)}><Undo2Icon /> Undo</Button> },
+  ];
+  return (
+    <DataTable rows={past} columns={columns} getRowId={(i) => i.id} storageKey="ads.imports" caption="Past imports" initialSort={{ id: "imported", desc: true }}
+      empty={{ icon: <FileUpIcon />, title: "No imports yet", description: "Use Import at the top of the dashboard to bring in a bulk export or CSV reports." }} />
   );
 }
 

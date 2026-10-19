@@ -1,12 +1,17 @@
 "use client";
 
-import { ChevronRightIcon, FileUpIcon, LoaderIcon } from "lucide-react";
+import { ChevronRightIcon, FileUpIcon, HistoryIcon, LayoutDashboardIcon, LoaderIcon } from "lucide-react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Fragment, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { usePageCrumbs } from "@/components/Crumbs";
+import { ImportFlow, ImportsHistory } from "@/components/ads/ImportFlow";
 import { EmptyState, ErrorState } from "@/components/States";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useTab } from "@/lib/ui/useTab";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Sparkline } from "@/components/results/Sparkline";
@@ -71,26 +76,69 @@ export default function AdsDashboardPage() {
   return <Suspense><AdsDashboard /></Suspense>;
 }
 
+const TABS = ["overview", "imports"] as const;
+type Tab = (typeof TABS)[number];
+
 function AdsDashboard() {
-  usePageCrumbs([{ label: "Ads", href: "/ads/dashboard" }, { label: "Dashboard" }]);
   const [d, setD] = useState<Dash | null>(null);
   const [error, setError] = useState<string | null>(null);
   const load = useCallback(() => api<Dash>("/api/ads/dashboard").then(setD).catch((e: Error) => setError(e.message)), []);
   useEffect(() => { load(); }, [load]);
+  // ?asin= (the product picker) belongs to the Overview tab but survives a trip to the history.
+  const [tab, setTab] = useTab(TABS, ["asin"]);
+  // ?import=1 (⌘K's Import ads bulk file, the empty states) opens the import sheet; closing it drops the flag.
+  const params = useSearchParams();
+  const router = useRouter();
+  const [importing, setImportingState] = useState(() => params.get("import") === "1");
+  const setImporting = (open: boolean) => {
+    setImportingState(open);
+    if (!open && params.has("import")) {
+      const q = new URLSearchParams(params.toString());
+      q.delete("import");
+      router.replace(q.size ? `/ads/dashboard?${q}` : "/ads/dashboard", { scroll: false });
+    }
+  };
+  const [imported, setImported] = useState(0);
 
-  if (error) return <ErrorState title="Couldn't load Ads" message={error} onRetry={load} />;
-  if (!d) return <div className="space-y-4"><Skeleton className="h-40 rounded-xl" /><Skeleton className="h-64 rounded-xl" /></div>;
-  if (!d.campaigns.length) {
-    return (
-      <div className="space-y-4">
-        <h1 className="page-title">Dashboard</h1>
-        <EmptyState icon={<FileUpIcon />} title="No ad data yet — import a report" action={<div className="flex flex-wrap justify-center gap-2"><Button asChild><Link href="/ads/imports">Import reports</Link></Button><Button asChild variant="outline"><Link href="/help/ads-playbook">Read the playbook</Link></Button></div>}>
-          Export the bulk export (or a Search term report, a Campaign report or the Campaign Manager grid) from Amazon Ads, and import it. New to running ads here? <Link className="text-brand underline" href="/help/ads-playbook">Ads: the playbook</Link> goes from setting a product up to the weekly loop.
-        </EmptyState>
-      </div>
-    );
-  }
-  return <Dashboard d={d} load={load} />;
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title="Dashboard"
+        crumbs={[{ label: "Ads", href: "/ads/dashboard" }, { label: "Dashboard" }]}
+        subtitle={d ? `Sponsored Products from ${d.imports} import${d.imports === 1 ? "" : "s"}, product by product.` : "Sponsored Products, product by product."}
+        info={<>
+          <p>ACoS is green at or under the target, amber up to break-even, red past it.{d ? ` Default target ACoS ${d.settings.targetAcos}% (Ads → Rules → Ad settings, or per product).` : ""}</p>
+          <p><b>Import</b> takes the bulk export from Amazon Ads (Campaign manager → Bulk operations, with the search term data): campaigns, placements, ad groups, keywords with their IDs and bids, negatives, product ads (which map campaigns to ASINs) and search terms. CSV reports still work: Search term, Campaign, the Campaign Manager grid, and the daily Campaign and Placement reports, which the Bid up, Budget and Revive rules need. Importing the same data again doesn&apos;t double it.</p>
+        </>}
+        actions={<Button onClick={() => setImporting(true)}><FileUpIcon /> Import</Button>}
+      />
+      <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)} className="gap-6">
+        <TabsList aria-label="Dashboard">
+          <TabsTrigger value="overview" className="px-3"><LayoutDashboardIcon /> Overview</TabsTrigger>
+          <TabsTrigger value="imports" className="px-3"><HistoryIcon /> Imports history</TabsTrigger>
+        </TabsList>
+        <TabsContent value="overview">
+          {error ? <ErrorState title="Couldn't load Ads" message={error} onRetry={load} />
+            : !d ? <div className="space-y-4"><Skeleton className="h-40 rounded-xl" /><Skeleton className="h-64 rounded-xl" /></div>
+            : !d.campaigns.length ? (
+              <EmptyState icon={<FileUpIcon />} title="No ad data yet — import a report" action={<Button onClick={() => setImporting(true)}><FileUpIcon /> Import</Button>}>
+                Export the bulk export from Amazon Ads and import it. New to running ads here? <Link className="text-primary underline" href="/help/ads-playbook">Ads: the playbook</Link> goes from setting a product up to the weekly loop.
+              </EmptyState>
+            ) : <Dashboard d={d} load={load} />}
+        </TabsContent>
+        <TabsContent value="imports"><ImportsHistory refresh={imported} /></TabsContent>
+      </Tabs>
+      <Sheet open={importing} onOpenChange={setImporting}>
+        <SheetContent className="w-full overflow-y-auto data-[side=right]:sm:max-w-3xl">
+          <SheetHeader>
+            <SheetTitle>Import Amazon Ads data</SheetTitle>
+            <SheetDescription>The bulk export (.xlsx) or CSV reports. Nothing is imported until you confirm.</SheetDescription>
+          </SheetHeader>
+          <div className="px-4 pb-6"><ImportFlow onImported={() => { load(); setImported((n) => n + 1); }} /></div>
+        </SheetContent>
+      </Sheet>
+    </div>
+  );
 }
 
 /** One section per product (picked, or all), then the campaigns no product owns, then the archived ones. */
@@ -103,19 +151,9 @@ function Dashboard({ d, load }: { d: Dash; load: () => void }) {
   const unlisted = !!pick && !products.some((p) => p.asin === pick);
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="page-title">Dashboard</h1>
-          <p className="text-sm text-muted-foreground">
-            Sponsored Products from {d.imports} import{d.imports === 1 ? "" : "s"}, product by product. Default target ACoS {d.settings.targetAcos}% (Settings → Ads, or per product).
-            ACoS is green at or under the target, amber up to break-even, red past it.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-end gap-2">
-          {(products.length > 1 || unlisted) && <ProductPicker products={products} value={pick} onChange={setPick} />}
-          <FetchStock onDone={load} />
-          <Button asChild variant="outline"><Link href="/ads/imports"><FileUpIcon /> Import reports</Link></Button>
-        </div>
+      <div className="flex flex-wrap items-end gap-2">
+        {(products.length > 1 || unlisted) && <ProductPicker products={products} value={pick} onChange={setPick} />}
+        <FetchStock onDone={load} />
       </div>
 
       {unlisted && <p className="panel p-4 text-sm text-muted-foreground"><span className="num">{pick}</span> has no ads data yet: no imported campaign and no launch plan. <button type="button" className="text-brand underline" onClick={() => setPick("")}>Show all products</button></p>}

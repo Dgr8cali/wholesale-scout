@@ -43,7 +43,7 @@ export async function GET() {
       : t
         ? { key: "keepa", label: "Keepa tokens", ok: t.tokensLeft >= 0, detail: `${t.tokensLeft.toLocaleString("en-GB")} left · refills ${t.refillRate}/min` }
         : { key: "keepa", label: "Keepa tokens", ok: false, detail: "Keepa didn't report a balance" },
-    { key: "ads", label: "Ads API", ok: null, detail: process.env.ADS_LWA_CLIENT_ID ? "Waiting for approval: reports come in as files" : "Not connected: reports come in as files", href: "/ads/imports" },
+    { key: "ads", label: "Ads API", ok: null, detail: process.env.ADS_LWA_CLIENT_ID ? "Waiting for approval: reports come in as files" : "Not connected: reports come in as files", href: "/ads/dashboard?tab=imports" },
     !last
       ? { key: "cron", label: "Last cron run", ok: false, detail: "No nightly Qogita pull recorded yet" }
       : { key: "cron", label: "Last cron run", ok: !last.error && Date.now() - Date.parse(last.started_at) < CRON_STALE_MS, detail: `Qogita nightly ${ago(last.started_at)}${last.error ? `: ${last.error}` : ""}`, href: "/new-run?tab=qogita" },

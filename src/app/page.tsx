@@ -189,7 +189,7 @@ export default function HomePage() {
           <Section load={ads} skeleton={<StatSkeleton />}>
             {(a) => {
               const t = a.campaigns.reduce((s, c) => ({ cost: s.cost + (c.totals?.cost ?? 0), sales: s.sales + (c.totals?.sales ?? 0) }), { cost: 0, sales: 0 });
-              if (!a.campaigns.length) return <Stat icon={<MegaphoneIcon />} label="Sponsored Products" href="/ads/imports" value="—" hint="No ad data yet — import a report" />;
+              if (!a.campaigns.length) return <Stat icon={<MegaphoneIcon />} label="Sponsored Products" href="/ads/dashboard?import=1" value="—" hint="No ad data yet — import a report" />;
               const waste = a.terms.filter((x) => x.status === "waste").length;
               return <Stat icon={<MegaphoneIcon />} label="Sponsored Products spend" href="/ads/dashboard" value={`£${t.cost.toFixed(2)}`}
                 hint={`ACoS ${t.sales ? Math.round((t.cost / t.sales) * 100) : "—"}% on £${t.sales.toFixed(2)} sales · ${waste} search term${waste === 1 ? "" : "s"} wasting spend`} />;

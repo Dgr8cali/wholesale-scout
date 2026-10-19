@@ -164,7 +164,7 @@ function AdsProposals() {
         rowClassName={(p) => (p.status === "approved" ? "bg-success-soft/40" : undefined)}
         empty={data.proposals.length
           ? { icon: <LightbulbIcon />, title: "No proposals match the filters", description: "Clear a filter to see the rest.", action: <Button variant="secondary" onClick={() => { setRule(""); setConf(""); setCampaign(""); setPick(""); }}>Clear filters</Button> }
-          : { icon: <LightbulbIcon />, title: "No proposals", description: `Nothing for the rules to change in the data imported.${held ? ` ${data.held.skipped} skipped and ${data.held.snoozed} snoozed are held back.` : ""}`, action: <Button asChild><Link href="/ads/imports">Import a newer bulk export</Link></Button> }}
+          : { icon: <LightbulbIcon />, title: "No proposals", description: `Nothing for the rules to change in the data imported.${held ? ` ${data.held.skipped} skipped and ${data.held.snoozed} snoozed are held back.` : ""}`, action: <Button asChild><Link href="/ads/dashboard?import=1">Import a newer bulk export</Link></Button> }}
       />
 
       {grams && grams.rows.length > 0 && <NgramCard d={grams} />}

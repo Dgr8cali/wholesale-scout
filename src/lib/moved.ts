@@ -23,6 +23,8 @@ export const MOVED: Moved[] = [
   { from: "/watchlist", to: "/shortlist?tab=watching" },
   // 3. Niche Hunt → Niches → Find niches.
   { from: "/pl/niche-hunt", to: "/pl/niches?tab=find" },
+  // 4. Ads Imports → the Dashboard's Import button (a sheet) and its Imports history tab.
+  { from: "/ads/imports", to: "/ads/dashboard?tab=imports" },
 ];
 
 /** Where an old address now lives (path + query), or null when it hasn't moved. */

@@ -5,7 +5,7 @@ synonyms: [ads import, bulk export, bulk file, bulk operations, xlsx, sponsored 
 workspace: ads
 order: 1
 ---
-Until the Amazon Ads API is connected, Ads works from files you export from Amazon Ads and import on **Ads → Imports**. The **bulk export** is the one to use: one file gives everything.
+Until the Amazon Ads API is connected, Ads works from files you export from Amazon Ads and import with **Import** on **Ads → Dashboard** (the old Ads → Imports page; its list of past imports is the Dashboard's **Imports history** tab). The **bulk export** is the one to use: one file gives everything.
 
 ## The bulk export (recommended)
 
@@ -40,7 +40,7 @@ The **daily Campaign report** (time unit Daily: one row per campaign per day) an
 
 ## Importing
 
-1. Drop the bulk export (.xlsx) or CSV files on **Ads → Imports**, or click to choose. One drop zone takes either, several at once.
+1. Drop the bulk export (.xlsx) or CSV files in the **Import** sheet (Ads → Dashboard → Import), or click to choose. One drop zone takes either, several at once.
 2. Each file shows what was read. A bulk export lists how many campaigns, placements, ad groups, product ads, keywords, negatives and search terms it holds, and each campaign with the ASIN its product ads advertise. A CSV shows its report type, rows, the dates it covers, its totals and first rows. A file the app doesn't know says why and isn't imported.
 3. Click **Import**.
 
