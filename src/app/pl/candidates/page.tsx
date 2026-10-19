@@ -1,27 +1,33 @@
 "use client";
 
-import { LoaderIcon, PlusIcon, TagIcon } from "lucide-react";
+import { FlaskConicalIcon, PlusIcon } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { usePageCrumbs } from "@/components/Crumbs";
-import { Dot } from "@/components/pl/bits";
 import { valuesOf, type CandidateRow, type ListResponse } from "@/components/pl/types";
 import { Workspace } from "@/components/pl/Workspace";
-import { EmptyState, ErrorState } from "@/components/States";
+import { ErrorState } from "@/components/States";
 import { Button } from "@/components/ui/button";
+import { DataTable, type DataColumn } from "@/components/ui/data-table";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { PageHeader } from "@/components/ui/page-header";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { StatusChip, Verdict, type Tone } from "@/components/ui/status-chip";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { capitalText, evaluate, referralOptions } from "@/lib/pl/gatekeeper";
+import { capitalText, evaluate, referralOptions, type Status } from "@/lib/pl/gatekeeper";
 import { withAdsDefaults } from "@/lib/pl/adsDefaults";
 import { priceMultiple } from "@/lib/pl/quotes";
 import { api } from "@/lib/ui/client";
 import { ago } from "@/lib/ui/when";
 import { cn } from "@/lib/utils";
+
+const VERDICT_TONE: Record<Status, Tone> = { pass: "good", warn: "warn", fail: "bad", empty: "neutral" };
+const VERDICT_RANK: Record<Status, number> = { pass: 3, warn: 2, fail: 1, empty: 0 };
+type Scored = { c: CandidateRow; ev: ReturnType<typeof evaluate> };
 
 export default function CandidatesPage() {
   return <Suspense><Candidates /></Suspense>;
@@ -29,12 +35,12 @@ export default function CandidatesPage() {
 
 /** Private label → Candidates: Gatekeeper's eight gates, scorecard and verdict for products you might launch. */
 function Candidates() {
-  usePageCrumbs([{ label: "Private label", href: "/pl/candidates" }, { label: "Candidates" }]);
   const router = useRouter();
   const params = useSearchParams();
   const [list, setList] = useState<ListResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(() => params.get("new") === "1");
+  const [showParked, setShowParked] = useState(false);
   const selected = params.get("c");
 
   const load = useCallback(() => api<ListResponse>("/api/pl/candidates").then(setList).catch((e: Error) => setError(e.message)), []);
@@ -51,78 +57,80 @@ function Candidates() {
   const parked = all.filter((x) => x.c.status === "parked").sort((a, b) => (b.c.parked_at ?? "").localeCompare(a.c.parked_at ?? ""));
 
   if (error) return <ErrorState title="Couldn't load Private label" message={error} onRetry={load} />;
-  if (!list) return <div className="grid gap-5 lg:grid-cols-[260px_1fr]"><Skeleton className="h-80 rounded-xl" /><Skeleton className="h-[70vh] rounded-xl" /></div>;
+  if (!list) return <div className="space-y-6"><Skeleton className="h-16 rounded-xl" /><Skeleton className="h-64 rounded-xl" /></div>;
 
   const patchRow = (id: string, p: Partial<CandidateRow>) => setList((l) => l && { ...l, candidates: l.candidates.map((c) => (c.id === id ? { ...c, ...p } : c)) });
 
+  const rows = showParked || parked.some((x) => x.c.id === selected) ? [...scored, ...parked] : scored;
+  const open = (id: string) => {
+    select(id);
+    requestAnimationFrame(() => document.getElementById("candidate-detail")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  };
+  const columns: DataColumn<Scored>[] = [
+    {
+      id: "name", header: "Candidate", mobile: "title", sortValue: ({ c }) => c.name,
+      cell: ({ c }) => (
+        <button type="button" onClick={(e) => { e.stopPropagation(); open(c.id); }} className="min-w-0 cursor-pointer text-left">
+          <span className="block font-medium hover:underline">{c.name}</span>
+          {c.niche_keyword && <span className="block text-meta text-muted-foreground">{c.niche_keyword}</span>}
+        </button>
+      ),
+    },
+    {
+      id: "verdict", header: "Verdict", mobile: 1, sortValue: ({ ev }) => VERDICT_RANK[ev.v.cls],
+      cell: ({ c, ev }) => c.status === "parked"
+        ? <Verdict verdict="parked" tone="neutral" title={c.park_reason ?? undefined} />
+        : <Verdict verdict={ev.v.title} tone={VERDICT_TONE[ev.v.cls]} title={ev.v.text} />,
+    },
+    { id: "score", header: "Score", numeric: true, mobile: 2, sortValue: ({ ev }) => (ev.sc.answered === 10 ? ev.sc.total : -1), cell: ({ ev }) => (ev.sc.answered === 10 ? `${ev.sc.total}/30` : <span className="text-muted-foreground">{ev.sc.answered}/10 scored</span>) },
+    { id: "status", header: "Stage", mobile: 3, sortValue: ({ c }) => c.status, cell: ({ c, ev }) => <span className="inline-flex flex-wrap items-center gap-1.5"><StatusChip tone="neutral" icon={false}>{c.status}</StatusChip>{ev.waivedCount > 0 && <StatusChip tone="warn" title={ev.waivedLine ?? ""}>{ev.waivedCount} waived</StatusChip>}</span> },
+    { id: "landed", header: "Landed · multiple", numeric: true, sortValue: ({ c }) => c.chosen_landed ?? (c.fields.landed?.value ? Number(c.fields.landed.value) : null), cell: ({ c }) => <CandidateLine c={c} /> },
+    { id: "keepa", header: "Keepa", sortValue: ({ c }) => c.refreshed_at, cell: ({ c }) => <span className="text-meta whitespace-nowrap text-muted-foreground">{c.refreshed_at ? ago(c.refreshed_at) : "not fetched"}</span> },
+  ];
+  const capital = list.settings.budget.toLocaleString("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: 0 });
+
   return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="page-title">Candidates</h1>
-        <p className="text-sm text-muted-foreground">Should ~{list ? capitalText(list.settings.budget) : "your launch capital"} launch your own product into this niche? A candidate must clear every gate <em>and</em> score well; a good score never overrides a failed gate.</p>
+    <div className="space-y-6">
+      <PageHeader
+        title="Candidates"
+        crumbs={[{ label: "Private label", href: "/pl/candidates" }, { label: "Candidates" }]}
+        subtitle={`Products you might launch, scored against Gatekeeper's eight gates.`}
+        info={<>
+          <p>Should ~{capitalText(list.settings.budget)} launch your own product into this niche? A candidate must clear every gate <em>and</em> score well; a good score never overrides a failed gate.</p>
+          <p>Thresholds: launch capital {capital}, min multiple {list.settings.minMultiple}×, steady margin {list.settings.minSteadyMargin}% (<Link className="text-primary underline" href="/settings?tab=pl">Settings → Private label</Link>). Rate card: {list.card.name}; peak rates apply automatically in October–December.</p>
+        </>}
+        actions={<Button onClick={() => setAdding(true)}><PlusIcon /> New candidate</Button>}
+      />
+
+      <div className="space-y-3">
+        {parked.length > 0 && (
+          <label className="flex w-fit cursor-pointer items-center gap-2 text-sm text-muted-foreground">
+            <Switch checked={showParked} onCheckedChange={setShowParked} /> Show parked ({parked.length})
+          </label>
+        )}
+        <DataTable
+          rows={rows}
+          columns={columns}
+          getRowId={(x) => x.c.id}
+          storageKey="pl.candidates"
+          caption="Candidates"
+          onRowClick={(x) => open(x.c.id)}
+          rowClassName={(x) => cn(x.c.id === selected && "bg-primary-soft hover:bg-primary-soft", x.c.status === "parked" && "text-muted-foreground")}
+          empty={{
+            icon: <FlaskConicalIcon />, title: parked.length ? "Every candidate is parked" : "Score a product against the eight gates",
+            description: parked.length ? "Show the parked ones, or add a new candidate." : "Add a candidate with up to ten page-one ASINs; Keepa fills the market and history gates.",
+            action: <Button onClick={() => setAdding(true)}><PlusIcon /> New candidate</Button>,
+          }}
+        />
       </div>
-      <div className="grid items-start gap-5 lg:grid-cols-[260px_1fr]">
-        <aside className="flex flex-col gap-3.5 lg:sticky lg:top-[calc(var(--app-header,56px)+12px)]">
-          <div className="panel p-3">
-            <h2 className="mb-2 text-sm font-bold">Candidates</h2>
-            {!scored.length ? (
-              <p className="rounded-lg bg-surface-2 px-3 py-2.5 text-xs text-muted-foreground">{parked.length ? "Every candidate is parked." : "No candidates yet. Add one to start scoring."}</p>
-            ) : (
-              <div className="flex max-h-[60vh] flex-col gap-1 overflow-auto">
-                {scored.map(({ c, ev }) => (
-                  <button key={c.id} type="button" onClick={() => select(c.id)}
-                    className={cn("flex w-full flex-col gap-0.5 rounded-lg border border-transparent px-2.5 py-2 text-left hover:bg-surface-2", c.id === selected && "border-brand bg-brand-soft hover:bg-brand-soft")}>
-                    <span className="flex items-center gap-2">
-                      <Dot status={ev.v.cls} />
-                      <span className="min-w-0 flex-1 truncate text-sm font-medium" title={ev.v.title}>{c.name}</span>
-                      {ev.waivedCount > 0 && <span className="rounded bg-warn-soft px-1 text-xs font-semibold text-warn" title={ev.waivedLine ?? ""}>{ev.waivedCount} waived</span>}
-                      <span className="num text-xs text-muted-foreground">{ev.sc.answered === 10 ? ev.sc.total : `${ev.sc.answered}/10`}</span>
-                    </span>
-                    <span className="flex items-center gap-2 pl-4 text-xs text-muted-foreground">
-                      <span className="rounded border px-1 tracking-wide uppercase">{c.status}</span>
-                      <span className="truncate">{c.refreshed_at ? `Keepa ${ago(c.refreshed_at)}` : "not fetched"}</span>
-                    </span>
-                    <CandidateLine c={c} />
-                  </button>
-                ))}
-              </div>
-            )}
-            {parked.length > 0 && (
-              <details className="mt-2 border-t pt-2" open={parked.some((x) => x.c.id === selected) || undefined}>
-                <summary className="cursor-pointer text-xs font-semibold text-muted-foreground">Parked ({parked.length})</summary>
-                <div className="mt-1 flex max-h-[40vh] flex-col gap-1 overflow-auto">
-                  {parked.map(({ c }) => (
-                    <button key={c.id} type="button" onClick={() => select(c.id)}
-                      className={cn("flex w-full flex-col gap-0.5 rounded-lg border border-transparent px-2.5 py-1.5 text-left hover:bg-surface-2", c.id === selected && "border-brand bg-brand-soft hover:bg-brand-soft")}>
-                      <span className="truncate text-sm text-muted-foreground">{c.name}</span>
-                      <span className="line-clamp-2 text-xs text-muted-foreground italic">{c.park_reason ?? ""}{c.parked_at ? ` · ${new Date(c.parked_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : ""}</span>
-                    </button>
-                  ))}
-                </div>
-              </details>
-            )}
-            <Button className="mt-2 w-full" onClick={() => setAdding(true)}><PlusIcon /> New candidate</Button>
-          </div>
-          <div className="panel p-3 text-xs text-muted-foreground">
-            <h2 className="mb-1.5 text-sm font-bold text-foreground">Thresholds</h2>
-            Launch capital {list.settings.budget.toLocaleString("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: 0 })}, min multiple {list.settings.minMultiple}×, steady margin {list.settings.minSteadyMargin}%.{" "}
-            <Link className="font-medium text-brand hover:underline" href="/settings?tab=pl">Change in Settings</Link>
-            <p className="mt-2">Rate card: {list.card.name}. Peak rates apply automatically in October–December.</p>
-          </div>
-        </aside>
-        <main className="min-w-0">
-          {selected && list.candidates.some((c) => c.id === selected) ? (
-            <Workspace key={selected} id={selected} settings={list.settings} card={list.card} adsCpc={list.adsCpc}
-              onChanged={(id, p) => patchRow(id, p as Partial<CandidateRow>)}
-              onDeleted={(id) => { setList((l) => l && { ...l, candidates: l.candidates.filter((c) => c.id !== id) }); select(null); }} />
-          ) : (
-            <EmptyState icon={<TagIcon />} title="Score a product against the eight gates"
-              action={<Button onClick={() => setAdding(true)}><PlusIcon /> New candidate</Button>}>
-              Add a candidate with up to ten page-one ASINs. Keepa fills the market and history gates; the extension fills Opportunity Explorer&apos;s; you type the rest. Each gate ticks pass, warn or fail as you go, and the scorecard totals to a verdict.
-            </EmptyState>
-          )}
-        </main>
-      </div>
+
+      {selected && list.candidates.some((c) => c.id === selected) && (
+        <section id="candidate-detail" className="min-w-0 scroll-mt-20">
+          <Workspace key={selected} id={selected} settings={list.settings} card={list.card} adsCpc={list.adsCpc}
+            onChanged={(id, p) => patchRow(id, p as Partial<CandidateRow>)}
+            onDeleted={(id) => { setList((l) => l && { ...l, candidates: l.candidates.filter((c) => c.id !== id) }); select(null); }} />
+        </section>
+      )}
       <NewCandidate open={adding} onOpenChange={setAdding} list={list} onCreated={async (id) => { await load(); select(id); }} />
     </div>
   );
@@ -168,8 +176,8 @@ function NewCandidate({ open, onOpenChange, list, onCreated }: { open: boolean; 
             <Textarea className="num h-32 text-xs" value={asins} onChange={(e) => setAsins(e.target.value)} placeholder={"One per line or comma-separated.\nThe first is the reference listing."} /></label>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={save} disabled={busy || !name.trim()}>{busy && <LoaderIcon className="animate-spin" />}{count ? "Save and fetch Keepa" : "Save"}</Button>
+          <Button variant="secondary" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button onClick={save} disabled={!name.trim()} loading={busy}>{count ? "Save and fetch Keepa" : "Save"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -184,7 +192,7 @@ function CandidateLine({ c }: { c: CandidateRow }) {
   const step = c.launch?.done ? c.launch.next : null;
   if (landed == null && !step) return null;
   return (
-    <span className="flex flex-wrap items-center gap-x-2 pl-4 text-xs text-muted-foreground">
+    <span className="inline-flex flex-wrap items-center justify-end gap-x-2 text-meta text-muted-foreground">
       {landed != null && <span title={c.chosen_landed != null ? "The chosen quote's landed cost per unit" : "Gate 0's landed cost per unit"}>landed £{landed.toFixed(2)}{c.chosen_landed != null ? " (quote)" : ""}</span>}
       {m && <span className={cn("num font-semibold", m.status === "pass" ? "text-pass" : m.status === "warn" ? "text-warn" : "text-fail")} title="Sell ÷ landed: 3.5× passes, 3× warns">{m.multiple.toFixed(1)}×</span>}
       {step && <span className="truncate" title="Next launch step">next: {step}</span>}

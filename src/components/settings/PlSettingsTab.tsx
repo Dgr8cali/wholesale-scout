@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { InfoTip, SectionTitle } from "@/components/ui/info-tip";
 import { toast } from "sonner";
 import { ErrorState } from "@/components/States";
 import { Button } from "@/components/ui/button";
@@ -36,8 +37,7 @@ export function PlSettingsTab() {
     <section className="panel space-y-4 p-4 sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
-          <h2 className="section-label">Private label</h2>
-          <p className="max-w-3xl text-sm text-muted-foreground">The budget, cost assumptions and Gate 6 floors used for every Private label candidate. Fees come from the rate card under Fees. Peak rates (October–December) apply automatically by date, as in screening.</p>
+          <SectionTitle title={<>Private label</>}>The budget, cost assumptions and Gate 6 floors used for every Private label candidate. Fees come from the rate card under Fees. Peak rates (October–December) apply automatically by date, as in screening.</SectionTitle>
         </div>
         <Button variant="outline" onClick={save} disabled={saving || bad.length > 0}>Save</Button>
       </div>
@@ -81,8 +81,7 @@ function BrandTermsEditor() {
     <div className="space-y-2 border-t pt-4" id="brand-terms">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
-          <h3 className="text-sm font-semibold">Niche Import: brand terms</h3>
-          <p className="max-w-3xl text-sm text-muted-foreground">A niche whose customer need or search terms is or contains one of these (a whole word or phrase) gets the <b>BIG_BRAND</b> flag: shoppers search for the brand, not the product. One a line. Saving re-flags every imported niche.</p>
+          <div className="flex items-center gap-1"><h3 className="text-sm font-semibold">Niche Import: brand terms</h3><InfoTip label="More about Niche Import: brand terms">A niche whose customer need or search terms is or contains one of these (a whole word or phrase) gets the <b>BIG_BRAND</b> flag: shoppers search for the brand, not the product. One a line. Saving re-flags every imported niche.</InfoTip></div>
         </div>
         <span className="flex gap-1.5">
           <Button variant="ghost" size="sm" disabled={busy} onClick={() => save(true)}>Reset to defaults</Button>
@@ -117,8 +116,7 @@ function OffNicheEditor() {
     <div className="space-y-2 border-t pt-4" id="off-niche-words">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
-          <h3 className="text-sm font-semibold">Niche Import: off-niche words</h3>
-          <p className="max-w-3xl text-sm text-muted-foreground">The incumbent check leaves out a product whose title has one of these (a whole word or phrase): toys, kids&rsquo; and pet products, cards, gifts, parts and spares. A word the search term itself uses doesn&rsquo;t count, pet words don&rsquo;t count for a pet niche, and an accessory for any of the niche&rsquo;s terms (&ldquo;for&rdquo;, &ldquo;fits&rdquo; or &ldquo;compatible with&rdquo; just before one) is always left out. One a line. The next check uses them; rerun a niche to apply.</p>
+          <div className="flex items-center gap-1"><h3 className="text-sm font-semibold">Niche Import: off-niche words</h3><InfoTip label="More about Niche Import: off-niche words">The incumbent check leaves out a product whose title has one of these (a whole word or phrase): toys, kids&rsquo; and pet products, cards, gifts, parts and spares. A word the search term itself uses doesn&rsquo;t count, pet words don&rsquo;t count for a pet niche, and an accessory for any of the niche&rsquo;s terms (&ldquo;for&rdquo;, &ldquo;fits&rdquo; or &ldquo;compatible with&rdquo; just before one) is always left out. One a line. The next check uses them; rerun a niche to apply.</InfoTip></div>
         </div>
         <span className="flex gap-1.5">
           <Button variant="ghost" size="sm" disabled={busy} onClick={() => save(true)}>Reset to defaults</Button>
@@ -154,8 +152,7 @@ function RfqTemplateEditor() {
     <div className="space-y-2 border-t pt-4" id="rfq-template">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
-          <h3 className="text-sm font-semibold">Supplier Scout: RFQ template</h3>
-          <p className="max-w-3xl text-sm text-muted-foreground">What <b>Copy RFQ</b> on a candidate puts on the clipboard. Placeholders are filled from the candidate; a line with an empty one (no six words yet, no spec) is left out.</p>
+          <div className="flex items-center gap-1"><h3 className="text-sm font-semibold">Supplier Scout: RFQ template</h3><InfoTip label="More about Supplier Scout: RFQ template">What <b>Copy RFQ</b> on a candidate puts on the clipboard. Placeholders are filled from the candidate; a line with an empty one (no six words yet, no spec) is left out.</InfoTip></div>
           <p className="max-w-3xl text-xs text-muted-foreground">{Object.entries(vars).map(([k, v]) => <span key={k} className="mr-3 inline-block"><code>{`{{${k}}}`}</code> {v}</span>)}</p>
         </div>
         <span className="flex gap-1.5">

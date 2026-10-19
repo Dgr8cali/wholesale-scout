@@ -28,3 +28,13 @@ export function InfoTip({ children, label = "More about this", className, align 
     </Popover>
   )
 }
+
+/** A section's small uppercase heading, with its explanation in an InfoTip instead of a paragraph. */
+export function SectionTitle({ title, children, className }: { title: ReactNode; children?: ReactNode; className?: string }) {
+  return (
+    <div className={cn("flex items-center gap-1", className)}>
+      <h2 className="section-label">{title}</h2>
+      {children && <InfoTip label={typeof title === "string" ? `About ${title}` : "More about this"}>{children}</InfoTip>}
+    </div>
+  )
+}

@@ -141,7 +141,7 @@ function StatusPopover() {
       <PopoverTrigger asChild>
         <button type="button" className="cursor-pointer rounded-full outline-none focus-visible:ring-3 focus-visible:ring-ring/40" aria-label={issues ? `${issues} issue${issues === 1 ? "" : "s"}: show` : "All systems OK: show"}>
           <StatusChip tone={issues ? "warn" : "good"}>
-            {issues ? `${issues} issue${issues === 1 ? "" : "s"}` : <>All systems OK</>}
+            {issues ? <>{issues}<span className="hidden sm:inline"> issue{issues === 1 ? "" : "s"}</span></> : <span className="hidden sm:inline">All systems OK</span>}
           </StatusChip>
         </button>
       </PopoverTrigger>

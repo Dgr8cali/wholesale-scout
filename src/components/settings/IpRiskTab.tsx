@@ -1,8 +1,10 @@
 "use client";
 
 import { PlusIcon, SearchIcon, ShieldAlertIcon, Trash2Icon, UploadIcon } from "lucide-react";
+import { SectionTitle } from "@/components/ui/info-tip";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { useDialogs } from "@/components/Dialogs";
 import { EmptyState, ErrorState } from "@/components/States";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -26,6 +28,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 
 /** Settings → IP risk: brands known to file IP or counterfeit complaints, and a CSV importer. */
 export function IpRiskTab() {
+  const { confirm } = useDialogs();
   const [list, setList] = useState<Entry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState("");
@@ -52,6 +55,7 @@ export function IpRiskTab() {
   }
   const update = (x: Entry, patch: Partial<Entry>) => save({ ...x, ...patch }, x.id);
   async function remove(x: Entry) {
+    if (!(await confirm({ title: `Remove ${x.brand}?`, description: "It's no longer flagged as an IP risk on screenings and the extension.", confirmLabel: "Remove", destructive: true }))) return;
     try {
       await api(`/api/ip-risk?id=${x.id}`, { method: "DELETE" });
       setList((l) => l && l.filter((y) => y.id !== x.id));
@@ -91,13 +95,12 @@ export function IpRiskTab() {
     <div className="space-y-5">
       <section className="panel space-y-4 p-4 sm:p-5">
         <div className="space-y-1">
-          <h2 className="section-label">IP-risk brands</h2>
-          <p className="max-w-3xl text-sm text-muted-foreground">
+          <SectionTitle title={<>IP-risk brands</>}>
             Brands known to file IP or counterfeit complaints against resellers. A product whose brand (or an alias) is here gets the
             compliance rule <b>IP-risk brand</b>: a warning by default; set that rule to fail on the Gates tab to drop high-risk brands
             (medium and low still only warn). On the Brands page, high risk halves the wholesale-friendly score.
             {seeds > 0 && <> <span className="text-warn">{seeds} entries are from the starter list, marked “seed, unverified”: check them before relying on them.</span></>}
-          </p>
+          </SectionTitle>
         </div>
 
         <div className="grid gap-2 rounded-lg border p-3 sm:grid-cols-[1.2fr_7rem_1.2fr_1.6fr_1fr_9rem_auto]">
@@ -170,7 +173,7 @@ export function IpRiskTab() {
                         onChange={(e) => update(x, { reported_on: e.target.value || null })} />
                     </TableCell>
                     <TableCell className="pr-3">
-                      <Button variant="ghost" size="icon" aria-label={`Remove ${x.brand}`} onClick={() => remove(x)}><Trash2Icon /></Button>
+                      <Button variant="danger" size="icon-sm" aria-label={`Remove ${x.brand}`} onClick={() => remove(x)}><Trash2Icon /></Button>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -182,11 +185,10 @@ export function IpRiskTab() {
 
       <section className="panel space-y-3 p-4 sm:p-5">
         <div className="space-y-1">
-          <h2 className="section-label">Import a list</h2>
-          <p className="max-w-3xl text-sm text-muted-foreground">
+          <SectionTitle title={<>Import a list</>}>
             Paste a CSV: a header naming <code>brand</code>, <code>level</code>, <code>note</code>, <code>source</code>, <code>date</code>, <code>aliases</code> in any
             order, or just one brand per line. Aliases are separated by ; and a missing level is medium. Brands already listed are updated; blank cells keep what&apos;s there.
-          </p>
+          </SectionTitle>
         </div>
         <Textarea rows={6} className="font-mono text-sm" value={csv} onChange={(e) => setCsv(e.target.value)} aria-label="CSV to import"
           placeholder={"brand,level,note,aliases\nExampleBrand,high,Test buys then counterfeit complaints,Example; ExampleCo"} />

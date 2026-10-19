@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { SectionTitle } from "@/components/ui/info-tip";
 import { toast } from "sonner";
 import { ErrorState } from "@/components/States";
 import { Button } from "@/components/ui/button";
@@ -38,8 +39,7 @@ export function StockSettingsTab() {
     <section className="panel space-y-4 p-4 sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
-          <h2 className="section-label">Stock</h2>
-          <p className="max-w-3xl text-sm text-muted-foreground">How Stock judges levels and reorders. An item&apos;s own low-stock level and lead time win over these.</p>
+          <SectionTitle title={<>Stock</>}>How Stock judges levels and reorders. An item&apos;s own low-stock level and lead time win over these.</SectionTitle>
         </div>
         <Button variant="outline" onClick={save}>Save</Button>
       </div>

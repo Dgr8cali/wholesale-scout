@@ -1,6 +1,7 @@
 "use client";
 
 import { LoaderIcon, RefreshCwIcon } from "lucide-react";
+import { SectionTitle } from "@/components/ui/info-tip";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -86,8 +87,7 @@ export function BusinessSettingsTab() {
     <div className="space-y-5">
       <section className="panel space-y-4 p-4 sm:p-5">
         <div className="space-y-1">
-          <h2 className="section-label">VAT</h2>
-          <p className="max-w-3xl text-sm text-muted-foreground">Every profit, ROI and margin in the app follows this: wholesale screening and results, the buy plan, the Tracker, and Private label&apos;s Gate 6. Each figure carries a small <b>VAT reg.</b> or <b>Non-VAT</b> tag for the basis it&apos;s on.</p>
+          <SectionTitle title={<>VAT</>}>Every profit, ROI and margin in the app follows this: wholesale screening and results, the buy plan, the Tracker, and Private label&apos;s Gate 6. Each figure carries a small <b>VAT reg.</b> or <b>Non-VAT</b> tag for the basis it&apos;s on.</SectionTitle>
         </div>
         <label className="flex items-center gap-2 text-sm">
           <Switch checked={b.vatRegistered} onCheckedChange={(on) => setB({ ...b, vatRegistered: on })} />
@@ -112,8 +112,7 @@ export function BusinessSettingsTab() {
 
       <section className="panel space-y-4 p-4 sm:p-5">
         <div className="space-y-1">
-          <h2 className="section-label">Price basis for profit</h2>
-          <p className="max-w-3xl text-sm text-muted-foreground">The sell price every screening works profit out at: the referral fee, profit, ROI, margin, the Fee engine gate and the score. Every card also shows the profit at the current Buy Box and at the 90-day median side by side, and says which the gates used. With no current Buy Box (suppressed, no offers) it falls back to the 90-day median and says so. Screenings made on another basis show a <b>stale</b> banner until re-checked.</p>
+          <SectionTitle title={<>Price basis for profit</>}>The sell price every screening works profit out at: the referral fee, profit, ROI, margin, the Fee engine gate and the score. Every card also shows the profit at the current Buy Box and at the 90-day median side by side, and says which the gates used. With no current Buy Box (suppressed, no offers) it falls back to the 90-day median and says so. Screenings made on another basis show a <b>stale</b> banner until re-checked.</SectionTitle>
         </div>
         <label className="block max-w-xl space-y-1.5"><span className="field-label">Price basis</span>
           <NativeSelect className="w-full" value={b.priceBasis} onChange={(e) => setB({ ...b, priceBasis: e.target.value as PriceBasis })}>
@@ -124,8 +123,7 @@ export function BusinessSettingsTab() {
 
       <section className="panel space-y-4 p-4 sm:p-5">
         <div className="space-y-1">
-          <h2 className="section-label">Qogita</h2>
-          <p className="max-w-3xl text-sm text-muted-foreground">Which Qogita account the app&apos;s login (QOGITA_EMAIL, QOGITA_PASSWORD) is. UK prices come in £ with shipping included and ex-VAT (supplier &ldquo;Qogita UK&rdquo;): no conversion. EU prices are € and converted at the day&apos;s ECB rate (supplier &ldquo;Qogita EU&rdquo;). A pull or import that comes back in the other currency says so.</p>
+          <SectionTitle title={<>Qogita</>}>Which Qogita account the app&apos;s login (QOGITA_EMAIL, QOGITA_PASSWORD) is. UK prices come in £ with shipping included and ex-VAT (supplier &ldquo;Qogita UK&rdquo;): no conversion. EU prices are € and converted at the day&apos;s ECB rate (supplier &ldquo;Qogita EU&rdquo;). A pull or import that comes back in the other currency says so.</SectionTitle>
         </div>
         <label className="block max-w-xs space-y-1.5"><span className="field-label">Region</span>
           <NativeSelect className="w-full" value={b.qogitaRegion} onChange={(e) => setB({ ...b, qogitaRegion: e.target.value as "UK" | "EU" })}>
@@ -137,8 +135,7 @@ export function BusinessSettingsTab() {
 
       <section className="panel space-y-4 p-4 sm:p-5">
         <div className="space-y-1">
-          <h2 className="section-label">Private label</h2>
-          <p className="max-w-3xl text-sm text-muted-foreground">The capital a whole launch must fit, with its 10% buffer: Gatekeeper&apos;s Gate 7 and scorecard line 9, and the budget bar on the Launch checklist. A candidate&apos;s own <b>Capital for this launch (£)</b> in Gate 7 takes priority when set.</p>
+          <SectionTitle title={<>Private label</>}>The capital a whole launch must fit, with its 10% buffer: Gatekeeper&apos;s Gate 7 and scorecard line 9, and the budget bar on the Launch checklist. A candidate&apos;s own <b>Capital for this launch (£)</b> in Gate 7 takes priority when set.</SectionTitle>
         </div>
         <label className="block max-w-xs space-y-1.5"><span className="field-label">Launch capital (£)</span>
           <Input className="num" type="number" min={1} step="any" value={b.launchCapital} onChange={(e) => setB({ ...b, launchCapital: Number(e.target.value) })} /></label>
@@ -152,8 +149,7 @@ export function BusinessSettingsTab() {
       <section className="panel space-y-3 p-4 sm:p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="space-y-1">
-            <h2 className="section-label">Recalculate all</h2>
-            <p className="max-w-3xl text-sm text-muted-foreground">Saved results keep the basis they were screened on until they&apos;re recalculated. This re-screens every finished run from its stored data (no Amazon or Keepa calls) and shows the 20 biggest profit changes.</p>
+            <SectionTitle title={<>Recalculate all</>}>Saved results keep the basis they were screened on until they&apos;re recalculated. This re-screens every finished run from its stored data (no Amazon or Keepa calls) and shows the 20 biggest profit changes.</SectionTitle>
           </div>
           <Button variant="outline" disabled={busy || changed} onClick={recalc} title={changed ? "Save first" : undefined}><RefreshCwIcon /> Recalculate all</Button>
         </div>

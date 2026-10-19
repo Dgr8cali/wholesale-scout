@@ -36,6 +36,13 @@ page's title.
 every page (More included), quick actions (Check an ASIN → `/check?asins=`, Import ads bulk file, New candidate →
 `/pl/candidates?new=1`, New run → Upload; an ASIN typed opens its product), and products (ASIN, EAN, title), candidates and
 suppliers from `/api/search` (debounced, 8 each). It replaces the top bar's product search box.
+Proof pages (everything above applied): Today (Home, titled as its menu item; Kpi tiles, two a row on phones; New run in the
+header), Ads → Proposals (one DataTable instead of a table per product and rule, confidence as StatusChip, Approve/Skip/Snooze
+per row, Export bulk sheet as the header's primary action with a loading state), Private label → Candidates (a DataTable of
+candidates with Verdict chips, score, stage, landed · multiple and Keepa age, Show parked; the chosen candidate below; New
+candidate in the header) and Settings (a vertical tab list on desktop, a dropdown on phones, `?tab=` kept in the address, a new
+Appearance tab with System / Light / Dark, every section's explanation in an InfoTip via `SectionTitle`; IP-risk removal now
+confirms). Every other page keeps its old layout inside the new shell until phase 3.
 Phases 3–5 to do.
 
 ## Workspaces

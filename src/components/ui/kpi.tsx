@@ -9,12 +9,12 @@ const isFigure = (v: ReactNode) => (typeof v === "number" || typeof v === "strin
 /** A key figure: label, the value (mono when it's a figure), one line of context; a link when it leads somewhere. */
 export function Kpi({ label, value, hint, icon, href, className }: { label: ReactNode; value: ReactNode; hint?: ReactNode; icon?: ReactNode; href?: string; className?: string }) {
   const body = (
-    <div data-slot="kpi" className={cn("panel flex h-full items-start gap-3 p-4 transition-colors", href && "hover:border-border-strong", className)}>
-      {icon && <span className="flex size-9 flex-none items-center justify-center rounded-lg bg-primary-soft text-primary-ink [&_svg]:size-4">{icon}</span>}
+    <div data-slot="kpi" className={cn("panel flex h-full items-start gap-3 p-3 transition-colors sm:p-4", href && "hover:border-border-strong", className)}>
+      {icon && <span className="hidden size-9 flex-none items-center sm:flex justify-center rounded-lg bg-primary-soft text-primary-ink [&_svg]:size-4">{icon}</span>}
       <div className="min-w-0">
         <p className="text-meta text-muted-foreground">{label}</p>
-        <p className={cn("stat-value mt-0.5 truncate", isFigure(value) && "num")}>{value}</p>
-        {hint && <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{hint}</p>}
+        {isFigure(value) || typeof value !== "string" ? <p className={cn("stat-value mt-0.5 truncate", isFigure(value) && "num")}>{value}</p> : <p className="mt-1 line-clamp-2 text-base leading-snug font-semibold">{value}</p>}
+        {hint && <div className={cn("mt-0.5 text-xs text-muted-foreground", typeof hint === "string" && "line-clamp-2")}>{hint}</div>}
       </div>
     </div>
   )

@@ -1,20 +1,20 @@
 "use client";
 
-import { CheckIcon, ClockIcon, DownloadIcon, LoaderIcon, Undo2Icon, XIcon } from "lucide-react";
+import { CheckIcon, ClockIcon, DownloadIcon, LightbulbIcon, Undo2Icon, XIcon } from "lucide-react";
 import Link from "next/link";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { usePageCrumbs } from "@/components/Crumbs";
-import { EmptyState, ErrorState } from "@/components/States";
+import { ErrorState } from "@/components/States";
 import { Button } from "@/components/ui/button";
+import { DataTable, type DataColumn } from "@/components/ui/data-table";
+import { PageHeader } from "@/components/ui/page-header";
+import { StatusChip, type Tone } from "@/components/ui/status-chip";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RULE_IDS, RULE_LABEL, type Confidence, type RuleId } from "@/lib/ads/rules";
 import { ProductPicker, useAdsProduct } from "@/components/ads/ProductPicker";
-import { SortTh, useSortable } from "@/components/SortableTable";
 import { api } from "@/lib/ui/client";
 import type { NgramData } from "../ngrams/page";
-import { cn } from "@/lib/utils";
 
 interface Row {
   id: string; rule: RuleId; asin: string | null; campaign: string | null; campaign_name: string | null; campaign_state: string | null;
@@ -24,7 +24,7 @@ interface Row {
 }
 interface Data { proposals: Row[]; notes: Partial<Record<RuleId, string[]>>; held: { skipped: number; snoozed: number }; batchesAwaitingUpload: number }
 
-const CONF_CLS: Record<Confidence, string> = { high: "bg-pass-soft text-pass", medium: "bg-warn-soft text-warn", low: "bg-empty-soft text-ink-2" };
+const CONF_TONE: Record<Confidence, Tone> = { high: "good", medium: "warn", low: "neutral" };
 const CONF_RANK: Record<Confidence, number> = { high: 3, medium: 2, low: 1 };
 
 /** Ads → Proposals: what the rules suggest, to approve, skip or snooze, and export as a bulk sheet. */
@@ -33,7 +33,6 @@ export default function AdsProposalsPage() {
 }
 
 function AdsProposals() {
-  usePageCrumbs([{ label: "Ads", href: "/ads/dashboard" }, { label: "Proposals" }]);
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [rule, setRule] = useState<"" | RuleId>("");
@@ -48,21 +47,8 @@ function AdsProposals() {
   useEffect(() => { load(); api<NgramData>("/api/ads/ngrams").then(setGrams).catch(() => {}); }, [load]);
 
   const shown = useMemo(() => (data?.proposals ?? []).filter((p) => (!pick || p.asin === pick) && (!rule || p.rule === rule) && (!conf || p.confidence === conf) && (!campaign || p.campaign === campaign)), [data, pick, rule, conf, campaign]);
-  const sorter = useSortable("ads.proposals", shown, {
-    entity: { value: (p) => p.entity.label, kind: "text" }, change: { value: (p) => p.proposed_value, kind: "text" },
-    reason: { value: (p) => p.reason, kind: "text" }, confidence: { value: (p) => CONF_RANK[p.confidence], kind: "number" },
-  });
-  const groups = useMemo(() => {
-    const byAsin = new Map<string, Map<string, Row[]>>();
-    for (const p of sorter.rows) {
-      const a = p.asin ?? "No ASIN";
-      const g = byAsin.get(a) ?? new Map<string, Row[]>();
-      const k = `${p.rule}${p.grp ? `|${p.grp}` : ""}`;
-      g.set(k, [...(g.get(k) ?? []), p]);
-      byAsin.set(a, g);
-    }
-    return [...byAsin.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([asin, g]) => ({ asin, rules: [...g.entries()].sort((a, b) => RULE_IDS.indexOf(a[0].split("|")[0] as RuleId) - RULE_IDS.indexOf(b[0].split("|")[0] as RuleId) || a[0].localeCompare(b[0])) }));
-  }, [sorter.rows]);
+  // Product, then the rules' order, then the most confident first.
+  const rows = useMemo(() => [...shown].sort((a, b) => (a.asin ?? "").localeCompare(b.asin ?? "") || RULE_IDS.indexOf(a.rule) - RULE_IDS.indexOf(b.rule) || CONF_RANK[b.confidence] - CONF_RANK[a.confidence]), [shown]);
 
   if (error) return <ErrorState title="Couldn't load the proposals" message={error} />;
   if (!data) return <Skeleton className="h-64 rounded-lg" />;
@@ -102,18 +88,51 @@ function AdsProposals() {
   const campaigns = [...new Map(data.proposals.filter((p) => p.campaign).map((p) => [p.campaign!, p.campaign_name ?? ""])).entries()].sort((a, b) => a[1].localeCompare(b[1]));
   const notes = Object.entries(data.notes) as [RuleId, string[]][];
 
+  const columns: DataColumn<Row>[] = [
+    {
+      id: "entity", header: "Entity", mobile: "title", sortValue: (p) => p.entity.label, className: "min-w-[12rem]",
+      cell: (p) => (
+        <div className="min-w-0">
+          <div className="font-medium">{p.entity.label}</div>
+          <div className="text-meta text-muted-foreground">{p.entity.type} · {p.campaign_name}{p.campaign_state && /paused/i.test(p.campaign_state) ? " (campaign paused)" : ""}</div>
+        </div>
+      ),
+    },
+    { id: "rule", header: "Rule", sortValue: (p) => RULE_IDS.indexOf(p.rule), cell: (p) => <span className="whitespace-nowrap">{RULE_LABEL[p.rule]}{p.grp === "word-level" && <span className="block text-meta text-muted-foreground">word-level</span>}</span> },
+    { id: "change", header: "Change", mobile: 1, sortValue: (p) => p.proposed_value, cell: (p) => <span className="whitespace-nowrap"><span className="text-muted-foreground">{p.current_value}</span> → <b>{p.proposed_value}</b></span> },
+    { id: "reason", header: "Reason", sortValue: (p) => p.reason, className: "min-w-[22rem]", cell: (p) => <><p>{p.reason}</p>{p.effect && <p className="text-meta text-muted-foreground">{p.effect}</p>}</> },
+    { id: "confidence", header: "Confidence", mobile: 2, sortValue: (p) => CONF_RANK[p.confidence], cell: (p) => <StatusChip tone={CONF_TONE[p.confidence]} title="Low under 10 clicks, medium 10–29, high from 30 clicks or 3 orders">{p.confidence}</StatusChip> },
+    { id: "asin", header: "Product", sortValue: (p) => p.asin, cell: (p) => <span className="num text-meta">{p.asin ?? "—"}</span> },
+    {
+      id: "act", header: <span className="sr-only">Actions</span>, mobile: 3, className: "text-right whitespace-nowrap",
+      cell: (p) => p.status === "approved" ? (
+        <span className="inline-flex items-center gap-1"><StatusChip tone="good">Approved</StatusChip><Button size="sm" variant="ghost" disabled={!!busy} onClick={() => act([p.id], "reopen")}><Undo2Icon /> Undo</Button></span>
+      ) : (
+        <span className="inline-flex gap-1">
+          <Button size="sm" variant="secondary" loading={busy === p.id} disabled={!!busy} onClick={() => act([p.id], "approve")}><CheckIcon /> Approve</Button>
+          <Button size="icon-sm" variant="ghost" disabled={!!busy} onClick={() => act([p.id], "skip")} title="Skip: not raised again for 30 days" aria-label="Skip (30 days)"><XIcon /></Button>
+          <Button size="icon-sm" variant="ghost" disabled={!!busy} onClick={() => act([p.id], "snooze")} title="Snooze: not raised again for 14 days" aria-label="Snooze 14 days"><ClockIcon /></Button>
+        </span>
+      ),
+    },
+  ];
+  const held = data.held.skipped + data.held.snoozed;
+
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="max-w-3xl">
-          <h1 className="page-title">Proposals</h1>
-          <p className="text-sm text-muted-foreground">What your <Link className="underline" href="/ads/rules">rules</Link> suggest from the imported data. Approve what you agree with, then export the bulk sheet and upload it in Amazon Ads (Campaign manager → Bulk operations). Nothing changes in Amazon Ads until you upload it.</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" asChild><Link href="/ads/proposals/exports">Exports{data.batchesAwaitingUpload ? ` (${data.batchesAwaitingUpload} to upload)` : ""}</Link></Button>
-          <Button onClick={exportSheet} disabled={!approved.length || busy === "export"}>{busy === "export" ? <LoaderIcon className="animate-spin" /> : <DownloadIcon />} Export bulk sheet ({approved.length} approved)</Button>
-        </div>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Proposals"
+        crumbs={[{ label: "Ads", href: "/ads/dashboard" }, { label: "Proposals" }]}
+        subtitle="What your rules suggest. Approve what you agree with, then export the bulk sheet."
+        info={<>
+          <p>Proposals come from your <Link className="text-primary underline" href="/ads/rules">rules</Link>, run on the imported data. Approve what you agree with, then export the bulk sheet and upload it in Amazon Ads (Campaign manager → Bulk operations).</p>
+          <p>Nothing changes in Amazon Ads until you upload it. Skip keeps a proposal away for 30 days, Snooze for 14. Confidence: low under 10 clicks, medium 10–29, high from 30 clicks or 3 orders.</p>
+        </>}
+        actions={<>
+          <Button variant="secondary" asChild><Link href="/ads/proposals/exports">Exports{data.batchesAwaitingUpload ? ` (${data.batchesAwaitingUpload} to upload)` : ""}</Link></Button>
+          <Button onClick={exportSheet} disabled={!approved.length} loading={busy === "export"} title={approved.length ? undefined : "Approve a proposal first"}><DownloadIcon /> Export bulk sheet ({approved.length})</Button>
+        </>}
+      />
 
       <div className="flex flex-wrap items-end gap-3">
         {(productIds.length > 1 || (!!pick && !productIds.includes(pick))) && <ProductPicker products={productIds.map((asin) => ({ asin }))} value={pick} onChange={setPick} />}
@@ -127,71 +146,36 @@ function AdsProposals() {
             <NativeSelectOption value="">Any</NativeSelectOption>
             {(["high", "medium", "low"] as const).map((c) => <NativeSelectOption key={c} value={c}>{c[0].toUpperCase() + c.slice(1)} ({data.proposals.filter((p) => p.confidence === c).length})</NativeSelectOption>)}
           </NativeSelect></label>
-        <label className="space-y-1"><span className="field-label">Campaign</span>
-          <NativeSelect value={campaign} onChange={(e) => setCampaign(e.target.value)}>
+        <label className="min-w-0 space-y-1"><span className="field-label">Campaign</span>
+          <NativeSelect value={campaign} onChange={(e) => setCampaign(e.target.value)} className="max-w-[min(20rem,calc(100vw-2rem))]">
             <NativeSelectOption value="">All campaigns</NativeSelectOption>
             {campaigns.map(([id, name]) => <NativeSelectOption key={id} value={id}>{name}</NativeSelectOption>)}
           </NativeSelect></label>
-        <Button variant="outline" className="ml-auto" disabled={!highOpen.length || busy === "approve"} onClick={() => act(highOpen.map((p) => p.id), "approve")}>
+        <Button variant="secondary" className="sm:ml-auto" disabled={!highOpen.length} loading={busy === "approve"} onClick={() => act(highOpen.map((p) => p.id), "approve")}>
           <CheckIcon /> Approve all high-confidence ({highOpen.length})
         </Button>
       </div>
 
+      <DataTable
+        rows={rows}
+        columns={columns}
+        getRowId={(p) => p.id}
+        storageKey="ads.proposals"
+        caption="Proposals"
+        rowClassName={(p) => (p.status === "approved" ? "bg-success-soft/40" : undefined)}
+        empty={data.proposals.length
+          ? { icon: <LightbulbIcon />, title: "No proposals match the filters", description: "Clear a filter to see the rest.", action: <Button variant="secondary" onClick={() => { setRule(""); setConf(""); setCampaign(""); setPick(""); }}>Clear filters</Button> }
+          : { icon: <LightbulbIcon />, title: "No proposals", description: `Nothing for the rules to change in the data imported.${held ? ` ${data.held.skipped} skipped and ${data.held.snoozed} snoozed are held back.` : ""}`, action: <Button asChild><Link href="/ads/imports">Import a newer bulk export</Link></Button> }}
+      />
+
       {grams && grams.rows.length > 0 && <NgramCard d={grams} />}
 
       {notes.length > 0 && (
-        <details className="panel px-3 py-2 text-sm">
+        <details className="panel px-4 py-3 text-sm">
           <summary className="cursor-pointer font-medium">What the rules couldn&apos;t check ({notes.reduce((a, [, n]) => a + n.length, 0)})</summary>
           <ul className="mt-2 space-y-1 text-muted-foreground">{notes.flatMap(([r, ns]) => ns.map((n) => <li key={r + n}><b className="text-foreground">{RULE_LABEL[r]}:</b> {n}</li>))}</ul>
         </details>
       )}
-
-      {!data.proposals.length ? (
-        <EmptyState title="No proposals">{`Nothing for the rules to change in the data imported.${data.held.skipped + data.held.snoozed ? ` ${data.held.skipped} skipped and ${data.held.snoozed} snoozed proposals are held back.` : ""} Import a newer bulk export to run them again.`}</EmptyState>
-      ) : !shown.length ? <p className="text-sm text-muted-foreground">No proposals match the filters.</p> : groups.map((g) => (
-        <section key={g.asin} className="space-y-3">
-          <h2 className="section-label">{g.asin}</h2>
-          {g.rules.map(([k, rows]) => (
-            <div key={k} className="overflow-x-auto rounded-lg border">
-              <div className="flex items-center gap-2 border-b bg-surface-2 px-3 py-1.5 text-sm font-semibold">
-                {RULE_LABEL[k.split("|")[0] as RuleId]}{k.includes("|word-level") && <span className="text-xs font-normal text-muted-foreground">word-level (campaign negative phrase)</span>}
-                <span className="text-xs font-normal text-muted-foreground">{rows.length}</span>
-              </div>
-              <table className="w-full text-sm">
-                <thead><tr className="border-b text-left text-xs tracking-wide text-muted-foreground uppercase">
-                  <SortTh {...sorter.th("entity")} className="px-3 py-1">Entity</SortTh><SortTh {...sorter.th("change")} className="px-3 py-1">Change</SortTh>
-                  <SortTh {...sorter.th("reason")} className="px-3 py-1">Reason</SortTh><SortTh {...sorter.th("confidence")} className="px-3 py-1">Confidence</SortTh><th />
-                </tr></thead>
-                <tbody>{rows.map((p) => (
-                  <tr key={p.id} className={cn("border-b align-top last:border-b-0", p.status === "approved" && "bg-pass-soft/40")}>
-                    <td className="w-[28%] px-3 py-2">
-                      <div className="font-medium">{p.entity.label}</div>
-                      <div className="text-xs text-muted-foreground">{p.entity.type} · {p.campaign_name}{p.campaign_state && /paused/i.test(p.campaign_state) ? " (campaign paused)" : ""}</div>
-                    </td>
-                    <td className="px-3 py-2 whitespace-nowrap"><span className="text-muted-foreground">{p.current_value}</span> → <b>{p.proposed_value}</b></td>
-                    <td className="px-3 py-2">
-                      <p>{p.reason}</p>
-                      {p.effect && <p className="text-xs text-muted-foreground">{p.effect}</p>}
-                    </td>
-                    <td className="px-3 py-2"><span className={cn("rounded-full px-2 py-0.5 text-xs font-semibold", CONF_CLS[p.confidence])} title="Low under 10 clicks, medium 10–29, high from 30 clicks or 3 orders">{p.confidence}</span></td>
-                    <td className="px-3 py-2 text-right whitespace-nowrap">
-                      {p.status === "approved" ? (
-                        <span className="inline-flex items-center gap-1"><span className="text-xs font-semibold text-pass">Approved</span><Button size="xs" variant="ghost" disabled={!!busy} onClick={() => act([p.id], "reopen")}><Undo2Icon /> Undo</Button></span>
-                      ) : (
-                        <span className="inline-flex gap-1">
-                          <Button size="xs" disabled={!!busy} onClick={() => act([p.id], "approve")}><CheckIcon /> Approve</Button>
-                          <Button size="xs" variant="ghost" disabled={!!busy} onClick={() => act([p.id], "skip")} title="Not raised again for 30 days"><XIcon /> Skip</Button>
-                          <Button size="xs" variant="ghost" disabled={!!busy} onClick={() => act([p.id], "snooze")} title="Not raised again for 14 days"><ClockIcon /> Snooze 14d</Button>
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                ))}</tbody>
-              </table>
-            </div>
-          ))}
-        </section>
-      ))}
     </div>
   );
 }
@@ -201,14 +185,14 @@ function NgramCard({ d }: { d: NgramData }) {
   const waste = [...d.rows].filter((r) => r.waste > 0).sort((a, b) => b.waste - a.waste).slice(0, 6);
   const fired = d.rows.filter((r) => r.trigger);
   return (
-    <section className="panel space-y-2 p-3 text-sm">
-      <div className="flex items-baseline gap-2">
+    <section className="panel space-y-3 p-4 text-sm">
+      <div className="flex flex-wrap items-baseline gap-2">
         <h2 className="font-semibold">N-grams</h2>
         <span className="text-xs text-muted-foreground">{fired.length ? `${fired.length} gram${fired.length === 1 ? "" : "s"} fire Rule 9 or 10: ${fired.map((r) => `"${r.gram}" (${r.trigger})`).join(", ")}` : "No gram fires Rule 9 (negative) or Rule 10 (winner) on this data"}</span>
-        <Link href="/ads/ngrams" className="ml-auto text-xs font-medium text-brand hover:underline">All n-grams →</Link>
+        <Link href="/ads/ngrams" className="ml-auto text-xs font-medium whitespace-nowrap text-primary hover:underline">All n-grams →</Link>
       </div>
       <div className="flex flex-wrap gap-2">{waste.map((r) => (
-        <span key={r.asin + r.gram} className="rounded-md bg-surface-2 px-2 py-1 text-xs" title={`${r.clicks} clicks, £${r.cost.toFixed(2)} spent, ${r.orders} orders, in ${r.terms} terms (${r.convertingTerms} with an order)`}>
+        <span key={r.asin + r.gram} className="rounded-full bg-subtle px-3 py-1 text-xs" title={`${r.clicks} clicks, £${r.cost.toFixed(2)} spent, ${r.orders} orders, in ${r.terms} terms (${r.convertingTerms} with an order)`}>
           <b>{r.gram}</b> · £{r.waste.toFixed(2)} wasted of £{r.cost.toFixed(2)} · {r.terms} terms{r.convertingTerms ? `, ${r.convertingTerms} converting` : ""}
         </span>
       ))}</div>

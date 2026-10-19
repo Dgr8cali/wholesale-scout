@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { InfoTip, SectionTitle } from "@/components/ui/info-tip";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { ErrorState } from "@/components/States";
@@ -45,8 +46,7 @@ export function AdsSettingsTab() {
     <section className="panel space-y-4 p-4 sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
-          <h2 className="section-label">Ads</h2>
-          <p className="max-w-3xl text-sm text-muted-foreground">The default target ACoS for the Ads dashboard&apos;s products and search-term chips (a product can have its own), and the CPC behind Private label&apos;s ads-per-unit estimate.</p>
+          <SectionTitle title={<>Ads</>}>The default target ACoS for the Ads dashboard&apos;s products and search-term chips (a product can have its own), and the CPC behind Private label&apos;s ads-per-unit estimate.</SectionTitle>
         </div>
         <Button variant="outline" onClick={save}>Save</Button>
       </div>
@@ -119,10 +119,9 @@ function AiSettings() {
     <div className="space-y-3 border-t pt-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
-          <h3 className="text-sm font-semibold">AI review (Claude)</h3>
-          <p className="max-w-3xl text-sm text-muted-foreground">
+          <div className="flex items-center gap-1"><h3 className="text-sm font-semibold">AI review (Claude)</h3><InfoTip label="More about AI review (Claude)">
             Explain this product, Recommend targets and the <Link className="underline" href="/ads/review">monthly review</Link>. The API is called only when you click, or by the monthly schedule if you turn it on. {data.settings.keySet ? <span className="text-pass">ANTHROPIC_API_KEY is set.</span> : <span className="text-warn">ANTHROPIC_API_KEY isn&apos;t set.</span>}
-          </p>
+          </InfoTip></div>
           <p className="text-sm">Spent: <b>{costTxt(data.spend.last30Gbp)}</b> over {data.spend.last30Calls} call{data.spend.last30Calls === 1 ? "" : "s"} in the last 30 days · {costTxt(data.spend.totalGbp)} in all ({data.spend.calls})</p>
         </div>
         <Button variant="outline" onClick={save}>Save</Button>
@@ -186,8 +185,7 @@ function KeywordListsEditor() {
     <div className="space-y-3 border-t pt-4" id="keyword-lists">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
-          <h3 className="text-sm font-semibold">Keyword lists</h3>
-          <p className="max-w-3xl text-sm text-muted-foreground"><b>Whitelist</b>: terms never negatived or paused (your brand name, the product&apos;s exact head terms); the rules skip them and say so. <b>Blacklist</b>: words or phrases always added as negative phrase to a product&apos;s new campaigns (the launcher and harvest&apos;s new Exact campaign), and proposed for its broad and auto campaigns. One term a line.</p>
+          <div className="flex items-center gap-1"><h3 className="text-sm font-semibold">Keyword lists</h3><InfoTip label="More about Keyword lists"><b>Whitelist</b>: terms never negatived or paused (your brand name, the product&apos;s exact head terms); the rules skip them and say so. <b>Blacklist</b>: words or phrases always added as negative phrase to a product&apos;s new campaigns (the launcher and harvest&apos;s new Exact campaign), and proposed for its broad and auto campaigns. One term a line.</InfoTip></div>
         </div>
         <Button variant="outline" onClick={save}>Save lists</Button>
       </div>

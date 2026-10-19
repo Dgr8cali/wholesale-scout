@@ -7,6 +7,8 @@ import { VerdictBar } from "@/components/VerdictBar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Kpi } from "@/components/ui/kpi";
+import { PageHeader } from "@/components/ui/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import { GATING_LABELS, GATING_VARIANT, type BrandSummary } from "@/lib/brandMap";
 import { etaLabel } from "@/lib/eta";
@@ -33,9 +35,12 @@ interface PlDash {
   suppliers?: { captured: number; toContact: number; contacted: number; quoted: number } | null;
 }
 
-/** A workspace's heading on Home. */
-const RowTitle = ({ children, href }: { children: ReactNode; href: string }) => (
-  <h2 className="section-label flex items-center gap-2"><Link href={href} className="hover:underline">{children}</Link></h2>
+/** A workspace's row on Today: its heading, then its tiles. */
+const Row = ({ title, href, children }: { title: string; href: string; children: ReactNode }) => (
+  <section className="space-y-3">
+    <h2 className="section-label flex items-center gap-2"><Link href={href} className="hover:underline">{title}</Link></h2>
+    {children}
+  </section>
 );
 
 /** Loaded data, or the error that stopped it. */
@@ -68,23 +73,12 @@ function Section<T>({ load, skeleton, children }: { load: Load<T>; skeleton: Rea
   return <>{children(load.data)}</>;
 }
 
-function Stat({ icon, label, value, hint, href }: { icon: ReactNode; label: string; value: ReactNode; hint?: ReactNode; href?: string }) {
-  const body = (
-    <Card size="sm" className="h-full transition-colors hover:bg-muted/40">
-      <CardContent className="flex items-start gap-3">
-        <span className="flex size-8 flex-none items-center justify-center rounded-lg bg-muted text-muted-foreground [&_svg]:size-4">{icon}</span>
-        <div className="min-w-0">
-          <p className="text-xs text-muted-foreground">{label}</p>
-          <p className="stat-value">{value}</p>
-          {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
-        </div>
-      </CardContent>
-    </Card>
-  );
-  return href ? <Link href={href} className="block rounded-lg focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none">{body}</Link> : body;
-}
+/** A figure on Today: the shared Kpi tile. */
+const Stat = ({ icon, label, value, hint, href }: { icon: ReactNode; label: string; value: ReactNode; hint?: ReactNode; href?: string }) => (
+  <Kpi icon={icon} label={label} value={value} hint={hint} href={href} />
+);
 
-const StatSkeleton = () => <Skeleton className="h-[88px] rounded-lg" />;
+const StatSkeleton = () => <Skeleton className="h-[104px] rounded-xl" />;
 const ListSkeleton = ({ rows = 4 }: { rows?: number }) => (
   <div className="space-y-4">{Array.from({ length: rows }, (_, i) => <div key={i} className="space-y-2"><Skeleton className="h-4 w-2/3" /><Skeleton className="h-2 w-full" /></div>)}</div>
 );
@@ -103,130 +97,136 @@ export default function HomePage() {
   const aiReview = useLoad<{ spend: { last30Gbp: number; last30Calls: number }; lastMonth: string; review: { result: { recommendations: { title: string }[] }; costGbp: number; at: string } | null }>("/api/ads/ai/spend");
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="page-title">Home</h1>
-          <p className="text-sm text-muted-foreground">Each workspace at a glance: Wholesale, Private label, Ads and Stock.</p>
+    <div className="space-y-8">
+      <PageHeader
+        title="Today"
+        subtitle="Each workspace at a glance."
+        info={<>
+          <p>One row per workspace: Wholesale, Private label, Ads and Stock. Each tile opens the page behind it.</p>
+          <p>Below: the latest runs, last night&apos;s Qogita pulls, favourites to re-screen and the brands worth asking for approval.</p>
+        </>}
+        actions={<Button asChild><Link href="/upload"><UploadIcon /> New run</Link></Button>}
+      />
+
+      <Row title="Wholesale" href="/runs">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5">
+          <Section load={keepa} skeleton={<StatSkeleton />}>
+            {(k) => (
+              <Stat icon={<CoinsIcon />} label="Keepa tokens available"
+                value={!k.available ? "—" : k.tokens ? k.tokens.tokensLeft.toLocaleString("en-GB") : "—"}
+                hint={!k.available ? "Keepa not configured" : k.tokens ? `refills ${k.tokens.refillRate}/min` : "Keepa didn't answer"} />
+            )}
+          </Section>
+          <Section load={dash} skeleton={<StatSkeleton />}>
+            {(d) => (
+              <Stat icon={<CoinsIcon />} label="Keepa tokens spent today" value={d.keepa.spentToday.toLocaleString("en-GB")}
+                hint={<>
+                  ≈ {Math.round(d.keepa.spentToday / 3).toLocaleString("en-GB")} products at 3 tokens each
+                  <SpendBars days={d.keepa.last7} />
+                </>} />
+            )}
+          </Section>
+          <Section load={alerts} skeleton={<StatSkeleton />}>
+            {(a) => <Stat icon={<BellIcon />} label="Watchlist: now passes" href="/watchlist" value={a.count}
+              hint={a.count ? "passed, met a condition or found a supplier" : "nothing new in the last 14 days"} />}
+          </Section>
+          <Section load={favs} skeleton={<StatSkeleton />}>
+            {(f) => <Stat icon={<StarIcon />} label="Favourites needing refresh" href="/favourites"
+              value={f.items.filter((x) => x.outdated).length} hint={`of ${f.items.length} favourites`} />}
+          </Section>
+          <Section load={brands} skeleton={<StatSkeleton />}>
+            {(b) => <Stat icon={<BuildingIcon />} label="Brands awaiting approval" href="/brands" value={b.awaiting.brands}
+              hint={`${b.awaiting.passing.toLocaleString("en-GB")} passing products held back`} />}
+          </Section>
         </div>
-        <Button asChild size="lg"><Link href="/upload"><UploadIcon /> Upload price list</Link></Button>
-      </div>
+      </Row>
 
-      <RowTitle href="/runs">Wholesale</RowTitle>
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        <Section load={keepa} skeleton={<StatSkeleton />}>
-          {(k) => (
-            <Stat icon={<CoinsIcon />} label="Keepa tokens available"
-              value={!k.available ? "—" : k.tokens ? k.tokens.tokensLeft.toLocaleString("en-GB") : "—"}
-              hint={!k.available ? "Keepa not configured" : k.tokens ? `refills ${k.tokens.refillRate}/min` : "Keepa didn't answer"} />
-          )}
-        </Section>
-        <Section load={dash} skeleton={<StatSkeleton />}>
-          {(d) => (
-            <Stat icon={<CoinsIcon />} label="Keepa tokens spent today" value={d.keepa.spentToday.toLocaleString("en-GB")}
-              hint={<>
-                ≈ {Math.round(d.keepa.spentToday / 3).toLocaleString("en-GB")} products at 3 tokens each
-                <SpendBars days={d.keepa.last7} />
-              </>} />
-          )}
-        </Section>
-        <Section load={alerts} skeleton={<StatSkeleton />}>
-          {(a) => <Stat icon={<BellIcon />} label="Watchlist: now passes" href="/watchlist" value={a.count}
-            hint={a.count ? "passed, met a condition or found a supplier" : "nothing new in the last 14 days"} />}
-        </Section>
-        <Section load={favs} skeleton={<StatSkeleton />}>
-          {(f) => <Stat icon={<StarIcon />} label="Favourites needing refresh" href="/favourites"
-            value={f.items.filter((x) => x.outdated).length} hint={`of ${f.items.length} favourites`} />}
-        </Section>
-        <Section load={brands} skeleton={<StatSkeleton />}>
-          {(b) => <Stat icon={<BuildingIcon />} label="Brands awaiting approval" href="/brands" value={b.awaiting.brands}
-            hint={`${b.awaiting.passing.toLocaleString("en-GB")} passing products held back`} />}
-        </Section>
-      </div>
+      <Row title="Private label" href="/pl/candidates">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5">
+          <Section load={pl} skeleton={<StatSkeleton />}>
+            {(p) => (
+              <Stat icon={<TagIcon />} label="Candidates by verdict" href="/pl/candidates" value={p.candidates}
+                hint={p.candidates ? (
+                  <span className="flex flex-wrap gap-x-2">
+                    <span className="text-pass">{p.verdicts.pass} order samples</span>
+                    <span className="text-warn">{p.verdicts.warn} check</span>
+                    <span className="text-fail">{p.verdicts.fail} drop</span>
+                    <span>{p.verdicts.empty} not scored yet</span>
+                  </span>
+                ) : "none yet: hunt a niche or add one"} />
+            )}
+          </Section>
+          <Section load={pl} skeleton={<StatSkeleton />}>
+            {(p) => (
+              <Stat icon={<TelescopeIcon />} label="Last Niche Hunt" href="/pl/niche-hunt"
+                value={p.lastHunt ? when(p.lastHunt.created_at) : "—"}
+                hint={p.lastHunt ? `${p.lastHunt.status === "done" ? "done" : p.lastHunt.status} · ${p.lastHunt.token_cost.toLocaleString("en-GB")} tokens` : "no hunt yet"} />
+            )}
+          </Section>
+          <Section load={pl} skeleton={<StatSkeleton />}>
+            {(p) => (
+              <Stat icon={<TelescopeIcon />} label="Niches" href="/pl/niches" value={`${(p.niches?.shortlisted ?? 0).toLocaleString("en-GB")} shortlisted`}
+                hint={p.niches?.total ? `of ${p.niches.total.toLocaleString("en-GB")} imported from Opportunity Explorer · ${p.niches.checked} incumbent-checked` : "import an Opportunity Explorer category download"} />
+            )}
+          </Section>
+          <Section load={pl} skeleton={<StatSkeleton />}>
+            {(p) => (
+              <Stat icon={<TagIcon />} label="Suppliers" href="/pl/suppliers" value={`${(p.suppliers?.toContact ?? 0).toLocaleString("en-GB")} to contact`}
+                hint={p.suppliers?.captured ? `scoring 60+ and not messaged yet, of ${p.suppliers.captured.toLocaleString("en-GB")} Alibaba listings · ${p.suppliers.contacted} contacted · ${p.suppliers.quoted} quoted` : "send Alibaba search results with the extension"} />
+            )}
+          </Section>
+          <Section load={pl} skeleton={<StatSkeleton />}>
+            {(p) => (
+              <Stat icon={<CoinsIcon />} label="Private label Keepa tokens this month" value={p.tokensThisMonth.toLocaleString("en-GB")}
+                hint={`candidates' refreshes, Niche Hunts and niche incumbent checks, ${new Date(`${p.month}-01`).toLocaleDateString("en-GB", { month: "long", year: "numeric" })}`} />
+            )}
+          </Section>
+        </div>
+      </Row>
 
-      <RowTitle href="/pl/candidates">Private label</RowTitle>
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        <Section load={pl} skeleton={<StatSkeleton />}>
-          {(p) => (
-            <Stat icon={<TagIcon />} label="Candidates by verdict" href="/pl/candidates" value={p.candidates}
-              hint={p.candidates ? (
-                <span className="flex flex-wrap gap-x-2">
-                  <span className="text-pass">{p.verdicts.pass} order samples</span>
-                  <span className="text-warn">{p.verdicts.warn} check</span>
-                  <span className="text-fail">{p.verdicts.fail} drop</span>
-                  <span>{p.verdicts.empty} not scored yet</span>
-                </span>
-              ) : "none yet: hunt a niche or add one"} />
-          )}
-        </Section>
-        <Section load={pl} skeleton={<StatSkeleton />}>
-          {(p) => (
-            <Stat icon={<TelescopeIcon />} label="Last Niche Hunt" href="/pl/niche-hunt"
-              value={p.lastHunt ? when(p.lastHunt.created_at) : "—"}
-              hint={p.lastHunt ? `${p.lastHunt.status === "done" ? "done" : p.lastHunt.status} · ${p.lastHunt.token_cost.toLocaleString("en-GB")} tokens` : "no hunt yet"} />
-          )}
-        </Section>
-        <Section load={pl} skeleton={<StatSkeleton />}>
-          {(p) => (
-            <Stat icon={<TelescopeIcon />} label="Niches" href="/pl/niches" value={`${(p.niches?.shortlisted ?? 0).toLocaleString("en-GB")} shortlisted`}
-              hint={p.niches?.total ? `of ${p.niches.total.toLocaleString("en-GB")} imported from Opportunity Explorer · ${p.niches.checked} incumbent-checked` : "import an Opportunity Explorer category download"} />
-          )}
-        </Section>
-        <Section load={pl} skeleton={<StatSkeleton />}>
-          {(p) => (
-            <Stat icon={<TagIcon />} label="Suppliers" href="/pl/suppliers" value={`${(p.suppliers?.toContact ?? 0).toLocaleString("en-GB")} to contact`}
-              hint={p.suppliers?.captured ? `scoring 60+ and not messaged yet, of ${p.suppliers.captured.toLocaleString("en-GB")} Alibaba listings · ${p.suppliers.contacted} contacted · ${p.suppliers.quoted} quoted` : "send Alibaba search results with the extension"} />
-          )}
-        </Section>
-        <Section load={pl} skeleton={<StatSkeleton />}>
-          {(p) => (
-            <Stat icon={<CoinsIcon />} label="Private label Keepa tokens this month" value={p.tokensThisMonth.toLocaleString("en-GB")}
-              hint={`candidates' refreshes, Niche Hunts and niche incumbent checks, ${new Date(`${p.month}-01`).toLocaleDateString("en-GB", { month: "long", year: "numeric" })}`} />
-          )}
-        </Section>
-      </div>
+      <Row title="Ads" href="/ads/dashboard">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5">
+          <Section load={ads} skeleton={<StatSkeleton />}>
+            {(a) => {
+              const t = a.campaigns.reduce((s, c) => ({ cost: s.cost + (c.totals?.cost ?? 0), sales: s.sales + (c.totals?.sales ?? 0) }), { cost: 0, sales: 0 });
+              if (!a.campaigns.length) return <Stat icon={<MegaphoneIcon />} label="Sponsored Products" href="/ads/imports" value="—" hint="No ad data yet — import a report" />;
+              const waste = a.terms.filter((x) => x.status === "waste").length;
+              return <Stat icon={<MegaphoneIcon />} label="Sponsored Products spend" href="/ads/dashboard" value={`£${t.cost.toFixed(2)}`}
+                hint={`ACoS ${t.sales ? Math.round((t.cost / t.sales) * 100) : "—"}% on £${t.sales.toFixed(2)} sales · ${waste} search term${waste === 1 ? "" : "s"} wasting spend`} />;
+            }}
+          </Section>
+          <Stat icon={<BookOpenIcon />} label="Ads: the playbook" href="/help/ads-playbook" value="Start to finish" hint="Set a product up, launch, the weekly loop, the 60-day arc, and what to do when something looks wrong" />
+          <Section load={aiReview} skeleton={<StatSkeleton />}>
+            {(r) => {
+              const month = new Date(`${r.lastMonth}-01`).toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+              const ai = `AI: £${r.spend.last30Gbp.toFixed(2)} over ${r.spend.last30Calls} call${r.spend.last30Calls === 1 ? "" : "s"} in 30 days`;
+              return r.review
+                ? <Stat icon={<SparklesIcon />} label={`Review of ${month}`} href={`/ads/review?month=${r.lastMonth}`} value={r.review.result.recommendations[0]?.title ?? "Done"} hint={`Top recommendation · this review cost £${r.review.costGbp.toFixed(2)} · ${ai}`} />
+                : <Stat icon={<SparklesIcon />} label={`Review of ${month}`} href={`/ads/review?month=${r.lastMonth}`} value="Not run" hint={`Run it on Ads → Review · ${ai}`} />;
+            }}
+          </Section>
+        </div>
+      </Row>
 
-      <RowTitle href="/ads/dashboard">Ads</RowTitle>
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        <Section load={ads} skeleton={<StatSkeleton />}>
-          {(a) => {
-            const t = a.campaigns.reduce((s, c) => ({ cost: s.cost + (c.totals?.cost ?? 0), sales: s.sales + (c.totals?.sales ?? 0) }), { cost: 0, sales: 0 });
-            if (!a.campaigns.length) return <Stat icon={<MegaphoneIcon />} label="Sponsored Products" href="/ads/imports" value="—" hint="No ad data yet — import a report" />;
-            const waste = a.terms.filter((x) => x.status === "waste").length;
-            return <Stat icon={<MegaphoneIcon />} label="Sponsored Products spend" href="/ads/dashboard" value={`£${t.cost.toFixed(2)}`}
-              hint={`ACoS ${t.sales ? Math.round((t.cost / t.sales) * 100) : "—"}% on £${t.sales.toFixed(2)} sales · ${waste} search term${waste === 1 ? "" : "s"} wasting spend`} />;
-          }}
-        </Section>
-        <Stat icon={<BookOpenIcon />} label="Ads: the playbook" href="/help/ads-playbook" value="Start to finish" hint="Set a product up, launch, the weekly loop, the 60-day arc, and what to do when something looks wrong" />
-        <Section load={aiReview} skeleton={<StatSkeleton />}>
-          {(r) => {
-            const month = new Date(`${r.lastMonth}-01`).toLocaleDateString("en-GB", { month: "long", year: "numeric" });
-            const ai = `AI: £${r.spend.last30Gbp.toFixed(2)} over ${r.spend.last30Calls} call${r.spend.last30Calls === 1 ? "" : "s"} in 30 days`;
-            return r.review
-              ? <Stat icon={<SparklesIcon />} label={`Review of ${month}`} href={`/ads/review?month=${r.lastMonth}`} value={r.review.result.recommendations[0]?.title ?? "Done"} hint={`Top recommendation · this review cost £${r.review.costGbp.toFixed(2)} · ${ai}`} />
-              : <Stat icon={<SparklesIcon />} label={`Review of ${month}`} href={`/ads/review?month=${r.lastMonth}`} value="Not run" hint={`Run it on Ads → Review · ${ai}`} />;
-          }}
-        </Section>
-      </div>
-
-      <RowTitle href="/stock/levels">Stock</RowTitle>
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Section load={stock} skeleton={<StatSkeleton />}>
-          {(s) => !s.items
-            ? <Stat icon={<BoxesIcon />} label="Stock" href="/stock/import" value="—" hint="No stock items yet — import from StockPilot or a CSV" />
-            : <Stat icon={<BoxesIcon />} label="Stock value at cost" href="/stock/levels" value={`£${s.value.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} hint={`${s.items} item${s.items === 1 ? "" : "s"}`} />}
-        </Section>
-        <Section load={stock} skeleton={<StatSkeleton />}>
-          {(s) => <Stat icon={<BoxesIcon />} label="Units by bucket" href="/stock/levels" value={(s.units.home + s.units.fba + s.units.tiktok_fbt).toLocaleString("en-GB")}
-            hint={`Self-ship ${s.units.home} · FBA ${s.units.fba} · TikTok ${s.units.tiktok_fbt}`} />}
-        </Section>
-        <Section load={stock} skeleton={<StatSkeleton />}>
-          {(s) => <Stat icon={<PackageXIcon />} label="Low or out of stock" href="/stock/levels" value={s.low} hint={s.low ? "at or under the low-stock level" : "every item above its low-stock level"} />}
-        </Section>
-        <Section load={stock} skeleton={<StatSkeleton />}>
-          {(s) => <Stat icon={<ShoppingCartIcon />} label="Reorders due or soon" href="/stock/reorder" value={s.reorderDue} hint={s.reorderDue ? "at the reorder point, or within a week of it" : "nothing to reorder yet"} />}
-        </Section>
-      </div>
+      <Row title="Stock" href="/stock/levels">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+          <Section load={stock} skeleton={<StatSkeleton />}>
+            {(s) => !s.items
+              ? <Stat icon={<BoxesIcon />} label="Stock" href="/stock/import" value="—" hint="No stock items yet — import from StockPilot or a CSV" />
+              : <Stat icon={<BoxesIcon />} label="Stock value at cost" href="/stock/levels" value={`£${s.value.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} hint={`${s.items} item${s.items === 1 ? "" : "s"}`} />}
+          </Section>
+          <Section load={stock} skeleton={<StatSkeleton />}>
+            {(s) => <Stat icon={<BoxesIcon />} label="Units by bucket" href="/stock/levels" value={(s.units.home + s.units.fba + s.units.tiktok_fbt).toLocaleString("en-GB")}
+              hint={`Self-ship ${s.units.home} · FBA ${s.units.fba} · TikTok ${s.units.tiktok_fbt}`} />}
+          </Section>
+          <Section load={stock} skeleton={<StatSkeleton />}>
+            {(s) => <Stat icon={<PackageXIcon />} label="Low or out of stock" href="/stock/levels" value={s.low} hint={s.low ? "at or under the low-stock level" : "every item above its low-stock level"} />}
+          </Section>
+          <Section load={stock} skeleton={<StatSkeleton />}>
+            {(s) => <Stat icon={<ShoppingCartIcon />} label="Reorders due or soon" href="/stock/reorder" value={s.reorderDue} hint={s.reorderDue ? "at the reorder point, or within a week of it" : "nothing to reorder yet"} />}
+          </Section>
+        </div>
+      </Row>
 
       <div className="grid gap-4 lg:grid-cols-5">
         <Card className="lg:col-span-3">

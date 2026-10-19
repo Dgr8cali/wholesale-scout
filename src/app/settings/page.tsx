@@ -1,13 +1,13 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { IpRiskTab } from "@/components/settings/IpRiskTab";
 import { CategoryRanks } from "@/components/settings/CategoryRanks";
 import { BusinessSettingsTab } from "@/components/settings/BusinessSettingsTab";
 import { PlSettingsTab } from "@/components/settings/PlSettingsTab";
 import { AdsSettingsTab } from "@/components/settings/AdsSettingsTab";
 import { StockSettingsTab } from "@/components/settings/StockSettingsTab";
-import { BoxesIcon, BuildingIcon, FilterIcon, GaugeIcon, MegaphoneIcon, ReceiptIcon, ShieldAlertIcon, ShieldCheckIcon, SlidersHorizontalIcon, TagIcon, Trash2Icon, UndoIcon } from "lucide-react";
+import { BoxesIcon, BuildingIcon, FilterIcon, GaugeIcon, MegaphoneIcon, PaletteIcon, ReceiptIcon, ShieldAlertIcon, ShieldCheckIcon, SlidersHorizontalIcon, TagIcon, Trash2Icon, UndoIcon } from "lucide-react";
 import { Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { activeChips, normalizeFilters, type FilterSet } from "@/lib/filters";
 import type { RateCard } from "@/lib/fees/rateCard";
@@ -40,6 +40,9 @@ import { EmptyState, ErrorState } from "@/components/States";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { SectionTitle } from "@/components/ui/info-tip";
+import { PageHeader } from "@/components/ui/page-header";
+import { ThemeChoice } from "@/components/ThemeToggle";
 import { cn } from "@/lib/utils";
 interface Profile { id: string; name: string; config: ProfileConfig; is_default: boolean }
 
@@ -86,7 +89,7 @@ function ModeSelect({ value, onChange, allowOff = true }: { value: GateMode; onC
 }
 
 type ProfileTab = "gates" | "score" | "fees" | "profiles";
-const TABS: { id: ProfileTab | "business" | "waived" | "filters" | "ip" | "pl" | "ads" | "stock"; label: string; icon: ReactNode }[] = [
+const TABS: { id: ProfileTab | "business" | "waived" | "filters" | "ip" | "pl" | "ads" | "stock" | "appearance"; label: string; icon: ReactNode }[] = [
   { id: "business", label: "Business", icon: <BuildingIcon /> },
   { id: "gates", label: "Gates", icon: <ShieldCheckIcon /> },
   { id: "score", label: "Score", icon: <GaugeIcon /> },
@@ -98,6 +101,7 @@ const TABS: { id: ProfileTab | "business" | "waived" | "filters" | "ip" | "pl" |
   { id: "pl", label: "Private label", icon: <TagIcon /> },
   { id: "ads", label: "Ads", icon: <MegaphoneIcon /> },
   { id: "stock", label: "Stock", icon: <BoxesIcon /> },
+  { id: "appearance", label: "Appearance", icon: <PaletteIcon /> },
 ];
 
 /** A settings block: a titled card with an optional note and actions. */
@@ -105,10 +109,7 @@ function Section({ title, note, actions, children, className }: { title: ReactNo
   return (
     <section className={cn("panel space-y-4 p-4 sm:p-5", className)}>
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="space-y-1">
-          <h2 className="section-label">{title}</h2>
-          {note && <p className="max-w-3xl text-sm text-muted-foreground">{note}</p>}
-        </div>
+        <SectionTitle title={title}>{note}</SectionTitle>
         {actions}
       </div>
       {children}
@@ -126,19 +127,36 @@ export default function SettingsPage() {
 function Settings() {
   // ?tab=ip opens a tab directly (the Brands page links to the IP-risk list).
   const params = useSearchParams();
-  const [tab, setTab] = useState<string>(() => (TABS.some((t) => t.id === params.get("tab")) ? params.get("tab")! : "gates"));
+  const router = useRouter();
+  const path = usePathname();
+  const [tab, setTabState] = useState<string>(() => (TABS.some((t) => t.id === params.get("tab")) ? params.get("tab")! : "gates"));
+  // The tab is in the address too (?tab=), so a link or a reload opens it.
+  const setTab = (t: string) => { setTabState(t); router.replace(`${path}?tab=${t}`, { scroll: false }); };
   const editor = useProfileEditor();
   const profileTab = tab === "gates" || tab === "score" || tab === "fees" || tab === "profiles";
   return (
-    <div className="space-y-5">
-      <div>
-        <h1 className="page-title">Settings</h1>
-        <p className="text-sm text-muted-foreground">Screening profiles (gates, score and fees), shared rules and rate card, waived gates, saved filter sets, and the Private label, Ads and Stock settings.</p>
-      </div>
-      <Tabs value={tab} onValueChange={setTab} className="gap-5">
-        <TabsList variant="line" className="w-full justify-start overflow-x-auto border-b">
-          {TABS.map((t) => <TabsTrigger key={t.id} value={t.id} className="flex-none">{t.icon}{t.label}</TabsTrigger>)}
+    <div className="space-y-6">
+      <PageHeader
+        title="Settings"
+        crumbs={[{ label: "Settings" }]}
+        subtitle="How the app screens, scores and runs each workspace."
+        info={<p>Screening profiles (gates, score and fees), shared rules and rate card, waived gates, saved filter sets, the Business, Private label, Ads and Stock settings, and how the app looks.</p>}
+      />
+      {/* Phones: the tabs as a dropdown. */}
+      <label className="block space-y-1 lg:hidden"><span className="field-label">Section</span>
+        <NativeSelect value={tab} onChange={(e) => setTab(e.target.value)} className="w-full" aria-label="Settings section">
+          {TABS.map((t) => <NativeSelectOption key={t.id} value={t.id}>{t.label}</NativeSelectOption>)}
+        </NativeSelect>
+      </label>
+      <Tabs value={tab} onValueChange={setTab} orientation="vertical" className="gap-6 lg:grid lg:grid-cols-[13rem_minmax(0,1fr)] lg:items-start">
+        <TabsList variant="line" className="hidden w-full gap-0.5 lg:sticky lg:top-[calc(var(--app-header)+1.5rem)] lg:flex">
+          {TABS.map((t) => (
+            <TabsTrigger key={t.id} value={t.id} className="h-9 w-full justify-start rounded-lg px-3 after:hidden hover:bg-subtle data-active:bg-primary-soft! data-active:text-primary-ink!">
+              {t.icon}{t.label}
+            </TabsTrigger>
+          ))}
         </TabsList>
+        <div className="min-w-0 flex-1 space-y-5">
         {profileTab && <ProfileBar editor={editor} manage={tab === "profiles"} />}
         <TabsContent value="gates" className="space-y-5">{editor.ready ? <GatesTab editor={editor} /> : editor.error ? <LoadError message={editor.error} /> : <LoadingBlocks />}</TabsContent>
         <TabsContent value="score" className="space-y-5">{editor.ready ? <ScoreTab editor={editor} /> : editor.error ? <LoadError message={editor.error} /> : <LoadingBlocks />}</TabsContent>
@@ -151,6 +169,12 @@ function Settings() {
         <TabsContent value="pl"><PlSettingsTab /></TabsContent>
         <TabsContent value="ads"><AdsSettingsTab /></TabsContent>
         <TabsContent value="stock"><StockSettingsTab /></TabsContent>
+        <TabsContent value="appearance">
+          <Section title="Appearance" note="System follows your device's light or dark setting; the button in the top bar switches between light and dark.">
+            <ThemeChoice />
+          </Section>
+        </TabsContent>
+        </div>
       </Tabs>
     </div>
   );
