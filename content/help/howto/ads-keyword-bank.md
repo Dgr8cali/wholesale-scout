@@ -4,9 +4,9 @@ summary: One place per product for every search term worth knowing (Opportunity 
 synonyms: [keyword bank, keywords, search terms, opportunity explorer terms, head terms, add as exact, add as negative, track rank, keyword research]
 workspace: ads
 order: 6
-route: /ads/keywords
+route: /ads/search-terms
 ---
-**Ads → Keywords** (and **Keyword bank** under each product on the dashboard) keeps every term worth knowing for a product in one table.
+**Ads → Search terms → Keywords** (and **Keyword bank** under each product on the dashboard) keeps every term worth knowing for a product in one table.
 
 ## Where its terms come from
 

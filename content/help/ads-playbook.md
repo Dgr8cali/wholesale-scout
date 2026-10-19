@@ -29,7 +29,7 @@ On the [Dashboard](/ads/dashboard), open the product and click **Price, costs an
 
 On [Launch](/ads/launch), pick the product (or come from a private-label candidate's launch checklist, which fills the head terms and competitors).
 
-- **Head terms**: the 2-pack's five ("dog seat belt", "dog car seat belt", "dog seatbelt for car", "pet seat belt", "dog car harness seat belt"). Without a candidate they come from the [Keyword bank](/ads/keywords).
+- **Head terms**: the 2-pack's five ("dog seat belt", "dog car seat belt", "dog seatbelt for car", "pet seat belt", "dog car harness seat belt"). Without a candidate they come from the [Keyword bank](/ads/search-terms?tab=keywords).
 - **Competitor ASINs**: page-one listings to target on their product pages. The 2-pack has none, so its product-targeting campaign is left out: add a few.
 - **Daily budget**: £10 for all the campaigns together.
 - **Starting bid**: the higher of target × price × smoothed conversion and the account CPC × 0.8. For the 2-pack, £0.44.
@@ -67,7 +67,7 @@ The four campaigns (three for the 2-pack):
 | **Bid down** | Approve, unless you're buying rank on that keyword during launch. The new bid is the one that hits the target at its smoothed conversion. |
 | **Bid up**, **Budget** | Approve when the product is profitable after ads. They need the daily Campaign report. |
 | **Placement** | Approve. It only raises a placement that's both better than its campaign and itself near the target. |
-| **N-gram negative / winner** | Read the examples in the reason ("cat" in "cat car seat belt", "cat harness belt"…): one word wasting across several terms. Check the word can't be part of a good term, then approve. See [N-grams](/ads/ngrams). |
+| **N-gram negative / winner** | Read the examples in the reason ("cat" in "cat car seat belt", "cat harness belt"…): one word wasting across several terms. Check the word can't be part of a good term, then approve. See [N-grams](/ads/search-terms?tab=ngrams). |
 | **Stock guard** | Approve: it slows the ads before stock runs out, and proposes restoring the old values once stock is back. |
 | **Ranked — ease off** | Approve once organic rank is page one: the ad pays for a slot the listing already holds. |
 
@@ -102,7 +102,7 @@ The plan's steps show on the product's section of the [Dashboard](/ads/dashboard
 | **High ACoS everywhere, CTR fine, conversion low** | A listing problem (listing health is amber). Fix the main image, price or title; bids won't fix it. |
 | **Spend nowhere near the budget, few impressions** | Bids too low for the searches (raise the starting bid or let Bid up act), or campaigns paused, or Amazon's default campaign taking the auctions (pause it). |
 | **Profit after ads negative though ACoS is under target** | The target is above break-even, or a cost is missing (landed cost, size). Set the target below break-even; use **Recommend**. |
-| **A search term in two campaigns, both paying** | The harvest's negative exact wasn't uploaded: approve the harvest's negative, or add the term as a negative from the [Keyword bank](/ads/keywords). |
+| **A search term in two campaigns, both paying** | The harvest's negative exact wasn't uploaded: approve the harvest's negative, or add the term as a negative from the [Keyword bank](/ads/search-terms?tab=keywords). |
 | **Proposals empty, or a rule silent** | No fresh import, or a rule can't check: **What the rules couldn't check** on [Proposals](/ads/proposals) and the notes on [Rules](/ads/rules) say why (a missing price, no daily report, an import longer than the rule's window). |
 
 ## 7. What changes with the Amazon Ads API

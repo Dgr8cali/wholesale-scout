@@ -32,8 +32,8 @@ describe("workspaces", () => {
     expect(more("wholesale")).toEqual(["Sellers", "Brands", "Plan"]);
     expect(main("pl")).toEqual(["Candidates", "Niches", "Suppliers", "Quotes"]);
     expect(more("pl")).toEqual(["Launch checklist"]);
-    expect(main("ads")).toEqual(["Dashboard", "Proposals", "Launch", "Keywords"]);
-    expect(more("ads")).toEqual(["Rules", "N-grams", "Review"]);
+    expect(main("ads")).toEqual(["Dashboard", "Proposals", "Launch", "Search terms"]);
+    expect(more("ads")).toEqual(["Rules", "Review"]);
     expect(main("stock")).toEqual(["Levels", "Orders", "Reorder"]);
     expect(more("stock")).toEqual(["Movements", "Sales", "Import"]);
     // A group's main pages come before its More.

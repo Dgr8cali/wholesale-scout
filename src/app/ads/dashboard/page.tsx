@@ -3,7 +3,7 @@
 import { ChevronRightIcon, FileUpIcon, HistoryIcon, LayoutDashboardIcon, LoaderIcon } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Fragment, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, Suspense, useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { ImportFlow, ImportsHistory } from "@/components/ads/ImportFlow";
 import { EmptyState, ErrorState } from "@/components/States";
@@ -20,7 +20,7 @@ import { SortTh, useSortable } from "@/components/SortableTable";
 import { ProductThumb } from "@/components/ProductThumb";
 import { ExplainPanel, TargetsPanel } from "@/components/ads/AiPanels";
 import { Skeleton } from "@/components/ui/skeleton";
-import { TERM_STATUS_LABEL, type Ratios, type TermStatus, type Totals } from "@/lib/ads/metrics";
+import type { Ratios, TermStatus, Totals } from "@/lib/ads/metrics";
 import { api } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
 import { KeywordBankPanel } from "@/components/ads/KeywordBank";
@@ -62,10 +62,6 @@ function acosTone(acos: number | null, target: number, breakEven: number | null)
   if (breakEven != null && acos > breakEven) return "text-fail";
   return "text-warn";
 }
-
-const STATUS_CLS: Record<TermStatus, string> = {
-  converting: "bg-pass-soft text-pass", over_target: "bg-warn-soft text-warn", watch: "bg-empty-soft text-ink-2", waste: "bg-fail-soft text-fail",
-};
 
 const SOURCE_LABEL: Record<string, string> = {
   campaign: "bulk export or campaign report", campaign_daily: "daily report", grid: "Campaign Manager export (range unknown)", search_term: "search terms summed",
@@ -167,7 +163,7 @@ function Dashboard({ d, load }: { d: Dash; load: () => void }) {
           <KeywordBankPanel asin={a.asin} />
           <CampaignTable rows={d.campaigns.filter((c) => c.asin === a.asin)} onSaved={load} />
           <KeywordTable rows={d.keywords.filter((k) => k.asin === a.asin)} />
-          <TermTable rows={d.terms.filter((t) => t.asin === a.asin)} campaigns={d.campaigns.filter((c) => c.asin === a.asin)} />
+          <p className="text-sm"><Link className="font-medium text-primary hover:underline" href={`/ads/search-terms?tab=all&asin=${a.asin}`}>Search terms ({d.terms.filter((t) => t.asin === a.asin).length}) →</Link> <span className="text-muted-foreground">with their status, the n-grams and the keyword bank</span></p>
         </ProductSection>
       ))}
       {launchOnly.filter((p) => shown(p.asin)).map((p) => (
@@ -613,64 +609,6 @@ function CampaignTable({ rows, onSaved }: { rows: CampaignRow[]; onSaved: () => 
           ))}</tbody>
         </table>
       </div>
-    </section>
-  );
-}
-
-function TermTable({ rows, campaigns }: { rows: TermRow[]; campaigns: CampaignRow[] }) {
-  const [campaign, setCampaign] = useState("");
-  const [status, setStatus] = useState<"" | TermStatus>("");
-  const filtered = useMemo(() => rows.filter((t) => (!campaign || t.campaign === campaign) && (!status || t.status === status)), [rows, campaign, status]);
-  const s = useSortable("ads.terms", filtered, {
-    term: { value: (t) => t.term, kind: "text" }, campaign: { value: (t) => t.campaignName, kind: "text" },
-    clicks: { value: (t) => t.totals.clicks, kind: "number" }, orders: { value: (t) => t.totals.orders, kind: "number" },
-    cost: { value: (t) => t.totals.cost, kind: "number" }, acos: { value: (t) => t.ratios.acos, kind: "number" },
-    breakEven: { value: (t) => t.breakEvenAcos, kind: "number" }, status: { value: (t) => TERM_STATUS_LABEL[t.status], kind: "text" },
-  }, { key: "cost", dir: "desc" });
-  const counts = useMemo(() => rows.filter((t) => !campaign || t.campaign === campaign).reduce<Record<string, number>>((a, t) => ({ ...a, [t.status]: (a[t.status] ?? 0) + 1 }), {}), [rows, campaign]);
-  return (
-    <section className="space-y-2">
-      <div className="flex flex-wrap items-end gap-3">
-        <h2 className="section-label mr-auto">Search terms</h2>
-        <label className="space-y-1"><span className="field-label">Campaign</span>
-          <NativeSelect value={campaign} onChange={(e) => setCampaign(e.target.value)}>
-            <NativeSelectOption value="">All campaigns</NativeSelectOption>
-            {campaigns.filter((c) => rows.some((t) => t.campaign === c.id)).map((c) => <NativeSelectOption key={c.id} value={c.id}>{c.name}</NativeSelectOption>)}
-          </NativeSelect></label>
-        <label className="space-y-1"><span className="field-label">Status</span>
-          <NativeSelect value={status} onChange={(e) => setStatus(e.target.value as "" | TermStatus)}>
-            <NativeSelectOption value="">Any ({Object.values(counts).reduce((a, b) => a + b, 0)})</NativeSelectOption>
-            {(Object.keys(TERM_STATUS_LABEL) as TermStatus[]).map((s) => <NativeSelectOption key={s} value={s}>{TERM_STATUS_LABEL[s]} ({counts[s] ?? 0})</NativeSelectOption>)}
-          </NativeSelect></label>
-      </div>
-      <div className="overflow-x-auto rounded-lg border">
-        <table className="w-full text-sm">
-          <thead><tr className="border-b text-left text-xs tracking-wide text-muted-foreground uppercase">
-            <SortTh {...s.th("term")} className="px-2 py-1.5">Search term</SortTh><SortTh {...s.th("campaign")} className="px-2 py-1.5">Campaign</SortTh>
-            <SortTh {...s.th("clicks")} numeric className="px-2 py-1.5 text-right">Clicks</SortTh><SortTh {...s.th("orders")} numeric className="px-2 py-1.5 text-right">Orders</SortTh>
-            <SortTh {...s.th("cost")} numeric className="px-2 py-1.5 text-right">Spend</SortTh><SortTh {...s.th("acos")} numeric className="px-2 py-1.5 text-right">ACoS</SortTh>
-            <SortTh {...s.th("breakEven")} numeric className="px-2 py-1.5 text-right">Break-even</SortTh><SortTh {...s.th("status")} className="px-2 py-1.5">Status</SortTh>
-          </tr></thead>
-          <tbody>{s.rows.map((t) => (
-            <Fragment key={`${t.campaign}|${t.term}`}>
-              <tr className="border-b last:border-b-0">
-                <td className="px-2 py-1.5">
-                  <div>{t.term}</div>
-                  {t.matched.length > 0 && <div className="text-xs text-muted-foreground" title={t.matched.map((m) => `${m.text} (${m.matchType ?? "targeting"}): ${m.clicks} clicks, £${m.cost.toFixed(2)}, ${m.orders} orders`).join("\n")}>matched by {t.matched.slice(0, 2).map((m) => `"${m.text}"${m.matchType ? ` ${m.matchType.toLowerCase()}` : ""}`).join(", ")}{t.matched.length > 2 ? ` +${t.matched.length - 2} more` : ""}</div>}
-                </td>
-                <td className="px-2 py-1.5 text-xs text-muted-foreground">{t.campaignName}</td>
-                <td className="num px-2 py-1.5 text-right">{n0(t.totals.clicks)}</td>
-                <td className="num px-2 py-1.5 text-right">{n0(t.totals.orders)}</td>
-                <td className="num px-2 py-1.5 text-right">{gbp(t.totals.cost)}</td>
-                <td className={cn("num px-2 py-1.5 text-right", acosTone(t.ratios.acos, t.targetAcos, t.breakEvenAcos))}>{pct(t.ratios.acos)}</td>
-                <td className="num px-2 py-1.5 text-right text-muted-foreground">{pct(t.breakEvenAcos)}</td>
-                <td className="px-2 py-1.5"><span title={t.why} className={cn("cursor-help rounded-full px-2 py-0.5 text-xs font-semibold", STATUS_CLS[t.status])}>{TERM_STATUS_LABEL[t.status]}</span></td>
-              </tr>
-            </Fragment>
-          ))}</tbody>
-        </table>
-      </div>
-      <p className="text-xs text-muted-foreground">Converting: orders at or under the target ACoS. Over target: orders above it. Watch: no order yet, under 15 clicks. Waste: no order after 15 clicks, or after spending half the product&apos;s price. The Negative rule on <Link className="underline" href="/ads/rules">Rules</Link> uses the same thresholds by default.</p>
     </section>
   );
 }

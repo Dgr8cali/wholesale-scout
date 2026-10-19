@@ -17,7 +17,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { RULE_IDS, RULE_LABEL, type Confidence, type RuleId } from "@/lib/ads/rules";
 import { ProductPicker, useAdsProduct } from "@/components/ads/ProductPicker";
 import { api } from "@/lib/ui/client";
-import type { NgramData } from "../ngrams/page";
+import type { NgramData } from "@/components/ads/NgramsTab";
 
 interface Row {
   id: string; rule: RuleId; asin: string | null; campaign: string | null; campaign_name: string | null; campaign_state: string | null;
@@ -205,7 +205,7 @@ function NgramCard({ d }: { d: NgramData }) {
       <div className="flex flex-wrap items-baseline gap-2">
         <h2 className="font-semibold">N-grams</h2>
         <span className="text-xs text-muted-foreground">{fired.length ? `${fired.length} gram${fired.length === 1 ? "" : "s"} fire Rule 9 or 10: ${fired.map((r) => `"${r.gram}" (${r.trigger})`).join(", ")}` : "No gram fires Rule 9 (negative) or Rule 10 (winner) on this data"}</span>
-        <Link href="/ads/ngrams" className="ml-auto text-xs font-medium whitespace-nowrap text-primary hover:underline">All n-grams →</Link>
+        <Link href="/ads/search-terms?tab=ngrams" className="ml-auto text-xs font-medium whitespace-nowrap text-primary hover:underline">All n-grams →</Link>
       </div>
       <div className="flex flex-wrap gap-2">{waste.map((r) => (
         <span key={r.asin + r.gram} className="rounded-full bg-subtle px-3 py-1 text-xs" title={`${r.clicks} clicks, £${r.cost.toFixed(2)} spent, ${r.orders} orders, in ${r.terms} terms (${r.convertingTerms} with an order)`}>

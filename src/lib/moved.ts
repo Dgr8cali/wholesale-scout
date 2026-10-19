@@ -29,6 +29,9 @@ export const MOVED: Moved[] = [
   { from: "/settings", tab: "ads", to: "/ads/rules?tab=settings" },
   // 6. Bulk exports → the Exports tab of Proposals.
   { from: "/ads/proposals/exports", to: "/ads/proposals?tab=exports" },
+  // 7. Keywords and N-grams (and the Dashboard's search terms) → Search terms, one ?asin= for every tab.
+  { from: "/ads/keywords", to: "/ads/search-terms?tab=keywords" },
+  { from: "/ads/ngrams", to: "/ads/search-terms?tab=ngrams" },
 ];
 
 /** Where an old address now lives (path + query), or null when it hasn't moved. */

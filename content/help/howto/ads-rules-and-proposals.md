@@ -53,7 +53,7 @@ On **Ads → Rules**, each rule has its thresholds, an on/off switch and a mode.
 
 ## N-grams
 
-**Ads → N-grams** splits every search term into single words and adjacent word pairs, leaving out words like "for", "with" and "the" but keeping numbers ("7 day", "3 times"). It sums the terms' impressions, clicks, spend, orders and sales per product and gram, with the ACoS, the number of distinct terms it appears in (and how many of them have an order) and the **waste**: spend in terms with no order. Sort by spend or waste. A gram Rule 9 or 10 acts on is marked. Proposals shows the grams wasting most in a card at the top.
+**Ads → Search terms → N-grams** splits every search term into single words and adjacent word pairs, leaving out words like "for", "with" and "the" but keeping numbers ("7 day", "3 times"). It sums the terms' impressions, clicks, spend, orders and sales per product and gram, with the ACoS, the number of distinct terms it appears in (and how many of them have an order) and the **waste**: spend in terms with no order. Sort by spend or waste. A gram Rule 9 or 10 acts on is marked. Proposals shows the grams wasting most in a card at the top.
 
 ## Stock guard
 

@@ -1,7 +1,6 @@
 "use client";
 
 import { LoaderIcon, PlayIcon } from "lucide-react";
-import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { ErrorState } from "@/components/States";

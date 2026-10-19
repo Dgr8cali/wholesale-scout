@@ -62,6 +62,8 @@ to the new page and tab, keeping their query string: `src/lib/moved.ts` (`MOVED`
 | `/ads/imports` | `/ads/dashboard?tab=imports` (`?import=1` opens the Import sheet) |
 | `/settings?tab=ads` | `/ads/rules?tab=settings` |
 | `/ads/proposals/exports` | `/ads/proposals?tab=exports` |
+| `/ads/keywords` | `/ads/search-terms?tab=keywords` (`?asin=` kept) |
+| `/ads/ngrams` | `/ads/search-terms?tab=ngrams` |
 
 New run (`src/app/new-run`, the sources in `src/components/newrun/`) is one page with a tab per source; Runs has a New run
 button; ⌘K's Check an ASIN opens its tab prefilled.
@@ -70,6 +72,7 @@ Niches (`src/app/pl/niches`; My niches is `src/components/pl/MyNiches.tsx`, Find
 Ads Dashboard: **Import** in the header opens the import in a sheet (`ImportFlow` in `src/components/ads/ImportFlow.tsx`: the old Imports page's reading and `/api/ads/import` calls, unchanged), and an Imports history tab (`ImportsHistory`, undo confirms).
 Ads → Rules has tabs Rules (`src/components/ads/RulesTab.tsx`) and Ad settings (`src/components/ads/AdSettingsTab.tsx`, the old Settings → Ads, unchanged); Settings has no Ads tab, only a link there; "Settings → Ads" in copy now reads "Ads → Rules → Ad settings".
 Proposals has tabs To review and Exports (`src/components/ads/ExportsTab.tsx`: batches and snapshots on DataTable, so phone rows are cards; a batch's change list opens in a dialog). Exporting switches to Exports. The bulk sheet itself (`/api/ads/proposals/export`, `/api/ads/exports/…`) is untouched.
+Ads → Search terms (`src/app/ads/search-terms`): tabs Keywords (the keyword bank), N-grams (`NgramsTab`, now paginated) and All search terms (`SearchTermsTable`: the Dashboard's per-product term table, which the Dashboard now links to); one `?asin=` picker at the top for every tab.
 To do: phase 3b, restyle every remaining page (the other pages onto PageHeader / DataTable / InfoTip, one verdict vocabulary, page titles = menu labels:
 Keyword bank → Keywords, Launch → Launch checklist, …), phase 4 (Private label Launch + Ads Launch, the candidate page, one results table for Run detail / Brand detail / Products) and phase 5 (polish).
 
