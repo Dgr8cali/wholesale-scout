@@ -147,7 +147,7 @@ function AdsLaunch() {
           <label className="block space-y-1"><span className="field-label">Competitor ASINs</span>
             <textarea className="min-h-16 w-full rounded-md border bg-transparent px-2 py-1.5 font-mono text-xs" value={form.competitorAsins} onChange={set("competitorAsins")} placeholder="From a candidate: its page-one list" /></label>
           <label className="block space-y-1"><span className="field-label">Negative phrases in every campaign (the blacklist)</span>
-            <textarea className="min-h-16 w-full rounded-md border bg-transparent px-2 py-1.5 text-sm" value={form.negatives} onChange={set("negatives")} placeholder="From Settings → Ads → Keyword lists and the product's own" /></label>
+            <textarea className="min-h-16 w-full rounded-md border bg-transparent px-2 py-1.5 text-sm" value={form.negatives} onChange={set("negatives")} placeholder="From Ads → Rules → Ad settings → Keyword lists and the product's own" /></label>
         </section>
         <section className="space-y-3">
           {!preview ? <p className="panel p-4 text-sm text-muted-foreground">Fill in the ASIN, price, budget, target and bid to see the campaigns.</p> : (

@@ -25,6 +25,8 @@ export const MOVED: Moved[] = [
   { from: "/pl/niche-hunt", to: "/pl/niches?tab=find" },
   // 4. Ads Imports → the Dashboard's Import button (a sheet) and its Imports history tab.
   { from: "/ads/imports", to: "/ads/dashboard?tab=imports" },
+  // 5. Settings → Ads → Ads → Rules → Ad settings (one home for the rules and what they work from).
+  { from: "/settings", tab: "ads", to: "/ads/rules?tab=settings" },
 ];
 
 /** Where an old address now lives (path + query), or null when it hasn't moved. */

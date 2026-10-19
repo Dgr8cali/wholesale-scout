@@ -68,7 +68,7 @@ The dashboard is product by product: each product is a section (click its arrow 
 - **Sale price**. Blank uses Keepa's Buy Box if the app has it, else the ads' average sale price (sales ÷ units).
 - **Landed cost a unit**. Needed for break-even and profit; the tile says so until it's set.
 - **FBA fee override**, **package weight and size** (or **Size and weight from Keepa**, 1 token).
-- **Phase** (launch or steady) and **target ACoS** for each phase. Blank uses Settings → Ads (30%).
+- **Phase** (launch or steady) and **target ACoS** for each phase. Blank uses Ads → Rules → Ad settings (30%).
 
 **Profit after ads** = sales − fees × units − landed cost × units − spend.
 
@@ -87,4 +87,4 @@ The Negative rule's defaults are the same thresholds (15 clicks, or half the pri
 
 ## Private label's ad estimate
 
-Each import updates **Settings → Ads → CPC** to the account's trailing CPC: spend ÷ clicks over the last 60 days of dated data, while **Follow the account's trailing CPC** is on. [Private label](/help/pages/private-label)'s Gate 6 uses it: ads per unit at launch = CPC ÷ the candidate's search conversion.
+Each import updates **Ads → Rules → Ad settings → CPC** to the account's trailing CPC: spend ÷ clicks over the last 60 days of dated data, while **Follow the account's trailing CPC** is on. [Private label](/help/pages/private-label)'s Gate 6 uses it: ads per unit at launch = CPC ÷ the candidate's search conversion.

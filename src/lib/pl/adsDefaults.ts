@@ -1,6 +1,6 @@
 /**
  * Private label's ads-per-unit defaults, from what an order costs in ads: CPC ÷ conversion. The CPC
- * is Settings → Ads's (£0.60 to start, then the account's trailing CPC once reports are imported);
+ * is Ads → Rules → Ad settings's (£0.60 to start, then the account's trailing CPC once reports are imported);
  * the conversion is the candidate's Gate 3 search conversion (Opportunity Explorer) when it has one,
  * else 7%. Steady state is 40% of launch (ranked, most sales come organically). A value you type
  * wins. Pure.

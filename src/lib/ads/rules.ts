@@ -249,7 +249,7 @@ export interface RulesInput {
    * window; without them, `terms` (summed) is used by every rule.
    */
   termRows?: RuleTerm[];
-  /** Smoothing weight in clicks (Settings → Ads; default 20). */
+  /** Smoothing weight in clicks (Ads → Rules → Ad settings; default 20). */
   smoothingK?: number;
 }
 
@@ -878,7 +878,7 @@ export function runRules(input: RulesInput, config: RulesConfig = DEFAULT_RULES)
           ...base("negative", c), key: `blacklist:${c.id}`,
           entity: { type: "campaign", label: c.name, campaignId: c.campaignId, adGroupId: null, keywordId: null, targetId: null },
           current: `${missing.length} of ${plural(bl.length, "blacklist term")} not negatived`, proposed: `negative phrase: ${list}`,
-          reason: `${p.asin}'s blacklist (Settings → Ads → Keyword lists) says ${list} never fit${missing.length === 1 ? "s" : ""} the product: ${c.name} (${auto ? "auto" : "broad/phrase"}) gets ${missing.length === 1 ? "it" : "them"} as campaign-level negative phrase${missing.length === 1 ? "" : "s"} before it buys clicks on them.`,
+          reason: `${p.asin}'s blacklist (Ads → Rules → Ad settings → Keyword lists) says ${list} never fit${missing.length === 1 ? "s" : ""} the product: ${c.name} (${auto ? "auto" : "broad/phrase"}) gets ${missing.length === 1 ? "it" : "them"} as campaign-level negative phrase${missing.length === 1 ? "" : "s"} before it buys clicks on them.`,
           confidence: "high", effect: "No clicks bought on searches the product can't sell to",
           changes: missing.map((text): BulkChange => ({ kind: "create_negative", campaignId: c.campaignId!, adGroupId: null, text, matchType: "Negative phrase" })),
           clicks: 0, orders: 0,

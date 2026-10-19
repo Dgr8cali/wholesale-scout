@@ -9,7 +9,7 @@ const authorised = (req: NextRequest) => bearerIs(req.headers.get("authorization
 
 /**
  * The monthly Ads review (the server's crontab, the 1st at 06:00): reviews last month,
- * only when Settings → Ads has the schedule on (it's off by default). Otherwise it does nothing.
+ * only when Ads → Rules → Ad settings has the schedule on (it's off by default). Otherwise it does nothing.
  */
 export const GET = handle(async (req: NextRequest) => {
   if (!authorised(req)) return Response.json({ error: "Unauthorised" }, { status: 401 });

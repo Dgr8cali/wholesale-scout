@@ -23,7 +23,7 @@ On the [Dashboard](/ads/dashboard), open the product and click **Price, costs an
 
 **Launch and steady targets.** The **launch** target can sit near break-even (you're buying rank, so profit can be thin); the **steady** one well under it (profit is the point). The 2-pack launches at 30%. **Recommend** (under the same panel) asks Claude for both targets from break-even, reviews, rank, stock cover and the account's conversion, with a paragraph of reasoning; **Apply** writes them. It costs about a penny. See [Ads: AI review](/help/howto/ads-ai-review#recommend-targets).
 
-**Whitelist and blacklist** ([Settings → Ads → Keyword lists](/settings?tab=ads#keyword-lists), for the account or the product). The whitelist is terms never negatived or paused: your brand, and the 2-pack's exact head terms ("dog seat belt", "dog car seat belt"). The blacklist is words that never fit: for a seat belt, perhaps "cat", "human", "replacement buckle". They go into every new campaign as negative phrases. See [Ads: rules and proposals](/help/howto/ads-rules-and-proposals#the-rules).
+**Whitelist and blacklist** ([Ads → Rules → Ad settings → Keyword lists](/ads/rules?tab=settings#keyword-lists), for the account or the product). The whitelist is terms never negatived or paused: your brand, and the 2-pack's exact head terms ("dog seat belt", "dog car seat belt"). The blacklist is words that never fit: for a seat belt, perhaps "cat", "human", "replacement buckle". They go into every new campaign as negative phrases. See [Ads: rules and proposals](/help/howto/ads-rules-and-proposals#the-rules).
 
 ## 2. Launch
 

@@ -142,7 +142,7 @@ export async function listCandidates() {
   ]);
   // The next launch step, for the list.
   const next = (id: string) => { const done = new Set(steps.filter((x) => x.candidate_id === id && x.done).map((x) => x.step)); return { next: LAUNCH_STEPS.find((x) => !done.has(x.key))?.label ?? null, done: done.size }; };
-  // adsCpc: the CPC the ads-per-unit defaults use (Settings → Ads; the account's once imported).
+  // adsCpc: the CPC the ads-per-unit defaults use (Ads → Rules → Ad settings; the account's once imported).
   return { candidates: candidates.map((c) => ({ ...c, chosen_landed: c.chosen_landed == null ? null : Number(c.chosen_landed), fields: fields.get(c.id) ?? {}, waivers: waivers.get(c.id) ?? [], launch: next(c.id) })), settings, card, adsCpc: ads.cpc };
 }
 

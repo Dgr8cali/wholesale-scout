@@ -18,6 +18,9 @@ describe("merged pages", () => {
     expect(movedTo("/sellers/scan", "?seller=A1B2C3")).toBe("/new-run?tab=seller&seller=A1B2C3");
     expect(movedTo("/upload/", "")).toBe("/new-run?tab=upload");
     expect(movedTo("/runs", "")).toBeNull();
+    // A tab that moved on its own: only that ?tab= redirects.
+    expect(movedTo("/settings", "?tab=ads")).toBe("/ads/rules?tab=settings");
+    expect(movedTo("/settings", "?tab=business")).toBeNull();
   });
 
   it("aren't in the menu any more", () => {

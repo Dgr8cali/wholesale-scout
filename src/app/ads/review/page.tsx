@@ -62,7 +62,7 @@ function Review() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="max-w-2xl">
           <h1 className="page-title">Monthly review</h1>
-          <p className="text-sm text-muted-foreground">Claude reads the month&apos;s figures from your imports, per product then account-wide, checks whether last month&apos;s applied batches worked (14 days before against 14 after) and ranks three recommendations by expected profit. It never sets bids or budgets: changes still come from the <Link className="underline" href="/ads/rules">rules</Link>. It runs only when you click, or on the 1st at 06:00 if you turn that on in Settings → Ads.</p>
+          <p className="text-sm text-muted-foreground">Claude reads the month&apos;s figures from your imports, per product then account-wide, checks whether last month&apos;s applied batches worked (14 days before against 14 after) and ranks three recommendations by expected profit. It never sets bids or budgets: changes still come from the <Link className="underline" href="/ads/rules">rules</Link>. It runs only when you click, or on the 1st at 06:00 if you turn that on in Ads → Rules → Ad settings.</p>
         </div>
         <div className="flex items-center gap-2">
           <Input type="month" className="w-40" value={month} onChange={(e) => { if (e.target.value) router.replace(`/ads/review?month=${e.target.value}`); }} />

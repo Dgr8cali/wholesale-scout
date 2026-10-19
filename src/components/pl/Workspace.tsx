@@ -35,7 +35,7 @@ const n0 = (v: number | null | undefined) => (v == null ? "—" : Math.round(v).
 /** One candidate: its header, the eight gates, the scorecard and the verdict. */
 export function Workspace({ id, settings, card, adsCpc, onChanged, onDeleted }: {
   id: string; settings: Settings; card: RateCard;
-  /** The CPC the ads-per-unit defaults use (Settings → Ads). */
+  /** The CPC the ads-per-unit defaults use (Ads → Rules → Ad settings). */
   adsCpc: number;
   /** The list re-scores as you type. */
   onChanged: (id: string, patch: { fields?: FieldMap; name?: string; status?: string; refreshed_at?: string | null; category?: string; waivers?: Waiver[]; notes?: string | null; park_reason?: string | null; parked_at?: string | null }) => void;

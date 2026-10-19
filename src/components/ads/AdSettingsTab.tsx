@@ -77,7 +77,7 @@ export function AdsSettingsTab() {
       </div>
       <KeywordListsEditor />
       <p className="max-w-3xl text-sm text-muted-foreground">
-        The rules&apos; thresholds (harvest, negatives, bid changes, pause, placements, budgets, revive) are set on <Link className="underline" href="/ads/rules">Ads → Rules</Link>, with on/off, mode and a dry run per rule.
+        The rules&apos; thresholds (harvest, negatives, bid changes, pause, placements, budgets, revive) are set on the <Link className="underline" href="/ads/rules">Rules</Link> tab, with on/off, mode and a dry run per rule.
       </p>
       <p className="max-w-3xl rounded-lg bg-surface-2 px-3 py-2 text-sm text-muted-foreground">
         <b className="text-foreground">Break-even ACoS</b> is a product&apos;s margin before ads: profit before advertising ÷ sale price. Spend more than that on ads per sale and each ad sale loses money. A product with a 35% margin breaks even at 35% ACoS; a 30% target leaves 5 points of profit on ad sales. Keep the target below each product&apos;s break-even, and lower for products with thin margins.
@@ -156,7 +156,7 @@ function AiSettings() {
 interface Lists { whitelist: string[]; blacklist: string[] }
 interface ListsData { account: Lists; products: Record<string, Lists & { useAccount: boolean }> }
 
-/** Settings → Ads → Keyword lists: the account's whitelist and blacklist, and a product's own. */
+/** Ads → Rules → Ad settings → Keyword lists: the account's whitelist and blacklist, and a product's own. */
 function KeywordListsEditor() {
   const [data, setData] = useState<ListsData | null>(null);
   const [products, setProducts] = useState<{ asin: string; title: string | null }[]>([]);

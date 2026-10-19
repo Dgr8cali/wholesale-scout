@@ -7,7 +7,7 @@ order: 12
 ---
 Settings is where you decide how products are screened: which gates run and how strict they are, how the 0–100 score is built, and how fees and landed cost are worked out. It also holds the lists shared by every profile: compliance rules, the rate card, your waivers and your IP-risk brands.
 
-The page's tabs: **Business**, **Gates**, **Score**, **Fees**, **Profiles**, **Waived**, **IP risk**, **Filter sets**, **Private label**, **Ads** and **Stock**. Settings is in every workspace. You can open a tab directly with `?tab=`, for example `/settings?tab=ip` (the Brands page links there).
+The page's tabs: **Business**, **Gates**, **Score**, **Fees**, **Profiles**, **Waived**, **IP risk**, **Filter sets**, **Private label**, **Stock** and **Appearance**. The Ads settings moved to [Ads → Rules → Ad settings](/help/pages/ads) (the **Ads** link at the bottom of the tab list goes there). Settings is in every workspace. You can open a tab directly with `?tab=`, for example `/settings?tab=ip` (the Brands page links there).
 
 ## Business tab
 
@@ -162,6 +162,8 @@ Filter sets are saved from a run's filter bar with **Save current filters…** a
 
 The thresholds and cost assumptions for [Private label](/help/pages/private-label), shared by every candidate. They are VAT rate (set on the **Business** tab, with VAT registration, as is the launch capital), digital services fee, inbound shipping per unit, prep per unit, average months in storage, returns allowance, min price multiple, min launch margin, min steady margin and min profit per unit. Each shows its default. **Save** applies them to every candidate straight away. The fees themselves come from the rate card on the **Fees** tab. There's no peak-rate switch here: Private label uses the peak rates in October–December automatically.
 
-## Ads tab
+## Ads settings (now on Ads → Rules)
+
+These are on the **Ad settings** tab of **Ads → Rules**, next to the rules that use them; `/settings?tab=ads` opens it.
 
 **Target ACoS** is 30% by default: the Ads dashboard's default for every product (a product can have its own) and for the search-term chips. **CPC** (£0.60 to start) is what [Private label](/help/pages/private-label)'s ads-per-unit estimate uses. With **Follow the account's trailing CPC** on, each import sets it to the account's spend ÷ clicks over the last 60 days of dated data. **Break-even ACoS** is a product's margin before ads (profit before advertising ÷ sale price): above it, each ad sale loses money. Keep the target below each product's break-even. See [Ads](/help/pages/ads).

@@ -1,0 +1,152 @@
+"use client";
+
+import { LoaderIcon, PlayIcon } from "lucide-react";
+import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
+import { toast } from "sonner";
+import { ErrorState } from "@/components/States";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
+import { SortTh, useSortable } from "@/components/SortableTable";
+import { LOOKBACKS, RULES, type RuleConfig, type RuleId, type RuleMeta, type RulesConfig, type Threshold } from "@/lib/ads/rules";
+import { api } from "@/lib/ui/client";
+import { cn } from "@/lib/utils";
+
+interface DryRun { counts: Record<RuleId, { total: number; byAsin: Record<string, number> }>; notes: Partial<Record<RuleId, string[]>> }
+
+const UNIT: Record<Threshold["unit"], string> = { count: "", times: "×", pct: "%", gbp: "£", days: "days", points: "points" };
+
+/** Ads → Rules → Rules: each rule's thresholds, on/off and mode, with what it would propose now. */
+export function RulesTab() {
+  const [saved, setSaved] = useState<RulesConfig | null>(null);
+  const [draft, setDraft] = useState<RulesConfig | null>(null);
+  const [dry, setDry] = useState<DryRun | null>(null);
+  const [running, setRunning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const run = useCallback(async (config?: RulesConfig) => {
+    setRunning(true);
+    try {
+      setDry(await api<DryRun>("/api/ads/rules/dry-run", { method: "POST", json: { config } }));
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setRunning(false);
+    }
+  }, []);
+  useEffect(() => {
+    api<{ config: RulesConfig }>("/api/ads/rules").then((r) => { setSaved(r.config); setDraft(r.config); run(r.config); }).catch((e: Error) => setError(e.message));
+  }, [run]);
+
+  if (error) return <ErrorState title="Couldn't load the rules" message={error} />;
+  if (!saved || !draft) return <Skeleton className="h-96 rounded-lg" />;
+
+  const edit = (id: RuleId, patch: Partial<RuleConfig>) => setDraft((d) => d && { ...d, [id]: { ...d[id], ...patch, thresholds: { ...d[id].thresholds, ...(patch.thresholds ?? {}) } } });
+  const save = async (id: RuleId) => {
+    try {
+      const r = await api<{ config: RulesConfig }>("/api/ads/rules", { method: "PUT", json: { rule: id, ...draft[id] } });
+      setSaved(r.config);
+      setDraft((d) => d && { ...d, [id]: r.config[id] });
+      toast.success("Saved. Proposals use it from now on.");
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
+  const changed = (id: RuleId) => JSON.stringify(saved[id]) !== JSON.stringify(draft[id]);
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-end justify-end gap-3">
+        <Button variant="outline" onClick={() => run(draft)} disabled={running}>{running ? <LoaderIcon className="animate-spin" /> : <PlayIcon />} Dry run with these settings</Button>
+      </div>
+      {dry && <DryRunByProduct dry={dry} />}
+      <div className="grid gap-3 lg:grid-cols-2">
+        {RULES.map((r) => <RuleCard key={r.id} meta={r} cfg={draft[r.id]} changed={changed(r.id)} dry={dry} running={running} onEdit={(p) => edit(r.id, p)} onSave={() => save(r.id)} onReset={() => setDraft((d) => d && { ...d, [r.id]: saved[r.id] })} />)}
+      </div>
+    </div>
+  );
+}
+
+function RuleCard({ meta, cfg, changed, dry, running, onEdit, onSave, onReset }: { meta: RuleMeta; cfg: RuleConfig; changed: boolean; dry: DryRun | null; running: boolean; onEdit: (p: Partial<RuleConfig>) => void; onSave: () => void; onReset: () => void }) {
+  const count = dry?.counts[meta.id];
+  const notes = dry?.notes[meta.id] ?? [];
+  return (
+    <section className={cn("panel space-y-3 p-4", !cfg.enabled && "opacity-70")}>
+      <div className="flex items-start gap-3">
+        <div className="flex-1 space-y-1">
+          <h2 className="font-semibold">{meta.label}</h2>
+          <p className="text-sm text-muted-foreground">{meta.summary}</p>
+        </div>
+        <label className="flex items-center gap-2 text-sm"><Switch checked={cfg.enabled} onCheckedChange={(v) => onEdit({ enabled: v })} aria-label={`${meta.label} on`} />{cfg.enabled ? "On" : "Off"}</label>
+      </div>
+      <div className="grid grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-3">
+        {meta.lookback != null && (
+          <label className="space-y-1" title="The days of data this rule reads, to the latest import: search terms from the imports in the window, daily rows in it, rank checks in it">
+            <span className="field-label">Looks back over</span>
+            <NativeSelect className="h-8 w-full" value={String(cfg.lookbackDays ?? meta.lookback)} onChange={(e) => onEdit({ lookbackDays: Number(e.target.value) })}>
+              {LOOKBACKS.map((d) => <NativeSelectOption key={d} value={d}>{d} days{d === meta.lookback ? " (default)" : ""}</NativeSelectOption>)}
+            </NativeSelect>
+          </label>
+        )}
+        {meta.thresholds.map((t) => (
+          <label key={t.key} className="space-y-1">
+            <span className="field-label">{t.label}{UNIT[t.unit] ? ` (${UNIT[t.unit]})` : ""}</span>
+            <Input className="num h-8" type="number" step="any" min={0} value={cfg.thresholds[t.key]} onChange={(e) => onEdit({ thresholds: { [t.key]: e.target.value === "" ? t.default : Number(e.target.value) } })} />
+          </label>
+        ))}
+      </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <label className="flex items-center gap-2 text-sm"><span className="field-label">Mode</span>
+          <NativeSelect value={cfg.mode} onChange={(e) => onEdit({ mode: e.target.value as RuleConfig["mode"] })}>
+            <NativeSelectOption value="propose">Propose</NativeSelectOption>
+            <NativeSelectOption value="auto">Auto</NativeSelectOption>
+          </NativeSelect></label>
+        <span className="text-xs text-muted-foreground">{cfg.mode === "auto" ? "Applies automatically once the Amazon Ads API is connected. Until then it proposes, like Propose." : "Each change waits for your approval."}</span>
+        {changed && <span className="ml-auto flex gap-1"><Button size="xs" variant="ghost" onClick={onReset}>Reset</Button><Button size="xs" onClick={onSave}>Save</Button></span>}
+      </div>
+      <div className="rounded-md bg-surface-2 px-3 py-2 text-sm">
+        {!count ? <span className="text-muted-foreground">{running ? "Running…" : "—"}</span> : (
+          <>
+            <b>{count.total}</b> proposal{count.total === 1 ? "" : "s"} now{changed ? " (with these unsaved settings, after a dry run)" : ""}
+            {Object.entries(count.byAsin).length > 0 && <span className="text-muted-foreground">: {Object.entries(count.byAsin).map(([a, n]) => `${a} ${n}`).join(", ")}</span>}
+          </>
+        )}
+        {notes.map((n) => <p key={n} className="text-xs text-warn">{n}</p>)}
+      </div>
+    </section>
+  );
+}
+
+/** The dry run per product: what each rule would propose for it now. */
+function DryRunByProduct({ dry }: { dry: DryRun }) {
+  const asins = [...new Set(Object.values(dry.counts).flatMap((c) => Object.keys(c.byAsin)))].sort();
+  const firing = RULES.filter((r) => dry.counts[r.id]?.total);
+  const s = useSortable("ads.dryrun", asins, {
+    product: { value: (a) => a, kind: "text" },
+    ...Object.fromEntries(firing.map((r) => [r.id, { value: (a: string) => dry.counts[r.id].byAsin[a] ?? null, kind: "number" as const }])),
+    all: { value: (a) => firing.reduce((x, r) => x + (dry.counts[r.id].byAsin[a] ?? 0), 0), kind: "number" },
+  });
+  if (!asins.length) return <p className="panel p-3 text-sm text-muted-foreground">Dry run: no rule would propose anything on the data imported now.</p>;
+  return (
+    <section className="panel space-y-2 p-3">
+      <h2 className="text-sm font-semibold">Dry run by product <span className="font-normal text-muted-foreground">(the proposals each rule would make now, with the settings on screen)</span></h2>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead><tr className="border-b text-left text-xs tracking-wide text-muted-foreground uppercase">
+            <SortTh {...s.th("product")} className="px-2 py-1">Product</SortTh>{firing.map((r) => <SortTh key={r.id} {...s.th(r.id)} numeric className="px-2 py-1 text-right">{r.label}</SortTh>)}<SortTh {...s.th("all")} numeric className="px-2 py-1 text-right">All</SortTh>
+          </tr></thead>
+          <tbody>{s.rows.map((a) => (
+            <tr key={a} className="border-b last:border-b-0">
+              <td className="num px-2 py-1">{a}</td>
+              {firing.map((r) => <td key={r.id} className="num px-2 py-1 text-right">{dry.counts[r.id].byAsin[a] ?? "—"}</td>)}
+              <td className="num px-2 py-1 text-right font-medium">{firing.reduce((x, r) => x + (dry.counts[r.id].byAsin[a] ?? 0), 0)}</td>
+            </tr>
+          ))}</tbody>
+        </table>
+      </div>
+    </section>
+  );
+}

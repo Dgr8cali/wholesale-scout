@@ -359,7 +359,7 @@ export async function aiSpend() {
 /** The scheduled review (1st of the month, 06:00): only when you've turned it on. */
 export async function scheduledReview(now = new Date()) {
   const s = await aiSettings();
-  if (!s.reviewSchedule) return { skipped: "The monthly review schedule is off (Settings → Ads)" };
+  if (!s.reviewSchedule) return { skipped: "The monthly review schedule is off (Ads → Rules → Ad settings)" };
   if (!s.keySet) return { skipped: "ANTHROPIC_API_KEY isn't set" };
   const prev = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1)).toISOString().slice(0, 7);
   const r = await monthlyReview(prev, { trigger: "schedule" });

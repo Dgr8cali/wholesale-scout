@@ -12,7 +12,7 @@ import { RULES, RULE_IDS } from "./rules";
 export interface AiModel { id: string; label: string; inUsd: number; outUsd: number }
 /**
  * Price per million tokens (USD) to start from: check anthropic.com/pricing and edit them in
- * Settings → Ads if they differ. Cache reads cost 10% of input, cache writes 125%.
+ * Ads → Rules → Ad settings if they differ. Cache reads cost 10% of input, cache writes 125%.
  */
 export const AI_MODELS: AiModel[] = [
   { id: "claude-sonnet-5-5", label: "Claude Sonnet 5.5 (balanced, default)", inUsd: 3, outUsd: 15 },

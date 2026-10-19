@@ -18,8 +18,8 @@ Start from an **Ads product** or a **private-label candidate**:
 | Head terms | A candidate's Gate 5: its top 8 Opportunity Explorer search terms by volume |
 | Competitor ASINs | A candidate's page-one list |
 | Daily budget, all four | A candidate's Gate 7 launch advertising ÷ 60 (else £10) |
-| Launch target ACoS | The product's launch target, else Settings → Ads |
-| Starting bid | The higher of the launch target ACoS × price × the smoothed conversion (the product's conversion, else the account's, else 7%) and the account's CPC × 0.8 (Settings → Ads). Both figures show under the field, with the one used marked, and follow the price and target as you change them |
+| Launch target ACoS | The product's launch target, else Ads → Rules → Ad settings |
+| Starting bid | The higher of the launch target ACoS × price × the smoothed conversion (the product's conversion, else the account's, else 7%) and the account's CPC × 0.8 (Ads → Rules → Ad settings). Both figures show under the field, with the one used marked, and follow the price and target as you change them |
 
 ## The campaigns
 

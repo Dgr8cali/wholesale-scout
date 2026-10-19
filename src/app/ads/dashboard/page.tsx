@@ -487,8 +487,8 @@ function EconEditor({ a, onSaved }: { a: AsinRow; onSaved: () => void }) {
             <NativeSelectOption value="launch">Launch</NativeSelectOption><NativeSelectOption value="steady">Steady</NativeSelectOption>
           </NativeSelect>
         </label>
-        {field("launch", "Target ACoS, launch (%)", undefined, "Blank: Settings → Ads")}
-        {field("steady", "Target ACoS, steady (%)", undefined, "Blank: Settings → Ads")}
+        {field("launch", "Target ACoS, launch (%)", undefined, "Blank: Ads → Rules → Ad settings")}
+        {field("steady", "Target ACoS, steady (%)", undefined, "Blank: Ads → Rules → Ad settings")}
       </div>
       <div className="grid gap-3 rounded-md bg-surface-2 p-3 sm:grid-cols-[12rem_12rem_1fr]">
         <label className="space-y-1">

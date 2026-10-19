@@ -24,6 +24,6 @@ The rules still see each keyword's ACoS, so TACoS mode turns the target TACoS in
 Under each product's tile, **Listing health** compares the ad **CTR** (clicks ÷ impressions) and **CVR** (orders ÷ clicks) with the niche, over the last 30 days of the daily Campaign report, else the whole import (it says which), once there are 100+ clicks:
 
 - **CVR benchmark**: the linked private-label candidate's Gate 3 search conversion (Opportunity Explorer), else the account's median across products.
-- **CTR benchmark**: 0.4% (Settings → Ads → CTR benchmark).
+- **CTR benchmark**: 0.4% (Ads → Rules → Ad settings → CTR benchmark).
 
 Under 60% of either benchmark, it turns amber: "Likely a listing problem, not a bidding one — fix images/price/title before raising bids". While it does, **Bid up** proposals are held back for the product, and Ads → Rules' notes say why. More bid on a listing that doesn't convert buys more clicks that don't convert.

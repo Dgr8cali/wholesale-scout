@@ -1,13 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { IpRiskTab } from "@/components/settings/IpRiskTab";
 import { CategoryRanks } from "@/components/settings/CategoryRanks";
 import { BusinessSettingsTab } from "@/components/settings/BusinessSettingsTab";
 import { PlSettingsTab } from "@/components/settings/PlSettingsTab";
-import { AdsSettingsTab } from "@/components/settings/AdsSettingsTab";
 import { StockSettingsTab } from "@/components/settings/StockSettingsTab";
-import { BoxesIcon, BuildingIcon, FilterIcon, GaugeIcon, MegaphoneIcon, PaletteIcon, ReceiptIcon, ShieldAlertIcon, ShieldCheckIcon, SlidersHorizontalIcon, TagIcon, Trash2Icon, UndoIcon } from "lucide-react";
+import { ArrowUpRightIcon, BoxesIcon, BuildingIcon, FilterIcon, GaugeIcon, MegaphoneIcon, PaletteIcon, ReceiptIcon, ShieldAlertIcon, ShieldCheckIcon, SlidersHorizontalIcon, TagIcon, Trash2Icon, UndoIcon } from "lucide-react";
 import { Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { activeChips, normalizeFilters, type FilterSet } from "@/lib/filters";
 import type { RateCard } from "@/lib/fees/rateCard";
@@ -89,7 +89,7 @@ function ModeSelect({ value, onChange, allowOff = true }: { value: GateMode; onC
 }
 
 type ProfileTab = "gates" | "score" | "fees" | "profiles";
-const TABS: { id: ProfileTab | "business" | "waived" | "filters" | "ip" | "pl" | "ads" | "stock" | "appearance"; label: string; icon: ReactNode }[] = [
+const TABS: { id: ProfileTab | "business" | "waived" | "filters" | "ip" | "pl" | "stock" | "appearance"; label: string; icon: ReactNode }[] = [
   { id: "business", label: "Business", icon: <BuildingIcon /> },
   { id: "gates", label: "Gates", icon: <ShieldCheckIcon /> },
   { id: "score", label: "Score", icon: <GaugeIcon /> },
@@ -99,7 +99,6 @@ const TABS: { id: ProfileTab | "business" | "waived" | "filters" | "ip" | "pl" |
   { id: "ip", label: "IP risk", icon: <ShieldAlertIcon /> },
   { id: "filters", label: "Filter sets", icon: <FilterIcon /> },
   { id: "pl", label: "Private label", icon: <TagIcon /> },
-  { id: "ads", label: "Ads", icon: <MegaphoneIcon /> },
   { id: "stock", label: "Stock", icon: <BoxesIcon /> },
   { id: "appearance", label: "Appearance", icon: <PaletteIcon /> },
 ];
@@ -147,6 +146,7 @@ function Settings() {
         <NativeSelect value={tab} onChange={(e) => setTab(e.target.value)} className="w-full" aria-label="Settings section">
           {TABS.map((t) => <NativeSelectOption key={t.id} value={t.id}>{t.label}</NativeSelectOption>)}
         </NativeSelect>
+        <span className="block pt-1 text-meta text-muted-foreground">Ads settings are on <Link className="text-primary underline" href="/ads/rules?tab=settings">Ads → Rules → Ad settings</Link>.</span>
       </label>
       <Tabs value={tab} onValueChange={setTab} orientation="vertical" className="gap-6 lg:grid lg:grid-cols-[13rem_minmax(0,1fr)] lg:items-start">
         <TabsList variant="line" className="hidden w-full gap-0.5 lg:sticky lg:top-[calc(var(--app-header)+1.5rem)] lg:flex">
@@ -155,6 +155,10 @@ function Settings() {
               {t.icon}{t.label}
             </TabsTrigger>
           ))}
+          {/* Ads settings live with the rules that use them. */}
+          <Link href="/ads/rules?tab=settings" className="mt-2 flex h-9 w-full items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-muted-foreground hover:bg-subtle hover:text-foreground [&_svg]:size-4">
+            <MegaphoneIcon /> Ads <ArrowUpRightIcon className="ml-auto" />
+          </Link>
         </TabsList>
         <div className="min-w-0 flex-1 space-y-5">
         {profileTab && <ProfileBar editor={editor} manage={tab === "profiles"} />}
@@ -167,7 +171,6 @@ function Settings() {
         <TabsContent value="ip"><IpRiskTab /></TabsContent>
         <TabsContent value="filters"><FilterSets /></TabsContent>
         <TabsContent value="pl"><PlSettingsTab /></TabsContent>
-        <TabsContent value="ads"><AdsSettingsTab /></TabsContent>
         <TabsContent value="stock"><StockSettingsTab /></TabsContent>
         <TabsContent value="appearance">
           <Section title="Appearance" note="System follows your device's light or dark setting; the button in the top bar switches between light and dark.">

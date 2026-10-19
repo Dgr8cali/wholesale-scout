@@ -96,7 +96,7 @@ export const GATES: GateDef[] = [
     blurb: "Sell price, landed cost, size and weight carry over from Gate 0. The FBA fee is read from the July 2026 rate card by size tier and weight band; referral comes from the category; storage from the volume. Launch and steady-state must both clear.",
     fields: [
       { k: "fbaOverride", label: "FBA fee override (ex-VAT)", type: "num", unit: "£", step: "0.01", hint: "Leave blank to use the rate card. Enter Amazon's own figure if you have it" },
-      { k: "adsLaunch", label: "Ads per unit, launch", type: "num", unit: "£", step: "0.01", hint: "Default: CPC ÷ conversion (Settings → Ads, Gate 3)" },
+      { k: "adsLaunch", label: "Ads per unit, launch", type: "num", unit: "£", step: "0.01", hint: "Default: CPC ÷ conversion (Ads → Rules → Ad settings, Gate 3)" },
       { k: "adsSteady", label: "Ads per unit, steady state", type: "num", unit: "£", step: "0.01", hint: "Default: launch × 0.4" },
       { k: "targetExworks", label: "Target ex-works price", type: "num", unit: "£", step: "0.01", hint: "Per unit of our product. Blank: Gate 0's landed cost ÷ 1.4. Supplier Scout scores listings against it" },
       { k: "maxMoq", label: "Most you'd order first (max MOQ)", type: "num", hint: "Blank: 1,000" },

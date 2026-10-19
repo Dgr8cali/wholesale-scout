@@ -32,10 +32,10 @@ Under a product's **Price, costs and target**, **Recommend** proposes a launch a
 
 Per-month figures come from the daily Campaign report. With only range data (a bulk export over several weeks), the review says the figures cover the range, not the month.
 
-**Scheduled**: Settings → Ads → **Run the monthly review on the 1st at 06:00** reviews the previous month automatically. It's off by default.
+**Scheduled**: Ads → Rules → Ad settings → **Run the monthly review on the 1st at 06:00** reviews the previous month automatically. It's off by default.
 
 ## Cost
 
-Every run shows what it cost: "This review cost £0.04 (3,059 tokens in, 2,723 out)". Each call is logged with its tokens and cost, and Settings → Ads shows the last 30 days' spend (Home's review tile too). On the default model and one product, an explanation costs about £0.04, a target recommendation about £0.01 and a monthly review about £0.04; more products mean a longer review. Failed calls are logged too, with whatever they cost.
+Every run shows what it cost: "This review cost £0.04 (3,059 tokens in, 2,723 out)". Each call is logged with its tokens and cost, and Ads → Rules → Ad settings shows the last 30 days' spend (Home's review tile too). On the default model and one product, an explanation costs about £0.04, a target recommendation about £0.01 and a monthly review about £0.04; more products mean a longer review. Failed calls are logged too, with whatever they cost.
 
-Settings → Ads sets the **model** (Claude Sonnet 5.5 by default; Haiku 4.5 is cheaper, Opus 5.5 the most capable), the **$ per million tokens** in and out the cost line uses (defaults per model; check them against Anthropic's pricing), and **£ per $**. The key is `ANTHROPIC_API_KEY` in the environment.
+Ads → Rules → Ad settings sets the **model** (Claude Sonnet 5.5 by default; Haiku 4.5 is cheaper, Opus 5.5 the most capable), the **$ per million tokens** in and out the cost line uses (defaults per model; check them against Anthropic's pricing), and **£ per $**. The key is `ANTHROPIC_API_KEY` in the environment.

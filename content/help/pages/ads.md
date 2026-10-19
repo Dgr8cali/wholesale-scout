@@ -12,7 +12,7 @@ order: 20
 | Page | What it does |
 |---|---|
 | **Dashboard** | Per product: spend, sales, ACoS beside break-even ACoS, profit after ads, cost per order, CPC, conversion, CTR. The same per campaign. Search terms with a status chip (Converting, Over target, Watch, Waste). **Import** (top right) opens the import: drop the bulk export (.xlsx) with campaigns, placements, keywords with IDs, negatives, product ads and search terms, or CSV reports; each file is previewed before you import, and re-importing doesn't double anything. The **Imports history** tab lists every import, each undoable. |
-| **Rules** | Thirteen rules (harvest, negatives, bids, pause, placements, budgets, revive, n-grams, stock guard, organic rank): thresholds, on/off, mode, and a dry run showing what each would propose now. |
+| **Rules** | Thirteen rules (harvest, negatives, bids, pause, placements, budgets, revive, n-grams, stock guard, organic rank): thresholds, on/off, mode, and a dry run showing what each would propose now. The **Ad settings** tab holds what they work from: default target ACoS, CPC, bid smoothing, CTR benchmark, the keyword lists and the AI review settings (it was Settings → Ads). |
 | **Proposals** | The changes your rules suggest, grouped by product and rule, with the reason in real numbers and a confidence. Approve, skip or snooze; export the approved ones as a bulk sheet to upload in Amazon Ads. Nothing changes in Amazon Ads without your upload. |
 | **N-grams** | Every search term's words and word pairs, with spend, orders, ACoS and waste per product; Rules 9 and 10 act on them. |
 | **Launch** | A new product's four launch campaigns as one bulk Create sheet, and its 60-day plan. See [Ads: launching a product](/help/howto/ads-launching-a-product). |
@@ -21,6 +21,6 @@ order: 20
 
 ## Target ACoS and break-even
 
-**Settings → Ads** holds the default target ACoS, 30%. Each product can have its own, for launch and steady state, on the dashboard. **Break-even ACoS** is a product's margin before ads ÷ its price: spend more than that per ad sale and each ad sale loses money. Keep the target below it.
+**Ads → Rules → Ad settings** holds the default target ACoS, 30%. Each product can have its own, for launch and steady state, on the dashboard. **Break-even ACoS** is a product's margin before ads ÷ its price: spend more than that per ad sale and each ad sale loses money. Keep the target below it.
 
 On Home, the Ads row shows the spend, the overall ACoS, and how many search terms are wasting spend.
