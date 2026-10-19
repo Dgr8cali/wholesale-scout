@@ -65,7 +65,7 @@ export function ProductSearch() {
               <li key={h.asin}>
                 <button type="button" className="w-full rounded-md px-2 py-1.5 text-left hover:bg-muted" onClick={() => go(h.asin)}>
                   <span className="line-clamp-1 text-sm">{h.title ?? h.asin}</span>
-                  <span className="num text-2xs text-muted-foreground">{h.asin}{h.ean !== h.asin ? ` · ${h.ean}` : ""}{h.brand ? ` · ${h.brand}` : ""}</span>
+                  <span className="num text-xs text-muted-foreground">{h.asin}{h.ean !== h.asin ? ` · ${h.ean}` : ""}{h.brand ? ` · ${h.brand}` : ""}</span>
                 </button>
               </li>
             ))}

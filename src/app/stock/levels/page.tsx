@@ -116,7 +116,7 @@ export default function StockLevelsPage() {
         <div className="overflow-x-auto rounded-lg border">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase">
+              <tr className="border-b text-left text-xs tracking-wide text-muted-foreground uppercase">
                 <th className="w-8 px-2 py-1.5"><input type="checkbox" aria-label="Select all shown" checked={allShown} onChange={() => setSelected(allShown ? new Set() : new Set(shownIds))} /></th>
                 <SortTh {...s.th("item")} className="px-2 py-1.5">Item</SortTh>
                 <SortTh {...s.th("home")} numeric className="px-2 py-1.5 text-right">{BUCKET_LABEL.home}</SortTh>
@@ -141,7 +141,7 @@ export default function StockLevelsPage() {
                 <td className="num px-2 py-1.5 text-right">{gbp(r.value)}</td>
                 <td className="num px-2 py-1.5 text-right" title={BUCKETS.map((b) => `${BUCKET_LABEL[b]}: ${r.cover[b] == null ? "no sales" : `${Math.round(r.cover[b]!)} days`}`).join("\n")}>
                   <Cover days={r.cover.total} />
-                  <span className="block text-[10.5px] text-muted-foreground">{BUCKETS.map((b) => (r.cover[b] == null ? "—" : Math.round(r.cover[b]!))).join(" · ")}</span>
+                  <span className="block text-xs text-muted-foreground">{BUCKETS.map((b) => (r.cover[b] == null ? "—" : Math.round(r.cover[b]!))).join(" · ")}</span>
                 </td>
                 <td className="px-2 py-1.5"><span className={cn("rounded-full px-2 py-0.5 text-xs font-semibold", STATUS_CLS[r.status])}>{r.status}</span></td>
                 <td className="px-2 py-1.5 text-xs text-muted-foreground">{r.item.supplier_name ?? "—"}</td>

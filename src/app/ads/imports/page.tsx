@@ -148,7 +148,7 @@ export default function AdsImportsPage() {
         {!past ? <Skeleton className="h-24 rounded-lg" /> : !past.length ? <p className="text-sm text-muted-foreground">None yet.</p> : (
           <div className="overflow-x-auto rounded-lg border">
             <table className="w-full text-sm">
-              <thead><tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase">
+              <thead><tr className="border-b text-left text-xs tracking-wide text-muted-foreground uppercase">
                 <SortTh {...ps.th("imported")} className="px-2 py-1.5">Imported</SortTh><SortTh {...ps.th("file")} className="px-2 py-1.5">File</SortTh>
                 <SortTh {...ps.th("report")} className="px-2 py-1.5">Report</SortTh><SortTh {...ps.th("rows")} numeric className="px-2 py-1.5 text-right">Rows</SortTh>
                 <SortTh {...ps.th("covers")} className="px-2 py-1.5">Covers</SortTh><th />
@@ -203,7 +203,7 @@ function Preview({ p, onRemove }: { p: Picked; onRemove: () => void }) {
       </div>
       <div className="overflow-x-auto rounded border">
         <table className="w-full text-xs">
-          <thead><tr className="border-b text-left text-[10.5px] tracking-wide text-muted-foreground uppercase">
+          <thead><tr className="border-b text-left text-xs tracking-wide text-muted-foreground uppercase">
             <SortTh {...s.th("campaign")} className="px-2 py-1">Campaign</SortTh>{isTerms && <SortTh {...s.th("term")} className="px-2 py-1">Search term</SortTh>}<SortTh {...s.th("dates")} className="px-2 py-1">Dates</SortTh>
             <SortTh {...s.th("clicks")} numeric className="px-2 py-1 text-right">Clicks</SortTh><SortTh {...s.th("cost")} numeric className="px-2 py-1 text-right">Spend</SortTh>
             <SortTh {...s.th("orders")} numeric className="px-2 py-1 text-right">Orders</SortTh><SortTh {...s.th("sales")} numeric className="px-2 py-1 text-right">Sales</SortTh>
@@ -262,7 +262,7 @@ function BulkPreview({ b, onChange, onRemove }: { b: PickedBulk; onChange: (patc
       </div>
       <div className="overflow-x-auto rounded border">
         <table className="w-full text-xs">
-          <thead><tr className="border-b text-left text-[10.5px] tracking-wide text-muted-foreground uppercase">
+          <thead><tr className="border-b text-left text-xs tracking-wide text-muted-foreground uppercase">
             <SortTh {...s.th("campaign")} className="px-2 py-1">Campaign</SortTh><SortTh {...s.th("asin")} className="px-2 py-1">ASIN (from product ads)</SortTh><SortTh {...s.th("state")} className="px-2 py-1">State</SortTh>
             <SortTh {...s.th("keywords")} numeric className="px-2 py-1 text-right">Keywords</SortTh><SortTh {...s.th("clicks")} numeric className="px-2 py-1 text-right">Clicks</SortTh>
             <SortTh {...s.th("cost")} numeric className="px-2 py-1 text-right">Spend</SortTh><SortTh {...s.th("orders")} numeric className="px-2 py-1 text-right">Orders</SortTh><SortTh {...s.th("sales")} numeric className="px-2 py-1 text-right">Sales</SortTh>

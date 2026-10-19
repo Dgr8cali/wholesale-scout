@@ -85,8 +85,8 @@ const columns = helper.columns(COLS.map((c) => helper.display({
   enableHiding: !c.fixed && c.id !== "product",
 })));
 
-const BAND_STYLE = { green: "bg-pass text-white", amber: "bg-warn text-white", grey: "bg-muted text-muted-foreground" } as const;
-const VERDICT_EDGE = { pass: "var(--pass)", warn: "var(--warn)", fail: "var(--fail)" } as const;
+const BAND_STYLE = { green: "bg-pass text-white", amber: "bg-highlight text-white", grey: "bg-muted text-muted-foreground" } as const;
+const VERDICT_EDGE = { pass: "var(--pass)", warn: "var(--highlight)", fail: "var(--fail)" } as const;
 
 export interface ResultsTableProps {
   rows: DisplayRow[];
@@ -332,7 +332,7 @@ function HeaderCell({ header, spec, sort, onSort, style, edge, children, draggin
               {label}{sorted ? (sort.dir === -1 ? " ↓" : " ↑") : ""}
             </button>
           ) : <span className="uppercase tracking-wide">{label}</span>}
-          {vatBasis === "mixed" ? <span className="ml-0.5 rounded bg-warn-soft px-1 py-px text-[9.5px] font-semibold text-warn normal-case" title="Rows on different VAT bases: Settings → Business → Recalculate all">mixed</span> : vatBasis != null ? <VatTag registered={vatBasis} className="ml-0.5" /> : null}
+          {vatBasis === "mixed" ? <span className="ml-0.5 rounded bg-warn-soft px-1 py-px text-xs font-semibold text-warn normal-case" title="Rows on different VAT bases: Settings → Business → Recalculate all">mixed</span> : vatBasis != null ? <VatTag registered={vatBasis} className="ml-0.5" /> : null}
         </span>
       )}
       {col.getCanResize() && (
@@ -371,7 +371,7 @@ function Cell({ id, d, props, compact, isOpen }: { id: string; d: DisplayRow; pr
             <div className={cn("min-w-0 font-medium leading-snug break-words", compact ? "line-clamp-1" : "line-clamp-2")} title={titleOf(r)}>
               {alt ? "↳ " : ""}{titleOf(r)}
             </div>
-            <div className="num truncate text-2xs text-muted-foreground">
+            <div className="num truncate text-xs text-muted-foreground">
               {r.product?.ean}
               {r.product?.asin && <> · <a className="text-brand hover:underline" href={`https://www.amazon.co.uk/dp/${r.product.asin}`} target="_blank" rel="noreferrer" onClick={stop}>{r.product.asin}</a></>}
               {r.offer?.supplier && <> · {r.offer.supplier.name}{r.offer_count > 1 ? ` (+${r.offer_count - 1})` : ""}</>}
@@ -379,8 +379,8 @@ function Cell({ id, d, props, compact, isOpen }: { id: string; d: DisplayRow; pr
             {props.rowNote?.(r)}
             {props.scanSellerId && r.inputs?.market?.buyBoxSellerId != null && (
               r.inputs.market.buyBoxSellerId === props.scanSellerId
-                ? <span className="mt-0.5 inline-block rounded bg-brand-soft px-1 text-2xs font-semibold text-brand" title="This seller holds the Buy Box now">Holds Buy Box</span>
-                : <span className="mt-0.5 inline-block text-2xs text-muted-foreground" title={`Buy Box held by ${r.inputs.market.buyBoxSellerId}`}>Buy Box: another seller</span>
+                ? <span className="mt-0.5 inline-block rounded bg-brand-soft px-1 text-xs font-semibold text-brand" title="This seller holds the Buy Box now">Holds Buy Box</span>
+                : <span className="mt-0.5 inline-block text-xs text-muted-foreground" title={`Buy Box held by ${r.inputs.market.buyBoxSellerId}`}>Buy Box: another seller</span>
             )}
             {!alt && d.others > 0 && (
               <button className="text-xs font-medium text-brand hover:underline" onClick={(e) => { stop(e); props.onToggleGroup(d.groupKey); }}>
@@ -423,7 +423,7 @@ function Cell({ id, d, props, compact, isOpen }: { id: string; d: DisplayRow; pr
         return (
           <span className={num} title={f.qty.note}>
             {f.qty.value == null ? <span className="text-muted-foreground">—</span> : f.qty.value.toLocaleString("en-GB")}
-            {f.qty.moqOverCap && <span className="ml-1 rounded bg-warn-soft px-1 text-2xs font-semibold text-warn">MOQ</span>}
+            {f.qty.moqOverCap && <span className="ml-1 rounded bg-warn-soft px-1 text-xs font-semibold text-warn">MOQ</span>}
           </span>
         );
       }
@@ -546,7 +546,7 @@ function ColumnsMenu({ prefs, setPrefs }: { prefs: TablePrefs; setPrefs: (f: (p:
           })}
         </ul>
         <div className="flex items-center justify-between border-t px-1.5 pt-2">
-          <span className="text-2xs text-muted-foreground">Drag headers to reorder; drag their edges to resize.</span>
+          <span className="text-xs text-muted-foreground">Drag headers to reorder; drag their edges to resize.</span>
           <Button variant="ghost" size="xs" onClick={() => setPrefs((p) => ({ ...normalizePrefs(null, IDS), density: p.density }))}>Reset</Button>
         </div>
       </PopoverContent>

@@ -23,7 +23,7 @@
       const note = document.createElement("div");
       note.id = "wholesale-scout-stale";
       note.textContent = "Wholesale Scout was updated — refresh this page to use it.";
-      note.style.cssText = "position:fixed;left:50%;transform:translateX(-50%);bottom:24px;z-index:2147483001;background:#111;color:#fff;border-radius:8px;padding:8px 14px;font:13px/1.4 -apple-system,Segoe UI,sans-serif;box-shadow:0 6px 20px rgba(0,0,0,.25);cursor:pointer";
+      note.style.cssText = "position:fixed;left:50%;transform:translateX(-50%);bottom:24px;z-index:2147483001;background:#16242A;color:#fff;border-radius:8px;padding:8px 14px;font:13px/1.4 'IBM Plex Sans',-apple-system,Segoe UI,sans-serif;box-shadow:0 6px 20px rgba(0,0,0,.25);cursor:pointer";
       note.title = "Click to dismiss";
       note.addEventListener("click", () => note.remove());
       (document.body || document.documentElement).append(note);
@@ -143,6 +143,6 @@
   };
   /** addEventListener whose handler checks the extension is still there first. */
   ws.on = (el, type, fn, opts) => el.addEventListener(type, (...a) => (ws.alive() ? fn(...a) : ws.staleNotice()), opts);
-  ws.VERDICT_COLOUR = { pass: "#15803d", warn: "#b45309", fail: "#b91c1c" };
+  ws.VERDICT_COLOUR = { pass: "#1F7A4D", warn: "#6B4A00", fail: "#B42318" };
   globalThis.__ws = ws;
 })();

@@ -30,12 +30,12 @@ import { cn } from "@/lib/utils";
 const PILL = "h-7 rounded-full px-3 text-xs font-medium bg-muted text-muted-foreground hover:bg-muted hover:text-foreground";
 const PRESSED: Record<Verdict | "brand" | "fav", string> = {
   pass: "data-[state=on]:bg-pass-soft data-[state=on]:text-pass data-[state=on]:ring-1 data-[state=on]:ring-pass",
-  warn: "data-[state=on]:bg-warn-soft data-[state=on]:text-warn data-[state=on]:ring-1 data-[state=on]:ring-warn",
+  warn: "data-[state=on]:bg-warn-soft data-[state=on]:text-warn data-[state=on]:ring-1 data-[state=on]:ring-highlight",
   fail: "data-[state=on]:bg-fail-soft data-[state=on]:text-fail data-[state=on]:ring-1 data-[state=on]:ring-fail",
   error: "data-[state=on]:bg-fail-soft data-[state=on]:text-fail data-[state=on]:ring-1 data-[state=on]:ring-fail",
   dormant: "data-[state=on]:bg-foreground/10 data-[state=on]:text-foreground data-[state=on]:ring-1 data-[state=on]:ring-foreground/40",
   brand: "data-[state=on]:bg-brand-soft data-[state=on]:text-brand data-[state=on]:ring-1 data-[state=on]:ring-brand",
-  fav: "data-[state=on]:bg-warn-soft data-[state=on]:text-warn data-[state=on]:ring-1 data-[state=on]:ring-warn",
+  fav: "data-[state=on]:bg-warn-soft data-[state=on]:text-warn data-[state=on]:ring-1 data-[state=on]:ring-highlight",
 };
 
 export interface FilterOptions {

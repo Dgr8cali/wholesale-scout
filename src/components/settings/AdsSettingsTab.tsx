@@ -53,13 +53,13 @@ export function AdsSettingsTab() {
       <label className="block max-w-xs space-y-1.5">
         <span className="field-label">Target ACoS (%)</span>
         <Input className="num" type="number" step="any" min={1} max={99} value={acos} onChange={(e) => setAcos(e.target.value)} />
-        <span className="block text-2xs text-muted-foreground">Default 30%. A product&apos;s own target (launch or steady) is set on the dashboard</span>
+        <span className="block text-xs text-muted-foreground">Default 30%. A product&apos;s own target (launch or steady) is set on the dashboard</span>
       </label>
       <div className="flex flex-wrap items-end gap-4">
         <label className="block max-w-xs space-y-1.5">
           <span className="field-label">CPC (£)</span>
           <Input className="num" type="number" step="0.01" min={0.01} value={cpc} disabled={cpcAuto} onChange={(e) => setCpc(e.target.value)} />
-          <span className="block text-2xs text-muted-foreground">Private label&apos;s launch ads per unit = CPC ÷ conversion. Default £0.60</span>
+          <span className="block text-xs text-muted-foreground">Private label&apos;s launch ads per unit = CPC ÷ conversion. Default £0.60</span>
         </label>
         <label className="flex items-center gap-2 pb-6 text-sm"><Switch checked={cpcAuto} onCheckedChange={setCpcAuto} /> Follow the account&apos;s trailing CPC after each import</label>
       </div>
@@ -67,12 +67,12 @@ export function AdsSettingsTab() {
         <label className="block w-56 space-y-1.5">
           <span className="field-label">Conversion smoothing (clicks)</span>
           <Input className="num" type="number" step={1} min={0} value={smoothK} onChange={(e) => setSmoothK(e.target.value)} />
-          <span className="block text-2xs text-muted-foreground">Bids use (orders + k × the product&apos;s conversion) ÷ (clicks + k), so 3 orders from 12 clicks doesn&apos;t read as 25%. Default 20; 0 turns it off</span>
+          <span className="block text-xs text-muted-foreground">Bids use (orders + k × the product&apos;s conversion) ÷ (clicks + k), so 3 orders from 12 clicks doesn&apos;t read as 25%. Default 20; 0 turns it off</span>
         </label>
         <label className="block w-56 space-y-1.5">
           <span className="field-label">CTR benchmark (%)</span>
           <Input className="num" type="number" step="0.05" min={0.05} value={ctrB} onChange={(e) => setCtrB(e.target.value)} />
-          <span className="block text-2xs text-muted-foreground">Listing health: an ad CTR under 60% of this is likely a listing problem. Default 0.4%</span>
+          <span className="block text-xs text-muted-foreground">Listing health: an ad CTR under 60% of this is likely a listing problem. Default 0.4%</span>
         </label>
       </div>
       <KeywordListsEditor />
@@ -148,7 +148,7 @@ function AiSettings() {
           <Input className="num" type="number" step="any" min={0.1} value={draft.gbpPerUsd} onChange={(e) => setDraft({ ...draft, gbpPerUsd: e.target.value })} />
         </label>
       </div>
-      <p className="text-2xs text-muted-foreground">Prices are the cost line&apos;s defaults per model; check them against Anthropic&apos;s pricing page and edit if they differ.</p>
+      <p className="text-xs text-muted-foreground">Prices are the cost line&apos;s defaults per model; check them against Anthropic&apos;s pricing page and edit if they differ.</p>
       <label className="flex items-center gap-2 text-sm"><Switch checked={draft.reviewSchedule} onCheckedChange={(v) => setDraft({ ...draft, reviewSchedule: v })} /> Run the monthly review on the 1st at 06:00 (last month; off by default)</label>
     </div>
   );

@@ -33,7 +33,7 @@ const RESTRICTION: Record<string, { label: string; className: string }> = {
 function Stat({ label, value, hint }: { label: string; value: React.ReactNode; hint?: string }) {
   return (
     <div title={hint}>
-      <p className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
       <p className="stat-value">{value}</p>
     </div>
   );
@@ -192,7 +192,7 @@ export default function BrandPage() {
                         <ProductThumb url={p.image_url} asin={p.asin} title={p.title ?? p.ean} brand={b.brand} size={36} />
                         <div className="min-w-0">
                           <p className="line-clamp-2 text-sm">{p.asin ? <Link className="hover:text-brand hover:underline" href={`/products/${p.asin}`}>{p.title ?? p.ean}</Link> : p.title ?? p.ean}</p>
-                          <p className="num text-2xs text-muted-foreground">
+                          <p className="num text-xs text-muted-foreground">
                             {p.ean !== p.asin ? p.ean : ""}
                             {p.asin && <> · <a className="text-brand hover:underline" href={`https://www.amazon.co.uk/dp/${p.asin}`} target="_blank" rel="noreferrer">{p.asin}</a></>}
                             {p.runId && <> · <Link className="text-brand hover:underline" href={`/runs/${p.runId}`}>latest run</Link></>}

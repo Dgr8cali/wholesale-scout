@@ -129,10 +129,10 @@ export function ReviewMiner({ candidateId, asins, product, fields, onSave, onAsi
               <span className="flex flex-wrap items-center gap-2 text-xs">
                 <span className="num font-medium">{a.asin}</span>
                 {a.brand && <span className="text-muted-foreground">{a.brand}</span>}
-                {a.state === "removed" && <span className="rounded-full bg-empty-soft px-1.5 py-px text-[10px] text-ink-2" title="This ASIN is no longer on the candidate; its reviews are kept and still mined">removed from candidate</span>}
-                {a.state === "separate" && <span className="rounded-full bg-empty-soft px-1.5 py-px text-[10px] text-ink-2" title="Not on the candidate; its reviews are kept and still mined">kept separate</span>}
+                {a.state === "removed" && <span className="rounded-full bg-empty-soft px-1.5 py-px text-xs text-ink-2" title="This ASIN is no longer on the candidate; its reviews are kept and still mined">removed from candidate</span>}
+                {a.state === "separate" && <span className="rounded-full bg-empty-soft px-1.5 py-px text-xs text-ink-2" title="Not on the candidate; its reviews are kept and still mined">kept separate</span>}
                 <a className="inline-flex items-center gap-1 text-brand hover:underline" target="_blank" rel="noreferrer" href={criticalUrl(a.asin)}>1–3★ reviews <ExternalLinkIcon className="size-3" /></a>
-                {cap && <span className="rounded-full bg-brand-soft px-1.5 py-px text-[10px] text-brand" title={`Sent by the extension from Amazon's review pages${cap.at ? `, last ${new Date(cap.at).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}` : ""}. ${cap.total - cap.inDump} at 4–5★ kept out of the miner. Editing the text here makes it your paste.`}>from the extension: {cap.total} ({cap.inDump} at 1–3★)</span>}
+                {cap && <span className="rounded-full bg-brand-soft px-1.5 py-px text-xs text-brand" title={`Sent by the extension from Amazon's review pages${cap.at ? `, last ${new Date(cap.at).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}` : ""}. ${cap.total - cap.inDump} at 4–5★ kept out of the miner. Editing the text here makes it your paste.`}>from the extension: {cap.total} ({cap.inDump} at 1–3★)</span>}
                 <span className="ml-auto text-muted-foreground">{n ? `${n} review${n === 1 ? "" : "s"}${pasted.has(a.asin) ? "" : " (not saved)"}` : "none yet"}</span>
               </span>
               {a.state === "pending" && (
@@ -182,7 +182,7 @@ function ThemesTable({ themes, marks, onChoose, onMark }: { themes: Theme[]; mar
   return (
     <div className="overflow-x-auto rounded-lg border">
       <table className="w-full text-sm">
-        <thead><tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase">
+        <thead><tr className="border-b text-left text-xs tracking-wide text-muted-foreground uppercase">
           <SortTh {...t.th("theme")} className="px-2 py-1.5">Theme</SortTh>
           <SortTh {...t.th("reviews")} numeric className="px-2 py-1.5 text-right">Reviews</SortTh>
           <SortTh {...t.th("pct")} numeric className="px-2 py-1.5 text-right">% of negative</SortTh>
@@ -195,8 +195,8 @@ function ThemesTable({ themes, marks, onChoose, onMark }: { themes: Theme[]; mar
             <tr key={x.key} className={cn("border-b align-top last:border-b-0", m === "chosen" && "bg-brand-soft/40", (m === "not fixable" || m === "ignore") && "text-muted-foreground")}>
               <td className="px-2 py-1.5">
                 <b className={cn(m === "ignore" && "line-through")}>{x.theme}</b>
-                {x.kind === "group" && <span className="ml-1 text-[10px] text-muted-foreground uppercase" title="Any of the synonym group's words">group</span>}
-                {m && m !== "ignore" && <span className={cn("ml-1 rounded-full px-1.5 py-px text-[10px] font-semibold", m === "chosen" ? "bg-brand text-white" : "bg-empty-soft text-ink-2")}>{m === "chosen" ? "Gate 4" : m}</span>}
+                {x.kind === "group" && <span className="ml-1 text-xs text-muted-foreground uppercase" title="Any of the synonym group's words">group</span>}
+                {m && m !== "ignore" && <span className={cn("ml-1 rounded-full px-1.5 py-px text-xs font-semibold", m === "chosen" ? "bg-brand text-white" : "bg-empty-soft text-ink-2")}>{m === "chosen" ? "Gate 4" : m}</span>}
               </td>
               <td className="num px-2 py-1.5 text-right">{x.reviews}</td>
               <td className="num px-2 py-1.5 text-right">{x.pct.toFixed(1)}%</td>

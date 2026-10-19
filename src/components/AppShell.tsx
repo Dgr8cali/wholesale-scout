@@ -90,7 +90,7 @@ function NavList({ items, path }: { items: NavItem[]; path: string }) {
               <Link href={n.href}>
                 <Icon />
                 <span>{n.label}</span>
-                {n.soon && <span className="ml-auto rounded bg-empty-soft px-1 text-[10px] font-medium text-empty">soon</span>}
+                {n.soon && <span className="ml-auto rounded bg-empty-soft px-1 text-xs font-medium text-empty">soon</span>}
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -132,7 +132,7 @@ function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
-        <p className="px-2 text-2xs text-muted-foreground group-data-[collapsible=icon]:hidden">Amazon UK · FBA</p>
+        <p className="px-2 text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">Amazon UK · FBA</p>
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
@@ -147,7 +147,7 @@ function StatusDot({ ok, label, hint }: { ok: boolean; label: string; hint: stri
     <Tooltip>
       <TooltipTrigger asChild>
         <span className="flex items-center gap-1.5 text-xs whitespace-nowrap text-muted-foreground" tabIndex={0}>
-          <span className={cn("size-2 rounded-full", ok ? "bg-pass" : "bg-warn")} aria-hidden="true" />
+          <span className={cn("size-2 rounded-full", ok ? "bg-pass" : "bg-highlight")} aria-hidden="true" />
           {label}
           <span className="sr-only">{ok ? "connected" : "not configured"}</span>
         </span>

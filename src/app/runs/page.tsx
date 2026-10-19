@@ -270,7 +270,7 @@ export default function RunsPage() {
           {done ? <Badge variant="pass">Done</Badge> : r.status === "error" ? <Badge variant="fail">Error</Badge> : r.paused_at ? (
             <div className="space-y-1">
               <Badge variant="muted">Paused</Badge>
-              <p className="num text-2xs text-muted-foreground">at {(r.row_count - pending).toLocaleString("en-GB")} of {r.row_count.toLocaleString("en-GB")}</p>
+              <p className="num text-xs text-muted-foreground">at {(r.row_count - pending).toLocaleString("en-GB")} of {r.row_count.toLocaleString("en-GB")}</p>
             </div>
           ) : (
             <div className="space-y-1">
@@ -281,7 +281,7 @@ export default function RunsPage() {
               </div>
               <div className="flex items-center gap-2">
                 <Progress value={pctDone} className="h-1.5 w-20" aria-label="Screened" />
-                <span className="num text-2xs text-muted-foreground">{Math.round(pctDone)}%</span>
+                <span className="num text-xs text-muted-foreground">{Math.round(pctDone)}%</span>
               </div>
             </div>
           )}

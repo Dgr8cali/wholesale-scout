@@ -42,7 +42,7 @@ export default function StockReorderPage() {
       {!rows.length ? <EmptyState title="No active items">Import or add stock items first.</EmptyState> : (
         <div className="overflow-x-auto rounded-lg border">
           <table className="w-full text-sm">
-            <thead><tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase">
+            <thead><tr className="border-b text-left text-xs tracking-wide text-muted-foreground uppercase">
               <SortTh {...s.th("item")} className="px-2 py-1.5">Item</SortTh>
               <SortTh {...s.th("total")} numeric className="px-2 py-1.5 text-right">In stock</SortTh>
               <SortTh {...s.th("demand")} numeric className="px-2 py-1.5 text-right">Sold / day</SortTh>
@@ -63,11 +63,11 @@ export default function StockReorderPage() {
                   <td className="num px-2 py-1.5 text-right">{r.total}</td>
                   <td className="num px-2 py-1.5 text-right">{R.perDay ? R.perDay.toFixed(2) : "—"}</td>
                   <td className="num px-2 py-1.5 text-right">{r.cover.total == null ? "—" : r.cover.total === 0 ? <span className="text-fail">0</span> : Math.round(r.cover.total)}</td>
-                  <td className="num px-2 py-1.5 text-right" title={`From ${LEAD_FROM[R.leadFrom]}`}>{R.leadTimeDays} d<span className="block text-[10.5px] text-muted-foreground">{R.leadFrom}</span></td>
+                  <td className="num px-2 py-1.5 text-right" title={`From ${LEAD_FROM[R.leadFrom]}`}>{R.leadTimeDays} d<span className="block text-xs text-muted-foreground">{R.leadFrom}</span></td>
                   <td className="num px-2 py-1.5 text-right">{R.perDay ? R.reorderPoint : "—"}</td>
                   <td className="num px-2 py-1.5 text-right font-semibold">{R.perDay ? R.suggestedQty : "—"}</td>
                   <td className="px-2 py-1.5"><span className={cn("rounded-full px-2 py-0.5 text-xs font-semibold", STATUS_CLS[R.status])}>{R.status}</span>
-                    {R.status === "soon" && R.daysToReorder != null && <span className="block text-[10.5px] text-muted-foreground">in {Math.ceil(R.daysToReorder)} days</span>}</td>
+                    {R.status === "soon" && R.daysToReorder != null && <span className="block text-xs text-muted-foreground">in {Math.ceil(R.daysToReorder)} days</span>}</td>
                   <td className="px-2 py-1.5 text-xs text-muted-foreground">{r.item.supplier_name ?? "—"}</td>
                   <td className="px-2 py-1.5 text-right">{R.perDay > 0 && <Button size="xs" variant={R.status === "due" ? "default" : "outline"} asChild><Link href={href}><ShoppingCartIcon /> Create purchase</Link></Button>}</td>
                 </tr>

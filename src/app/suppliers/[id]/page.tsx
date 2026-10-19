@@ -187,7 +187,7 @@ export default function SupplierPage() {
                     <TableRow key={b.productId} data-verdict={b.verdict}>
                       <TableCell className="max-w-80 pl-4 whitespace-normal">
                         <p className="line-clamp-2 text-sm">{b.title ?? b.ean}</p>
-                        <p className="num text-2xs text-muted-foreground">{b.brand} · {b.asin ? <a className="text-brand hover:underline" href={`https://www.amazon.co.uk/dp/${b.asin}`} target="_blank" rel="noreferrer">{b.asin}</a> : b.ean}</p>
+                        <p className="num text-xs text-muted-foreground">{b.brand} · {b.asin ? <a className="text-brand hover:underline" href={`https://www.amazon.co.uk/dp/${b.asin}`} target="_blank" rel="noreferrer">{b.asin}</a> : b.ean}</p>
                       </TableCell>
                       <TableCell><Badge variant={b.verdict as "pass" | "warn"}>{b.verdict}</Badge></TableCell>
                       <TableCell className="num text-right">{gbp(b.buyBox)}</TableCell>
@@ -257,7 +257,7 @@ function StockSection({ data }: { data: Detail }) {
             </TableRow></TableHeader>
             <TableBody>{items.rows.map((i) => (
               <TableRow key={i.id}>
-                <TableCell className="pl-4 whitespace-normal"><Link className="text-sm hover:underline" href={`/stock/levels?item=${i.id}`}>{i.name}</Link><p className="num text-2xs text-muted-foreground">{i.sku}{i.asin ? ` · ${i.asin}` : ""}{i.status === "discontinued" ? " · discontinued" : ""}</p></TableCell>
+                <TableCell className="pl-4 whitespace-normal"><Link className="text-sm hover:underline" href={`/stock/levels?item=${i.id}`}>{i.name}</Link><p className="num text-xs text-muted-foreground">{i.sku}{i.asin ? ` · ${i.asin}` : ""}{i.status === "discontinued" ? " · discontinued" : ""}</p></TableCell>
                 <TableCell className="num pr-4 text-right">{gbp(i.unit_cost)}</TableCell>
               </TableRow>
             ))}</TableBody>
@@ -279,9 +279,9 @@ function StockSection({ data }: { data: Detail }) {
               <TableRow key={p.id}>
                 <TableCell className="num pl-4">{p.ordered_on}</TableCell>
                 <TableCell className="max-w-64 text-sm whitespace-normal">{p.stock_item_id ? <Link className="hover:underline" href={`/stock/levels?item=${p.stock_item_id}`}>{p.item?.name ?? p.asin}</Link> : <Link className="hover:underline" href={`/products/${p.asin}`}>{p.product?.title ?? p.asin}</Link>}</TableCell>
-                <TableCell className="text-xs"><OrderLink id={p.order_id} url={p.order_url} />{trackingText(p.tracking_carrier, p.tracking_number) && <span className="block text-2xs text-muted-foreground">{trackingText(p.tracking_carrier, p.tracking_number)}</span>}</TableCell>
+                <TableCell className="text-xs"><OrderLink id={p.order_id} url={p.order_url} />{trackingText(p.tracking_carrier, p.tracking_number) && <span className="block text-xs text-muted-foreground">{trackingText(p.tracking_carrier, p.tracking_number)}</span>}</TableCell>
                 <TableCell className="num text-right">{p.units}</TableCell>
-                <TableCell className="num text-right">{gbp(p.landed_gbp)}{p.currency !== "GBP" && p.unit_cost_ccy != null && <span className="block text-2xs text-muted-foreground">{p.currency} {Number(p.unit_cost_ccy).toFixed(2)}</span>}</TableCell>
+                <TableCell className="num text-right">{gbp(p.landed_gbp)}{p.currency !== "GBP" && p.unit_cost_ccy != null && <span className="block text-xs text-muted-foreground">{p.currency} {Number(p.unit_cost_ccy).toFixed(2)}</span>}</TableCell>
                 <TableCell className="text-xs">{statusLabel(p.status)}</TableCell>
                 <TableCell className="num pr-4 text-xs">{p.status === "ordered" ? p.expected_date ?? "—" : ""}</TableCell>
               </TableRow>
@@ -304,7 +304,7 @@ function StockSection({ data }: { data: Detail }) {
             <TableBody>{receipts.rows.map((r) => (
               <TableRow key={r.id}>
                 <TableCell className="num pl-4">{r.date}</TableCell>
-                <TableCell className="text-sm"><Link className="hover:underline" href={`/stock/levels?item=${r.item_id}`}>{r.item?.name ?? ""}</Link> <span className="text-2xs text-muted-foreground">into {BUCKET_LABEL[r.bucket as Bucket] ?? r.bucket}</span></TableCell>
+                <TableCell className="text-sm"><Link className="hover:underline" href={`/stock/levels?item=${r.item_id}`}>{r.item?.name ?? ""}</Link> <span className="text-xs text-muted-foreground">into {BUCKET_LABEL[r.bucket as Bucket] ?? r.bucket}</span></TableCell>
                 <TableCell className="text-xs"><OrderLink id={r.order_id} url={r.order_url} /></TableCell>
                 <TableCell className="num text-right">{r.quantity}</TableCell>
                 <TableCell className="num pr-4 text-right">{gbp(r.unit_cost)}</TableCell>

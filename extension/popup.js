@@ -141,7 +141,7 @@ function sendButton(cap, candidateId, mode) {
     if (!d.pick?.length) return revMsg("There's no candidate to send them to: add one on the Private label page.", "err");
     revMsg(d.hasAsin ? `${d.pick.length} candidates have ${cap.asin}. Send to:` : `No candidate has ${cap.asin} among its page-one ASINs. Send to:`);
     const sel = document.createElement("select");
-    sel.style.cssText = "width:100%;padding:6px;border:1px solid #d4d4d8;border-radius:6px;margin-bottom:6px";
+    sel.style.cssText = "width:100%;padding:6px;border:1px solid #C9D2D4;border-radius:10px;margin-bottom:6px";
     for (const c of d.pick) { const o = document.createElement("option"); o.value = c.id; o.textContent = c.niche_keyword ? `${c.name} (${c.niche_keyword})` : c.name; sel.append(o); }
     const go = document.createElement("button"); go.className = "p"; go.textContent = "Send"; go.onclick = () => send(sel.value);
     box.replaceChildren(sel, go);

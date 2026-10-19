@@ -71,20 +71,20 @@
   window.addEventListener("message", onMessage);
 
   const btn = (text, onclick, primary) => ws.h("button", {
-    style: primary ? "background:#0b8ca0;color:#fff;border:0;border-radius:6px;padding:6px 10px;cursor:pointer;font-weight:600"
-      : "border:1px solid #d4d4d8;background:#fff;color:#111;border-radius:6px;padding:6px 10px;cursor:pointer",
+    style: primary ? "background:#2F7F8C;color:#fff;border:0;border-radius:6px;padding:6px 10px;cursor:pointer;font-weight:600"
+      : "border:1px solid #C9D2D4;background:#fff;color:#16242A;border-radius:6px;padding:6px 10px;cursor:pointer",
     text, onclick,
   });
 
   function shell() {
     if (panel && document.body.contains(panel)) return panel;
-    panel = ws.h("div", { id: "wholesale-scout-poe", style: "position:fixed;right:16px;bottom:16px;z-index:2147483000;width:340px;background:#fff;color:#111;border:2px solid #0b8ca0;border-radius:10px;padding:10px 12px;box-shadow:0 10px 30px rgba(0,0,0,.2);font:13px/1.4 -apple-system,Segoe UI,sans-serif;display:flex;flex-direction:column;gap:8px" });
+    panel = ws.h("div", { id: "wholesale-scout-poe", style: "position:fixed;right:16px;bottom:16px;z-index:2147483000;width:340px;background:#fff;color:#16242A;border:2px solid #2F7F8C;border-radius:10px;padding:10px 12px;box-shadow:0 10px 30px rgba(0,0,0,.2);font:13px/1.4 'IBM Plex Sans',-apple-system,Segoe UI,sans-serif;display:flex;flex-direction:column;gap:8px" });
     document.body.append(panel);
     return panel;
   }
 
   /** The debug line: every operation seen on this niche page, with how many responses. */
-  const debugLine = () => ws.h("div", { style: "color:#71717a;font:11px/1.3 ui-monospace,Menlo,monospace;word-break:break-word", text:
+  const debugLine = () => ws.h("div", { style: "color:#5A6B70;font:11px/1.3 'IBM Plex Mono',ui-monospace,Menlo,monospace;word-break:break-word", text:
     `Seen: ${[...ops].map(([n, o]) => `${n}${o.count > 1 ? ` ×${o.count}` : ""}`).join(", ") || "nothing yet"}${growth.length ? `; insights ×${growth.length}` : ""}` });
 
   function render(status) {
@@ -98,9 +98,9 @@
       ws.brand("Wholesale Scout · Private label"),
       niche
         ? ws.h("div", { text: `Niche captured: ${title || "title not found (sent anyway)"}` })
-        : ws.h("div", { style: "color:#b45309", text: "No niche data yet. Open a niche; its page loads it (getNiche)." }),
+        : ws.h("div", { style: "color:#6B4A00", text: "No niche data yet. Open a niche; its page loads it (getNiche)." }),
       debugLine(),
-      ws.h("div", { style: "color:#71717a;font-size:12px", text: "Kept in this tab only. Nothing is sent until you click." }),
+      ws.h("div", { style: "color:#5A6B70;font-size:12px", text: "Kept in this tab only. Nothing is sent until you click." }),
       shown || ws.h("div", { style: "display:flex;gap:8px" }, [
         niche ? btn(isSent ? "Send again" : "Send to Private label", send, true) : null,
         btn("Dismiss", () => { panel.remove(); panel = null; }),
@@ -111,10 +111,10 @@
   /** What the app read, said plainly: nothing read is never shown as a success. */
   function outcome(prefix, filled, unread, candidateId) {
     if (unread.length >= FIELDS) {
-      return ws.h("div", { style: "color:#b45309", text: `${prefix}captured but could not read ${unread.length} fields — raw saved. Nothing was filled.` });
+      return ws.h("div", { style: "color:#6B4A00", text: `${prefix}captured but could not read ${unread.length} fields — raw saved. Nothing was filled.` });
     }
-    const lines = [ws.h("div", { style: "color:#15803d", text: `${prefix}${filled.length} field${filled.length === 1 ? "" : "s"} filled.` })];
-    if (unread.length) lines.push(ws.h("div", { style: "color:#b45309", text: `Could not read ${unread.length} of ${FIELDS}: ${unread.join(", ")} (raw saved).` }));
+    const lines = [ws.h("div", { style: "color:#1F7A4D", text: `${prefix}${filled.length} field${filled.length === 1 ? "" : "s"} filled.` })];
+    if (unread.length) lines.push(ws.h("div", { style: "color:#6B4A00", text: `Could not read ${unread.length} of ${FIELDS}: ${unread.join(", ")} (raw saved).` }));
     if (candidateId) lines.push(openLink(candidateId));
     return ws.h("div", { style: "display:flex;flex-direction:column;gap:4px" }, lines);
   }
@@ -130,23 +130,23 @@
       seen: [...ops.keys()],
     };
     const r = await ws.api("POST", "/api/pl/poe", { nicheId: id, title, raw });
-    if (!r.ok) return render(ws.h("div", { style: "color:#b91c1c", text: r.error }));
+    if (!r.ok) return render(ws.h("div", { style: "color:#B42318", text: r.error }));
     sent = niche;
     const d = r.data;
     const unread = d.unread || [];
     if (d.attached) return render(outcome(`Attached to “${d.attached.name}”: `, d.attached.filled, unread, d.attached.id));
     // "Niche only" first: the capture goes to the imported niche (Private label → Niches), no candidate.
-    const select = ws.h("select", { style: "flex:1;min-width:0;padding:5px;border:1px solid #d4d4d8;border-radius:6px" }, [
+    const select = ws.h("select", { style: "flex:1;min-width:0;padding:5px;border:1px solid #C9D2D4;border-radius:6px" }, [
       ws.h("option", { value: NICHE_ONLY, text: "Niche only (no candidate)" }),
       ...d.candidates.map((c) => ws.h("option", { value: c.id, text: c.niche_keyword ? `${c.name} (${c.niche_keyword})` : c.name })),
     ]);
     render(ws.h("div", { style: "display:flex;flex-direction:column;gap:6px" }, [
       ws.h("div", { text: d.candidates.length ? `No candidate's niche keyword is “${title || "this niche"}”. Attach it to:` : "No candidates yet. Keep it for the niche, or add a candidate on the Private label page and send again:" }),
-      unread.length >= FIELDS ? ws.h("div", { style: "color:#b45309", text: `Warning: the app could not read any of the ${FIELDS} fields from this capture.` }) : null,
+      unread.length >= FIELDS ? ws.h("div", { style: "color:#6B4A00", text: `Warning: the app could not read any of the ${FIELDS} fields from this capture.` }) : null,
       ws.h("div", { style: "display:flex;gap:6px" }, [select, btn("Attach", async () => {
         if (select.value === NICHE_ONLY) return nicheOnly(d.snapshotId, title);
         const a = await ws.api("POST", "/api/pl/poe/attach", { snapshotId: d.snapshotId, candidateId: select.value });
-        if (!a.ok) return render(ws.h("div", { style: "color:#b91c1c", text: a.error }));
+        if (!a.ok) return render(ws.h("div", { style: "color:#B42318", text: a.error }));
         render(outcome("Attached: ", a.data.filled || [], a.data.unread || [], select.value));
       }, true)]),
     ]));
@@ -156,22 +156,22 @@
   async function nicheOnly(snapshotId, title) {
     render(ws.h("div", { text: "Linking to the niche…" }));
     const a = await ws.api("POST", "/api/pl/poe/niche", { snapshotId });
-    if (!a.ok) return render(ws.h("div", { style: "color:#b91c1c", text: a.error }));
+    if (!a.ok) return render(ws.h("div", { style: "color:#B42318", text: a.error }));
     const x = a.data;
     const pct = (n) => `${Number(n).toFixed(1)}%`;
     if (x.niches?.length) {
       return render(ws.h("div", { style: "display:flex;flex-direction:column;gap:4px" }, [
-        ...x.niches.map((n) => ws.h("div", { style: "color:#15803d", text: `Linked to the niche “${n.customer_need}”: best term ${pct(n.best)} (“${n.term}”)${n.signal === "BUYING" ? " · Buying" : n.signal === "BROWSE_ONLY" ? " · Browse-only" : ""}. No candidate touched.` })),
+        ...x.niches.map((n) => ws.h("div", { style: "color:#1F7A4D", text: `Linked to the niche “${n.customer_need}”: best term ${pct(n.best)} (“${n.term}”)${n.signal === "BUYING" ? " · Buying" : n.signal === "BROWSE_ONLY" ? " · Browse-only" : ""}. No candidate touched.` })),
         nichesLink(),
       ]));
     }
     if (x.newerKept?.length) return render(ws.h("div", { text: `Saved. “${x.newerKept.join("”, “")}” already has a newer capture, which it keeps. No candidate touched.` }));
-    if (x.noConversion) return render(ws.h("div", { style: "color:#b45309", text: "Saved, but the capture has no search-term conversion to show (open the niche's Search terms tab and send again). No candidate touched." }));
-    render(ws.h("div", { style: "color:#b45309", text: `No matching niche — import its category first. The capture of “${title || x.title || "this niche"}” is kept and links when you import it.` }));
+    if (x.noConversion) return render(ws.h("div", { style: "color:#6B4A00", text: "Saved, but the capture has no search-term conversion to show (open the niche's Search terms tab and send again). No candidate touched." }));
+    render(ws.h("div", { style: "color:#6B4A00", text: `No matching niche — import its category first. The capture of “${title || x.title || "this niche"}” is kept and links when you import it.` }));
   }
 
   function nichesLink() {
-    const link = ws.h("a", { href: "#", style: "color:#0b8ca0;font-weight:600", text: "Open Niches" });
+    const link = ws.h("a", { href: "#", style: "color:#2F7F8C;font-weight:600", text: "Open Niches" });
     ws.on(link, "click", async (e) => {
       e.preventDefault();
       const s = await ws.send({ type: "settings" });
@@ -181,7 +181,7 @@
   }
 
   function openLink(candidateId) {
-    const link = ws.h("a", { href: "#", style: "color:#0b8ca0;font-weight:600", text: "Open in the app" });
+    const link = ws.h("a", { href: "#", style: "color:#2F7F8C;font-weight:600", text: "Open in the app" });
     ws.on(link, "click", async (e) => {
       e.preventDefault();
       const s = await ws.send({ type: "settings" });

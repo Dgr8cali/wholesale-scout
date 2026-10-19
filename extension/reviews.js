@@ -17,8 +17,8 @@
 
   const btn = (text, onclick, primary) => ws.h("button", {
     style: primary
-      ? "border:0;background:#0b8ca0;color:#fff;border-radius:6px;padding:6px 10px;font-weight:600;cursor:pointer"
-      : "border:1px solid #d4d4d8;background:#fff;color:#111;border-radius:6px;padding:6px 10px;cursor:pointer",
+      ? "border:0;background:#2F7F8C;color:#fff;border-radius:6px;padding:6px 10px;font-weight:600;cursor:pointer"
+      : "border:1px solid #C9D2D4;background:#fff;color:#16242A;border-radius:6px;padding:6px 10px;cursor:pointer",
     text, onclick,
   });
 
@@ -26,7 +26,7 @@
   let toastEl = null, toastTimer = null;
   function toast(text, warn) {
     if (toastEl) toastEl.remove();
-    toastEl = ws.h("div", { style: `position:fixed;left:50%;transform:translateX(-50%);bottom:24px;z-index:2147483001;background:${warn ? "#b45309" : "#111"};color:#fff;border-radius:8px;padding:8px 14px;font:13px/1.4 -apple-system,Segoe UI,sans-serif;box-shadow:0 6px 20px rgba(0,0,0,.25)`, text });
+    toastEl = ws.h("div", { style: `position:fixed;left:50%;transform:translateX(-50%);bottom:24px;z-index:2147483001;background:${warn ? "#6B4A00" : "#16242A"};color:#fff;border-radius:8px;padding:8px 14px;font:13px/1.4 'IBM Plex Sans',-apple-system,Segoe UI,sans-serif;box-shadow:0 6px 20px rgba(0,0,0,.25)`, text });
     document.body.append(toastEl);
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => { if (toastEl) { toastEl.remove(); toastEl = null; } }, 4500);
@@ -58,7 +58,7 @@
   function shell() {
     if (panel && document.body.contains(panel)) return panel;
     // Bottom left on a product page, where the verdict panel is on the right.
-    panel = ws.h("div", { id: "wholesale-scout-reviews", style: `position:fixed;${productPage() ? "left" : "right"}:16px;bottom:16px;z-index:2147483000;width:340px;background:#fff;color:#111;border:2px solid #0b8ca0;border-radius:10px;padding:10px 12px;box-shadow:0 10px 30px rgba(0,0,0,.2);font:13px/1.4 -apple-system,Segoe UI,sans-serif;display:flex;flex-direction:column;gap:8px` });
+    panel = ws.h("div", { id: "wholesale-scout-reviews", style: `position:fixed;${productPage() ? "left" : "right"}:16px;bottom:16px;z-index:2147483000;width:340px;background:#fff;color:#16242A;border:2px solid #2F7F8C;border-radius:10px;padding:10px 12px;box-shadow:0 10px 30px rgba(0,0,0,.2);font:13px/1.4 'IBM Plex Sans',-apple-system,Segoe UI,sans-serif;display:flex;flex-direction:column;gap:8px` });
     document.body.append(panel);
     return panel;
   }
@@ -73,8 +73,8 @@
     p.replaceChildren(
       ws.brand("Wholesale Scout · Private label"),
       ws.h("div", { text: `${cap.asin}: ${list.length} review${list.length === 1 ? "" : "s"} captured over ${cap.pages.length} page${cap.pages.length === 1 ? "" : "s"}${onPage != null ? ` (${onPage} on this page)` : ""}.` }),
-      stars ? ws.h("div", { style: "color:#52525b;font-size:12px", text: `${stars}. Gate 4 mines the ${low} at 1–3★.` }) : null,
-      ws.h("div", { style: "color:#71717a;font-size:12px", text: "Click through more pages (filter to critical reviews for Gate 4) and they're added here. Nothing is sent until you click." }),
+      stars ? ws.h("div", { style: "color:#5A6B70;font-size:12px", text: `${stars}. Gate 4 mines the ${low} at 1–3★.` }) : null,
+      ws.h("div", { style: "color:#5A6B70;font-size:12px", text: "Click through more pages (filter to critical reviews for Gate 4) and they're added here. Nothing is sent until you click." }),
       status || ws.h("div", { style: "display:flex;gap:8px;flex-wrap:wrap" }, [
         list.length ? btn(cap.sentAt ? "Send again" : "Send reviews to Private label", () => send(cap), true) : null,
         list.length ? btn("Clear", async () => { await ws.store.remove(KEY(cap.asin)); status = null; capture(); }) : null,
@@ -84,7 +84,7 @@
   }
 
   const say = (cap, el) => { status = el; render(cap); };
-  const err = (cap, text) => say(cap, ws.h("div", { style: "display:flex;flex-direction:column;gap:6px" }, [ws.h("div", { style: "color:#b91c1c", text }), btn("Back", () => { status = null; render(cap); })]));
+  const err = (cap, text) => say(cap, ws.h("div", { style: "display:flex;flex-direction:column;gap:6px" }, [ws.h("div", { style: "color:#B42318", text }), btn("Back", () => { status = null; render(cap); })]));
 
   async function send(cap, candidateId, mode) {
     say(cap, ws.h("div", { text: "Sending…" }));
@@ -96,8 +96,8 @@
       await save(cap.asin, cap);
       const s = d.saved;
       return say(cap, ws.h("div", { style: "display:flex;flex-direction:column;gap:4px" }, [
-        ws.h("div", { style: "color:#15803d", text: `Sent to “${d.candidate.name}”: ${s.added} new, ${s.total} in all for ${s.asin}; ${s.inDump} at 1–3★ in Gate 4's reviews${s.keptPaste ? " (your pasted reviews kept above them)" : ""}.` }),
-        s.onCandidate === false ? ws.h("div", { style: "color:#b45309", text: `${s.asin} isn't on this candidate: its reviews are kept in their own box in Gate 4, where you can add it or keep it separate.` }) : null,
+        ws.h("div", { style: "color:#1F7A4D", text: `Sent to “${d.candidate.name}”: ${s.added} new, ${s.total} in all for ${s.asin}; ${s.inDump} at 1–3★ in Gate 4's reviews${s.keptPaste ? " (your pasted reviews kept above them)" : ""}.` }),
+        s.onCandidate === false ? ws.h("div", { style: "color:#6B4A00", text: `${s.asin} isn't on this candidate: its reviews are kept in their own box in Gate 4, where you can add it or keep it separate.` }) : null,
         ws.h("div", { style: "display:flex;gap:8px" }, [openLink(d.candidate.id), btn("Back", () => { status = null; render(cap); })]),
       ]));
     }
@@ -112,7 +112,7 @@
       ]));
     }
     if (!d.pick?.length) return err(cap, "There's no candidate to send them to. Add one on the Private label page (with this ASIN among its page-one ASINs), then send again.");
-    const select = ws.h("select", { style: "flex:1;min-width:0;padding:5px;border:1px solid #d4d4d8;border-radius:6px" },
+    const select = ws.h("select", { style: "flex:1;min-width:0;padding:5px;border:1px solid #C9D2D4;border-radius:6px" },
       d.pick.map((c) => ws.h("option", { value: c.id, text: c.niche_keyword ? `${c.name} (${c.niche_keyword})` : c.name })));
     say(cap, ws.h("div", { style: "display:flex;flex-direction:column;gap:6px" }, [
       ws.h("div", { text: d.hasAsin ? `${d.pick.length} candidates have ${cap.asin}. Send to:` : `No candidate has ${cap.asin} among its page-one ASINs. Send to:` }),
@@ -122,7 +122,7 @@
   }
 
   function openLink(candidateId) {
-    const link = ws.h("a", { href: "#", style: "color:#0b8ca0;font-weight:600;align-self:center", text: "Open in the app" });
+    const link = ws.h("a", { href: "#", style: "color:#2F7F8C;font-weight:600;align-self:center", text: "Open in the app" });
     ws.on(link, "click", async (e) => {
       e.preventDefault();
       const s = await ws.send({ type: "settings" });

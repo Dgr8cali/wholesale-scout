@@ -33,7 +33,7 @@ import { amazonLastSeen, isStale, stamp } from "@/lib/ui/when";
 import type { WatchCondition } from "@/lib/watch";
 
 const STATUS_ICON: Record<string, string> = { pass: "✓", warn: "!", fail: "✕", skipped: "–", off: "·" };
-const STATUS_STYLE: Record<string, string> = { pass: "bg-pass", warn: "bg-warn", fail: "bg-fail", skipped: "bg-muted-foreground/40", off: "bg-border" };
+const STATUS_STYLE: Record<string, string> = { pass: "bg-pass", warn: "bg-highlight", fail: "bg-fail", skipped: "bg-muted-foreground/40", off: "bg-border" };
 
 /** Referral and FBA fee from each source, ex-VAT and ex-DSF, at the scoring price. */
 function FeeCompare({ c, dimsSource }: { c: NonNullable<NonNullable<Result["fees"]>["compare"]>; dimsSource?: string | null }) {
@@ -163,7 +163,7 @@ export function Detail({ r, fav, onNote, onWaive, onWatch, onCost, stacked = fal
         <ul className="space-y-1">
           {r.gate_outcomes.map((g) => (
             <li key={g.gate} className="flex gap-2 text-xs">
-              <span className={`flex h-4 w-4 flex-none items-center justify-center rounded-full text-2xs font-bold text-white ${STATUS_STYLE[g.status]}`}>{STATUS_ICON[g.status]}</span>
+              <span className={`flex h-4 w-4 flex-none items-center justify-center rounded-full text-xs font-bold text-white ${STATUS_STYLE[g.status]}`}>{STATUS_ICON[g.status]}</span>
               <button type="button" title={`What ${g.label} checks`} onClick={(e) => { e.stopPropagation(); help.open(`gates/${g.gate}`); }}
                 className={cn("flex-none text-left font-medium underline decoration-dotted decoration-muted-foreground/50 underline-offset-2 hover:text-brand", stacked ? "w-32" : "w-40")}>
                 {g.label}
@@ -366,7 +366,7 @@ function QogitaOfferList({ q, stacked }: { q: QogitaOffers; stacked: boolean }) 
                   <tr key={o.qid} className={cn("border-b last:border-0", chosen && "bg-pass-soft")}>
                     <td className="px-2 py-1.5 font-sans">
                       <span className={cn(chosen && "font-semibold")}>{o.seller}</span>
-                      {chosen && <span className="ml-1.5 rounded bg-pass px-1 py-px text-2xs font-semibold text-white">fits the budget</span>}
+                      {chosen && <span className="ml-1.5 rounded bg-pass px-1 py-px text-xs font-semibold text-white">fits the budget</span>}
                     </td>
                     <td className="px-2 py-1.5 text-right">{m(o.basePrice)}</td>
                     <td className="px-2 py-1.5 text-right text-muted-foreground">{gbp(o.basePrice * q.fxRate)}</td>
@@ -432,7 +432,7 @@ function PriceCompare({ at, basis, spike }: { at: NonNullable<NonNullable<Result
       {!at.current && <dt className="col-span-2 text-warn">No current Buy Box (suppressed or no offers): the 90-day median is used.</dt>}
       <dt className="col-span-2 flex flex-wrap items-center gap-1.5 text-muted-foreground">
         Gates use: <b className="text-foreground">{PRICE_BASIS_SHORT[basis ?? "lower"]}</b>
-        {spike && <span className="rounded-full bg-warn-soft px-1.5 py-px text-[10px] font-semibold text-warn uppercase" title="The current Buy Box is more than 15% over its 90-day median">Price spike</span>}
+        {spike && <span className="rounded-full bg-warn-soft px-1.5 py-px text-xs font-semibold text-warn uppercase" title="The current Buy Box is more than 15% over its 90-day median">Price spike</span>}
       </dt>
     </>
   );

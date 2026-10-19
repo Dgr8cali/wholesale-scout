@@ -6,94 +6,108 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * Colour tokens: the Gatekeeper design system, mapped onto shadcn's variables so every component
- * follows it. Named roles (ground, surface, line, ink, accent, pass/warn/fail/empty with soft
- * tints) are kept as their own variables too; brand is the accent.
+ * Colour tokens: "Calm Workbench". One brand colour (the logo's teal), one accent (the logo's amber),
+ * and soft/ink pairs for status. Every colour in the app comes from here: components use the
+ * Tailwind names below (bg-primary, text-primary-ink, bg-success-soft…), never a hex value.
+ * The older role names (pass/warn/fail/empty, brand, surface-2, ink-2, line-strong) are kept as
+ * aliases so existing pages follow the new palette.
  */
 :root {
-  --ground: #F4F6F7;
-  --surface: #FFFFFF;
-  --surface-2: #EDF1F3;
-  --line: #D6DEE3;
-  --line-strong: #B9C5CC;
-  --ink: #1C2534;
-  --ink-2: #3E4B58;
-  --muted-ink: #6B7883;
-  --accent-strong: #0B8CA0;
-  --accent-ink: #FFFFFF;
-  --accent-soft: #DDF1F4;
-  --pass: #1E8E5A;
-  --pass-soft: #DDF3E7;
-  --warn: #B86E00;
-  --warn-soft: #FCEBCF;
-  --fail: #C2382F;
-  --fail-soft: #F9DEDB;
-  --empty: #8A97A2;
-  --empty-soft: #E9EDF0;
+  --background: #F4F6F6;
+  --card: #FFFFFF;
+  --popover: #FFFFFF;
+  --border: #E1E6E7;
+  --divider: #EEF1F2;
+  --border-strong: #C9D2D4;
+  --foreground: #16242A;
+  --muted-foreground: #5A6B70;
+  --subtle: #EEF1F2;
+  --primary: #2F7F8C;
+  --primary-hover: #276C77;
+  --primary-soft: #E6F2F3;
+  --primary-ink: #134B54;
+  --primary-foreground: #FFFFFF;
+  /* The accent (the logo's amber): highlights only, never a button. Named "highlight" in Tailwind,
+     because shadcn's own "accent" is the hover background. */
+  --highlight: #F2B544;
+  --warn-soft: #FFF1D6;
+  --warn-ink: #6B4A00;
+  --danger: #B42318;
+  --danger-soft: #FDECEA;
+  --success: #1F7A4D;
+  --success-soft: #E5F4EC;
+  --neutral: #5A6B70;
+  --neutral-soft: #EEF1F2;
 }
 
 .dark {
-  --ground: #111820;
-  --surface: #18212B;
-  --surface-2: #1F2A36;
-  --line: #2C3946;
-  --line-strong: #3D4C5B;
-  --ink: #E7ECF0;
-  --ink-2: #C2CCD5;
-  --muted-ink: #8E9CAA;
-  --accent-strong: #2FB3C7;
-  --accent-ink: #0B1418;
-  --accent-soft: #163A42;
-  --pass: #3FC07E;
-  --pass-soft: #153826;
-  --warn: #E39A2E;
-  --warn-soft: #3E2B0C;
-  --fail: #EF6B62;
-  --fail-soft: #44201D;
-  --empty: #7C8894;
-  --empty-soft: #232E39;
+  --background: #0F1416;
+  --card: #172025;
+  --popover: #172025;
+  --border: #26323A;
+  --divider: #222D33;
+  --border-strong: #34434C;
+  --foreground: #E6EDEF;
+  --muted-foreground: #9AABB2;
+  --subtle: #1C272D;
+  --primary: #4FA3AF;
+  --primary-hover: #6BB4BF;
+  --primary-soft: #1E2E35;
+  --primary-ink: #B5E7ED;
+  --primary-foreground: #0F1416;
+  --highlight: #F2B544;
+  --warn-soft: #3A2E12;
+  --warn-ink: #F2CB7A;
+  --danger: #F08A80;
+  --danger-soft: #3B1F1F;
+  --success: #5CC795;
+  --success-soft: #123B2A;
+  --neutral: #9AABB2;
+  --neutral-soft: #222D33;
 }
 
-/* shadcn's variables, from the roles above (both themes). */
+/* shadcn's variables and the older role names, from the tokens above (both themes). */
 :root, .dark {
-  --background: var(--ground);
-  --foreground: var(--ink);
-  --card: var(--surface);
-  --card-foreground: var(--ink);
-  --popover: var(--surface);
-  --popover-foreground: var(--ink);
-  /* The one primary action per page: accent-filled. */
-  --primary: var(--accent-strong);
-  --primary-foreground: var(--accent-ink);
-  --secondary: var(--surface-2);
-  --secondary-foreground: var(--ink);
-  --muted: var(--surface-2);
-  --muted-foreground: var(--muted-ink);
-  /* shadcn's "accent" is the hover and selected background, not the brand colour. */
-  --accent: var(--surface-2);
-  --accent-foreground: var(--ink);
-  --destructive: var(--fail);
-  --border: var(--line);
-  --input: var(--line-strong);
-  --ring: var(--accent-strong);
-  --chart-1: var(--accent-strong);
-  --chart-2: var(--pass);
-  --chart-3: var(--warn);
-  --chart-4: var(--fail);
-  --chart-5: var(--empty);
-  --radius: 0.625rem;
-  --sidebar: var(--surface);
-  --sidebar-foreground: var(--ink-2);
-  --sidebar-primary: var(--accent-strong);
-  --sidebar-primary-foreground: var(--accent-ink);
-  --sidebar-accent: var(--accent-soft);
-  --sidebar-accent-foreground: var(--ink);
-  --sidebar-border: var(--line);
-  --sidebar-ring: var(--accent-strong);
+  --card-foreground: var(--foreground);
+  --popover-foreground: var(--foreground);
+  /* shadcn's secondary/muted/accent are quiet surfaces (accent is the hover and selected background). */
+  --secondary: var(--subtle);
+  --secondary-foreground: var(--foreground);
+  --muted: var(--subtle);
+  --accent: var(--subtle);
+  --accent-foreground: var(--foreground);
+  --destructive: var(--danger);
+  --input: var(--border-strong);
+  --ring: var(--primary);
+  --chart-1: var(--primary);
+  --chart-2: var(--success);
+  --chart-3: var(--highlight);
+  --chart-4: var(--danger);
+  --chart-5: var(--neutral);
+  /* Inputs and buttons 10px; cards 14px (rounded-xl); chips fully round. */
+  --radius: 10px;
+  --sidebar: var(--card);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: var(--primary-soft);
+  --sidebar-accent-foreground: var(--primary-ink);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--primary);
 
-  --brand: var(--accent-strong);
-  --brand-foreground: var(--accent-ink);
-  --brand-soft: var(--accent-soft);
+  --brand: var(--primary);
+  --brand-foreground: var(--primary-foreground);
+  --brand-soft: var(--primary-soft);
+  --pass: var(--success);
+  --pass-soft: var(--success-soft);
+  --warn: var(--warn-ink);
+  --fail: var(--danger);
+  --fail-soft: var(--danger-soft);
+  --empty: var(--neutral);
+  --empty-soft: var(--neutral-soft);
+  --surface-2: var(--subtle);
+  --line-strong: var(--border-strong);
+  --ink-2: var(--foreground);
 }
 
 @theme inline {
@@ -129,6 +143,21 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
+  --color-divider: var(--divider);
+  --color-border-strong: var(--border-strong);
+  --color-subtle: var(--subtle);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-soft: var(--primary-soft);
+  --color-primary-ink: var(--primary-ink);
+  --color-highlight: var(--highlight);
+  --color-warn-ink: var(--warn-ink);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-neutral: var(--neutral);
+  --color-neutral-soft: var(--neutral-soft);
+
   --color-brand: var(--brand);
   --color-brand-foreground: var(--brand-foreground);
   --color-brand-soft: var(--brand-soft);
@@ -146,24 +175,42 @@
 
   --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-plex-mono), ui-monospace, monospace;
-  --font-heading: var(--font-bricolage), var(--font-plex-sans), ui-sans-serif, sans-serif;
+  /* One family: IBM Plex Sans for every heading and label too. */
+  --font-heading: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
 
   /*
-   * Type scale: Tailwind's steps (xs 12, sm 14, base 16, lg 18, xl 20, 2xl 24) plus one below
-   * xs for dense table meta. Body copy is sm; labels and table meta xs / 2xs.
+   * The type scale, and only these: 12 (xs) / 13 (meta) / 14 (sm, body) / 15 (base) / 18 (lg) /
+   * 22 (xl) / 28 (2xl). Anything bigger is not used.
    */
-  --text-2xs: 0.6875rem;
-  --text-2xs--line-height: 1rem;
-  /* Body: 14px at 1.45. */
-  --text-sm--line-height: 1.45;
+  --text-xs: 12px;
+  --text-xs--line-height: 16px;
+  --text-meta: 13px;
+  --text-meta--line-height: 18px;
+  --text-sm: 14px;
+  --text-sm--line-height: 20px;
+  --text-base: 15px;
+  --text-base--line-height: 22px;
+  --text-lg: 18px;
+  --text-lg--line-height: 26px;
+  --text-xl: 22px;
+  --text-xl--line-height: 28px;
+  --text-2xl: 28px;
+  --text-2xl--line-height: 34px;
+  --text-2xl: initial;
+  --text-4xl: initial;
+  --text-5xl: initial;
+  --text-6xl: initial;
+  --text-7xl: initial;
+  --text-8xl: initial;
+  --text-9xl: initial;
 
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
+  --radius-sm: 6px;
+  --radius-md: 8px;
   --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+  --radius-xl: 14px;
+  --radius-2xl: 18px;
+  --radius-3xl: 22px;
+  --radius-4xl: 26px;
 }
 
 @layer base {
@@ -176,20 +223,17 @@
   body {
     @apply bg-background text-foreground;
     font-size: 14px;
-    line-height: 1.45;
-  }
-  h1, h2, h3 {
-    font-family: var(--font-heading);
+    line-height: 20px;
   }
 }
 
 /* Page and section headings, one size each everywhere. */
 @utility page-title {
-  @apply font-heading text-2xl font-bold tracking-tight;
+  @apply text-xl font-semibold tracking-tight;
 }
 /* A title inside a card or panel (a product in the drawer, an empty state). */
 @utility section-title {
-  @apply font-heading text-base font-semibold;
+  @apply text-base font-semibold;
 }
 /* Section headings: a small caps-tracked muted label; a trailing note (a span) stays as written. */
 @utility section-label {
@@ -198,13 +242,13 @@
     @apply font-normal tracking-normal normal-case;
   }
 }
-/* A stat tile's value (Home tiles, a brand's figures, the check card): Bricolage 22px bold. */
+/* A stat tile's value (Home tiles, a brand's figures, the check card): 22px semibold; a figure adds .num. */
 @utility stat-value {
-  @apply font-heading text-[22px] leading-tight font-bold tabular-nums;
+  @apply text-xl font-semibold tabular-nums;
 }
 /* Small uppercase label above a group (e.g. "Gates", "Score groups"). */
 @utility eyebrow {
-  @apply text-2xs font-semibold tracking-[0.08em] text-muted-foreground uppercase;
+  @apply text-xs font-semibold tracking-[0.08em] text-muted-foreground uppercase;
 }
 
 /* Figures: tabular, monospaced digits so columns line up. */
@@ -270,14 +314,14 @@
 /* Any table row with data-verdict: a 4px verdict-coloured edge on its first cell. */
 tr[data-verdict] > td:first-child { box-shadow: inset 4px 0 0 var(--empty); }
 tr[data-verdict="pass"] > td:first-child { box-shadow: inset 4px 0 0 var(--pass); }
-tr[data-verdict="warn"] > td:first-child { box-shadow: inset 4px 0 0 var(--warn); }
+tr[data-verdict="warn"] > td:first-child { box-shadow: inset 4px 0 0 var(--highlight); }
 tr[data-verdict="fail"] > td:first-child { box-shadow: inset 4px 0 0 var(--fail); }
 tr[data-verdict] > td:first-child { padding-left: 0.75rem; }
 
 /* Framed content areas (filter bar, tables, forms). */
-/* Cards: surface, a 1px line border, 10px radius, no shadow. */
+/* Cards: white, a 1px border, 14px radius, no shadow. */
 @utility panel {
-  @apply rounded-lg border border-border bg-card text-card-foreground;
+  @apply rounded-xl border border-border bg-card text-card-foreground;
 }
 /* A form field's label. */
 @utility field-label {

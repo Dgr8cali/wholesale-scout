@@ -21,7 +21,7 @@ const today = () => new Date().toLocaleDateString("en-CA", { timeZone: "Europe/L
 const gbp = (v: number) => `£${v.toFixed(2)}`;
 
 function Field({ label, children, hint }: { label: string; children: React.ReactNode; hint?: React.ReactNode }) {
-  return <label className="block space-y-1"><span className="field-label">{label}</span>{children}{hint && <span className="block text-2xs text-muted-foreground">{hint}</span>}</label>;
+  return <label className="block space-y-1"><span className="field-label">{label}</span>{children}{hint && <span className="block text-xs text-muted-foreground">{hint}</span>}</label>;
 }
 
 function BucketSelect({ value, onChange, levels }: { value: Bucket; onChange: (b: Bucket) => void; levels?: Record<Bucket, number> }) {

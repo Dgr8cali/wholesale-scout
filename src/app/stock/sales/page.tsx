@@ -72,7 +72,7 @@ export default function StockSalesPage() {
       {!rows ? <Skeleton className="h-48 rounded-lg" /> : !rows.length ? <EmptyState title="No sales recorded">Record one here or from an item on Levels.</EmptyState> : (
         <div className="overflow-x-auto rounded-lg border">
           <table className="w-full text-sm">
-            <thead><tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase">
+            <thead><tr className="border-b text-left text-xs tracking-wide text-muted-foreground uppercase">
               <SortTh {...s.th("date")} className="px-2 py-1.5">Date</SortTh>
               <SortTh {...s.th("item")} className="px-2 py-1.5">Item</SortTh>
               <SortTh {...s.th("channel")} className="px-2 py-1.5">Channel</SortTh>

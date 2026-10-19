@@ -25,7 +25,7 @@ function Num({ label, value, onChange, step, hint }: { label: string; value: num
     <label className="space-y-1.5">
       <span className="field-label">{label}</span>
       <Input className="num" type="number" min={0} step={step ?? 1} value={Number.isFinite(value) ? value : ""} onChange={(e) => onChange(e.target.value === "" ? NaN : Number(e.target.value))} />
-      {hint && <span className="block text-2xs text-muted-foreground">{hint}</span>}
+      {hint && <span className="block text-xs text-muted-foreground">{hint}</span>}
     </label>
   );
 }
@@ -126,7 +126,7 @@ export default function HuntPage() {
             <NativeSelect className="w-full" value={String(shape.results)} onChange={(e) => set({ results: Number(e.target.value) })}>
               {HUNT_RESULTS.map((n) => <NativeSelectOption key={n} value={String(n)}>{n}</NativeSelectOption>)}
             </NativeSelect>
-            <span className="block text-2xs text-muted-foreground">best-ranked first</span>
+            <span className="block text-xs text-muted-foreground">best-ranked first</span>
           </label>
           <label className="col-span-2 flex items-center gap-2 self-center text-sm">
             <Switch checked={shape.noAmazon} onCheckedChange={(v) => set({ noAmazon: v })} /> No Amazon offer

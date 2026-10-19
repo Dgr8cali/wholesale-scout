@@ -80,7 +80,7 @@ export function StockPurchaseDialog({ itemId, qty, supplierId, open, onOpenChang
                 <Input className="h-8" placeholder="SKU" value={newItem.sku} onChange={(e) => setNewItem({ ...newItem, sku: e.target.value })} autoFocus />
                 <Input className="col-span-2 h-8" placeholder="Name" value={newItem.name} onChange={(e) => setNewItem({ ...newItem, name: e.target.value })} />
                 <Input className="num h-8 uppercase" placeholder="ASIN (optional)" value={newItem.asin} onChange={(e) => setNewItem({ ...newItem, asin: e.target.value })} />
-                <span className="col-span-2 self-center text-2xs text-muted-foreground">Added to Stock when you save the order.</span>
+                <span className="col-span-2 self-center text-xs text-muted-foreground">Added to Stock when you save the order.</span>
                 <Button type="button" size="xs" variant="ghost" className="col-span-3 justify-self-end" onClick={() => setNewItem(null)}>Pick an existing item instead</Button>
               </div>
             ) : (
@@ -96,7 +96,7 @@ export function StockPurchaseDialog({ itemId, qty, supplierId, open, onOpenChang
           <div className="col-span-2 space-y-1"><span className="field-label">Supplier</span><SupplierPicker value={supplier} onChange={(v) => setSupplier(v)} /></div>
           <label className="space-y-1"><span className="field-label">Quantity</span><Input className="num" type="number" min={1} value={f.units} onChange={(e) => setF({ ...f, units: e.target.value })} /></label>
           <label className="space-y-1"><span className="field-label">{gbpCost ? "Landed cost per unit (£)" : `Unit cost (${order.currency})`}</span><Input className="num" type="number" step="0.01" min={0} value={f.cost} onChange={(e) => setF({ ...f, cost: e.target.value })} />
-            {!gbpCost && Number(order.fxRate) > 0 && Number(f.cost) >= 0 && f.cost !== "" && <span className="block text-2xs text-muted-foreground">£{(Number(f.cost) * Number(order.fxRate)).toFixed(2)} a unit at the rate</span>}
+            {!gbpCost && Number(order.fxRate) > 0 && Number(f.cost) >= 0 && f.cost !== "" && <span className="block text-xs text-muted-foreground">£{(Number(f.cost) * Number(order.fxRate)).toFixed(2)} a unit at the rate</span>}
           </label>
           <OrderFields value={order} onChange={setOrder} />
           <label className="col-span-2 space-y-1"><span className="field-label">Notes</span><Input value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} /></label>

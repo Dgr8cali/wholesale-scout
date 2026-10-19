@@ -39,7 +39,7 @@ const when = (iso: string) => new Date(iso).toLocaleString("en-GB", { day: "nume
 
 /** "123 / 200", red when over. */
 function Counter({ n, max, unit = "chars" }: { n: number; max: number; unit?: string }) {
-  return <span className={cn("num text-[11px]", n > max ? "font-semibold text-fail" : "text-muted-foreground")}>{n} / {max} {unit}</span>;
+  return <span className={cn("num text-xs", n > max ? "font-semibold text-fail" : "text-muted-foreground")}>{n} / {max} {unit}</span>;
 }
 
 /**
@@ -118,7 +118,7 @@ export function ListingSection({ candidateId }: { candidateId: string }) {
     const ps = field === "bullets" ? [] : checks.proof.filter((p) => (field === "bullet" ? p.field === "bullets" && p.index === index : p.field === field));
     if (!is.length && !fs.length && !ps.length) return null;
     return (
-      <ul className="space-y-0.5 text-[11.5px]">
+      <ul className="space-y-0.5 text-xs">
         {is.map((i, k) => <li key={`i${k}`} className={i.level === "error" ? "text-fail" : "text-warn"}>{i.message}</li>)}
         {fs.map((f, k) => <li key={`f${k}`} className="text-fail">&ldquo;{f.term}&rdquo;: {f.why}. Try {f.suggestion}.</li>)}
         {ps.map((p, k) => (
@@ -146,7 +146,7 @@ export function ListingSection({ candidateId }: { candidateId: string }) {
         <Button size="sm" disabled={!!busy || !inputs.brand} title={inputs.brand ? undefined : "Set the brand name first"} onClick={() => generate(!!view.latest)}>
           {busy === "generate" || busy === "regenerate" ? <LoaderIcon className="animate-spin" /> : <SparklesIcon />} {view.latest ? "Regenerate all" : "Write the listing"}
         </Button>
-        {view.lastRun && <p className="max-w-md text-right text-[11px] text-muted-foreground">Last call: {runLine(view.lastRun)}</p>}
+        {view.lastRun && <p className="max-w-md text-right text-xs text-muted-foreground">Last call: {runLine(view.lastRun)}</p>}
         </div>
       </div>
 
@@ -188,7 +188,7 @@ export function ListingSection({ candidateId }: { candidateId: string }) {
             <div className="flex flex-wrap items-center gap-2"><span className="field-label">Bullets</span><span className="ml-auto">{regenButton("bullets")}</span></div>
             {draft.bullets.map((b, i) => (
               <div key={i} className="space-y-0.5">
-                <div className="flex items-center gap-2 text-[11px] text-muted-foreground">Bullet {i + 1} <Counter n={b.length} max={BULLET_LIMIT} /></div>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">Bullet {i + 1} <Counter n={b.length} max={BULLET_LIMIT} /></div>
                 <Textarea rows={2} className="text-sm" value={b} onChange={(e) => set({ bullets: draft.bullets.map((x, j) => (j === i ? e.target.value : x)) })} />
                 {notes("bullet", i)}
               </div>
@@ -276,7 +276,7 @@ function CoverageTable({ rows, pct }: { rows: CoverageRow[]; pct: number | null 
       <p className="text-sm"><b>Keyword coverage</b> <span className={cn("num font-semibold", (pct ?? 0) >= 80 ? "text-pass" : (pct ?? 0) >= 50 ? "text-warn" : "text-fail")}>{pct ?? "—"}%</span> <span className="text-xs text-muted-foreground">of the search volume, in the title, bullets or backend terms</span></p>
       <div className="max-h-80 overflow-auto rounded-lg border">
         <table className="w-full text-xs">
-          <thead><tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase">
+          <thead><tr className="border-b text-left text-xs tracking-wide text-muted-foreground uppercase">
             <SortTh {...t.th("term")} className="px-2 py-1.5">Search term</SortTh>
             <SortTh {...t.th("volume")} numeric className="px-2 py-1.5 text-right">Volume / mo</SortTh>
             <SortTh {...t.th("conversion")} numeric className="px-2 py-1.5 text-right">Conversion</SortTh>

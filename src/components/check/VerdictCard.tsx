@@ -23,9 +23,9 @@ const GATING: Record<string, { label: string; variant: "pass" | "warn" | "fail" 
 function Stat({ label, children, note, text }: { label: string; children: ReactNode; note?: ReactNode; text?: boolean }) {
   return (
     <div className="min-w-0">
-      <p className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
       <p className={cn("truncate", text ? "text-sm" : "stat-value")}>{children}</p>
-      {note && <p className="line-clamp-2 text-2xs text-muted-foreground">{note}</p>}
+      {note && <p className="line-clamp-2 text-xs text-muted-foreground">{note}</p>}
     </div>
   );
 }

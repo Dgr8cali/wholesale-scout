@@ -382,7 +382,7 @@ export default function UploadPage() {
                 {files.map((f) => (
                   <TabsTrigger key={f.key} value={f.key} className="max-w-56">
                     <span className="truncate">{f.fileName}</span>
-                    {mapProblems(f).length ? <span className="size-1.5 flex-none rounded-full bg-warn" aria-label="needs attention" /> : <CheckIcon className="text-pass" />}
+                    {mapProblems(f).length ? <span className="size-1.5 flex-none rounded-full bg-highlight" aria-label="needs attention" /> : <CheckIcon className="text-pass" />}
                   </TabsTrigger>
                 ))}
               </TabsList>
@@ -597,7 +597,7 @@ function MapFile({ f, suppliers, problems, onUpdate, onCurrency, onSupplier, onS
                       <NativeSelectOption value="">— not in this file —</NativeSelectOption>
                       {headers.map((h) => <NativeSelectOption key={h}>{h}</NativeSelectOption>)}
                     </NativeSelect>
-                    {sample && <p className="num truncate text-2xs text-muted-foreground" title={sample}>e.g. {sample}</p>}
+                    {sample && <p className="num truncate text-xs text-muted-foreground" title={sample}>e.g. {sample}</p>}
                   </div>
                   {askPer && (
                     <fieldset className="flex-none rounded-md bg-warn-soft px-3 py-1.5">

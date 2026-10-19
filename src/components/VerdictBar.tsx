@@ -4,7 +4,7 @@ export interface VerdictCounts { pass: number; warn: number; fail: number; error
 
 const SEGMENTS = [
   { key: "pass", label: "pass", className: "bg-pass" },
-  { key: "warn", label: "warn", className: "bg-warn" },
+  { key: "warn", label: "warn", className: "bg-highlight" },
   { key: "fail", label: "fail", className: "bg-fail" },
   { key: "error", label: "error", className: "bg-fail/40" },
   { key: "pending", label: "to screen", className: "bg-muted-foreground/20" },
@@ -22,7 +22,7 @@ export function VerdictBar({ counts, legend = true, legendClassName, className }
         ))}
       </div>
       {legend && (
-        <div className={cn("flex flex-wrap gap-x-3 text-2xs text-muted-foreground", legendClassName)} aria-hidden="true">
+        <div className={cn("flex flex-wrap gap-x-3 text-xs text-muted-foreground", legendClassName)} aria-hidden="true">
           {SEGMENTS.filter((s) => counts[s.key] > 0 || s.key !== "error" && s.key !== "pending").map((s) => (
             <span key={s.key} className="flex items-center gap-1">
               <span className={cn("size-1.5 rounded-full", s.className)} />

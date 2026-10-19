@@ -165,8 +165,8 @@ export default function TrackerPage() {
                             {p.asin && p.product
                               ? <Link className="line-clamp-2 text-sm hover:text-brand hover:underline" href={`/products/${p.asin}`}>{purchaseTitle(p)}</Link>
                               : <Link className="line-clamp-2 text-sm hover:text-brand hover:underline" href={p.stock_item_id ? `/stock/levels?item=${p.stock_item_id}` : `/products/${p.asin}`}>{purchaseTitle(p)}</Link>}
-                            <p className="num text-2xs text-muted-foreground">{p.asin ?? p.stock?.sku ?? "—"} · {p.supplier_name ?? "—"} · {p.ordered_on}{p.received_bucket ? ` · in Stock (${p.received_bucket === "home" ? "self-ship" : "TikTok FBT"})` : ""}</p>
-                            <div className="flex flex-wrap items-center gap-1"><OrderLine p={p} /><OrderEditButton p={p} onSaved={() => setNonce((n) => n + 1)} /><OrderDeleteButton p={p} onDeleted={() => setNonce((n) => n + 1)} />{p.stock_item_id && <Link className="text-2xs text-brand hover:underline" href={`/stock/levels?item=${p.stock_item_id}`}>Stock →</Link>}</div>
+                            <p className="num text-xs text-muted-foreground">{p.asin ?? p.stock?.sku ?? "—"} · {p.supplier_name ?? "—"} · {p.ordered_on}{p.received_bucket ? ` · in Stock (${p.received_bucket === "home" ? "self-ship" : "TikTok FBT"})` : ""}</p>
+                            <div className="flex flex-wrap items-center gap-1"><OrderLine p={p} /><OrderEditButton p={p} onSaved={() => setNonce((n) => n + 1)} /><OrderDeleteButton p={p} onDeleted={() => setNonce((n) => n + 1)} />{p.stock_item_id && <Link className="text-xs text-brand hover:underline" href={`/stock/levels?item=${p.stock_item_id}`}>Stock →</Link>}</div>
                           </div>
                         </div>
                       </TableCell>
@@ -180,7 +180,7 @@ export default function TrackerPage() {
                       <TableCell className="num text-right">{gbp(p.prediction.profitPerUnit)} · {a ? gbp(a.profitPerUnit) : "—"}</TableCell>
                       <TableCell className="num text-right">
                         {p.prediction.sharePerMonth ?? "—"} · {a?.unitsPerMonth ?? "—"}
-                        {salesOff != null && <span className={cn("ml-1 text-2xs", Math.abs(salesOff) < 15 ? "text-muted-foreground" : salesOff > 0 ? "text-pass" : "text-fail")}>{salesOff > 0 ? "+" : ""}{salesOff}%</span>}
+                        {salesOff != null && <span className={cn("ml-1 text-xs", Math.abs(salesOff) < 15 ? "text-muted-foreground" : salesOff > 0 ? "text-pass" : "text-fail")}>{salesOff > 0 ? "+" : ""}{salesOff}%</span>}
                       </TableCell>
                       <TableCell className="num text-right">{a ? `${a.unitsSold} / ${p.units}` : "—"}</TableCell>
                       <TableCell className="num pr-4 text-right">{a ? gbp(a.profitToDate) : "—"}</TableCell>

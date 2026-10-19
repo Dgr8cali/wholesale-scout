@@ -5,13 +5,21 @@ it (what's built, the backlog, the rough edges). Last updated: 19 Oct 2026 (host
 
 Wholesale Scout is a single-user Amazon UK seller's workbench: Next.js 16 (App Router, `proxy.ts`
 password gate), self-hosted Supabase (Postgres, RLS on, service-role access from the server only),
-hosted on the Netcup server at https://ws.dgr8cali.co.uk (`infra/`, `make deploy`), a Chrome extension (`extension/`, 0.6.1), and the Help centre in `content/help`. It has
+hosted on the Netcup server at https://ws.dgr8cali.co.uk (`infra/`, `make deploy`), a Chrome extension (`extension/`, 0.7.0), and the Help centre in `content/help`. It has
 four workspaces (switch at the top of the sidebar, Alt+Shift+W); Home, Settings and Help are
 shared.
 
 **Hosting cutover, closed out** (19 Oct 2026): the app moved from Vercel + Supabase Cloud to the Netcup server on 17 Oct (cutover dump 06:28:33 BST), but wholesale-scout.vercel.app kept running against Supabase Cloud and was used by mistake on 17 Oct evening. A read-only three-way diff (the cutover dump restored locally vs Cloud vs self-hosted, every table, by primary key and row content) found Cloud-only: two Private label candidates ("Electrolyte sachets", "Women's probiotic") with their ASINs, fields, waivers, review dumps, POE snapshots, niches and hunt ASINs; two AI review summaries (£0.052); the deletion of three draft candidates (tackle box, raised dog bowl, cat water fountain); and the Vercel crons' Qogita nightlies (18, 19 Oct), Watchlist re-check (18 Oct) and an ASIN check. All of it was copied into self-hosted in one transaction (IDs kept, foreign-key order), after a backup (`~/backups/supabase-pre-merge-20261019T145918.dump` on the server); the brand map was rebuilt there, not copied. Kept self-hosted on conflicts: Amazon sync data (same values both sides), one proposal's refresh time. The re-run diff shows Cloud ⊆ self-hosted. All the Ads launch work (B0HM8FBX3T's "2026-10-18 #1", uploaded; "2026-10-02 #3" discarded) was on self-hosted all along. Supabase Cloud is untouched, as the rollback. To stop it recurring: `vercel.json` now 308-redirects every path to https://ws.dgr8cali.co.uk and has no crons, and `proxy.ts` redirects any `*.vercel.app` host as a backstop; the extension's default App URL is the server and a saved vercel.app address is moved to it. The server's crons had failed since the cutover (`.cron.env` held the secret unquoted and still `$$`-escaped): fixed, and both run by hand returned JSON. The server's `.env` has every key the Vercel environment pull had; missing: `RESEND_API_KEY`, `ALERT_EMAIL_TO` (email alerts off) and optionally `ALERT_EMAIL_FROM`.
 
 **Logo** (18 Oct 2026): the master mark is `public/logo.svg` (teal tile, magnifier, amber bars), drawn by `<Logo size>` (`src/components/Logo.tsx`, alt "Wholesale Scout") in the sidebar header, the Help centre header, and as the default mark of an `EmptyState` given no icon. Favicon and app icons by Next's file conventions: `src/app/favicon.ico` (16/32/48), `icon.svg`, `apple-icon.png` (180, full-bleed teal: iOS rounds it), and `manifest.ts` (Wholesale Scout / Scout, theme #2F7F8C, `public/icon-192.png` and `icon-512.png`). The proxy serves those files without the password (a browser fetches the manifest without credentials). The extension (0.6.0 on) uses the same mark: `extension/icons/` 16/32/48/128 for its icon and toolbar button, the popup's heading, and a 16 px mark in every panel heading (built as SVG nodes, so no page's CSP blocks it). There's no login page to put it on: the password is the browser's own Basic-auth dialog.
+
+**UI redesign** ("Calm Workbench", from `docs/ui-audit.md`). Phase 1, the audit, done (19 Oct 2026). Phase 2, foundations, in progress:
+tokens in `src/app/globals.css` (one source of truth: the logo teal #2F7F8C as primary with hover/soft/ink, the amber #F2B544 as
+`highlight` (shadcn's `accent` stays the hover surface), warn/danger/success soft+ink pairs, light and dark; the old names
+pass/warn/fail/empty, brand, surface-2, ink-2, line-strong are aliases of the new ones); IBM Plex Sans for all text and IBM Plex Mono
+(`.num`, tabular) for figures, Bricolage removed; a 12/13/14/15/18/22/28 type scale (`text-xs/meta/sm/base/lg/xl/2xl`, nothing else);
+radius 10px inputs and buttons, 14px cards (`panel`, Card), chips round. The extension (0.7.0) uses the same teal and Plex.
+Phases 3–5 to do.
 
 ## Workspaces
 

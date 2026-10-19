@@ -297,7 +297,7 @@ function UnassignedRow({ c, onSaved }: { c: CampaignRow; onSaved: () => void }) 
 function Metric({ label, value, sub, cls }: { label: string; value: string; sub?: string; cls?: string }) {
   return (
     <div className="rounded-lg bg-surface-2 px-3 py-2">
-      <div className="text-[11px] tracking-wide text-muted-foreground uppercase">{label}</div>
+      <div className="text-xs tracking-wide text-muted-foreground uppercase">{label}</div>
       <div className={cn("num text-base font-medium", cls)}>{value}</div>
       {sub && <div className="text-xs text-muted-foreground">{sub}</div>}
     </div>
@@ -428,7 +428,7 @@ function EconEditor({ a, onSaved }: { a: AsinRow; onSaved: () => void }) {
     <label className="space-y-1">
       <span className="field-label">{label}</span>
       <Input className="num" type="number" step="any" value={f[k]} placeholder={placeholder} onChange={(ev) => setF({ ...f, [k]: ev.target.value })} />
-      {hint && <span className="block text-2xs text-muted-foreground">{hint}</span>}
+      {hint && <span className="block text-xs text-muted-foreground">{hint}</span>}
     </label>
   );
   return (
@@ -441,7 +441,7 @@ function EconEditor({ a, onSaved }: { a: AsinRow; onSaved: () => void }) {
         <div className="space-y-1">
           <span className="field-label">Package L × W × H (cm)</span>
           <div className="flex gap-1">{(["l", "w", "h"] as const).map((k) => <Input key={k} className="num" type="number" step="any" value={f[k]} onChange={(ev) => setF({ ...f, [k]: ev.target.value })} />)}</div>
-          <span className="block text-2xs text-muted-foreground">{e.sizeKnown ? "Blank: as stored" : "Unknown: enter it or fetch it"}</span>
+          <span className="block text-xs text-muted-foreground">{e.sizeKnown ? "Blank: as stored" : "Unknown: enter it or fetch it"}</span>
         </div>
         <label className="space-y-1">
           <span className="field-label">Phase</span>
@@ -518,7 +518,7 @@ function CampaignTable({ rows, onSaved }: { rows: CampaignRow[]; onSaved: () => 
       <h2 className="section-label">Campaigns</h2>
       <div className="overflow-x-auto rounded-lg border">
         <table className="w-full text-sm">
-          <thead><tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase">
+          <thead><tr className="border-b text-left text-xs tracking-wide text-muted-foreground uppercase">
             <SortTh {...s.th("name")} className="px-2 py-1.5">Campaign</SortTh><SortTh {...s.th("asin")} className="px-2 py-1.5">ASIN</SortTh>
             <SortTh {...s.th("impressions")} numeric className="px-2 py-1.5 text-right">Impr.</SortTh><SortTh {...s.th("clicks")} numeric className="px-2 py-1.5 text-right">Clicks</SortTh>
             <SortTh {...s.th("ctr")} numeric className="px-2 py-1.5 text-right">CTR</SortTh><SortTh {...s.th("cost")} numeric className="px-2 py-1.5 text-right">Spend</SortTh>
@@ -607,7 +607,7 @@ function TermTable({ rows, campaigns }: { rows: TermRow[]; campaigns: CampaignRo
       </div>
       <div className="overflow-x-auto rounded-lg border">
         <table className="w-full text-sm">
-          <thead><tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase">
+          <thead><tr className="border-b text-left text-xs tracking-wide text-muted-foreground uppercase">
             <SortTh {...s.th("term")} className="px-2 py-1.5">Search term</SortTh><SortTh {...s.th("campaign")} className="px-2 py-1.5">Campaign</SortTh>
             <SortTh {...s.th("clicks")} numeric className="px-2 py-1.5 text-right">Clicks</SortTh><SortTh {...s.th("orders")} numeric className="px-2 py-1.5 text-right">Orders</SortTh>
             <SortTh {...s.th("cost")} numeric className="px-2 py-1.5 text-right">Spend</SortTh><SortTh {...s.th("acos")} numeric className="px-2 py-1.5 text-right">ACoS</SortTh>
@@ -670,7 +670,7 @@ function KeywordTable({ rows }: { rows: KeywordRow[] }) {
       </div>
       <div className="overflow-x-auto rounded-lg border">
         <table className="w-full text-sm">
-          <thead><tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase">
+          <thead><tr className="border-b text-left text-xs tracking-wide text-muted-foreground uppercase">
             <SortTh {...s.th("keyword")} className="px-2 py-1.5">Keyword</SortTh><SortTh {...s.th("campaign")} className="px-2 py-1.5">Campaign</SortTh>
             <SortTh {...s.th("bid")} numeric className="px-2 py-1.5 text-right">Bid</SortTh><SortTh {...s.th("clicks")} numeric className="px-2 py-1.5 text-right">Clicks</SortTh>
             <SortTh {...s.th("cost")} numeric className="px-2 py-1.5 text-right">Spend</SortTh><SortTh {...s.th("orders")} numeric className="px-2 py-1.5 text-right">Orders</SortTh>

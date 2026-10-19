@@ -11,12 +11,12 @@
 
   function badge(el, b, asin) {
     el.querySelector(":scope .ws-badge")?.remove();
-    const colour = b?.verdict ? ws.VERDICT_COLOUR[b.verdict] : "#71717a";
+    const colour = b?.verdict ? ws.VERDICT_COLOUR[b.verdict] : "#5A6B70";
     const label = !b ? "?" : b.pending ? "…" : `${b.verdict ?? "—"}${b.score != null ? ` ${b.score}` : ""}`;
     const node = ws.h("button", {
       class: "ws-badge",
       title: !b ? "Not checked by Wholesale Scout: click to check it (a check run, a few Keepa tokens)" : `Wholesale Scout: ${b.verdict ?? "screening"}${b.score != null ? `, score ${b.score}` : ""}`,
-      style: `position:absolute;top:6px;left:6px;z-index:5;border:0;border-radius:999px;padding:2px 8px;font:700 11px/1.4 sans-serif;color:#fff;background:${colour};cursor:pointer;text-transform:uppercase;box-shadow:0 1px 3px rgba(0,0,0,.25)`,
+      style: `position:absolute;top:6px;left:6px;z-index:5;border:0;border-radius:999px;padding:2px 8px;font:700 11px/1.4 'IBM Plex Sans',sans-serif;color:#fff;background:${colour};cursor:pointer;text-transform:uppercase;box-shadow:0 1px 3px rgba(0,0,0,.25)`,
       text: label,
       onclick: async (e) => {
         e.preventDefault();

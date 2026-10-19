@@ -327,7 +327,7 @@ function Num({ label, value, onChange, step, hint }: { label: string; value: num
     <label className="space-y-1">
       <span className="field-label">{label}</span>
       <Input className="num" type="number" step={step ?? 1} value={Number.isFinite(value) ? value : ""} onChange={(e) => onChange(e.target.value === "" ? NaN : Number(e.target.value))} />
-      {hint && <span className="block text-2xs text-muted-foreground">{hint}</span>}
+      {hint && <span className="block text-xs text-muted-foreground">{hint}</span>}
     </label>
   );
 }
@@ -449,7 +449,7 @@ function Results({ result, start, onReload, onPick, onCandidate, onStart, onRequ
       ) : (
         <div className="overflow-x-auto rounded-lg border">
           <table className="w-full text-sm">
-            <thead><tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase">
+            <thead><tr className="border-b text-left text-xs tracking-wide text-muted-foreground uppercase">
               <SortTh {...s.th("name")} className="px-2 py-1.5">Niche</SortTh><SortTh {...s.th("category")} className="px-2 py-1.5">Category</SortTh>
               <SortTh {...s.th("count")} numeric className="px-2 py-1.5 text-right" title="Qualifying · near misses · incumbents (sorts by qualifying)">Q · near · inc</SortTh>
               <SortTh {...s.th("price")} numeric className="px-2 py-1.5 text-right">Median price</SortTh><SortTh {...s.th("reviews")} numeric className="px-2 py-1.5 text-right">Median reviews</SortTh>
@@ -549,7 +549,7 @@ function NicheAsins({ asins }: { asins: Niche["asins"] }) {
   });
   return (
     <table className="w-full text-xs">
-      <thead><tr className="text-left text-[10.5px] tracking-wide text-muted-foreground uppercase">
+      <thead><tr className="text-left text-xs tracking-wide text-muted-foreground uppercase">
         <SortTh {...s.th("title")} className="px-2 py-1">Listing</SortTh><SortTh {...s.th("price")} numeric className="px-2 py-1 text-right">Price</SortTh>
         <SortTh {...s.th("reviews")} numeric className="px-2 py-1 text-right">Reviews</SortTh><SortTh {...s.th("rating")} numeric className="px-2 py-1 text-right">Rating</SortTh>
         <SortTh {...s.th("rank")} numeric className="px-2 py-1 text-right">Rank</SortTh><SortTh {...s.th("sales")} numeric className="px-2 py-1 text-right">Sales / mo</SortTh>
@@ -591,7 +591,7 @@ function LeavesTable({ leaves, minLeafMatches }: { leaves: HuntLeaf[]; minLeafMa
   }, { key: "matches", dir: "desc" });
   return (
     <table className="w-full text-xs">
-      <thead><tr className="border-b text-left text-[10.5px] tracking-wide text-muted-foreground uppercase">
+      <thead><tr className="border-b text-left text-xs tracking-wide text-muted-foreground uppercase">
         <SortTh {...s.th("name")} className="px-2 py-1.5">Leaf</SortTh><SortTh {...s.th("matches")} numeric className="px-2 py-1.5 text-right">Matches</SortTh>
         <SortTh {...s.th("cost")} numeric className="px-2 py-1.5 text-right">Finder cost</SortTh><SortTh {...s.th("stage")} className="px-2 py-1.5">Stage 2</SortTh>
       </tr></thead>

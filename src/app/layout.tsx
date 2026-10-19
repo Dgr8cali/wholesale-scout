@@ -1,14 +1,13 @@
 import type { Metadata } from "next";
-import { Bricolage_Grotesque, IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
+import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
 import { cookies } from "next/headers";
 import { AppShell } from "@/components/AppShell";
 import { Providers } from "@/components/Providers";
 import { parseWorkspace, WORKSPACE_COOKIE } from "@/lib/workspaces";
 import "./globals.css";
 
-// Gatekeeper's type: Bricolage Grotesque for headings and stat values, IBM Plex Sans for text,
-// IBM Plex Mono (tabular figures) for every number, code, EAN and ASIN.
-const bricolage = Bricolage_Grotesque({ variable: "--font-bricolage", subsets: ["latin"], weight: ["500", "600", "700"] });
+// IBM Plex Sans for all UI text (headings too), IBM Plex Mono (tabular figures) for every number,
+// price, code, EAN and ASIN.
 const plexSans = IBM_Plex_Sans({ variable: "--font-plex-sans", subsets: ["latin"], weight: ["400", "500", "600", "700"] });
 const plexMono = IBM_Plex_Mono({ variable: "--font-plex-mono", subsets: ["latin"], weight: ["400", "500", "600"] });
 
@@ -25,7 +24,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   const ws = parseWorkspace(jar.get(WORKSPACE_COOKIE)?.value);
   return (
     // suppressHydrationWarning: next-themes sets the theme class on <html> before React hydrates.
-    <html lang="en-GB" className={`${bricolage.variable} ${plexSans.variable} ${plexMono.variable} h-full antialiased`} suppressHydrationWarning>
+    <html lang="en-GB" className={`${plexSans.variable} ${plexMono.variable} h-full antialiased`} suppressHydrationWarning>
       <body className="min-h-full font-sans">
         <Providers>
           <AppShell defaultOpen={sidebarOpen} workspace={ws} qogita={!!(process.env.QOGITA_EMAIL && process.env.QOGITA_PASSWORD)}>{children}</AppShell>

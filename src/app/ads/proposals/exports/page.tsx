@@ -117,7 +117,7 @@ export default function AdsExportsPage() {
       {!batches.length ? <EmptyState title="No exports yet">Approve proposals, then Export bulk sheet on Proposals.</EmptyState> : (
         <div className="overflow-x-auto rounded-lg border">
           <table className="w-full text-sm">
-            <thead><tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase">
+            <thead><tr className="border-b text-left text-xs tracking-wide text-muted-foreground uppercase">
               <SortTh {...bs.th("label")} className="px-2 py-1.5">Batch</SortTh><SortTh {...bs.th("created")} className="px-2 py-1.5">Exported</SortTh>
               <SortTh {...bs.th("rows")} numeric className="px-2 py-1.5 text-right">Rows</SortTh><SortTh {...bs.th("uploaded")} className="px-2 py-1.5">Uploaded</SortTh><th />
             </tr></thead>
@@ -172,7 +172,7 @@ export default function AdsExportsPage() {
         </div>
         {!snaps.length ? <p className="text-sm text-muted-foreground">None yet.</p> : (
           <table className="w-full text-sm">
-            <thead><tr className="text-left text-[11px] tracking-wide text-muted-foreground uppercase">
+            <thead><tr className="text-left text-xs tracking-wide text-muted-foreground uppercase">
               <SortTh {...ss.th("label")} className="py-1 pr-3">Snapshot</SortTh><SortTh {...ss.th("created")} className="pr-3">Taken</SortTh>
               <SortTh {...ss.th("keywords")} className="pr-3">Contents</SortTh><th />
             </tr></thead>

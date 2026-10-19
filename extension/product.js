@@ -7,28 +7,28 @@
 
   const CSS = `
     :host { all: initial; }
-    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    * { box-sizing: border-box; font-family: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
     .wrap { position: fixed; top: 120px; right: 0; z-index: 2147483000; display: flex; align-items: flex-start; }
-    .tab { writing-mode: vertical-rl; background: #0f766e; color: #fff; border: 0; border-radius: 8px 0 0 8px; padding: 10px 6px; font: 600 12px/1 sans-serif; cursor: pointer; }
-    .panel { width: 320px; max-height: calc(100vh - 140px); overflow: auto; background: #fff; color: #111; border: 1px solid #d4d4d8; border-right: 0;
+    .tab { writing-mode: vertical-rl; background: #2F7F8C; color: #fff; border: 0; border-radius: 8px 0 0 8px; padding: 10px 6px; font: 600 12px/1 'IBM Plex Sans',sans-serif; cursor: pointer; }
+    .panel { width: 320px; max-height: calc(100vh - 140px); overflow: auto; background: #fff; color: #16242A; border: 1px solid #C9D2D4; border-right: 0;
       border-radius: 10px 0 0 10px; box-shadow: 0 10px 30px rgba(0,0,0,.18); padding: 12px; font-size: 13px; line-height: 1.35; }
     .hidden { display: none; }
     .row { display: flex; align-items: center; gap: 8px; }
     .between { justify-content: space-between; }
     .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-weight: 700; font-size: 12px; color: #fff; text-transform: uppercase; }
-    .muted { color: #71717a; font-size: 12px; }
+    .muted { color: #5A6B70; font-size: 12px; }
     .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; margin: 10px 0; }
-    .k { color: #71717a; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; }
+    .k { color: #5A6B70; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; }
     .v { font-weight: 600; font-variant-numeric: tabular-nums; }
-    .why { font-size: 12px; color: #3f3f46; margin: 6px 0 8px; }
-    input { width: 100%; padding: 6px 8px; border: 1px solid #d4d4d8; border-radius: 6px; font-size: 13px; }
-    button.b { border: 1px solid #d4d4d8; background: #fff; border-radius: 6px; padding: 6px 8px; font-size: 12px; cursor: pointer; }
-    button.b:hover { background: #f4f4f5; }
-    button.p { background: #0f766e; border-color: #0f766e; color: #fff; }
+    .why { font-size: 12px; color: #16242A; margin: 6px 0 8px; }
+    input { width: 100%; padding: 6px 8px; border: 1px solid #C9D2D4; border-radius: 6px; font-size: 13px; }
+    button.b { border: 1px solid #C9D2D4; background: #fff; border-radius: 6px; padding: 6px 8px; font-size: 12px; cursor: pointer; }
+    button.b:hover { background: #F4F6F6; }
+    button.p { background: #2F7F8C; border-color: #2F7F8C; color: #fff; }
     button:disabled { opacity: .5; cursor: default; }
-    a { color: #0f766e; }
-    .sec { border-top: 1px solid #e4e4e7; margin-top: 10px; padding-top: 8px; }
-    .err { color: #b91c1c; font-size: 12px; }
+    a { color: #2F7F8C; }
+    .sec { border-top: 1px solid #EEF1F2; margin-top: 10px; padding-top: 8px; }
+    .err { color: #B42318; font-size: 12px; }
     ul { margin: 4px 0 0; padding-left: 16px; }
   `;
 
@@ -113,7 +113,7 @@
     }
     if (card) {
       const c = card;
-      const colour = c.verdict ? ws.VERDICT_COLOUR[c.verdict] : "#71717a";
+      const colour = c.verdict ? ws.VERDICT_COLOUR[c.verdict] : "#5A6B70";
       panel.append(ws.h("div", { class: "row", style: "margin-top:8px" }, [
         ws.h("span", { class: "badge", style: `background:${colour}`, text: c.verdict ?? (c.pending ? "screening" : "—") }),
         c.score != null ? ws.h("span", { class: "v", text: `Score ${Math.round(c.score)}` }) : null,
@@ -142,11 +142,11 @@
         // Both prices side by side, and which the gates used.
         c.compare?.current ? kv(`Profit at current Buy Box (${ws.gbp(c.compare.current.price)})`, c.compare.current.profit == null ? "needs a cost" : ws.gbp(c.compare.current.profit)) : null,
         c.compare?.median90 ? kv(`Profit at ${c.compare.median90.label} (${ws.gbp(c.compare.median90.price)})`, c.compare.median90.profit == null ? "needs a cost" : ws.gbp(c.compare.median90.profit)) : null,
-        c.compare?.gatesUse ? kv("Gates use", c.compare.spike ? ws.h("span", {}, [c.compare.gatesUse, " ", ws.h("span", { style: "background:#fef3c7;color:#b45309;border-radius:9px;padding:0 6px;font-size:10px;font-weight:700", text: "PRICE SPIKE" })]) : c.compare.gatesUse) : null,
+        c.compare?.gatesUse ? kv("Gates use", c.compare.spike ? ws.h("span", {}, [c.compare.gatesUse, " ", ws.h("span", { style: "background:#FFF1D6;color:#6B4A00;border-radius:9px;padding:0 6px;font-size:10px;font-weight:700", text: "PRICE SPIKE" })]) : c.compare.gatesUse) : null,
       ].filter(Boolean)));
       if (c.why) panel.append(ws.h("div", { class: "why", text: c.why }));
       if (c.notFetched) {
-        panel.append(ws.h("div", { class: "why", style: "background:#f4f4f5;padding:6px 8px;border-radius:6px" }, [
+        panel.append(ws.h("div", { class: "why", style: "background:#F4F6F6;padding:6px 8px;border-radius:6px" }, [
           `Not fetched: failed at ${c.notFetched.label.toLowerCase()}. Buy Box, sellers and Amazon are from current offers; sales, your share and history weren't fetched. `,
           ws.h("button", { class: "b", text: "Fetch anyway", onclick: fetchAnyway }),
         ]));
@@ -208,7 +208,7 @@
       sec.append(ws.h("details", { style: "margin-top:6px" }, [
         ws.h("summary", { class: "muted", style: "cursor:pointer", text: `Debug (${debug.length} steps)` }),
         ws.h("button", { class: "b", style: "margin:4px 0", text: "Copy", onclick: () => navigator.clipboard.writeText(dump).then(() => status("Debug copied."), () => status("Couldn't copy: click the page first, then Copy.", true)) }),
-        ws.h("pre", { style: "white-space:pre-wrap;word-break:break-all;font-size:10px;max-height:200px;overflow:auto;background:#f4f4f5;padding:6px;border-radius:6px", text: dump }),
+        ws.h("pre", { style: "white-space:pre-wrap;word-break:break-all;font-size:10px;max-height:200px;overflow:auto;background:#F4F6F6;padding:6px;border-radius:6px", text: dump }),
       ]));
     }
     panel.append(sec);

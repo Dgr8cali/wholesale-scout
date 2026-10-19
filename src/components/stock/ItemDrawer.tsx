@@ -114,16 +114,16 @@ export function ItemDrawer({ row, onClose, onChanged }: { row: ItemLevels | null
             <section className="grid grid-cols-4 gap-2 text-center">
               {BUCKETS.map((b) => (
                 <div key={b} className="rounded-lg bg-surface-2 px-2 py-1.5">
-                  <div className="text-[10.5px] tracking-wide text-muted-foreground uppercase">{BUCKET_LABEL[b]}</div>
+                  <div className="text-xs tracking-wide text-muted-foreground uppercase">{BUCKET_LABEL[b]}</div>
                   <div className="num text-lg font-medium">{b === "fba" && !row.fba.matched ? "—" : row.levels[b]}</div>
                 </div>
               ))}
-              <div className="rounded-lg bg-surface-2 px-2 py-1.5"><div className="text-[10.5px] tracking-wide text-muted-foreground uppercase">Total</div><div className="num text-lg font-semibold">{row.total}</div></div>
+              <div className="rounded-lg bg-surface-2 px-2 py-1.5"><div className="text-xs tracking-wide text-muted-foreground uppercase">Total</div><div className="num text-lg font-semibold">{row.total}</div></div>
             </section>
             <section className="space-y-1">
               <div className="flex items-center justify-between text-xs text-muted-foreground"><span>Level, last 30 days</span><span>{row.demand.total ? `${row.demand.total.toFixed(2)} a day sold` : "nothing sold in 30 days"}</span></div>
               <Sparkline values={row.spark} width={520} height={44} label="Stock level, last 30 days" className="w-full" />
-              {it.asin && <p className="text-2xs text-muted-foreground">Amazon FBA {row.fba.matched ? `is SP-API's fulfillable count${row.fba.synced ? `, synced ${new Date(row.fba.synced).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}` : ""}` : "has no SP-API stock for this SKU or ASIN"}; Amazon sales come from the orders sync.</p>}
+              {it.asin && <p className="text-xs text-muted-foreground">Amazon FBA {row.fba.matched ? `is SP-API's fulfillable count${row.fba.synced ? `, synced ${new Date(row.fba.synced).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}` : ""}` : "has no SP-API stock for this SKU or ASIN"}; Amazon sales come from the orders sync.</p>}
             </section>
 
             <section className="space-y-2">

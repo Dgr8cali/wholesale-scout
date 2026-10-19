@@ -78,7 +78,7 @@ export function RecordPurchaseDialog({ variant = "default" }: { variant?: "defau
                 <li key={h.asin}>
                   <button type="button" className="w-full px-1 py-2 text-left hover:bg-muted" onClick={() => go(h.asin)}>
                     <span className="line-clamp-1 text-sm">{h.title ?? h.asin}</span>
-                    <span className="num text-2xs text-muted-foreground">{h.asin}{h.brand ? ` · ${h.brand}` : ""}</span>
+                    <span className="num text-xs text-muted-foreground">{h.asin}{h.brand ? ` · ${h.brand}` : ""}</span>
                   </button>
                 </li>
               ))}

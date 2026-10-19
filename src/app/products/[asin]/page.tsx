@@ -50,7 +50,7 @@ function Figure({ label, value, source }: { label: ReactNode; value: ReactNode; 
     <div className="min-w-0">
       <p className="eyebrow">{label}</p>
       <p className="stat-value truncate">{value}</p>
-      {source && <p className="text-2xs text-muted-foreground">{source}</p>}
+      {source && <p className="text-xs text-muted-foreground">{source}</p>}
     </div>
   );
 }
@@ -217,16 +217,16 @@ export default function ProductPage() {
             <div>
               <p className="mb-1 text-xs font-medium">Price</p>
               <HistoryChart now={Date.parse(v.keepa.fetchedAt)} format={(x) => `£${x.toFixed(x >= 100 ? 0 : 2)}`} series={[
-                { label: "Buy Box", points: v.keepa.buyBox, colour: "var(--accent-strong)" },
+                { label: "Buy Box", points: v.keepa.buyBox, colour: "var(--primary)" },
                 { label: "Amazon", points: v.keepa.amazon, colour: "var(--fail)", dashed: true },
               ]} />
             </div>
             <div>
               <p className="mb-1 text-xs font-medium">Sales rank (lower is better) and sellers</p>
               <HistoryChart now={Date.parse(v.keepa.fetchedAt)} log invert format={(x) => (x >= 1000 ? `${Math.round(x / 1000)}k` : String(Math.round(x)))}
-                series={[{ label: "Rank", points: v.keepa.rank, colour: "var(--accent-strong)" }]} />
+                series={[{ label: "Rank", points: v.keepa.rank, colour: "var(--primary)" }]} />
               <HistoryChart now={Date.parse(v.keepa.fetchedAt)} height={90} format={(x) => String(Math.round(x))}
-                series={[{ label: "New offers", points: v.keepa.offers, colour: "var(--warn)" }]} />
+                series={[{ label: "New offers", points: v.keepa.offers, colour: "var(--highlight)" }]} />
             </div>
           </div>
         </Panel>
@@ -250,9 +250,9 @@ export default function ProductPage() {
                       <TableRow key={o.id} data-verdict={room == null ? "empty" : room >= 0 ? "pass" : "fail"} className={cn(o.archived && "opacity-60")}>
                         <TableCell>
                           {o.supplier ? <Link className="font-medium text-brand hover:underline" href={`/suppliers/${o.supplier.id}`}>{o.supplier.name}</Link> : "—"}
-                          {o.archived && <span className="ml-1 rounded bg-surface-2 px-1 py-px text-[10px] text-muted-foreground" title="The Qogita UK account now prices this product: this EU offer is kept for history and left out of plans">archived</span>}
+                          {o.archived && <span className="ml-1 rounded bg-surface-2 px-1 py-px text-xs text-muted-foreground" title="The Qogita UK account now prices this product: this EU offer is kept for history and left out of plans">archived</span>}
                           {(o.stock != null || o.offerCount != null || o.preOrder || o.deliveryWeeks != null) && (
-                            <span className="block text-[11px] text-muted-foreground">
+                            <span className="block text-xs text-muted-foreground">
                               {[o.stock != null ? `${o.stock.toLocaleString("en-GB")} in stock` : null, o.offerCount != null ? `${o.offerCount} offer${o.offerCount === 1 ? "" : "s"}` : null, o.preOrder ? "pre-order" : null, o.deliveryWeeks != null ? `${o.deliveryWeeks} wk delivery` : null].filter(Boolean).join(" · ")}
                               {o.link && <> · <a className="text-brand hover:underline" href={o.link} target="_blank" rel="noreferrer">view</a></>}
                             </span>
@@ -286,8 +286,8 @@ export default function ProductPage() {
                 {historySort.rows.map((h) => (
                   <TableRow key={h.id} data-verdict={h.verdict ?? "empty"}>
                     <TableCell className="num text-xs whitespace-nowrap">{new Date(h.at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</TableCell>
-                    <TableCell className="max-w-48 truncate"><Link className="text-brand hover:underline" href={`/runs/${h.runId}`}>{h.runName}</Link>{h.profile && <span className="block text-2xs text-muted-foreground">{h.profile}</span>}</TableCell>
-                    <TableCell>{h.verdict ? <Badge variant={h.verdict as "pass"}>{h.verdict}</Badge> : "—"}{h.failedGate && <span className="block text-2xs text-muted-foreground">{GATE_LABELS[h.failedGate as GateId] ?? h.failedGate}</span>}</TableCell>
+                    <TableCell className="max-w-48 truncate"><Link className="text-brand hover:underline" href={`/runs/${h.runId}`}>{h.runName}</Link>{h.profile && <span className="block text-xs text-muted-foreground">{h.profile}</span>}</TableCell>
+                    <TableCell>{h.verdict ? <Badge variant={h.verdict as "pass"}>{h.verdict}</Badge> : "—"}{h.failedGate && <span className="block text-xs text-muted-foreground">{GATE_LABELS[h.failedGate as GateId] ?? h.failedGate}</span>}</TableCell>
                     <TableCell className="num text-right">{h.score != null ? Math.round(h.score) : "—"}</TableCell>
                     <TableCell className="num text-right">{gbp(h.sellPrice)}</TableCell>
                     <TableCell className="num text-right">{gbp(h.profit)}</TableCell>

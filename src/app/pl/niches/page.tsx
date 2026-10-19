@@ -45,7 +45,7 @@ const SHAPE_CLS = { open: "bg-pass-soft text-pass", contested: "bg-warn-soft tex
 const SIGNAL_CLS: Record<TermSignal, string> = { BUYING: "bg-pass-soft text-pass", BROWSE_ONLY: "bg-fail-soft text-fail" };
 /** The BUYING / BROWSE-ONLY chip from a niche's best search-term conversion. */
 function SignalChip({ s }: { s: TermSignal | null | undefined }) {
-  return s ? <span className={cn("rounded-full px-1.5 py-px text-[10px] font-semibold whitespace-nowrap uppercase", SIGNAL_CLS[s])}>{TERM_SIGNAL_LABEL[s]}</span> : null;
+  return s ? <span className={cn("rounded-full px-1.5 py-px text-xs font-semibold whitespace-nowrap uppercase", SIGNAL_CLS[s])}>{TERM_SIGNAL_LABEL[s]}</span> : null;
 }
 const FLAG_CLS: Partial<Record<NicheFlag, string>> = { SPIKE: "bg-fail-soft text-fail", BIG_BRAND: "bg-fail-soft text-fail", REGULATED: "bg-warn-soft text-warn", ELECTRICAL: "bg-warn-soft text-warn", HEAVY_BULKY: "bg-warn-soft text-warn" };
 const PRICE_BANDS: [string, string][] = [["", "Any price"], ["core", "£15–40"], ["mid", "£10–60"], ["low", "Under £10"], ["high", "Over £60"]];
@@ -246,7 +246,7 @@ function NicheTable({ data, loading, f, change, hide, setHide, sorting, page, se
           ["Hidden by flags", data.stats.hiddenByFlags],
           ["Shortlisted", data.stats.shortlisted],
           ["Incumbents checked", data.stats.checked],
-        ].map(([l, v]) => <div key={l} className="rounded-lg bg-surface-2 px-3 py-2"><div className="text-[10.5px] tracking-wide text-muted-foreground uppercase">{l}</div><div className="num text-lg font-semibold">{Number(v).toLocaleString("en-GB")}</div></div>)}
+        ].map(([l, v]) => <div key={l} className="rounded-lg bg-surface-2 px-3 py-2"><div className="text-xs tracking-wide text-muted-foreground uppercase">{l}</div><div className="num text-lg font-semibold">{Number(v).toLocaleString("en-GB")}</div></div>)}
       </div>
       <div className="flex flex-wrap items-end gap-3">
         <label className="space-y-1"><span className="field-label">Category</span>
@@ -280,7 +280,7 @@ function NicheTable({ data, loading, f, change, hide, setHide, sorting, page, se
       {pager}
       <div className={cn("overflow-x-auto rounded-lg border", loading && "opacity-70")}>
         <table className="w-full text-sm">
-          <thead><tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase">
+          <thead><tr className="border-b text-left text-xs tracking-wide text-muted-foreground uppercase">
             <th className="w-8 px-2 py-1.5"><input type="checkbox" aria-label="Select all on this page" checked={allShown} onChange={() => setSel(allShown ? new Set() : new Set(rows.map((n) => n.id)))} /></th>
             <SortTh {...s.th("need")} className="px-2 py-1.5">Customer need</SortTh>
             <SortTh {...s.th("terms")} className="px-2 py-1.5">Search terms</SortTh>
@@ -308,11 +308,11 @@ function NicheTable({ data, loading, f, change, hide, setHide, sorting, page, se
                   </button>
                   {(n.categories?.length ?? 0) > 0 && (!f.category || n.categories.length > 1) && (
                     <span className="flex flex-wrap gap-1 pt-0.5 pl-4" title={n.categories.length > 1 ? "In each of these categories' downloads: one niche" : undefined}>
-                      {n.categories.map((c) => <span key={c} className={cn("rounded-full px-1.5 py-px text-[10px]", c === f.category ? "bg-brand-soft text-brand" : "bg-surface-2 text-muted-foreground")}>{c}</span>)}
+                      {n.categories.map((c) => <span key={c} className={cn("rounded-full px-1.5 py-px text-xs", c === f.category ? "bg-brand-soft text-brand" : "bg-surface-2 text-muted-foreground")}>{c}</span>)}
                     </span>
                   )}
-                  {(n.extra.aliases?.length ?? 0) > 0 && <span className="block pl-4 text-2xs text-muted-foreground">also: {n.extra.aliases!.join(", ")}</span>}
-                  {n.notes && <span className="block pl-4 text-2xs text-muted-foreground italic">{n.notes.slice(0, 80)}</span>}
+                  {(n.extra.aliases?.length ?? 0) > 0 && <span className="block pl-4 text-xs text-muted-foreground">also: {n.extra.aliases!.join(", ")}</span>}
+                  {n.notes && <span className="block pl-4 text-xs text-muted-foreground italic">{n.notes.slice(0, 80)}</span>}
                 </td>
                 <td className="max-w-56 px-2 py-1.5 text-xs text-muted-foreground">{n.search_terms.join(" · ")}</td>
                 <td className={cn("num px-2 py-1.5 text-right", scoreTone(n.score))}>{n.score ?? "—"}</td>
@@ -327,7 +327,7 @@ function NicheTable({ data, loading, f, change, hide, setHide, sorting, page, se
                   : <span className="text-xs text-muted-foreground" title="Not sent from Opportunity Explorer yet">—</span>}</td>
                 <td className="num px-2 py-1.5 text-right">{n0(n.units_per_product_mid)}</td>
                 <td className="num px-2 py-1.5 text-right">{pct(n.return_rate, 2).replace("+", "")}</td>
-                <td className="px-2 py-1.5"><span className="flex flex-wrap gap-1">{n.flags.map((x) => <span key={x} className={cn("rounded-full px-1.5 py-px text-[10px] font-semibold uppercase", FLAG_CLS[x as NicheFlag] ?? "bg-empty-soft text-ink-2")}>{FLAG_LABEL[x as NicheFlag] ?? x}</span>)}</span></td>
+                <td className="px-2 py-1.5"><span className="flex flex-wrap gap-1">{n.flags.map((x) => <span key={x} className={cn("rounded-full px-1.5 py-px text-xs font-semibold uppercase", FLAG_CLS[x as NicheFlag] ?? "bg-empty-soft text-ink-2")}>{FLAG_LABEL[x as NicheFlag] ?? x}</span>)}</span></td>
                 <td className="px-2 py-1.5">{n.shape ? <span className={cn("rounded-full px-2 py-0.5 text-xs font-semibold", SHAPE_CLS[n.shape])}>{n.shape}</span> : <span className="text-xs text-muted-foreground">—</span>}</td>
                 <td className="px-2 py-1.5 text-xs">{n.status === "candidate" && n.candidate_id ? <Link className="text-brand underline" href={`/pl/candidates?c=${n.candidate_id}`}>candidate</Link> : n.status}</td>
               </tr>
@@ -414,9 +414,9 @@ function NicheDetail({ n, onChanged }: { n: NicheRow; onChanged: () => void }) {
         {inc ? (
           <div className="text-xs">
             <p><b>Incumbents for {(inc.terms ?? [inc.term]).map((t) => `“${t}”`).join(", ")}</b>{inc.rootCategories?.length ? ` in ${inc.rootCategories.join(", ")}` : ""}: {inc.shape ? <span className={cn("rounded-full px-1.5 py-px font-semibold", SHAPE_CLS[inc.shape as keyof typeof SHAPE_CLS])}>{inc.shape}</span> : <span className="text-muted-foreground">no on-niche sellers</span>} · {inc.found.toLocaleString("en-GB")} products match{inc.onNiche != null ? `, ${inc.onNiche} on-niche of ${inc.candidates?.length ?? "?"} detailed` : ""} · {inc.tokensUsed} tokens{inc.reused ? `, ${inc.reused} reused` : ""}{inc.reusedFinder ? " (rerun)" : ""} · {new Date(inc.checkedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</p>
-            {inc.outside && <p className="mt-0.5"><span className="rounded-full bg-warn-soft px-1.5 py-px text-[10px] font-semibold text-warn uppercase" title="Fewer than 5 products in the niche's categories: the same search ran on all of Amazon, with the same off-niche rules">found outside {inc.rootCategories?.length ? inc.rootCategories.join(", ") : "its category"}</span></p>}
+            {inc.outside && <p className="mt-0.5"><span className="rounded-full bg-warn-soft px-1.5 py-px text-xs font-semibold text-warn uppercase" title="Fewer than 5 products in the niche's categories: the same search ran on all of Amazon, with the same off-niche rules">found outside {inc.rootCategories?.length ? inc.rootCategories.join(", ") : "its category"}</span></p>}
             {(inc.onNicheCategories?.length ?? 0) > 0 && <p className="mt-1 flex flex-wrap items-center gap-1"><span className="text-muted-foreground">On-niche products filed under:</span>
-              {inc.onNicheCategories!.map((c) => <span key={c.name} className={cn("rounded-full px-1.5 py-px text-[10px]", inc.rootCategories?.includes(c.name) ? "bg-brand-soft text-brand" : "bg-surface-2 text-ink-2")}>{c.name} · {c.count}</span>)}</p>}
+              {inc.onNicheCategories!.map((c) => <span key={c.name} className={cn("rounded-full px-1.5 py-px text-xs", inc.rootCategories?.includes(c.name) ? "bg-brand-soft text-brand" : "bg-surface-2 text-ink-2")}>{c.name} · {c.count}</span>)}</p>}
             {inc.onNiche == null && <p className="text-amber-700 dark:text-amber-400">An old check (any word, all of Amazon): rerun it.</p>}
             <table className="mt-1 text-xs"><tbody>{inc.incumbents.map((x) => (
               <tr key={x.asin} className="align-top">
@@ -428,7 +428,7 @@ function NicheDetail({ n, onChanged }: { n: NicheRow; onChanged: () => void }) {
                 <td className="whitespace-nowrap pr-2">{x.poe ? <span className="rounded-full bg-brand-soft px-1.5 py-px font-semibold text-brand" title={`Opportunity Explorer's #${x.poe.rank} clicked product for “${x.poe.term}”: counted on-niche whatever its title says`}>POE top clicked #{x.poe.rank}</span>
                   : x.matchedTerm && <span className={cn("rounded-full px-1.5 py-px", x.matchedHow === "words" ? "border border-dashed" : "bg-muted")} title={x.matchedHow === "words" ? "Its title has every word of this search term within 4 words, in another order" : "Its title has this search term as a phrase"}>{x.matchedTerm}{x.matchedHow === "words" ? " (any order)" : ""}</span>}</td>
                 <td className="pr-2 text-muted-foreground">{(x.title ?? "").slice(0, 80)}</td>
-                <td className="whitespace-nowrap"><button type="button" disabled={!!busy} className="text-[11px] text-muted-foreground hover:text-fail hover:underline disabled:opacity-50" title="Leave this product out of the shape, now and on every rerun" onClick={() => markOut(x.asin, true)}>Not on-niche</button></td>
+                <td className="whitespace-nowrap"><button type="button" disabled={!!busy} className="text-xs text-muted-foreground hover:text-fail hover:underline disabled:opacity-50" title="Leave this product out of the shape, now and on every rerun" onClick={() => markOut(x.asin, true)}>Not on-niche</button></td>
               </tr>
             ))}</tbody></table>
             {!!inc.excludedCount && <details className="mt-1"><summary className="cursor-pointer text-muted-foreground">{inc.excludedCount} off-niche left out{(() => { const m = inc.excluded?.filter((x) => x.why === "marked not on-niche by you").length ?? 0; return m ? ` (${m} marked by you)` : ""; })()}</summary>

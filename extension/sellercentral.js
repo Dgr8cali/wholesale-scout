@@ -11,7 +11,7 @@
     let status = "unknown";
     let detail = "";
 
-    const bar = ws.h("div", { id: "wholesale-scout-dg", style: "position:fixed;left:16px;right:16px;bottom:16px;z-index:2147483000;background:#fff;color:#111;border:2px solid #0f766e;border-radius:10px;padding:10px 12px;box-shadow:0 10px 30px rgba(0,0,0,.2);font:13px/1.4 -apple-system,Segoe UI,sans-serif;display:flex;flex-wrap:wrap;gap:8px;align-items:center" });
+    const bar = ws.h("div", { id: "wholesale-scout-dg", style: "position:fixed;left:16px;right:16px;bottom:16px;z-index:2147483000;background:#fff;color:#16242A;border:2px solid #2F7F8C;border-radius:10px;padding:10px 12px;box-shadow:0 10px 30px rgba(0,0,0,.2);font:13px/1.4 'IBM Plex Sans',-apple-system,Segoe UI,sans-serif;display:flex;flex-wrap:wrap;gap:8px;align-items:center" });
     document.body.append(bar);
 
     /** What the page says, as a suggestion: "not dangerous goods" beats a mention of dangerous goods. */
@@ -34,9 +34,9 @@
       bar.replaceChildren(
         ws.brand(`Wholesale Scout · DG for ${asin}:`),
         choice("hazmat", "Hazmat"), choice("not_hazmat", "Not hazmat"), choice("unknown", "Unknown"),
-        ws.h("span", { style: "color:#71717a;flex:1;min-width:200px;font-size:12px", text: detail ? `Read on the page: “${detail}”` : "Nothing found yet: pick what Seller Central says." }),
+        ws.h("span", { style: "color:#5A6B70;flex:1;min-width:200px;font-size:12px", text: detail ? `Read on the page: “${detail}”` : "Nothing found yet: pick what Seller Central says." }),
         ws.h("button", {
-          style: "background:#0f766e;color:#fff;border:0;border-radius:6px;padding:6px 10px;cursor:pointer", text: "Save to the app",
+          style: "background:#2F7F8C;color:#fff;border:0;border-radius:6px;padding:6px 10px;cursor:pointer", text: "Save to the app",
           onclick: async () => {
             const r = await ws.api("POST", "/api/extension/dg", { asin, status, detail: detail || null, url: location.href });
             if (!r.ok) return alert(`Wholesale Scout: ${r.error}`);
@@ -45,7 +45,7 @@
             setTimeout(() => bar.remove(), 4000);
           },
         }),
-        ws.h("button", { style: "border:1px solid #d4d4d8;background:#fff;border-radius:6px;padding:6px 10px;cursor:pointer", text: "Dismiss", onclick: () => { ws.store.remove("pendingDg"); bar.remove(); } }),
+        ws.h("button", { style: "border:1px solid #C9D2D4;background:#fff;border-radius:6px;padding:6px 10px;cursor:pointer", text: "Dismiss", onclick: () => { ws.store.remove("pendingDg"); bar.remove(); } }),
       );
     }
 

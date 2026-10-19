@@ -263,7 +263,7 @@ export default function FavouritesPage() {
               const i = byRow.get(r.id);
               if (!i) return null;
               return (
-                <div className="text-2xs text-muted-foreground">
+                <div className="text-xs text-muted-foreground">
                   {i.latest ? <>Screened {when(i.latest.updated_at)}{i.latest.run && <> · <Link className="text-brand hover:underline" href={`/runs/${i.latest.run.id}`} onClick={(e) => e.stopPropagation()}>{i.latest.run.name}</Link></>}</> : <span className="text-warn">Not screened yet</span>}
                   {i.outdated && i.latest && <Badge variant="warn" className="ml-1.5">outdated</Badge>}
                   {i.favourite.note && <span className="italic"> · {i.favourite.note}</span>}

@@ -49,7 +49,7 @@ export function DetailDrawer({ r, index, count, sparks, onStep, onClose, childre
 
   const money = (label: string, v: ReactNode, cls?: string) => (
     <div className="rounded-lg bg-muted/60 px-2.5 py-1.5">
-      <p className="text-2xs text-muted-foreground">{label}</p>
+      <p className="text-xs text-muted-foreground">{label}</p>
       <p className={cn("num text-sm font-semibold", cls)}>{v}</p>
     </div>
   );
@@ -60,7 +60,7 @@ export function DetailDrawer({ r, index, count, sparks, onStep, onClose, childre
         <Button variant="ghost" size="icon-sm" aria-label="Previous row (Up)" disabled={index <= 0} onClick={() => onStep(-1)}><ChevronUpIcon /></Button>
         <Button variant="ghost" size="icon-sm" aria-label="Next row (Down)" disabled={index >= count - 1} onClick={() => onStep(1)}><ChevronDownIcon /></Button>
         <span className="num text-xs text-muted-foreground" aria-live="polite">{index + 1} of {count}</span>
-        <span className="ml-2 hidden text-2xs text-muted-foreground sm:inline">↑ ↓ to step · Esc to close</span>
+        <span className="ml-2 hidden text-xs text-muted-foreground sm:inline">↑ ↓ to step · Esc to close</span>
         <Button variant="ghost" size="icon-sm" className="ml-auto" aria-label="Close details" onClick={onClose}><XIcon /></Button>
       </div>
       <div ref={body} className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">

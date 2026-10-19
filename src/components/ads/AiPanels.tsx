@@ -35,7 +35,7 @@ export function DataSent({ url }: { url: string }) {
   return (
     <details className="text-xs" open={open} onToggle={(e) => { const o = (e.target as HTMLDetailsElement).open; setOpen(o); if (o && !data) api<{ context: unknown; contextTokens: number }>(url).then(setData).catch((err: Error) => toast.error(err.message)); }}>
       <summary className="cursor-pointer text-muted-foreground hover:text-foreground">The data sent{data ? ` (about ${data.contextTokens.toLocaleString("en-GB")} tokens)` : ""}</summary>
-      {data ? <pre className="mt-1 max-h-72 overflow-auto rounded bg-surface-2 p-2 text-[11px]">{JSON.stringify(data.context, null, 1)}</pre> : open ? <p className="mt-1 text-muted-foreground">Loading…</p> : null}
+      {data ? <pre className="mt-1 max-h-72 overflow-auto rounded bg-surface-2 p-2 text-xs">{JSON.stringify(data.context, null, 1)}</pre> : open ? <p className="mt-1 text-muted-foreground">Loading…</p> : null}
     </details>
   );
 }

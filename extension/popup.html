@@ -3,17 +3,25 @@
 <head>
   <meta charset="utf-8" />
   <style>
-    body { width: 320px; margin: 0; padding: 14px; font: 13px/1.4 -apple-system, "Segoe UI", sans-serif; color: #111; }
-    h1 { font-size: 15px; margin: 0 0 10px; }
-    label { display: block; margin: 10px 0 4px; font-weight: 600; font-size: 12px; }
-    input[type=text], input[type=password], input[type=url] { width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid #d4d4d8; border-radius: 6px; font-size: 13px; }
+    /* The app's look: IBM Plex Sans (bundled, OFL), the logo teal, 10px radius. */
+    @font-face { font-family: "IBM Plex Sans"; font-weight: 100 700; font-display: swap; src: url("fonts/IBMPlexSans-latin.woff2") format("woff2"); }
+    @font-face { font-family: "IBM Plex Mono"; font-weight: 400; font-display: swap; src: url("fonts/IBMPlexMono-400-latin.woff2") format("woff2"); }
+    body { width: 320px; margin: 0; padding: 16px; font: 13px/1.45 "IBM Plex Sans", -apple-system, "Segoe UI", sans-serif; color: #16242A; background: #fff; }
+    h1 { font-size: 15px; font-weight: 600; margin: 0 0 12px; }
+    label { display: block; margin: 12px 0 4px; font-weight: 500; font-size: 12px; color: #5A6B70; }
+    input[type=text], input[type=password], input[type=url] { width: 100%; box-sizing: border-box; height: 36px; padding: 6px 10px; border: 1px solid #C9D2D4; border-radius: 10px; font: inherit; color: inherit; }
+    input:focus, select:focus, button:focus-visible { outline: 2px solid #2F7F8C; outline-offset: 1px; }
     .row { display: flex; gap: 8px; margin-top: 12px; }
-    button { border: 1px solid #d4d4d8; background: #fff; border-radius: 6px; padding: 6px 10px; cursor: pointer; }
-    button.p { background: #0f766e; border-color: #0f766e; color: #fff; }
-    .hint { color: #71717a; font-size: 11px; margin-top: 3px; }
+    button { height: 32px; border: 1px solid #C9D2D4; background: #fff; color: #16242A; border-radius: 10px; padding: 0 12px; font: 500 13px "IBM Plex Sans", sans-serif; cursor: pointer; }
+    button:hover:not(:disabled) { background: #EEF1F2; }
+    button.p { background: #2F7F8C; border-color: #2F7F8C; color: #fff; }
+    button.p:hover:not(:disabled) { background: #276C77; border-color: #276C77; }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    .hint { color: #5A6B70; font-size: 12px; margin-top: 4px; }
     #msg { margin-top: 10px; font-size: 12px; }
-    .ok { color: #15803d; } .err { color: #b91c1c; }
-    .check { display: flex; gap: 6px; align-items: center; font-weight: 400; }
+    .ok { color: #1F7A4D; } .err { color: #B42318; }
+    .check { display: flex; gap: 6px; align-items: center; font-weight: 400; color: #16242A; font-size: 13px; }
+    select { font: inherit; color: inherit; background: #fff; }
   </style>
 </head>
 <body>
@@ -36,16 +44,16 @@
     <button id="test">Test connection</button>
   </div>
   <div id="msg"></div>
-  <hr style="border:0;border-top:1px solid #e4e4e7;margin:14px 0 4px" />
+  <hr style="border:0;border-top:1px solid #EEF1F2;margin:14px 0 4px" />
   <h1 style="margin-top:10px">Reviews</h1>
   <div class="hint" style="margin:0 0 6px">On an amazon.co.uk product or reviews page: read the reviews shown now and add them to this listing's capture (the same one the page's panel keeps), then send them to a candidate's Gate 4.</div>
   <div class="row"><button id="revCapture" class="p">Capture reviews on this page</button></div>
   <div id="revMsg" style="margin-top:8px;font-size:12px"></div>
   <div id="revSend" style="margin-top:6px"></div>
-  <hr style="border:0;border-top:1px solid #e4e4e7;margin:14px 0 4px" />
+  <hr style="border:0;border-top:1px solid #EEF1F2;margin:14px 0 4px" />
   <h1 style="margin-top:10px">Check ranks</h1>
   <div class="hint" style="margin:0 0 6px">Where a product sits in Amazon's organic results for its keywords (its exact keywords plus any you added). Opens a tab and searches one keyword every 3–6 seconds, up to 30. Manual: it runs only when you click, and Stop is in the tab.</div>
-  <select id="rankAsin" style="width:100%;padding:6px;border:1px solid #d4d4d8;border-radius:6px"><option value="">Loading products…</option></select>
+  <select id="rankAsin" style="width:100%;height:36px;padding:6px 8px;border:1px solid #C9D2D4;border-radius:10px"><option value="">Loading products…</option></select>
   <div id="rankInfo" class="hint"></div>
   <div class="row"><button id="rankGo" class="p" disabled>Check ranks</button></div>
   <div id="rankMsg" style="margin-top:8px;font-size:12px"></div>

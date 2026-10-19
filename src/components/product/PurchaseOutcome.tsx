@@ -10,7 +10,7 @@ function Diff({ predicted, actual, higherIsGood = true }: { predicted: number | 
   if (predicted == null || actual == null || predicted === 0) return null;
   const pc = Math.round(((actual - predicted) / Math.abs(predicted)) * 100);
   const good = higherIsGood ? pc >= 0 : pc <= 0;
-  return <span className={cn("num text-2xs", Math.abs(pc) < 10 ? "text-muted-foreground" : good ? "text-pass" : "text-fail")}>{pc > 0 ? "+" : ""}{pc}%</span>;
+  return <span className={cn("num text-xs", Math.abs(pc) < 10 ? "text-muted-foreground" : good ? "text-pass" : "text-fail")}>{pc > 0 ? "+" : ""}{pc}%</span>;
 }
 
 /** A purchase's prediction (frozen when recorded), and beside it what happened once Amazon's reports are in. */
@@ -42,13 +42,13 @@ export function PurchaseOutcome({ p, actuals }: { p: Purchase; actuals: Actuals 
         </tbody>
       </table>
       {actuals ? (
-        <p className="mt-1 text-2xs text-muted-foreground">
+        <p className="mt-1 text-xs text-muted-foreground">
           {actuals.unitsSold} sold in {actuals.daysLive} days · {gbp(actuals.revenue)} revenue · profit to date {gbp(actuals.profitToDate)}
           {actuals.buyBoxPct != null ? ` · Buy Box ${actuals.buyBoxPct}%` : ""}{actuals.onHand != null ? ` · ${actuals.onHand} at Amazon` : ""}
           {actuals.syncedAt ? ` · from Amazon's reports, ${new Date(actuals.syncedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : ""}
         </p>
       ) : (
-        <p className="mt-1 text-2xs text-muted-foreground">Actual sales, price and fees appear here once it&apos;s live and Amazon&apos;s reports have been read (nightly).</p>
+        <p className="mt-1 text-xs text-muted-foreground">Actual sales, price and fees appear here once it&apos;s live and Amazon&apos;s reports have been read (nightly).</p>
       )}
     </div>
   );

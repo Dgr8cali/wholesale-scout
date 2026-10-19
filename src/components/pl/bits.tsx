@@ -27,14 +27,14 @@ const SOURCE: Record<FieldSource, { label: string; cls: string; title: string }>
 
 export function SourceChip({ source }: { source: FieldSource }) {
   const s = SOURCE[source];
-  return <span title={s.title} className={cn("rounded px-1.5 py-px text-[10px] font-semibold tracking-wide uppercase", s.cls)}>{s.label}</span>;
+  return <span title={s.title} className={cn("rounded px-1.5 py-px text-xs font-semibold tracking-wide uppercase", s.cls)}>{s.label}</span>;
 }
 
 /** A labelled figure: the readouts under Gates 6 and 7. */
 export function Readout({ label, value, sub, tone }: { label: React.ReactNode; value: React.ReactNode; sub?: React.ReactNode; tone?: Status | null }) {
   return (
     <div className="flex flex-col gap-0.5 rounded-lg bg-surface-2 px-3 py-2.5">
-      <span className="text-[11px] tracking-wide text-muted-foreground uppercase">{label}</span>
+      <span className="text-xs tracking-wide text-muted-foreground uppercase">{label}</span>
       <span className={cn("num text-base font-medium", tone && tone !== "empty" && TONE[tone].text)}>{value}</span>
       {sub && <span className="text-xs text-muted-foreground">{sub}</span>}
     </div>

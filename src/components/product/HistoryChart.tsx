@@ -6,7 +6,7 @@ import type { SeriesPoint } from "@/lib/sparkline";
 export interface ChartSeries {
   label: string;
   points: SeriesPoint[];
-  /** A CSS colour (a token: var(--accent-strong)). */
+  /** A CSS colour (a token: var(--primary)). */
   colour: string;
   dashed?: boolean;
 }
@@ -74,12 +74,12 @@ export function HistoryChart({ series, format, now, log = false, invert = false,
         onMouseLeave={() => setHover(null)}>
         {ticks.map((t, i) => (
           <g key={i}>
-            <line x1={padL} x2={W - padR} y1={t.yy} y2={t.yy} stroke="var(--line)" strokeWidth="1" />
-            <text x={padL - 6} y={t.yy + 3} textAnchor="end" className="num" fontSize="10" fill="var(--muted-ink)">{format(t.v)}</text>
+            <line x1={padL} x2={W - padR} y1={t.yy} y2={t.yy} stroke="var(--divider)" strokeWidth="1" />
+            <text x={padL - 6} y={t.yy + 3} textAnchor="end" className="num" fontSize="10" fill="var(--muted-foreground)">{format(t.v)}</text>
           </g>
         ))}
         {months.map((t, i) => (
-          <text key={i} x={x(t)} y={H - 4} textAnchor="middle" fontSize="10" fill="var(--muted-ink)">
+          <text key={i} x={x(t)} y={H - 4} textAnchor="middle" fontSize="10" fill="var(--muted-foreground)">
             {new Date(t).toLocaleDateString("en-GB", { month: "short", year: "2-digit" })}
           </text>
         ))}

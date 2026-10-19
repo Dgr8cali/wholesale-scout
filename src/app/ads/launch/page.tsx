@@ -110,7 +110,7 @@ function AdsLaunch() {
     }
   };
   const field = (k: keyof Form, label: string, hint?: string, props: React.InputHTMLAttributes<HTMLInputElement> = {}) => (
-    <label className="block space-y-1"><span className="field-label">{label}</span><Input className="h-8" value={form[k]} onChange={set(k)} {...props} />{hint && <span className="block text-2xs text-muted-foreground">{hint}</span>}</label>
+    <label className="block space-y-1"><span className="field-label">{label}</span><Input className="h-8" value={form[k]} onChange={set(k)} {...props} />{hint && <span className="block text-xs text-muted-foreground">{hint}</span>}</label>
   );
 
   return (
@@ -154,7 +154,7 @@ function AdsLaunch() {
             <>
               <div className="overflow-x-auto rounded-lg border">
                 <table className="w-full text-sm">
-                  <thead><tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase">
+                  <thead><tr className="border-b text-left text-xs tracking-wide text-muted-foreground uppercase">
                     <SortTh {...cs.th("name")} className="px-2 py-1.5">Campaign</SortTh><SortTh {...cs.th("budget")} numeric className="px-2 py-1.5 text-right">Budget</SortTh>
                     <SortTh {...cs.th("bid")} numeric className="px-2 py-1.5 text-right">Bid</SortTh><SortTh {...cs.th("targets")} className="px-2 py-1.5">Targets</SortTh>
                   </tr></thead>

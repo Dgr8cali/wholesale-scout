@@ -102,7 +102,7 @@ function LeadsTable({ rows, showCandidate, onChanged, onQuoted }: { rows: Lead[]
   return (
     <div className="overflow-x-auto rounded-lg border">
       <table className="w-full text-xs">
-        <thead><tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase">
+        <thead><tr className="border-b text-left text-xs tracking-wide text-muted-foreground uppercase">
           <SortTh {...t.th("score")} numeric className="px-2 py-1.5 text-right">Score</SortTh>
           <SortTh {...t.th("supplier")} className="px-2 py-1.5">Supplier</SortTh>
           {showCandidate && <SortTh {...t.th("candidate")} className="px-2 py-1.5">Candidate</SortTh>}
@@ -137,9 +137,9 @@ function LeadsTable({ rows, showCandidate, onChanged, onQuoted }: { rows: Lead[]
               <td className="num px-2 py-1.5 text-right">{l.supplier_years ?? "—"}</td>
               <td className="num px-2 py-1.5 text-right">{l.rating ?? "—"}</td>
               <td className="num px-2 py-1.5 text-right">{l.review_count ?? "—"}</td>
-              <td className="px-2 py-1.5"><span className="flex flex-wrap gap-1">{l.badges.map((x) => <span key={x} className="rounded bg-surface-2 px-1 py-px text-[10px] whitespace-nowrap">{x}</span>)}</span></td>
+              <td className="px-2 py-1.5"><span className="flex flex-wrap gap-1">{l.badges.map((x) => <span key={x} className="rounded bg-surface-2 px-1 py-px text-xs whitespace-nowrap">{x}</span>)}</span></td>
               <td className="num px-2 py-1.5 text-right">{l.sold_count ?? "—"}</td>
-              <td className="px-2 py-1.5"><span className="flex flex-wrap gap-1">{l.flags.map((f) => <span key={f} className={cn("rounded-full px-1.5 py-px text-[10px] font-semibold whitespace-nowrap uppercase", FLAG_CLS[f])}>{SUPPLIER_FLAG_LABEL[f]}</span>)}</span></td>
+              <td className="px-2 py-1.5"><span className="flex flex-wrap gap-1">{l.flags.map((f) => <span key={f} className={cn("rounded-full px-1.5 py-px text-xs font-semibold whitespace-nowrap uppercase", FLAG_CLS[f])}>{SUPPLIER_FLAG_LABEL[f]}</span>)}</span></td>
               <td className={cn("px-2 py-1.5 capitalize", STATUS_CLS[l.status])}>{l.status}</td>
               <td className="px-2 py-1.5">
                 <span className="flex flex-wrap gap-x-2 gap-y-0.5 whitespace-nowrap">

@@ -31,7 +31,7 @@ export function StockSettingsTab() {
     <label className="block max-w-xs space-y-1.5">
       <span className="field-label">{label}</span>
       <Input className="num" type="number" min={0} value={v[k]} onChange={(e) => setV({ ...v, [k]: e.target.value })} />
-      <span className="block text-2xs text-muted-foreground">{hint}</span>
+      <span className="block text-xs text-muted-foreground">{hint}</span>
     </label>
   );
   return (

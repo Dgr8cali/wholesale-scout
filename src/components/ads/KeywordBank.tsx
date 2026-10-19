@@ -93,7 +93,7 @@ export function KeywordBank({ asin }: { asin: string }) {
       {!bank.rows.length ? <p className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">Nothing in the bank yet: harvests, n-gram winners, rank-tracked terms, a linked candidate&apos;s Opportunity Explorer terms, and what you add here all land in it.</p> : (
         <div className="overflow-x-auto rounded-lg border">
           <table className="w-full text-sm">
-            <thead><tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase">
+            <thead><tr className="border-b text-left text-xs tracking-wide text-muted-foreground uppercase">
               <th className="w-8 px-2 py-1.5"><input type="checkbox" aria-label="Select all shown" checked={all} onChange={() => setSel(all ? new Set() : new Set(shown))} /></th>
               <SortTh {...s.th("term")} className="px-2 py-1.5">Term</SortTh>
               <SortTh {...s.th("source")} className="px-2 py-1.5">Source</SortTh>
@@ -108,7 +108,7 @@ export function KeywordBank({ asin }: { asin: string }) {
             <tbody>{s.rows.map((r) => (
               <tr key={r.norm} className={cn("border-b last:border-b-0", sel.has(r.norm) && "bg-brand-soft/30")}>
                 <td className="px-2 py-1.5"><input type="checkbox" aria-label="Select" checked={sel.has(r.norm)} onChange={() => toggle(r.norm)} /></td>
-                <td className="px-2 py-1.5">{r.text}{r.tracked && <span className="ml-1 text-[10px] text-muted-foreground uppercase" title="In the rank checks">tracked</span>}</td>
+                <td className="px-2 py-1.5">{r.text}{r.tracked && <span className="ml-1 text-xs text-muted-foreground uppercase" title="In the rank checks">tracked</span>}</td>
                 <td className="px-2 py-1.5 text-xs text-muted-foreground">{r.sources.map((x) => BANK_SOURCE_LABEL[x]).join(", ")}</td>
                 <td className="num px-2 py-1.5 text-right">{r.searches?.toLocaleString("en-GB") ?? "—"}</td>
                 <td className="num px-2 py-1.5 text-right">{r.clicks || "—"}</td>

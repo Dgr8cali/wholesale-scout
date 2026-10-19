@@ -141,7 +141,7 @@ function DryRunByProduct({ dry }: { dry: DryRun }) {
       <h2 className="text-sm font-semibold">Dry run by product <span className="font-normal text-muted-foreground">(the proposals each rule would make now, with the settings on screen)</span></h2>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead><tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase">
+          <thead><tr className="border-b text-left text-xs tracking-wide text-muted-foreground uppercase">
             <SortTh {...s.th("product")} className="px-2 py-1">Product</SortTh>{firing.map((r) => <SortTh key={r.id} {...s.th(r.id)} numeric className="px-2 py-1 text-right">{r.label}</SortTh>)}<SortTh {...s.th("all")} numeric className="px-2 py-1 text-right">All</SortTh>
           </tr></thead>
           <tbody>{s.rows.map((a) => (

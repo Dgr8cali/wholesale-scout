@@ -416,7 +416,7 @@ function FeesTab({ editor: e }: { editor: Editor }) {
     <>
       <Section title="Fees and landed cost" note="How this profile turns a supplier price into a landed cost and Amazon's fees into profit.">
         <p className="flex flex-wrap items-center gap-2 text-sm">
-          <span className={cn("rounded px-1.5 py-px text-[11px] font-semibold", draft.fees.vatRegistered ? "bg-brand-soft text-brand" : "bg-surface-2 text-ink-2")}>{draft.fees.vatRegistered ? "VAT reg." : "Non-VAT"}</span>
+          <span className={cn("rounded px-1.5 py-px text-xs font-semibold", draft.fees.vatRegistered ? "bg-brand-soft text-brand" : "bg-surface-2 text-ink-2")}>{draft.fees.vatRegistered ? "VAT reg." : "Non-VAT"}</span>
           {draft.fees.vatRegistered ? `VAT registered at ${draft.fees.vatRatePct}%: output VAT comes off the sale price; fees and goods count ex-VAT.` : `Not VAT registered: VAT on fees and goods is a cost (${draft.fees.vatRatePct}%).`}
           <a className="text-brand underline" href="/settings?tab=business">Set in Settings → Business</a>
         </p>

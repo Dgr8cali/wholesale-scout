@@ -79,7 +79,7 @@ export default function StockOrdersPage() {
       ) : (
         <div className="overflow-x-auto rounded-lg border">
           <table className="w-full text-sm">
-            <thead><tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase">
+            <thead><tr className="border-b text-left text-xs tracking-wide text-muted-foreground uppercase">
               <SortTh {...s.th("item")} className="px-2 py-1.5">Item</SortTh>
               <SortTh {...s.th("supplier")} className="px-2 py-1.5">Supplier</SortTh>
               <SortTh {...s.th("status")} className="px-2 py-1.5" title="In pipeline order">Status</SortTh>
@@ -98,17 +98,17 @@ export default function StockOrdersPage() {
                     <ProductThumb url={p.stock?.image_url || p.product?.image_url || null} asin={p.asin} title={p.stock?.name ?? p.product?.title ?? p.asin ?? "—"} brand={p.stock?.brand ?? p.product?.brand ?? null} size={32} />
                     <div className="min-w-0">
                       <Link className="line-clamp-2 hover:text-brand hover:underline" href={`/stock/levels?item=${p.stock_item_id}`}>{p.stock?.name ?? p.product?.title ?? p.asin}</Link>
-                      <p className="num text-2xs text-muted-foreground">{p.stock?.sku}{p.asin ? <> · <Link className="hover:underline" href={`/products/${p.asin}`}>{p.asin}</Link></> : null}</p>
+                      <p className="num text-xs text-muted-foreground">{p.stock?.sku}{p.asin ? <> · <Link className="hover:underline" href={`/products/${p.asin}`}>{p.asin}</Link></> : null}</p>
                     </div>
                   </div>
                 </td>
                 <td className="px-2 py-1.5 text-xs">{p.supplier_id ? <Link className="hover:underline" href={`/suppliers/${p.supplier_id}`}>{p.supplier_name}</Link> : p.supplier_name ?? "—"}</td>
                 <td className="px-2 py-1.5"><span className={cn("rounded-full px-2 py-0.5 text-xs font-semibold", STATUS_CLS[p.status] ?? "bg-surface-2 text-ink-2")}>{statusLabel(p.status)}</span>
-                  {p.received_bucket && <span className="block text-2xs text-muted-foreground">into {BUCKET_LABEL[p.received_bucket as Bucket]}</span>}</td>
+                  {p.received_bucket && <span className="block text-xs text-muted-foreground">into {BUCKET_LABEL[p.received_bucket as Bucket]}</span>}</td>
                 <td className="num px-2 py-1.5 text-right">{p.units}</td>
-                <td className="num px-2 py-1.5 text-right">{gbp(p.landed_gbp)}{p.currency && p.currency !== "GBP" && p.unit_cost_ccy != null && <span className="block text-2xs text-muted-foreground">{p.currency} {Number(p.unit_cost_ccy).toFixed(2)}</span>}</td>
+                <td className="num px-2 py-1.5 text-right">{gbp(p.landed_gbp)}{p.currency && p.currency !== "GBP" && p.unit_cost_ccy != null && <span className="block text-xs text-muted-foreground">{p.currency} {Number(p.unit_cost_ccy).toFixed(2)}</span>}</td>
                 <td className="num px-2 py-1.5 text-right">{gbp(p.units * p.landed_gbp)}</td>
-                <td className="px-2 py-1.5 text-xs"><OrderLink id={p.order_id} url={p.order_url} />{trackingText(p.tracking_carrier, p.tracking_number) && <span className="block text-2xs text-muted-foreground">{trackingText(p.tracking_carrier, p.tracking_number)}</span>}</td>
+                <td className="px-2 py-1.5 text-xs"><OrderLink id={p.order_id} url={p.order_url} />{trackingText(p.tracking_carrier, p.tracking_number) && <span className="block text-xs text-muted-foreground">{trackingText(p.tracking_carrier, p.tracking_number)}</span>}</td>
                 <td className="num px-2 py-1.5 text-xs whitespace-nowrap">{p.ordered_on}</td>
                 <td className="num px-2 py-1.5 text-xs whitespace-nowrap">{p.status === "ordered" ? p.expected_date ?? "—" : ""}</td>
                 <td className="px-2 py-1.5 text-right whitespace-nowrap">

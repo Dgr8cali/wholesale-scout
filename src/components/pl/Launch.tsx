@@ -67,7 +67,7 @@ export function LaunchSection({ candidateId, status, steps, listingAsin, ads, pl
 
       <div className="overflow-x-auto rounded-lg border">
         <table className="w-full text-sm">
-          <thead><tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase">
+          <thead><tr className="border-b text-left text-xs tracking-wide text-muted-foreground uppercase">
             <th className="px-2 py-1.5">Step</th><th className="px-2 py-1.5">Date</th><th className="px-2 py-1.5">Note</th><th className="px-2 py-1.5 text-right">Cost (£)</th>
           </tr></thead>
           <tbody>{LAUNCH_STEPS.map((d, i) => {
@@ -117,7 +117,7 @@ export function LaunchSection({ candidateId, status, steps, listingAsin, ads, pl
           <div>
             <div className="mb-1 flex justify-between text-xs text-muted-foreground"><span>Spent {gbp(b.spent)} of {gbp(b.budget)}</span><span>Planned {gbp(b.plannedTotal)}</span></div>
             <div className="relative h-3 overflow-hidden rounded-full bg-surface-2" role="img" aria-label={`Spent ${Math.round(b.spentRatio * 100)}% of the budget; planned ${Math.round(b.plannedRatio * 100)}%`}>
-              <div className={cn("h-full", b.spentRatio > 1 ? "bg-fail" : b.spentRatio > 0.9 ? "bg-warn" : "bg-brand")} style={{ width: `${Math.min(100, b.spentRatio * 100)}%` }} />
+              <div className={cn("h-full", b.spentRatio > 1 ? "bg-fail" : b.spentRatio > 0.9 ? "bg-highlight" : "bg-brand")} style={{ width: `${Math.min(100, b.spentRatio * 100)}%` }} />
               <div className="absolute top-0 h-full w-0.5 bg-ink-2" style={{ left: `${Math.min(100, b.plannedRatio * 100)}%` }} title="Planned (Gate 7)" />
             </div>
           </div>
@@ -137,9 +137,9 @@ export function LaunchSection({ candidateId, status, steps, listingAsin, ads, pl
 function Fig({ label, value, sub, cls }: { label: string; value: string; sub?: string; cls?: string }) {
   return (
     <div className="rounded-lg bg-surface-2 px-2.5 py-1.5">
-      <div className="text-[10.5px] tracking-wide text-muted-foreground uppercase">{label}</div>
+      <div className="text-xs tracking-wide text-muted-foreground uppercase">{label}</div>
       <div className={cn("num font-medium", cls)}>{value}</div>
-      {sub && <div className="text-[11px] text-muted-foreground">{sub}</div>}
+      {sub && <div className="text-xs text-muted-foreground">{sub}</div>}
     </div>
   );
 }

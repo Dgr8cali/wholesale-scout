@@ -305,7 +305,7 @@ export default function PlanPage() {
 function Total({ label, value, note, good, bad }: { label: ReactNode; value: string; note: string; good?: boolean; bad?: boolean }) {
   return (
     <div>
-      <p className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
       <p className={cn("stat-value", good && "text-pass", bad && "text-fail")}>{value}</p>
       <p className="text-xs text-muted-foreground">{note}</p>
     </div>
@@ -318,12 +318,12 @@ function Line({ x, lineCap, onPin, onExclude, ownQty, onQty }: { x: PlanLine; li
     <TableRow className={cn(x.notes.length > 0 && "bg-warn-soft/40")}>
       <TableCell className="max-w-96 pl-4 whitespace-normal">
         <p className="line-clamp-2 text-sm">{c.asin ? <Link className="hover:text-brand hover:underline" href={`/products/${c.asin}`}>{c.title ?? c.ean}</Link> : c.title ?? c.ean}</p>
-        <p className="num text-2xs text-muted-foreground">
+        <p className="num text-xs text-muted-foreground">
           {c.brand} · {c.asin ? <a className="text-brand hover:underline" href={`https://www.amazon.co.uk/dp/${c.asin}`} target="_blank" rel="noreferrer">{c.asin}</a> : c.ean}
           {c.verdict === "warn" && <span className="font-sans text-warn" title={gates(c.warnGates)}> · warns: {gates(c.warnGates) || "yes"}</span>}
           {c.moq ? ` · MOQ ${c.moq}` : ""}{c.step > 1 ? ` · cases of ${c.step}` : ""}
         </p>
-        {x.notes.length > 0 && <p className="text-2xs text-warn">{x.notes.join("; ")}</p>}
+        {x.notes.length > 0 && <p className="text-xs text-warn">{x.notes.join("; ")}</p>}
       </TableCell>
       <TableCell className="text-right">
         <Input className="num ml-auto h-7 w-20 text-right" type="number" min={1} step={Math.max(1, c.step)} value={ownQty ?? x.qty}
@@ -331,7 +331,7 @@ function Line({ x, lineCap, onPin, onExclude, ownQty, onQty }: { x: PlanLine; li
       </TableCell>
       <TableCell className="num text-right">{gbp(c.landedGbp)}</TableCell>
       <TableCell className="num text-right">{gbp(c.profitUnit)}</TableCell>
-      <TableCell className="num text-right">{c.shareMonth ?? "—"}<span className="text-2xs text-muted-foreground">/mo</span></TableCell>
+      <TableCell className="num text-right">{c.shareMonth ?? "—"}<span className="text-xs text-muted-foreground">/mo</span></TableCell>
       <TableCell className="num text-right">{x.months == null ? "—" : monthsLabel(x.months)}</TableCell>
       <TableCell className="num text-right">{gbp(x.lineTotal)}</TableCell>
       <TableCell className="num text-right text-pass">{gbp(x.profitMonth)}</TableCell>

@@ -37,7 +37,7 @@ export const valuesOf = (m: FieldMap): Fields => Object.fromEntries(Object.entri
 
 export const TONE: Record<Status, { text: string; soft: string; solid: string; border: string }> = {
   pass: { text: "text-pass", soft: "bg-pass-soft", solid: "bg-pass text-white", border: "border-pass" },
-  warn: { text: "text-warn", soft: "bg-warn-soft", solid: "bg-warn text-white", border: "border-warn" },
+  warn: { text: "text-warn", soft: "bg-warn-soft", solid: "bg-highlight text-white", border: "border-warn" },
   fail: { text: "text-fail", soft: "bg-fail-soft", solid: "bg-fail text-white", border: "border-fail" },
   empty: { text: "text-empty", soft: "bg-empty-soft", solid: "bg-surface-2 text-ink-2", border: "border-border" },
 };

@@ -18,7 +18,7 @@ export interface EditableMovement {
 
 /** The bucket stood below 0 after this movement (or now, on Levels): shown until it's corrected. */
 export function NegativeChip({ title }: { title?: string }) {
-  return <span className="ml-1 rounded-full bg-fail-soft px-1.5 py-px text-[10px] font-semibold text-fail uppercase" title={title ?? "The bucket is below 0 here: a movement is missing or wrong. Correct it (receive, adjust, or edit the movement)."}>negative</span>;
+  return <span className="ml-1 rounded-full bg-fail-soft px-1.5 py-px text-xs font-semibold text-fail uppercase" title={title ?? "The bucket is below 0 here: a movement is missing or wrong. Correct it (receive, adjust, or edit the movement)."}>negative</span>;
 }
 
 /** What deleting a movement takes with it, in words for the confirm. */
@@ -92,7 +92,7 @@ export function AuditTable({ rows }: { rows: AuditRow[] }) {
   return (
     <div className="overflow-x-auto rounded-lg border">
       <table className="w-full text-sm">
-        <thead><tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase">
+        <thead><tr className="border-b text-left text-xs tracking-wide text-muted-foreground uppercase">
           <SortTh {...s.th("when")} className="px-2 py-1.5">When</SortTh>
           <SortTh {...s.th("entity")} className="px-2 py-1.5">What</SortTh>
           <SortTh {...s.th("action")} className="px-2 py-1.5">Action</SortTh>
@@ -109,8 +109,8 @@ export function AuditTable({ rows }: { rows: AuditRow[] }) {
               <button type="button" className="ml-2 text-brand hover:underline" onClick={() => setOpen(open === r.id ? null : r.id)}>{open === r.id ? "hide" : "before / after"}</button>
               {open === r.id && (
                 <div className="mt-1 grid gap-2 md:grid-cols-2">
-                  <pre className="max-h-60 overflow-auto rounded bg-surface-2 p-2 text-[11px]">{JSON.stringify(r.before, null, 1)}</pre>
-                  <pre className="max-h-60 overflow-auto rounded bg-surface-2 p-2 text-[11px]">{r.after == null ? "(gone)" : JSON.stringify(r.after, null, 1)}</pre>
+                  <pre className="max-h-60 overflow-auto rounded bg-surface-2 p-2 text-xs">{JSON.stringify(r.before, null, 1)}</pre>
+                  <pre className="max-h-60 overflow-auto rounded bg-surface-2 p-2 text-xs">{r.after == null ? "(gone)" : JSON.stringify(r.after, null, 1)}</pre>
                 </div>
               )}
             </td>

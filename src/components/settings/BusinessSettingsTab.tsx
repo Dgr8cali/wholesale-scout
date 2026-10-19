@@ -165,7 +165,7 @@ export function BusinessSettingsTab() {
             {status.top.length > 0 && (
               <div className="overflow-x-auto rounded-lg border">
                 <table className="w-full text-xs">
-                  <thead><tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase">
+                  <thead><tr className="border-b text-left text-xs tracking-wide text-muted-foreground uppercase">
                     <th className="px-2 py-1.5">Product</th><th className="px-2 py-1.5 text-right">Profit before</th><th className="px-2 py-1.5 text-right">After</th><th className="px-2 py-1.5 text-right">Change</th>
                   </tr></thead>
                   <tbody>{status.top.map((c) => (

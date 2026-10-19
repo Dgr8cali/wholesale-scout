@@ -66,7 +66,7 @@ function AdsNgrams() {
       {!rows.length ? <EmptyState title="No search terms yet">Import a bulk export with search term data.</EmptyState> : (
         <div className="overflow-x-auto rounded-lg border">
           <table className="w-full text-sm">
-            <thead><tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase">
+            <thead><tr className="border-b text-left text-xs tracking-wide text-muted-foreground uppercase">
               <SortTh {...th("gram")} className="px-2 py-1.5">Gram</SortTh><SortTh {...th("terms")} numeric className="px-2 py-1.5 text-right">Terms</SortTh>
               <SortTh {...th("impressions")} numeric className="px-2 py-1.5 text-right">Impr.</SortTh><SortTh {...th("clicks")} numeric className="px-2 py-1.5 text-right">Clicks</SortTh>
               <SortTh {...th("cost")} numeric className="px-2 py-1.5 text-right">Spend</SortTh><SortTh {...th("orders")} numeric className="px-2 py-1.5 text-right">Orders</SortTh>

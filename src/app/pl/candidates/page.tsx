@@ -75,10 +75,10 @@ function Candidates() {
                     <span className="flex items-center gap-2">
                       <Dot status={ev.v.cls} />
                       <span className="min-w-0 flex-1 truncate text-sm font-medium" title={ev.v.title}>{c.name}</span>
-                      {ev.waivedCount > 0 && <span className="rounded bg-warn-soft px-1 text-[10px] font-semibold text-warn" title={ev.waivedLine ?? ""}>{ev.waivedCount} waived</span>}
+                      {ev.waivedCount > 0 && <span className="rounded bg-warn-soft px-1 text-xs font-semibold text-warn" title={ev.waivedLine ?? ""}>{ev.waivedCount} waived</span>}
                       <span className="num text-xs text-muted-foreground">{ev.sc.answered === 10 ? ev.sc.total : `${ev.sc.answered}/10`}</span>
                     </span>
-                    <span className="flex items-center gap-2 pl-4 text-[11px] text-muted-foreground">
+                    <span className="flex items-center gap-2 pl-4 text-xs text-muted-foreground">
                       <span className="rounded border px-1 tracking-wide uppercase">{c.status}</span>
                       <span className="truncate">{c.refreshed_at ? `Keepa ${ago(c.refreshed_at)}` : "not fetched"}</span>
                     </span>
@@ -95,7 +95,7 @@ function Candidates() {
                     <button key={c.id} type="button" onClick={() => select(c.id)}
                       className={cn("flex w-full flex-col gap-0.5 rounded-lg border border-transparent px-2.5 py-1.5 text-left hover:bg-surface-2", c.id === selected && "border-brand bg-brand-soft hover:bg-brand-soft")}>
                       <span className="truncate text-sm text-muted-foreground">{c.name}</span>
-                      <span className="line-clamp-2 text-[11px] text-muted-foreground italic">{c.park_reason ?? ""}{c.parked_at ? ` · ${new Date(c.parked_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : ""}</span>
+                      <span className="line-clamp-2 text-xs text-muted-foreground italic">{c.park_reason ?? ""}{c.parked_at ? ` · ${new Date(c.parked_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : ""}</span>
                     </button>
                   ))}
                 </div>
@@ -159,7 +159,7 @@ function NewCandidate({ open, onOpenChange, list, onCreated }: { open: boolean; 
         <div className="grid gap-3">
           <label className="space-y-1.5"><span className="field-label">Name</span><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Working name" autoFocus /></label>
           <label className="space-y-1.5"><span className="field-label">Niche keyword</span><Input value={niche} onChange={(e) => setNiche(e.target.value)} placeholder="e.g. bamboo cutlery tray" />
-            <span className="block text-2xs text-muted-foreground">As Opportunity Explorer titles the niche: a capture with this title attaches by itself.</span></label>
+            <span className="block text-xs text-muted-foreground">As Opportunity Explorer titles the niche: a capture with this title attaches by itself.</span></label>
           <label className="space-y-1.5"><span className="field-label">Referral category</span>
             <NativeSelect className="w-full" value={category} onChange={(e) => setCategory(e.target.value)}>
               {referralOptions(list.card).map((o) => <NativeSelectOption key={o.name} value={o.name}>{o.name} — {o.rates}</NativeSelectOption>)}
@@ -184,7 +184,7 @@ function CandidateLine({ c }: { c: CandidateRow }) {
   const step = c.launch?.done ? c.launch.next : null;
   if (landed == null && !step) return null;
   return (
-    <span className="flex flex-wrap items-center gap-x-2 pl-4 text-[11px] text-muted-foreground">
+    <span className="flex flex-wrap items-center gap-x-2 pl-4 text-xs text-muted-foreground">
       {landed != null && <span title={c.chosen_landed != null ? "The chosen quote's landed cost per unit" : "Gate 0's landed cost per unit"}>landed £{landed.toFixed(2)}{c.chosen_landed != null ? " (quote)" : ""}</span>}
       {m && <span className={cn("num font-semibold", m.status === "pass" ? "text-pass" : m.status === "warn" ? "text-warn" : "text-fail")} title="Sell ÷ landed: 3.5× passes, 3× warns">{m.multiple.toFixed(1)}×</span>}
       {step && <span className="truncate" title="Next launch step">next: {step}</span>}

@@ -335,7 +335,7 @@ function CategoryPicker({ cats, value, onChange }: { cats: Category[]; value: Fi
                     className={cn("flex w-full items-center gap-2 rounded-md py-1 pr-2 text-left text-sm hover:bg-muted", selected && "bg-brand-soft")}
                     style={{ paddingLeft: q ? 8 : 8 + (n.path.length - 1) * 14 }}>
                     <span className="min-w-0 flex-1 truncate">{q ? n.path.slice(1).join(" › ") || n.name : n.name}</span>
-                    {n.path.length < 4 && n.leaves > 1 && <span className="num text-2xs text-muted-foreground">{n.leaves}</span>}
+                    {n.path.length < 4 && n.leaves > 1 && <span className="num text-xs text-muted-foreground">{n.leaves}</span>}
                     {selected && <CheckIcon className="size-3.5 text-brand" />}
                   </button>
                 </li>

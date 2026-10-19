@@ -115,7 +115,7 @@ function PreviewTable({ src, preview, asins, setAsins, busy, onImport }: { src: 
       </div>
       <div className="overflow-x-auto rounded-lg border">
         <table className="w-full text-sm">
-          <thead><tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase">
+          <thead><tr className="border-b text-left text-xs tracking-wide text-muted-foreground uppercase">
             <SortTh {...s.th("sku")} className="px-2 py-1.5">SKU</SortTh>
             <SortTh {...s.th("name")} className="px-2 py-1.5">Name</SortTh>
             <SortTh {...s.th("asin")} className="px-2 py-1.5">ASIN</SortTh>
@@ -132,11 +132,11 @@ function PreviewTable({ src, preview, asins, setAsins, busy, onImport }: { src: 
               <td className="px-2 py-1.5">{r.name}</td>
               <td className="px-2 py-1.5">
                 <Input className="num h-7 w-32 uppercase" value={asins[r.sku] ?? ""} placeholder="none" onChange={(e) => setAsins({ ...asins, [r.sku]: e.target.value })} aria-label={`ASIN for ${r.sku}`} />
-                {!r.asin && r.suggestion && <span className="block max-w-56 text-[11px] text-muted-foreground">Suggested from Ads product: {r.suggestion.title.slice(0, 50)} ({r.suggestion.shared.join(", ")}). Clear it if wrong.</span>}
-                {r.asin && <span className="block text-[11px] text-muted-foreground">Matched by SKU</span>}
+                {!r.asin && r.suggestion && <span className="block max-w-56 text-xs text-muted-foreground">Suggested from Ads product: {r.suggestion.title.slice(0, 50)} ({r.suggestion.shared.join(", ")}). Clear it if wrong.</span>}
+                {r.asin && <span className="block text-xs text-muted-foreground">Matched by SKU</span>}
               </td>
-              <td className="px-2 py-1.5 text-xs">{r.supplier ? <>{r.supplier} <span className={cn("rounded px-1 text-[10px] font-semibold uppercase", r.supplierAction === "match" ? "bg-pass-soft text-pass" : "bg-brand-soft text-brand")}>{r.supplierAction === "match" ? "matched" : "new"}</span></> : "—"}</td>
-              <td className="px-2 py-1.5"><span className={cn("rounded px-1.5 text-[11px] font-semibold uppercase", r.action === "new" ? "bg-brand-soft text-brand" : "bg-empty-soft text-ink-2")}>{r.action === "new" ? "new" : "update"}</span></td>
+              <td className="px-2 py-1.5 text-xs">{r.supplier ? <>{r.supplier} <span className={cn("rounded px-1 text-xs font-semibold uppercase", r.supplierAction === "match" ? "bg-pass-soft text-pass" : "bg-brand-soft text-brand")}>{r.supplierAction === "match" ? "matched" : "new"}</span></> : "—"}</td>
+              <td className="px-2 py-1.5"><span className={cn("rounded px-1.5 text-xs font-semibold uppercase", r.action === "new" ? "bg-brand-soft text-brand" : "bg-empty-soft text-ink-2")}>{r.action === "new" ? "new" : "update"}</span></td>
               <td className="num px-2 py-1.5 text-right">{r.home}</td>
               <td className="num px-2 py-1.5 text-right">{r.tiktok_fbt}</td>
               <td className="num px-2 py-1.5 text-right text-muted-foreground">{r.fbaDropped}</td>

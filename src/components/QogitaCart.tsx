@@ -164,7 +164,7 @@ function Line({ allocationQid, l, onChanged }: { allocationQid: string; l: CartL
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="text-sm leading-snug">{l.name}</p>
-          <p className="num text-2xs text-muted-foreground">{l.gtin} · {money(l.price)} each{l.unit > 1 ? ` · case of ${l.unit}` : ""}{l.availableQuantity != null ? ` · ${l.availableQuantity.toLocaleString("en-GB")} available` : ""}</p>
+          <p className="num text-xs text-muted-foreground">{l.gtin} · {money(l.price)} each{l.unit > 1 ? ` · case of ${l.unit}` : ""}{l.availableQuantity != null ? ` · ${l.availableQuantity.toLocaleString("en-GB")} available` : ""}</p>
           {l.warnings.map((w) => <Badge key={w} variant="warn" className="mt-1 mr-1">{w}</Badge>)}
         </div>
         <p className="num flex-none text-sm font-medium">{money(l.subtotal)}</p>

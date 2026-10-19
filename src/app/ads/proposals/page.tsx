@@ -158,7 +158,7 @@ function AdsProposals() {
                 <span className="text-xs font-normal text-muted-foreground">{rows.length}</span>
               </div>
               <table className="w-full text-sm">
-                <thead><tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase">
+                <thead><tr className="border-b text-left text-xs tracking-wide text-muted-foreground uppercase">
                   <SortTh {...sorter.th("entity")} className="px-3 py-1">Entity</SortTh><SortTh {...sorter.th("change")} className="px-3 py-1">Change</SortTh>
                   <SortTh {...sorter.th("reason")} className="px-3 py-1">Reason</SortTh><SortTh {...sorter.th("confidence")} className="px-3 py-1">Confidence</SortTh><th />
                 </tr></thead>

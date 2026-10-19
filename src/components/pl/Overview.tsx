@@ -60,7 +60,7 @@ export function PlOverview({ mode }: { mode: "quotes" | "launch" }) {
       ) : (
         <div className="overflow-x-auto rounded-lg border">
           <table className="w-full text-sm">
-            <thead><tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase">
+            <thead><tr className="border-b text-left text-xs tracking-wide text-muted-foreground uppercase">
               <SortTh {...s.th("name")} className="px-2 py-1.5">Candidate</SortTh>
               <SortTh {...s.th("status")} className="px-2 py-1.5">Status</SortTh>
               <SortTh {...s.th("verdict")} className="px-2 py-1.5">Verdict</SortTh>
@@ -72,7 +72,7 @@ export function PlOverview({ mode }: { mode: "quotes" | "launch" }) {
             <tbody>{s.rows.map((r) => (
               <tr key={r.c.id} onClick={() => setPicked(r.c.id)} className={cn("cursor-pointer border-b last:border-b-0 hover:bg-surface-2", sel?.c.id === r.c.id && "bg-brand-soft hover:bg-brand-soft")}>
                 <td className="px-2 py-1.5 font-medium">{r.c.name}</td>
-                <td className="px-2 py-1.5"><span className="rounded border px-1 text-[11px] tracking-wide uppercase">{r.c.status}</span></td>
+                <td className="px-2 py-1.5"><span className="rounded border px-1 text-xs tracking-wide uppercase">{r.c.status}</span></td>
                 <td className="px-2 py-1.5 text-xs">{r.ev.v.title} <span className="text-muted-foreground">{r.ev.sc.answered === 10 ? `${r.ev.sc.total}/30` : `${r.ev.sc.answered}/10 scored`}</span></td>
                 <td className="num px-2 py-1.5 text-right">{r.quotes || "—"}</td>
                 <td className="num px-2 py-1.5 text-right">{r.landed != null ? `£${r.landed.toFixed(2)}` : "—"}{r.c.chosen_landed != null && <span className="text-xs text-muted-foreground"> quote</span>}</td>

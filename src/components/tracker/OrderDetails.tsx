@@ -25,7 +25,7 @@ export function OrderLine({ p }: { p: OrderLike }) {
   const track = trackingText(p.tracking_carrier, p.tracking_number);
   if (!p.order_id && !p.order_url && !track && !p.expected_date && (!p.currency || p.currency === "GBP")) return null;
   return (
-    <span className="inline-flex flex-wrap items-center gap-x-1.5 text-2xs text-muted-foreground">
+    <span className="inline-flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
       {(p.order_id || p.order_url) && <span>Order <OrderLink id={p.order_id} url={p.order_url} /></span>}
       {p.expected_date && p.status === "ordered" && <span>· expected {p.expected_date}</span>}
       {track && <span>· {track}</span>}
@@ -96,7 +96,7 @@ function OrderEditDialog({ p, onClose, onSaved }: { p: OrderLike; onClose: () =>
           <div className="col-span-2 space-y-1"><span className="field-label">Supplier</span><SupplierPicker value={supplier} onChange={(v) => setSupplier(v)} /></div>
           <label className="space-y-1"><span className="field-label">Quantity</span><Input className="num" type="number" min={1} value={units} onChange={(e) => setUnits(e.target.value)} /></label>
           <label className="space-y-1"><span className="field-label">{gbp ? "Landed cost per unit (£)" : `Unit cost (${o.currency})`}</span><Input className="num" type="number" step="0.01" min={0} value={cost} onChange={(e) => setCost(e.target.value)} />
-            {!gbp && Number(o.fxRate) > 0 && cost !== "" && <span className="block text-2xs text-muted-foreground">£{(Number(cost) * Number(o.fxRate)).toFixed(2)} a unit landed at the rate</span>}</label>
+            {!gbp && Number(o.fxRate) > 0 && cost !== "" && <span className="block text-xs text-muted-foreground">£{(Number(cost) * Number(o.fxRate)).toFixed(2)} a unit landed at the rate</span>}</label>
           <OrderFields value={o} onChange={(v) => { if (v.currency !== o.currency) setCost(v.currency === "GBP" ? Number(p.landed_gbp).toFixed(2) : ""); setO(v); }} />
           <label className="col-span-2 space-y-1"><span className="field-label">Notes</span><Input value={note} onChange={(e) => setNote(e.target.value)} /></label>
         </div>

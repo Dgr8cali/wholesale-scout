@@ -76,11 +76,11 @@ export default function SellersPage() {
                       </TableCell>
                       <TableCell className="num text-right">
                         {s.ratingPct != null ? `${s.ratingPct}%` : "—"}
-                        <p className="text-2xs text-muted-foreground">{s.ratingCount != null ? `${n(s.ratingCount)} ratings` : ""}</p>
+                        <p className="text-xs text-muted-foreground">{s.ratingCount != null ? `${n(s.ratingCount)} ratings` : ""}</p>
                       </TableCell>
                       <TableCell className="num text-right">
                         {s.storefrontSize != null ? n(s.storefrontSize) : "—"}
-                        <p className="text-2xs text-muted-foreground">
+                        <p className="text-xs text-muted-foreground">
                           {s.buyBoxOwnershipPct != null ? `holds ${s.buyBoxOwnershipPct}% of its Buy Boxes` : ""}
                         </p>
                       </TableCell>
@@ -97,7 +97,7 @@ export default function SellersPage() {
                             {r && (screened > 0 || r.pending > 0) && (
                               <>
                                 <VerdictBar counts={{ pass: r.pass, warn: r.warn, fail: r.fail, error: 0, pending: r.pending }} legend={false} />
-                                <p className="num text-2xs text-muted-foreground">
+                                <p className="num text-xs text-muted-foreground">
                                   {r.pass} pass · {r.warn} warn · {r.fail} fail{r.pending ? ` · ${n(r.pending)} to go` : ""}
                                   {` · holds Buy Box on ${n(r.holdsBuyBox)}`}
                                 </p>

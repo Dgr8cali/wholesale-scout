@@ -126,7 +126,7 @@ function QuoteCard({ q, sell, chosen, others, onChanged, onFieldsChanged }: { q:
     onChanged();
   };
   const field = (label: string, el: React.ReactNode, hint?: React.ReactNode) => (
-    <label className="block space-y-0.5"><span className="field-label">{label}</span>{el}{hint && <span className="block text-2xs text-muted-foreground">{hint}</span>}</label>
+    <label className="block space-y-0.5"><span className="field-label">{label}</span>{el}{hint && <span className="block text-xs text-muted-foreground">{hint}</span>}</label>
   );
 
   return (

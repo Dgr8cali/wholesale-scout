@@ -142,14 +142,14 @@ function ScanSeller() {
 
           <div className="grid gap-3 text-sm sm:grid-cols-2">
             <div>
-              <p className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">ASINs</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">ASINs</p>
               <p><span className="num font-semibold">{n(p.asins.scanned)}</span> to screen
                 {p.asins.more > 0 && <span className="text-warn"> · {n(p.asins.more)} more on the storefront, over the {n(SCAN_CAP)} cap, not scanned</span>}
               </p>
               <p className="text-xs text-muted-foreground">Storefront size per Keepa: {p.seller.storefrontSize != null ? n(p.seller.storefrontSize) : "—"}</p>
             </div>
             <div>
-              <p className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">Keepa tokens</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Keepa tokens</p>
               <p><span className="num font-semibold">{n(total)}</span> to start
                 {p.tokensLeft != null && <span className={total > p.tokensLeft ? "text-warn" : "text-muted-foreground"}> · {n(p.tokensLeft)} left now</span>}
               </p>

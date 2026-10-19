@@ -103,7 +103,7 @@ export default function ProductsPage() {
                         <ProductThumb url={p.image_url} asin={p.asin} title={p.title ?? p.asin} brand={p.brand} size={36} />
                         <div className="min-w-0">
                           <Link className="line-clamp-2 text-sm font-medium hover:text-brand hover:underline" href={`/products/${p.asin}`}>{p.title ?? p.asin}</Link>
-                          <p className="num text-2xs text-muted-foreground">{p.asin}{p.brand ? ` · ${p.brand}` : ""}{p.bought && <Badge variant="brand" className="ml-1.5 h-4 px-1.5 font-sans">bought</Badge>}</p>
+                          <p className="num text-xs text-muted-foreground">{p.asin}{p.brand ? ` · ${p.brand}` : ""}{p.bought && <Badge variant="brand" className="ml-1.5 h-4 px-1.5 font-sans">bought</Badge>}</p>
                         </div>
                       </div>
                     </TableCell>

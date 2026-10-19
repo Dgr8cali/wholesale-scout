@@ -29,7 +29,7 @@ import type { PlStatus } from "@/lib/pl/launch";
 import { ReviewMiner } from "./ReviewMiner";
 import { WaivePopover } from "./WaivePopover";
 
-const CHECK_BG: Record<Status, string> = { pass: "bg-pass", warn: "bg-warn", fail: "bg-fail", empty: "bg-empty" };
+const CHECK_BG: Record<Status, string> = { pass: "bg-pass", warn: "bg-highlight", fail: "bg-fail", empty: "bg-empty" };
 const n0 = (v: number | null | undefined) => (v == null ? "—" : Math.round(v).toLocaleString("en-GB"));
 
 /** One candidate: its header, the eight gates, the scorecard and the verdict. */
@@ -245,8 +245,8 @@ function Header({ data, ev, card, busy, onRefresh, onPatch }: {
       <NotesBox key={c.id} initial={c.notes ?? ""} onSave={(notes) => onPatch({ notes })} />
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-baseline gap-4">
-          <div className="flex flex-col items-end leading-tight"><span className="num font-heading text-2xl font-bold">{ev.passed}<small className="text-sm font-medium text-muted-foreground">/8</small></span><span className="text-[10.5px] tracking-wide text-muted-foreground uppercase">gates clear</span></div>
-          <div className="flex flex-col items-end leading-tight"><span className="num font-heading text-2xl font-bold">{sc.answered === 10 ? sc.total : "–"}<small className="text-sm font-medium text-muted-foreground">/30</small></span><span className="text-[10.5px] tracking-wide text-muted-foreground uppercase">score</span></div>
+          <div className="flex flex-col items-end leading-tight"><span className="num font-heading text-2xl font-bold">{ev.passed}<small className="text-sm font-medium text-muted-foreground">/8</small></span><span className="text-xs tracking-wide text-muted-foreground uppercase">gates clear</span></div>
+          <div className="flex flex-col items-end leading-tight"><span className="num font-heading text-2xl font-bold">{sc.answered === 10 ? sc.total : "–"}<small className="text-sm font-medium text-muted-foreground">/30</small></span><span className="text-xs tracking-wide text-muted-foreground uppercase">score</span></div>
         </div>
         <StatusPill status={ev.v.cls} label={ev.v.title} big />
         <div className="ml-auto flex items-center gap-2">
@@ -302,7 +302,7 @@ function NotesBox({ initial, onSave }: { initial: string; onSave: (notes: string
   return (
     <label className="block space-y-1">
       <span className="flex items-center gap-2"><span className="field-label">Notes</span>
-        <span className="text-[11px] text-muted-foreground">{state === "saving" ? "Saving…" : state === "typing" ? "Editing" : text ? "Saved" : ""}</span></span>
+        <span className="text-xs text-muted-foreground">{state === "saving" ? "Saving…" : state === "typing" ? "Editing" : text ? "Saved" : ""}</span></span>
       <Textarea rows={2} className="text-sm" value={text} placeholder="Anything worth remembering about this candidate: supplier leads, doubts, what to check next"
         onChange={(e) => { const v = e.target.value; setText(v); setState("typing"); if (timer.current) clearTimeout(timer.current); timer.current = setTimeout(() => { void flush(v); }, 1000); }}
         onBlur={() => { void flush(text); }} />
@@ -324,7 +324,7 @@ function AsinTable({ data }: { data: CandidateDetail }) {
   return (
     <div className="table-wrap overflow-x-auto rounded-lg border">
       <table className="w-full text-sm">
-        <thead><tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase">
+        <thead><tr className="border-b text-left text-xs tracking-wide text-muted-foreground uppercase">
           <SortTh {...t.th("title")} className="px-2 py-1.5">Listing</SortTh><SortTh {...t.th("price")} numeric className="px-2 py-1.5 text-right">Price</SortTh>
           <SortTh {...t.th("rating")} numeric className="px-2 py-1.5 text-right">Rating</SortTh><SortTh {...t.th("reviews")} numeric className="px-2 py-1.5 text-right">Reviews</SortTh>
           <SortTh {...t.th("rank")} numeric className="px-2 py-1.5 text-right">Rank</SortTh><SortTh {...t.th("sales")} numeric className="px-2 py-1.5 text-right">Sales / mo</SortTh>
@@ -339,7 +339,7 @@ function AsinTable({ data }: { data: CandidateDetail }) {
                     <ProductThumb url={a.image} asin={a.asin} title={a.title} brand={a.brand} size={32} />
                     <div className="min-w-0">
                       <div className="truncate text-xs font-medium" title={a.title ?? ""}>{a.title ?? (a.snapshot_at ? "—" : "Not fetched yet")}</div>
-                      <div className="num text-[11px] text-muted-foreground">
+                      <div className="num text-xs text-muted-foreground">
                         <a className="hover:underline" href={`https://www.amazon.co.uk/dp/${a.asin}`} target="_blank" rel="noreferrer">{a.asin}</a>
                         {a.brand ? ` · ${a.brand}` : ""}{a.is_reference ? " · reference" : ""}
                       </div>
@@ -375,13 +375,13 @@ function FieldRow({ def, field, why, onSave, manualOnly, derived }: {
       <div className="flex min-w-0 flex-col gap-1">
         <div className="flex items-center gap-1.5">
           <span className="text-xs font-medium text-ink-2">{def.label}</span>
-          <span title="Worked out from other figures (shown below): type a value to use your own" className="rounded bg-brand-soft px-1.5 py-px text-[10px] font-semibold tracking-wide text-brand uppercase">Derived</span>
+          <span title="Worked out from other figures (shown below): type a value to use your own" className="rounded bg-brand-soft px-1.5 py-px text-xs font-semibold tracking-wide text-brand uppercase">Derived</span>
         </div>
         <div className="flex min-h-9 items-center gap-2 rounded-lg border border-dashed bg-surface-2 px-2.5 py-1.5">
           <span className="num flex-1 text-sm">£{derived.value.toFixed(2)}</span>
           <button type="button" className="text-xs font-medium text-brand hover:underline" onClick={() => onSave(def.k, String(derived.value), 0)}>edit</button>
         </div>
-        <span className="text-[11.5px] text-muted-foreground">{derived.why}</span>
+        <span className="text-xs text-muted-foreground">{derived.why}</span>
       </div>
     );
   }
@@ -435,9 +435,9 @@ function FieldRow({ def, field, why, onSave, manualOnly, derived }: {
         {field && <SourceChip source={field.source as "keepa"} />}
       </div>
       {control}
-      {auto && why ? <span className="text-[11.5px] text-muted-foreground">{why}</span>
-        : manualOnly && !field ? <span className="text-[11.5px] text-muted-foreground">Type it: Opportunity Explorer has no bids or sponsored slots</span>
-        : def.hint ? <span className="text-[11.5px] text-muted-foreground">{def.hint}</span> : null}
+      {auto && why ? <span className="text-xs text-muted-foreground">{why}</span>
+        : manualOnly && !field ? <span className="text-xs text-muted-foreground">Type it: Opportunity Explorer has no bids or sponsored slots</span>
+        : def.hint ? <span className="text-xs text-muted-foreground">{def.hint}</span> : null}
     </div>
   );
 }
@@ -466,7 +466,7 @@ function PageOneTable({ asins }: { asins: CandidateDetail["asins"] }) {
     <div className="flex flex-col gap-1.5">
       <div className="overflow-x-auto rounded-lg border">
         <table className="w-full text-xs">
-          <thead><tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase">
+          <thead><tr className="border-b text-left text-xs tracking-wide text-muted-foreground uppercase">
             <SortTh {...t.th("asin")} className="px-2 py-1.5">ASIN</SortTh><SortTh {...t.th("brand")} className="px-2 py-1.5">Brand</SortTh>
             <SortTh {...t.th("reviews")} numeric className="px-2 py-1.5 text-right">Reviews</SortTh><SortTh {...t.th("rating")} numeric className="px-2 py-1.5 text-right">Rating</SortTh>
             <SortTh {...t.th("bought")} numeric className="px-2 py-1.5 text-right" title="Amazon's bought in past month">Bought / mo</SortTh><SortTh {...t.th("price")} numeric className="px-2 py-1.5 text-right">Price</SortTh>
@@ -476,20 +476,20 @@ function PageOneTable({ asins }: { asins: CandidateDetail["asins"] }) {
             const y = young.has(a.asin), f = fewest.has(a.asin);
             return (
               <tr key={a.asin} className={cn("border-b last:border-0", (y || f) && "bg-brand-soft/40")}>
-                <td className="num px-2 py-1.5"><a className="text-brand hover:underline" href={`https://www.amazon.co.uk/dp/${a.asin}`} target="_blank" rel="noreferrer">{a.asin}</a>{a.is_reference && <span className="ml-1 text-[10px] text-muted-foreground">ref</span>}</td>
+                <td className="num px-2 py-1.5"><a className="text-brand hover:underline" href={`https://www.amazon.co.uk/dp/${a.asin}`} target="_blank" rel="noreferrer">{a.asin}</a>{a.is_reference && <span className="ml-1 text-xs text-muted-foreground">ref</span>}</td>
                 <td className="max-w-40 truncate px-2 py-1.5" title={a.title ?? ""}>{a.brand ?? "—"}</td>
                 <td className={cn("num px-2 py-1.5 text-right", f && "font-semibold text-brand")}>{a.review_count?.toLocaleString("en-GB") ?? "—"}</td>
                 <td className="num px-2 py-1.5 text-right">{a.rating ?? "—"}</td>
                 <td className="num px-2 py-1.5 text-right">{a.bought_past_month != null ? `${a.bought_past_month.toLocaleString("en-GB")}+` : "—"}</td>
                 <td className="num px-2 py-1.5 text-right">{money(priceOf(a))}</td>
                 <td className={cn("num px-2 py-1.5 text-right whitespace-nowrap", y && "font-semibold text-brand")}>{a.first_seen ? new Date(a.first_seen).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "—"}
-                  {y && <span className="ml-1 text-[10px] font-normal">({listingAge(a.first_seen)?.text})</span>}</td>
+                  {y && <span className="ml-1 text-xs font-normal">({listingAge(a.first_seen)?.text})</span>}</td>
               </tr>
             );
           })}</tbody>
         </table>
       </div>
-      <p className="text-[11.5px] text-muted-foreground">Marked: the two youngest listings (first seen) and the two with the fewest reviews. Young or thinly reviewed listings selling well are the proof a newcomer can break in.</p>
+      <p className="text-xs text-muted-foreground">Marked: the two youngest listings (first seen) and the two with the fewest reviews. Young or thinly reviewed listings selling well are the proof a newcomer can break in.</p>
     </div>
   );
 }
@@ -563,7 +563,7 @@ function RankSparkline({ points }: { points: [number, number][] }) {
   const best = Math.min(...points.map((p) => p[1])), worst = Math.max(...points.map((p) => p[1]));
   const fmt = (t: number) => new Date(t).toLocaleDateString("en-GB", { month: "short", year: "2-digit" });
   return (
-    <span className="inline-flex items-center gap-2 text-[11px] text-muted-foreground" title={`Sales rank, ${fmt(t0)}–${fmt(t1)}, weekly (log scale; up is better). Best #${best.toLocaleString("en-GB")}, worst #${worst.toLocaleString("en-GB")}.`}>
+    <span className="inline-flex items-center gap-2 text-xs text-muted-foreground" title={`Sales rank, ${fmt(t0)}–${fmt(t1)}, weekly (log scale; up is better). Best #${best.toLocaleString("en-GB")}, worst #${worst.toLocaleString("en-GB")}.`}>
       <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="overflow-visible" aria-label="Sales rank, 12 months">
         <path d={d} fill="none" stroke="currentColor" strokeWidth={1.5} className="text-brand" />
       </svg>
@@ -608,7 +608,7 @@ function GateExtras({ g, data, fields, settings, card, onSave, onAsinsChanged }:
         </div>
         <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
           <Readout label="FBA size tier" value={<span className="flex flex-wrap items-center gap-1.5 font-sans text-sm font-semibold">{tierLine}
-            {e.fbaSource === "low-price" && <span className="rounded-full bg-pass-soft px-1.5 py-px text-[10px] font-semibold text-pass uppercase" title={`Amazon's Low-Price FBA rate: the sell price is £${e.lowThreshold} or less in this category`}>low-price rate</span>}</span>} sub={`${dimNote}${srcNote}`} />
+            {e.fbaSource === "low-price" && <span className="rounded-full bg-pass-soft px-1.5 py-px text-xs font-semibold text-pass uppercase" title={`Amazon's Low-Price FBA rate: the sell price is £${e.lowThreshold} or less in this category`}>low-price rate</span>}</span>} sub={`${dimNote}${srcNote}`} />
           <Readout label="FBA fee" value={e.fbaV == null ? "—" : money(e.fbaV)} sub={e.fbaBase == null ? "enter dimensions and weight in Gate 0" : `${money(e.fbaBase)} + ${e.vatRegistered ? "" : "VAT + "}DSF${e.fbaSource === "peak" ? " (peak)" : e.fbaSource === "low-price" ? " (low-price rate)" : ""}`} />
           <Readout label="Referral fee" value={money(e.referral)} sub={`${e.pct}% of ${money(e.sell)} + ${e.vatRegistered ? "" : "VAT + "}DSF`} />
           <Readout label="Storage" value={money(e.storage)} sub={e.storage == null ? "enter dimensions in Gate 0" : `${money(e.storageBase)} (${S.storageMonths} mo × £${e.peak ? card.storage.peakPerCuFt : card.storage.standardPerCuFt}/cu ft${e.peak ? ", peak" : ""}) + ${e.vatRegistered ? "" : "VAT + "}DSF`} />
@@ -659,7 +659,7 @@ function ScorecardPanel({ ev }: { ev: Evaluation }) {
       <div className="mb-3 flex flex-wrap items-center gap-3.5">
         <h2 className="font-heading text-lg font-bold">Scorecard</h2>
         <StatusPill status={sc.answered === 10 ? "pass" : "empty"} label={`${sc.answered}/10 lines scored`} />
-        <div className="ml-auto flex items-baseline gap-1.5 font-heading"><b className="num text-3xl font-bold">{sc.answered === 10 ? sc.total : "–"}</b><span className="text-sm text-muted-foreground">/ 30</span></div>
+        <div className="ml-auto flex items-baseline gap-1.5 font-heading"><b className="num text-2xl font-bold">{sc.answered === 10 ? sc.total : "–"}</b><span className="text-sm text-muted-foreground">/ 30</span></div>
       </div>
       <div className="relative mb-3.5 h-2.5 overflow-hidden rounded-full bg-surface-2">
         <i className="block h-full rounded-full bg-brand transition-[width]" style={{ width: `${(sc.total / 30) * 100}%` }} />
@@ -667,7 +667,7 @@ function ScorecardPanel({ ev }: { ev: Evaluation }) {
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead><tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase">
+          <thead><tr className="border-b text-left text-xs tracking-wide text-muted-foreground uppercase">
             <SortTh {...t.th("n")} numeric className="px-2 py-1.5">#</SortTh><SortTh {...t.th("label")} className="px-2 py-1.5">Criterion</SortTh>
             <SortTh {...t.th("pts")} numeric className="px-2 py-1.5 text-center">Pts</SortTh><SortTh {...t.th("why")} className="px-2 py-1.5">Reads as</SortTh>
             <SortTh {...t.th("structural")} className="px-2 py-1.5">Type</SortTh></tr></thead>
@@ -676,10 +676,10 @@ function ScorecardPanel({ ev }: { ev: Evaluation }) {
               <td className="num px-2 py-2 text-muted-foreground">{r.n}</td>
               <td className="px-2 py-2">{r.label}</td>
               <td className="px-2 py-2 text-center">{r.info
-                ? (r.info.signal ? <span className={cn("rounded-full px-1.5 py-px text-[10px] font-semibold whitespace-nowrap uppercase", r.info.signal === "BUYING" ? "bg-pass-soft text-pass" : "bg-fail-soft text-fail")}>{TERM_SIGNAL_LABEL[r.info.signal]}</span> : <span className="text-xs text-muted-foreground">–</span>)
+                ? (r.info.signal ? <span className={cn("rounded-full px-1.5 py-px text-xs font-semibold whitespace-nowrap uppercase", r.info.signal === "BUYING" ? "bg-pass-soft text-pass" : "bg-fail-soft text-fail")}>{TERM_SIGNAL_LABEL[r.info.signal]}</span> : <span className="text-xs text-muted-foreground">–</span>)
                 : <b className={cn("num inline-flex size-7 items-center justify-center rounded-md font-semibold", r.pts == null ? "bg-empty-soft text-empty" : PTS[r.pts])}>{r.pts ?? "–"}</b>}</td>
               <td className="px-2 py-2 text-xs text-muted-foreground">{r.info ? (r.info.answered ? r.info.text : "Not captured: send the niche from Opportunity Explorer") : r.pts == null ? "Not scored" : r.why[r.pts]}</td>
-              <td className="px-2 py-2 text-[11px] whitespace-nowrap text-muted-foreground">{r.info ? "reads only" : r.structural ? "structural" : ""}</td>
+              <td className="px-2 py-2 text-xs whitespace-nowrap text-muted-foreground">{r.info ? "reads only" : r.structural ? "structural" : ""}</td>
             </tr>
           ))}</tbody>
         </table>
@@ -694,7 +694,7 @@ function ScorecardPanel({ ev }: { ev: Evaluation }) {
 }
 
 function WaivedChip({ waiver }: { waiver: Waiver }) {
-  return <span title={`Waived: ${waiver.reason}`} className="cursor-help rounded bg-warn-soft px-1.5 py-px text-[10px] font-semibold tracking-wide text-warn uppercase">Waived</span>;
+  return <span title={`Waived: ${waiver.reason}`} className="cursor-help rounded bg-warn-soft px-1.5 py-px text-xs font-semibold tracking-wide text-warn uppercase">Waived</span>;
 }
 
 /**
@@ -707,7 +707,7 @@ function CheckRow({ row: r, gate, gateWaived, onWaive, onUnwaive }: { row: GateR
   const own = r.waiver && r.waiver.check_label != null ? r.waiver : null;
   return (
     <div className="grid grid-cols-[22px_1fr_auto] items-center gap-2.5 border-t px-3 py-2 text-sm first:border-t-0">
-      <span className={cn("flex size-[18px] items-center justify-center rounded-full text-[11px] font-bold text-white", CHECK_BG[r.status], r.waiver && "opacity-60")}>{r.status === "pass" ? "✓" : r.status === "fail" ? "✕" : r.status === "warn" ? "!" : "·"}</span>
+      <span className={cn("flex size-[18px] items-center justify-center rounded-full text-xs font-bold text-white", CHECK_BG[r.status], r.waiver && "opacity-60")}>{r.status === "pass" ? "✓" : r.status === "fail" ? "✕" : r.status === "warn" ? "!" : "·"}</span>
       <span className="flex min-w-0 flex-wrap items-center gap-1.5">
         <span className={cn(r.waiver && cn("line-through decoration-2", TONE[r.status].text))} title={r.waiver ? `Waived: ${r.waiver.reason}` : undefined}>{r.label}</span>
         {r.waiver && <WaivedChip waiver={r.waiver} />}
@@ -741,7 +741,7 @@ function WaiversPanel({ waivers, ev, onUnwaive }: { waivers: Waiver[]; ev: Evalu
       <p className="mb-3 text-xs text-muted-foreground">Each waived check counts as a pass for its gate. The scorecard isn&apos;t affected, and the verdict lists every waived check.</p>
       <div className="overflow-x-auto rounded-lg border">
         <table className="w-full text-sm">
-          <thead><tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase">
+          <thead><tr className="border-b text-left text-xs tracking-wide text-muted-foreground uppercase">
             <SortTh {...t.th("gate")} className="px-2 py-1.5">Gate</SortTh><SortTh {...t.th("check")} className="px-2 py-1.5">Check</SortTh>
             <SortTh {...t.th("reason")} className="px-2 py-1.5">Reason</SortTh><SortTh {...t.th("waived")} numeric className="px-2 py-1.5">Waived</SortTh><th /></tr></thead>
           <tbody>{t.rows.map((w) => {
@@ -775,7 +775,7 @@ function SearchTermsTable({ terms, captured }: { terms: PoeTerm[]; captured: num
   return (
     <div className="overflow-x-auto rounded-lg border">
       <table className="w-full text-sm">
-        <thead><tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase">
+        <thead><tr className="border-b text-left text-xs tracking-wide text-muted-foreground uppercase">
           <SortTh {...t.th("term")} className="px-2 py-1.5">Search term</SortTh><SortTh {...t.th("volume")} numeric className="px-2 py-1.5 text-right">Searches / mo</SortTh>
           <SortTh {...t.th("clickShare")} numeric className="px-2 py-1.5 text-right">Click share</SortTh><SortTh {...t.th("conversion")} numeric className="px-2 py-1.5 text-right">Conversion</SortTh></tr></thead>
         <tbody>{t.rows.map((x) => (
@@ -800,7 +800,7 @@ function CriticalReviewsTable({ asins }: { asins: CandidateDetail["asins"] }) {
   return (
     <div className="overflow-x-auto rounded-lg border">
       <table className="w-full text-sm">
-        <thead><tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase">
+        <thead><tr className="border-b text-left text-xs tracking-wide text-muted-foreground uppercase">
           <SortTh {...t.th("listing")} className="px-2 py-1.5">Listing</SortTh><SortTh {...t.th("rating")} numeric className="px-2 py-1.5 text-right">Rating</SortTh>
           <SortTh {...t.th("reviews")} numeric className="px-2 py-1.5 text-right">Reviews</SortTh><th className="px-2 py-1.5">1–3★ reviews</th></tr></thead>
         <tbody>{t.rows.map((a) => (

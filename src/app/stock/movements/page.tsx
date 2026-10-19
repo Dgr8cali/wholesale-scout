@@ -121,7 +121,7 @@ export default function StockMovementsPage() {
       {!rows ? <Skeleton className="h-48 rounded-lg" /> : !rows.length ? <p className="text-sm text-muted-foreground">No movements match.</p> : (
         <div className="overflow-x-auto rounded-lg border">
           <table className="w-full text-sm">
-            <thead><tr className="border-b text-left text-[11px] tracking-wide text-muted-foreground uppercase">
+            <thead><tr className="border-b text-left text-xs tracking-wide text-muted-foreground uppercase">
               <th className="w-8 px-2 py-1.5"><input type="checkbox" aria-label="Select all shown" checked={allShown} onChange={() => setSelected(allShown ? new Set() : new Set(shownIds))} /></th>
               <SortTh {...s.th("date")} className="px-2 py-1.5">Date</SortTh>
               <SortTh {...s.th("item")} className="px-2 py-1.5">Item</SortTh>
@@ -144,8 +144,8 @@ export default function StockMovementsPage() {
                 <td className="px-2 py-1.5">{KIND_LABEL[r.kind]}</td>
                 <td className={cn("num px-2 py-1.5 text-right font-medium whitespace-nowrap", r.quantity > 0 ? "text-pass" : "text-fail")}>{r.quantity > 0 ? `+${r.quantity}` : r.quantity}{r.negative && <NegativeChip title={`${BUCKET_LABEL[r.bucket]} is below 0 after this movement`} />}</td>
                 <td className="px-2 py-1.5 text-xs">{r.reason ?? "—"}</td>
-                <td className="num px-2 py-1.5 text-right">{r.unit_cost != null ? `£${Number(r.unit_cost).toFixed(2)}` : "—"}{r.currency && r.unit_cost_ccy != null && <span className="block text-2xs text-muted-foreground">{r.currency} {Number(r.unit_cost_ccy).toFixed(2)}</span>}</td>
-                <td className="px-2 py-1.5 text-xs"><OrderLink id={r.order_id} url={r.order_url} />{trackingText(r.tracking_carrier, r.tracking_number) && <span className="block text-2xs text-muted-foreground">{trackingText(r.tracking_carrier, r.tracking_number)}</span>}</td>
+                <td className="num px-2 py-1.5 text-right">{r.unit_cost != null ? `£${Number(r.unit_cost).toFixed(2)}` : "—"}{r.currency && r.unit_cost_ccy != null && <span className="block text-xs text-muted-foreground">{r.currency} {Number(r.unit_cost_ccy).toFixed(2)}</span>}</td>
+                <td className="px-2 py-1.5 text-xs"><OrderLink id={r.order_id} url={r.order_url} />{trackingText(r.tracking_carrier, r.tracking_number) && <span className="block text-xs text-muted-foreground">{trackingText(r.tracking_carrier, r.tracking_number)}</span>}</td>
                 <td className="px-2 py-1.5 text-xs">{r.supplier ? <a className="hover:underline" href={`/suppliers/${r.supplier.id}`}>{r.supplier.name}</a> : ""}</td>
                 <td className="px-2 py-1.5 text-xs text-muted-foreground">{r.note ?? ""}</td>
                 <td className="px-2 py-1.5 whitespace-nowrap">
