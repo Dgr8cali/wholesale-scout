@@ -1,112 +1,127 @@
 "use client";
 
 import {
-  BoxesIcon, BuildingIcon, CircleHelpIcon, ClipboardListIcon, CrosshairIcon, DownloadCloudIcon, EyeIcon, FileUpIcon, GaugeIcon, HomeIcon,
-  LightbulbIcon, ListChecksIcon, ListFilterIcon, PackageIcon, ReceiptIcon, RocketIcon, ScanSearchIcon, SettingsIcon, StarIcon, StoreIcon,
-  TagIcon, TelescopeIcon, TruckIcon, UploadIcon,
+  ArrowLeftRightIcon, AwardIcon, BanknoteIcon, CalendarCheckIcon, ChartPieIcon, ChevronRightIcon, CircleHelpIcon, ClipboardListIcon,
+  CloudDownloadIcon, CrosshairIcon, EyeIcon, FactoryIcon, FileSpreadsheetIcon, FileUpIcon, FlaskConicalIcon, HouseIcon, LayoutDashboardIcon,
+  LightbulbIcon, ListChecksIcon, ListFilterIcon, ListTodoIcon, PackagePlusIcon, PackageSearchIcon, ReceiptTextIcon, RepeatIcon, RocketIcon,
+  ScanSearchIcon, SettingsIcon, StarIcon, StoreIcon, TelescopeIcon, TextSearchIcon, TrendingUpIcon, TruckIcon, UploadIcon, WarehouseIcon,
+  WholeWordIcon, type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { createContext, Fragment, useCallback, useContext, useEffect, useState, type ComponentType, type CSSProperties, type ReactNode } from "react";
+import { usePathname } from "next/navigation";
+import { createContext, Fragment, useContext, useEffect, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import { Logo } from "@/components/Logo";
-import { WorkspaceSwitcher } from "@/components/WorkspaceSwitcher";
-import { isSwitchShortcut, nextWorkspace, SHARED_NAV, workspace, workspaceCookie, workspaceForPath, type NavItem, type WorkspaceId } from "@/lib/workspaces";
+import { SHARED_NAV, WORKSPACES, type NavItem, type Workspace } from "@/lib/workspaces";
 import { CrumbsProvider, useCrumbs } from "@/components/Crumbs";
 import { QogitaCartButton, QogitaCartProvider } from "@/components/QogitaCart";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { HelpButton } from "@/components/help/HelpButton";
 import { ProductSearch } from "@/components/product/ProductSearch";
 import { HelpProvider } from "@/components/help/HelpPanel";
-import {
-  Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
-import { Separator } from "@/components/ui/separator";
+import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarHeader, SidebarInset,
-  SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarRail, SidebarTrigger,
+  SidebarMenu, SidebarMenuBadge, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarRail, SidebarTrigger, useSidebar,
 } from "@/components/ui/sidebar";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { api, sharedGet } from "@/lib/ui/client";
+import { StatusChip } from "@/components/ui/status-chip";
+import type { ShellCheck, ShellData } from "@/app/api/shell/route";
+import { api } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
 
-/** Icons by page. */
-const ICON: Record<string, ComponentType> = {
-  "/": HomeIcon, "/runs": ListChecksIcon, "/upload": UploadIcon, "/check": ScanSearchIcon, "/qogita": DownloadCloudIcon,
-  "/sellers": StoreIcon, "/brands": BuildingIcon, "/suppliers": TruckIcon, "/favourites": StarIcon, "/watchlist": EyeIcon,
-  "/plan": ClipboardListIcon, "/hunt": CrosshairIcon, "/products": BoxesIcon, "/tracker": PackageIcon,
-  "/pl/candidates": TagIcon, "/pl/niche-hunt": TelescopeIcon, "/pl/quotes": ReceiptIcon, "/pl/launch": RocketIcon,
-  "/ads/dashboard": GaugeIcon, "/ads/imports": FileUpIcon, "/ads/rules": ListFilterIcon, "/ads/proposals": LightbulbIcon,
-  "/settings": SettingsIcon, "/help": CircleHelpIcon,
+/** Each page's own icon. "?" is Help's alone. */
+export const NAV_ICON: Record<string, LucideIcon> = {
+  "/": HouseIcon, "/settings": SettingsIcon, "/help": CircleHelpIcon,
+  "/runs": ListChecksIcon, "/products": PackageSearchIcon, "/suppliers": TruckIcon, "/watchlist": EyeIcon, "/tracker": TrendingUpIcon,
+  "/upload": UploadIcon, "/check": ScanSearchIcon, "/qogita": CloudDownloadIcon, "/sellers": StoreIcon, "/brands": AwardIcon,
+  "/favourites": StarIcon, "/plan": ClipboardListIcon, "/hunt": CrosshairIcon,
+  "/pl/candidates": FlaskConicalIcon, "/pl/niches": ChartPieIcon, "/pl/suppliers": FactoryIcon, "/pl/quotes": ReceiptTextIcon,
+  "/pl/niche-hunt": TelescopeIcon, "/pl/launch": ListTodoIcon,
+  "/ads/dashboard": LayoutDashboardIcon, "/ads/proposals": LightbulbIcon, "/ads/launch": RocketIcon, "/ads/keywords": TextSearchIcon,
+  "/ads/imports": FileUpIcon, "/ads/rules": ListFilterIcon, "/ads/ngrams": WholeWordIcon, "/ads/review": CalendarCheckIcon,
+  "/stock/levels": WarehouseIcon, "/stock/orders": PackagePlusIcon, "/stock/reorder": RepeatIcon, "/stock/movements": ArrowLeftRightIcon,
+  "/stock/sales": BanknoteIcon, "/stock/import": FileSpreadsheetIcon,
 };
 
 const isActive = (href: string, path: string) => (href === "/" ? path === "/" : path === href || path.startsWith(`${href}/`));
 
-/** The workspace in use: from the cookie at first, then whichever workspace the page belongs to. */
-const WorkspaceCtx = createContext<{ ws: WorkspaceId; switchTo: (id: WorkspaceId) => void }>({ ws: "wholesale", switchTo: () => {} });
+/** The top bar's checks and the sidebar's counts, refreshed every minute and on focus. */
+const ShellCtx = createContext<{ data: ShellData | null; down: boolean }>({ data: null, down: false });
 
-function WorkspaceProvider({ initial, children }: { initial: WorkspaceId; children: ReactNode }) {
-  const path = usePathname();
-  const router = useRouter();
-  const pageWs = workspaceForPath(path);
-  // The workspace chosen last: the cookie's at first, then the switcher's, then whichever workspace
-  // a page opened belongs to (a link or a bookmark into another workspace switches to it).
-  const [chosen, setChosen] = useState<WorkspaceId>(pageWs ?? initial);
-  const [seenPageWs, setSeenPageWs] = useState(pageWs);
-  if (pageWs !== seenPageWs) {
-    setSeenPageWs(pageWs);
-    if (pageWs) setChosen(pageWs);
-  }
-  const ws = pageWs ?? chosen;
-  // Remembered for the next visit (the layout reads it, so the first paint is right).
+function ShellDataProvider({ children }: { children: ReactNode }) {
+  const [data, setData] = useState<ShellData | null>(null);
+  const [down, setDown] = useState(false);
   useEffect(() => {
-    document.cookie = workspaceCookie(ws);
-  }, [ws]);
-  const switchTo = useCallback((id: WorkspaceId) => {
-    setChosen(id);
-    // On a shared page (Home, Settings, Help) it stays put; on another workspace's page it goes to the new one's first page.
-    if (pageWs !== null && pageWs !== id) router.push(workspace(id).landing);
-  }, [pageWs, router]);
-  // Alt+Shift+W (Option+Shift+W on a Mac) cycles Wholesale → Private label → Ads.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (!isSwitchShortcut(e)) return;
-      e.preventDefault();
-      switchTo(nextWorkspace(ws));
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [ws, switchTo]);
-  return <WorkspaceCtx.Provider value={{ ws, switchTo }}>{children}</WorkspaceCtx.Provider>;
+    const load = () => api<ShellData>("/api/shell").then((d) => { setData(d); setDown(false); }).catch(() => setDown(true));
+    load();
+    const t = setInterval(load, 60_000);
+    window.addEventListener("focus", load);
+    return () => { clearInterval(t); window.removeEventListener("focus", load); };
+  }, []);
+  return <ShellCtx.Provider value={{ data, down }}>{children}</ShellCtx.Provider>;
 }
 
-function NavList({ items, path }: { items: NavItem[]; path: string }) {
+function NavLink({ n, path }: { n: NavItem; path: string }) {
+  const Icon = NAV_ICON[n.href];
+  const count = useContext(ShellCtx).data?.counts[n.href] ?? 0;
+  const { isMobile, setOpenMobile } = useSidebar();
   return (
-    <SidebarMenu>
-      {items.map((n) => {
-        const Icon = ICON[n.href] ?? CircleHelpIcon;
-        return (
-          <SidebarMenuItem key={n.href}>
-            <SidebarMenuButton asChild isActive={isActive(n.href, path)} tooltip={n.soon ? `${n.label} (coming soon)` : n.label}>
-              <Link href={n.href}>
-                <Icon />
-                <span>{n.label}</span>
-                {n.soon && <span className="ml-auto rounded bg-empty-soft px-1 text-xs font-medium text-empty">soon</span>}
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        );
-      })}
-    </SidebarMenu>
+    <SidebarMenuItem>
+      <SidebarMenuButton asChild isActive={isActive(n.href, path)} tooltip={count ? `${n.label} (${count})` : n.label}>
+        <Link href={n.href} onClick={() => isMobile && setOpenMobile(false)}>
+          {Icon && <Icon />}
+          <span>{n.label}</span>
+        </Link>
+      </SidebarMenuButton>
+      {count > 0 && <SidebarMenuBadge className="num rounded-full bg-primary-soft text-primary-ink">{count}</SidebarMenuBadge>}
+    </SidebarMenuItem>
   );
 }
 
-function AppSidebar() {
+// Each workspace's "More" is remembered in this browser (closed by default).
+const moreKey = (id: string) => `nav.more.${id}`;
+const moreListeners = new Set<() => void>();
+const readMore = (id: string) => { try { return localStorage.getItem(moreKey(id)) === "1"; } catch { return false; } };
+const writeMore = (id: string, open: boolean) => {
+  try { localStorage.setItem(moreKey(id), open ? "1" : "0"); } catch { /* not remembered */ }
+  moreListeners.forEach((l) => l());
+};
+const subscribeMore = (l: () => void) => { moreListeners.add(l); return () => { moreListeners.delete(l); }; };
+
+function WorkspaceGroup({ w, path }: { w: Workspace; path: string }) {
+  const main = w.nav.filter((n) => !n.more), more = w.nav.filter((n) => n.more);
+  const saved = useSyncExternalStore(subscribeMore, () => readMore(w.id), () => false);
+  // The page you're on is never hidden: its More opens (without changing what's remembered).
+  const here = more.some((n) => isActive(n.href, path));
+  const open = saved || here;
+  return (
+    <SidebarGroup>
+      <SidebarGroupLabel>{w.label}</SidebarGroupLabel>
+      <SidebarGroupContent>
+        <SidebarMenu>
+          {main.map((n) => <NavLink key={n.href} n={n} path={path} />)}
+          {more.length > 0 && (
+            <SidebarMenuItem>
+              <SidebarMenuButton onClick={() => writeMore(w.id, !saved)} aria-expanded={open} disabled={here && !saved}
+                tooltip={`${open ? "Fewer" : "More"} ${w.label} pages`} className="text-muted-foreground disabled:opacity-100">
+                <ChevronRightIcon className={cn("transition-transform", open && "rotate-90")} />
+                <span>More</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          )}
+          {open && more.map((n) => <NavLink key={n.href} n={n} path={path} />)}
+        </SidebarMenu>
+      </SidebarGroupContent>
+    </SidebarGroup>
+  );
+}
+
+function AppSidebar({ top }: { top?: ReactNode }) {
   const path = usePathname();
-  const { ws, switchTo } = useContext(WorkspaceCtx);
-  const home = SHARED_NAV.filter((n) => n.href === "/"), rest = SHARED_NAV.filter((n) => n.href !== "/");
+  const today = SHARED_NAV.filter((n) => n.href === "/"), pinned = SHARED_NAV.filter((n) => n.href !== "/");
   return (
     <Sidebar collapsible="icon">
-      <SidebarHeader>
+      <SidebarHeader className="gap-3">
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton asChild size="lg" tooltip="Wholesale Scout">
@@ -117,96 +132,72 @@ function AppSidebar() {
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
-        <WorkspaceSwitcher value={ws} onChange={switchTo} />
+        {top}
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupContent><NavList items={home} path={path} /></SidebarGroupContent>
+          <SidebarGroupLabel>Home</SidebarGroupLabel>
+          <SidebarGroupContent><SidebarMenu>{today.map((n) => <NavLink key={n.href} n={n} path={path} />)}</SidebarMenu></SidebarGroupContent>
         </SidebarGroup>
-        <SidebarGroup>
-          <SidebarGroupLabel>{workspace(ws).label}</SidebarGroupLabel>
-          <SidebarGroupContent><NavList items={workspace(ws).nav} path={path} /></SidebarGroupContent>
-        </SidebarGroup>
-        <SidebarGroup className="mt-auto">
-          <SidebarGroupContent><NavList items={rest} path={path} /></SidebarGroupContent>
-        </SidebarGroup>
+        {WORKSPACES.map((w) => <WorkspaceGroup key={w.id} w={w} path={path} />)}
       </SidebarContent>
-      <SidebarFooter>
-        <p className="px-2 text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">Amazon UK · FBA</p>
+      <SidebarFooter className="border-t border-sidebar-border">
+        <SidebarMenu>{pinned.map((n) => <NavLink key={n.href} n={n} path={path} />)}</SidebarMenu>
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
   );
 }
 
-interface Status { supabase: boolean; spapi: boolean; spapiSellerId: boolean; keepa: boolean }
-interface KeepaBalance { available: boolean; tokens: { tokensLeft: number; refillRate: number; refillInMs: number } | null }
-
-function StatusDot({ ok, label, hint }: { ok: boolean; label: string; hint: string }) {
+/** One chip for every integration: "All systems OK", or how many need you, with the list in a popover. */
+function StatusPopover() {
+  const { data, down } = useContext(ShellCtx);
+  if (!data && !down) return null;
+  const issues = down ? 1 : data!.issues;
+  const checks: ShellCheck[] = down ? [{ key: "api", label: "The app's server", ok: false, detail: "Didn't answer: check your connection or the deployment" }] : data!.checks;
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span className="flex items-center gap-1.5 text-xs whitespace-nowrap text-muted-foreground" tabIndex={0}>
-          <span className={cn("size-2 rounded-full", ok ? "bg-pass" : "bg-highlight")} aria-hidden="true" />
-          {label}
-          <span className="sr-only">{ok ? "connected" : "not configured"}</span>
-        </span>
-      </TooltipTrigger>
-      <TooltipContent>{ok ? `${label}: connected` : hint}</TooltipContent>
-    </Tooltip>
+    <Popover>
+      <PopoverTrigger asChild>
+        <button type="button" className="cursor-pointer rounded-full outline-none focus-visible:ring-3 focus-visible:ring-ring/40" aria-label={issues ? `${issues} issue${issues === 1 ? "" : "s"}: show` : "All systems OK: show"}>
+          <StatusChip tone={issues ? "warn" : "good"}>
+            {issues ? `${issues} issue${issues === 1 ? "" : "s"}` : <>All systems OK</>}
+          </StatusChip>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-[min(22rem,calc(100vw-2rem))] p-0">
+        <p className="border-b border-divider px-4 py-3 text-xs font-semibold tracking-[0.06em] text-muted-foreground uppercase">Systems</p>
+        <ul className="divide-y divide-divider">
+          {checks.map((c) => (
+            <li key={c.key} className="flex items-start justify-between gap-3 px-4 py-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium">{c.href ? <Link href={c.href} className="hover:underline">{c.label}</Link> : c.label}</p>
+                <p className="text-meta text-muted-foreground">{c.detail}</p>
+              </div>
+              <StatusChip tone={c.ok === null ? "neutral" : c.ok ? "good" : "warn"} className="mt-0.5">{c.ok === null ? "Info" : c.ok ? "OK" : "Check"}</StatusChip>
+            </li>
+          ))}
+        </ul>
+      </PopoverContent>
+    </Popover>
   );
 }
 
-/** The four integration dots and the live Keepa balance, refreshed every minute and on focus. */
-function StatusBar() {
-  const [status, setStatus] = useState<Status | null>(null);
-  const [down, setDown] = useState(false);
-  const [keepa, setKeepa] = useState<KeepaBalance | null>(null);
-  useEffect(() => {
-    api<Status>("/api/status").then(setStatus).catch(() => setDown(true));
-    const load = () => sharedGet<KeepaBalance>("/api/keepa").then(setKeepa).catch(() => {});
-    load();
-    const t = setInterval(load, 60_000);
-    window.addEventListener("focus", load);
-    return () => { clearInterval(t); window.removeEventListener("focus", load); };
-  }, []);
-  if (down) return <StatusDot ok={false} label="Can't reach the server" hint="The app's API didn't answer; check your connection or the deployment" />;
-  if (!status) return null;
-  const t = keepa?.tokens;
-  return (
-    <div className="flex items-center gap-4">
-      <div className="hidden items-center gap-3 lg:flex">
-        <StatusDot ok={status.supabase} label="Supabase" hint="Set SUPABASE_URL and SUPABASE_SERVICE_KEY" />
-        <StatusDot ok={status.spapi} label="SP-API" hint="Set SPAPI_CLIENT_ID, SPAPI_CLIENT_SECRET, SPAPI_REFRESH_TOKEN" />
-        <StatusDot ok={status.spapiSellerId} label="Gating" hint="Set SPAPI_SELLER_ID (your merchant token) for gating checks" />
-        <StatusDot ok={status.keepa} label="Keepa" hint="Stub until KEEPA_API_KEY is a real key: history gates are skipped" />
-      </div>
-      {status.keepa && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span className="flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs whitespace-nowrap" tabIndex={0}>
-              <span className="text-muted-foreground">Keepa</span>
-              <span className="num font-medium">{t ? t.tokensLeft.toLocaleString("en-GB") : "—"}</span>
-              {/* Phones: just "Keepa 1,260", so the breadcrumbs keep their room. */}
-              <span className="hidden text-muted-foreground sm:inline">tokens</span>
-            </span>
-          </TooltipTrigger>
-          <TooltipContent>{t ? `Refills ${t.refillRate}/min; a product costs 1 token for its history, 3 more for Buy Box data if it gets that far` : "Keepa didn't report a balance"}</TooltipContent>
-        </Tooltip>
-      )}
-    </div>
-  );
-}
-
-function Crumbs() {
+/** The page's name: its last breadcrumb, else its menu label. */
+function TopTitle() {
   const crumbs = useCrumbs();
-  // Browser tab titles come from each route's layout metadata (pageTitle), Next's own mechanism.
-  if (!crumbs.length) return null;
+  const path = usePathname();
+  const nav = [...SHARED_NAV, ...WORKSPACES.flatMap((w) => w.nav)].find((n) => isActive(n.href, path));
+  const title = crumbs.length ? crumbs[crumbs.length - 1].label : nav?.label;
+  return title ? <p className="min-w-0 truncate text-sm font-medium">{title}</p> : null;
+}
+
+/** The breadcrumb, above the page's title. */
+function PageCrumbs() {
+  const crumbs = useCrumbs();
+  if (crumbs.length < 2) return null;
   return (
-    <>
-    <Separator orientation="vertical" className="mx-1 data-vertical:h-4 data-vertical:self-center" />
-    <Breadcrumb className="min-w-0 overflow-hidden">
-      <BreadcrumbList className="flex-nowrap">
+    <Breadcrumb className="mb-2 min-w-0 overflow-hidden">
+      <BreadcrumbList className="flex-nowrap text-meta">
         {crumbs.map((c, i) => (
           <Fragment key={i}>
             {i > 0 && <BreadcrumbSeparator />}
@@ -219,37 +210,39 @@ function Crumbs() {
         ))}
       </BreadcrumbList>
     </Breadcrumb>
-    </>
   );
 }
 
-/** Collapsible left sidebar, top bar with status and breadcrumbs, and the page. */
-export function AppShell({ defaultOpen, qogita, workspace: initialWorkspace, children }: { defaultOpen: boolean; qogita: boolean; workspace: WorkspaceId; children: ReactNode }) {
+/** Collapsible grouped sidebar (a drawer on phones), the top bar, the breadcrumb and the page. */
+export function AppShell({ defaultOpen, qogita, children }: { defaultOpen: boolean; qogita: boolean; children: ReactNode }) {
   return (
-    <WorkspaceProvider initial={initialWorkspace}>
+    <ShellDataProvider>
     <QogitaCartProvider enabled={qogita}>
     <CrumbsProvider>
     <HelpProvider>
-      <SidebarProvider defaultOpen={defaultOpen} style={{ "--sidebar-width": "13rem" } as CSSProperties}>
+      <SidebarProvider defaultOpen={defaultOpen} style={{ "--sidebar-width": "15rem", "--sidebar-width-icon": "4rem" } as CSSProperties}>
         <AppSidebar />
         <SidebarInset className="min-w-0">
-          <header className="sticky top-0 z-30 flex h-12 flex-none items-center gap-2 border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-            <SidebarTrigger className="-ml-1" />
-            <Crumbs />
-            <div className="ml-auto flex items-center gap-3">
+          <header className="sticky top-0 z-30 flex h-14 flex-none items-center gap-2 border-b border-border bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/80 lg:px-6">
+            <SidebarTrigger className="-ml-1 size-9" aria-label="Menu" />
+            <TopTitle />
+            <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
               <ProductSearch />
-              <StatusBar />
+              <StatusPopover />
               <QogitaCartButton />
               <HelpButton />
               <ThemeToggle />
             </div>
           </header>
-          <div className="mx-auto w-full max-w-[1400px] min-w-0 flex-1 px-4 py-6 lg:px-6">{children}</div>
+          <div className="mx-auto w-full max-w-[1400px] min-w-0 flex-1 px-4 py-6 lg:px-8 lg:py-8">
+            <PageCrumbs />
+            {children}
+          </div>
         </SidebarInset>
       </SidebarProvider>
     </HelpProvider>
     </CrumbsProvider>
     </QogitaCartProvider>
-    </WorkspaceProvider>
+    </ShellDataProvider>
   );
 }

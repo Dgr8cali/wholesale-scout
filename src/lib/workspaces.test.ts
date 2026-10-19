@@ -1,13 +1,9 @@
-import { renderToStaticMarkup } from "react-dom/server";
-import { createElement } from "react";
+import { existsSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import nextConfig from "../../next.config";
-import { WorkspaceSwitcher } from "@/components/WorkspaceSwitcher";
 import { articles } from "./help/load";
 import { workspaceOfArticle } from "./help/catalog";
-import {
-  isSwitchShortcut, nextWorkspace, pageTitle, parseWorkspace, WORKSPACE_COOKIE, workspace, workspaceCookie, workspaceForPath, WORKSPACES,
-} from "./workspaces";
+import { pageTitle, SHARED_NAV, workspace, workspaceForPath, WORKSPACES } from "./workspaces";
 
 /** Where next.config's redirects send a request: the first rule whose source (and query condition) matches. */
 async function redirected(url: string): Promise<string | null> {
@@ -23,18 +19,32 @@ async function redirected(url: string): Promise<string | null> {
 }
 
 describe("workspaces", () => {
-  it("are Wholesale, Private label, Ads and Stock, each with its own nav", () => {
+  it("are Wholesale, Private label, Ads and Stock, each a sidebar group with its main pages then More", () => {
     expect(WORKSPACES.map((w) => [w.id, w.label, w.tagline])).toEqual([
       ["wholesale", "Wholesale", "Resell existing listings"],
       ["pl", "Private label", "Launch your own product"],
       ["ads", "Ads", "Run and tune Sponsored Products"],
       ["stock", "Stock", "Track what you hold"],
     ]);
-    expect(workspace("stock").nav.map((n) => n.href)).toEqual(["/stock/levels", "/stock/movements", "/stock/sales", "/stock/orders", "/stock/reorder", "/stock/import"]);
-    expect(workspace("pl").nav.map((n) => [n.href, n.soon ?? false])).toEqual([["/pl/candidates", false], ["/pl/niche-hunt", false], ["/pl/niches", false], ["/pl/suppliers", false], ["/pl/quotes", false], ["/pl/launch", false]]);
-    expect(workspace("ads").nav.map((n) => n.href)).toEqual(["/ads/dashboard", "/ads/imports", "/ads/rules", "/ads/proposals", "/ads/keywords", "/ads/ngrams", "/ads/launch", "/ads/review"]);
-    expect(workspace("ads").nav.some((n) => n.soon)).toBe(false);
-    expect(workspace("wholesale").nav.map((n) => n.label)).toEqual(expect.arrayContaining(["Runs", "Upload", "Check ASINs", "Qogita", "Sellers", "Brands", "Suppliers", "Favourites", "Watchlist", "Plan", "Hunt"]));
+    const main = (id: Parameters<typeof workspace>[0]) => workspace(id).nav.filter((n) => !n.more).map((n) => n.label);
+    const more = (id: Parameters<typeof workspace>[0]) => workspace(id).nav.filter((n) => n.more).map((n) => n.label);
+    expect(main("wholesale")).toEqual(["Runs", "Products", "Suppliers", "Watchlist", "Tracker"]);
+    expect(more("wholesale")).toEqual(["Upload", "Check ASINs", "Qogita", "Sellers", "Brands", "Favourites", "Plan", "Hunt"]);
+    expect(main("pl")).toEqual(["Candidates", "Niches", "Suppliers", "Quotes"]);
+    expect(more("pl")).toEqual(["Niche Hunt", "Launch checklist"]);
+    expect(main("ads")).toEqual(["Dashboard", "Proposals", "Launch", "Keywords"]);
+    expect(more("ads")).toEqual(["Imports", "Rules", "N-grams", "Review"]);
+    expect(main("stock")).toEqual(["Levels", "Orders", "Reorder"]);
+    expect(more("stock")).toEqual(["Movements", "Sales", "Import"]);
+    // A group's main pages come before its More.
+    for (const w of WORKSPACES) expect(w.nav.findIndex((n) => n.more)).toBe(w.nav.filter((n) => !n.more).length);
+    expect(SHARED_NAV.map((n) => n.label)).toEqual(["Today", "Settings", "Help"]);
+  });
+
+  it("links only to pages that exist, each once", () => {
+    const hrefs = [...SHARED_NAV, ...WORKSPACES.flatMap((w) => w.nav)].map((n) => n.href);
+    expect(new Set(hrefs).size).toBe(hrefs.length);
+    for (const h of hrefs) expect(existsSync(`src/app${h === "/" ? "" : h}/page.tsx`), h).toBe(true);
   });
 
   it("knows which workspace a page belongs to; Home, Settings and Help belong to all", () => {
@@ -44,27 +54,6 @@ describe("workspaces", () => {
     expect(workspaceForPath("/ads/rules")).toBe("ads");
     expect(workspaceForPath("/stock/levels")).toBe("stock");
     for (const p of ["/", "/settings", "/help", "/help/pages/runs"]) expect(workspaceForPath(p)).toBeNull();
-  });
-
-  it("remembers the workspace in a cookie, falling back to Wholesale", () => {
-    expect(workspaceCookie("pl")).toBe(`${WORKSPACE_COOKIE}=pl; path=/; max-age=31536000; samesite=lax`);
-    expect(parseWorkspace("ads")).toBe("ads");
-    expect(parseWorkspace(undefined)).toBe("wholesale");
-    expect(parseWorkspace("nonsense")).toBe("wholesale");
-  });
-
-  it("cycles with Alt+Shift+W (Option+Shift+W on a Mac)", () => {
-    expect([nextWorkspace("wholesale"), nextWorkspace("pl"), nextWorkspace("ads"), nextWorkspace("stock")]).toEqual(["pl", "ads", "stock", "wholesale"]);
-    const k = (o: Partial<{ key: string; code: string; shiftKey: boolean; ctrlKey: boolean; metaKey: boolean; altKey: boolean }>) => ({ key: "W", code: "KeyW", shiftKey: true, ctrlKey: false, metaKey: false, altKey: true, ...o });
-    expect(isSwitchShortcut(k({}))).toBe(true);
-    // Option+Shift+W on a Mac types "„": the physical key decides.
-    expect(isSwitchShortcut(k({ key: "„" }))).toBe(true);
-    // Chrome's close-window shortcuts, and plain or partial chords, aren't it.
-    expect(isSwitchShortcut(k({ altKey: false, ctrlKey: true }))).toBe(false);
-    expect(isSwitchShortcut(k({ altKey: false, metaKey: true }))).toBe(false);
-    expect(isSwitchShortcut(k({ shiftKey: false }))).toBe(false);
-    expect(isSwitchShortcut(k({ altKey: false }))).toBe(false);
-    expect(isSwitchShortcut(k({ code: "KeyQ", key: "Q" }))).toBe(false);
   });
 
   it("titles browser tabs page · workspace · app", () => {
@@ -84,15 +73,6 @@ describe("workspaces", () => {
     expect(await redirected("/ads")).toBe("/ads/dashboard");
     expect(await redirected("/stock")).toBe("/stock/levels");
     expect(await redirected("/pl/candidates")).toBeNull();
-  });
-
-  it("renders the switcher as four options with the current one checked", () => {
-    const html = renderToStaticMarkup(createElement(WorkspaceSwitcher, { value: "pl", onChange: () => {} }));
-    expect(html).toContain('role="radiogroup"');
-    expect(html.match(/role="radio"/g)).toHaveLength(4);
-    expect(html).toMatch(/aria-checked="true"[^>]*title="Private label: Launch your own product"/);
-    expect(html.match(/aria-checked="false"/g)).toHaveLength(3);
-    expect(html).toContain("Launch your own product");
   });
 
   it("groups Help articles under Wholesale, Private label, Ads and General", () => {

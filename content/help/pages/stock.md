@@ -6,7 +6,7 @@ route: /stock
 order: 25
 workspace: stock
 ---
-**Stock** is the fourth workspace, next to Wholesale, Private label and Ads (switch at the top of the sidebar, or Alt+Shift+W). It tracks what you hold for each item, in three buckets:
+**Stock** is the fourth workspace, next to Wholesale, Private label and Ads (its own group in the sidebar). It tracks what you hold for each item, in three buckets:
 
 | Bucket | Where its figure comes from |
 |---|---|

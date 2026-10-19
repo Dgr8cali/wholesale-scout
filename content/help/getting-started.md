@@ -10,13 +10,14 @@ Wholesale Scout takes a supplier's price list, or products pulled from Qogita, a
 
 ## Workspaces
 
-The app has three workspaces. Switch between them at the top of the sidebar:
+The app has four workspaces, each a group in the sidebar:
 
-- **Wholesale**: resell existing listings. Runs, Upload, Check ASINs, Qogita, Sellers, Brands, Suppliers, Favourites, Watchlist, Plan, Hunt, Products and Tracker.
-- **Private label**: launch your own product. [Candidates](/help/pages/private-label) and [Niche Hunt](/help/concepts/niche-hunt); Quotes and Launch are coming soon.
-- **Ads**: run and tune Sponsored Products. [Dashboard, Imports, Rules and Proposals](/help/pages/ads) are coming once Amazon Ads API access is approved.
+- **Wholesale**: resell existing listings. Runs, Products, Suppliers, Watchlist and Tracker; under More: Upload, Check ASINs, Qogita, Sellers, Brands, Favourites, Plan and Hunt.
+- **Private label**: launch your own product. [Candidates](/help/pages/private-label), Niches, Suppliers and Quotes; under More: [Niche Hunt](/help/concepts/niche-hunt) and the Launch checklist.
+- **Ads**: run and tune Sponsored Products. [Dashboard, Proposals, Launch and Keywords](/help/pages/ads); under More: Imports, Rules, N-grams and Review.
+- **Stock**: track what you hold. Levels, Orders and Reorder; under More: Movements, Sales and Import.
 
-Home, Settings and Help are in every workspace. The app remembers the workspace you used last and opens in it next time. Opening a page from another workspace (a link or a bookmark) switches to that workspace. **Alt+Shift+W** (**Option+Shift+W** on a Mac) cycles the workspaces: Wholesale, Private label, Ads. Browser tabs read "Candidates · Private label · Wholesale Scout".
+The sidebar lists every workspace as a labelled group: its main pages, then **More** (closed until you open it; the app remembers) with the rest. **Today** is at the top; **Settings** and **Help** are pinned at the bottom. Collapse the sidebar to an icon rail with the button at the top left (or Ctrl/Cmd+B); on a phone it slides out from the menu button. Browser tabs read "Candidates · Private label · Wholesale Scout".
 
 ## The flow in five steps
 

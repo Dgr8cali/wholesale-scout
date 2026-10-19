@@ -5,7 +5,7 @@ synonyms: [stock, inventory, stock levels, buckets, self-ship, fba, tiktok fbt, 
 workspace: stock
 order: 1
 ---
-**Stock** (the fourth workspace: switch at the top of the sidebar, or Alt+Shift+W) tracks what you hold of your own items, in three **buckets**:
+**Stock** (the fourth workspace: the Stock group in the sidebar) tracks what you hold of your own items, in three **buckets**:
 
 | Bucket | Where it comes from |
 |---|---|

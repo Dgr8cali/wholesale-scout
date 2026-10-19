@@ -265,7 +265,7 @@
  */
 :root {
   /* Height of the app's sticky top bar: page-level sticky things sit below it. */
-  --app-header: 3rem;
+  --app-header: 3.5rem;
 }
 .table-wrap {
   container-type: inline-size;

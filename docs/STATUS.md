@@ -6,8 +6,8 @@ it (what's built, the backlog, the rough edges). Last updated: 19 Oct 2026 (host
 Wholesale Scout is a single-user Amazon UK seller's workbench: Next.js 16 (App Router, `proxy.ts`
 password gate), self-hosted Supabase (Postgres, RLS on, service-role access from the server only),
 hosted on the Netcup server at https://ws.dgr8cali.co.uk (`infra/`, `make deploy`), a Chrome extension (`extension/`, 0.7.0), and the Help centre in `content/help`. It has
-four workspaces (switch at the top of the sidebar, Alt+Shift+W); Home, Settings and Help are
-shared.
+four workspaces, each a labelled group in one sidebar (main pages, then a collapsible More); Today
+(Home), Settings and Help are shared.
 
 **Hosting cutover, closed out** (19 Oct 2026): the app moved from Vercel + Supabase Cloud to the Netcup server on 17 Oct (cutover dump 06:28:33 BST), but wholesale-scout.vercel.app kept running against Supabase Cloud and was used by mistake on 17 Oct evening. A read-only three-way diff (the cutover dump restored locally vs Cloud vs self-hosted, every table, by primary key and row content) found Cloud-only: two Private label candidates ("Electrolyte sachets", "Women's probiotic") with their ASINs, fields, waivers, review dumps, POE snapshots, niches and hunt ASINs; two AI review summaries (£0.052); the deletion of three draft candidates (tackle box, raised dog bowl, cat water fountain); and the Vercel crons' Qogita nightlies (18, 19 Oct), Watchlist re-check (18 Oct) and an ASIN check. All of it was copied into self-hosted in one transaction (IDs kept, foreign-key order), after a backup (`~/backups/supabase-pre-merge-20261019T145918.dump` on the server); the brand map was rebuilt there, not copied. Kept self-hosted on conflicts: Amazon sync data (same values both sides), one proposal's refresh time. The re-run diff shows Cloud ⊆ self-hosted. All the Ads launch work (B0HM8FBX3T's "2026-10-18 #1", uploaded; "2026-10-02 #3" discarded) was on self-hosted all along. Supabase Cloud is untouched, as the rollback. To stop it recurring: `vercel.json` now 308-redirects every path to https://ws.dgr8cali.co.uk and has no crons, and `proxy.ts` redirects any `*.vercel.app` host as a backstop; the extension's default App URL is the server and a saved vercel.app address is moved to it. The server's crons had failed since the cutover (`.cron.env` held the secret unquoted and still `$$`-escaped): fixed, and both run by hand returned JSON. The server's `.env` has every key the Vercel environment pull had; missing: `RESEND_API_KEY`, `ALERT_EMAIL_TO` (email alerts off) and optionally `ALERT_EMAIL_FROM`.
 
@@ -23,6 +23,15 @@ Building blocks (`src/components/ui`): Button primary/secondary/ghost/danger (de
 (`sm`), `loading` = spinner + "…"; `PageHeader` (crumbs, title = the menu label, one subtitle line, `info` InfoTip, the primary
 action); `InfoTip`; `DataTable` (TanStack v9 sorting + pagination, 50 a page, phone cards); `EmptyState` (`States.tsx`);
 `StatusChip`/`Verdict` (`verdictTone()` maps every verdict word to good/warn/bad/neutral, with an icon); `Kpi`.
+Sidebar (`AppShell.tsx`, `src/lib/workspaces.ts`, `NavItem.more`): one grouped, labelled sidebar (the workspace switcher and
+Alt+Shift+W are gone): Home → Today; each workspace's main pages, then "More" (closed by default, remembered per workspace in
+localStorage, opened while you're on one of its pages); Settings and Help pinned at the bottom; every item its own lucide icon
+(`NAV_ICON`, "?" only for Help); active = primary-soft + primary-ink; open proposals as a badge; collapses to a 64px icon rail
+with tooltips; a drawer on phones. Not in the menu because they aren't pages: Supplier Scout (the extension's Alibaba panel)
+and the Listing writer (a section of each candidate). Top bar: the page title, one status chip ("All systems OK" or "n issues")
+with a popover of Database, SP-API, Keepa tokens, Ads API (information only until it's approved) and the last nightly cron
+(`/api/shell`, which also carries the sidebar counts), the cart, Help and a light/dark button. The breadcrumb sits above each
+page's title.
 Phases 3–5 to do.
 
 ## Workspaces
