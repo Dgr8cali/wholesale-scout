@@ -2,8 +2,8 @@
 
 import { RotateCcwIcon, ScanSearchIcon } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { usePageCrumbs } from "@/components/Crumbs";
 import { Badge } from "@/components/ui/badge";
@@ -36,9 +36,15 @@ https://www.amazon.co.uk/dp/B0F2HKZMPT  12.50
 3337875597197  £6.20`;
 
 export default function CheckPage() {
+  return <Suspense><Check /></Suspense>;
+}
+
+/** Check ASINs; ?asins= prefills the box (the command palette's "Check an ASIN"). */
+function Check() {
   usePageCrumbs([{ label: "Check ASINs" }]);
   const router = useRouter();
-  const [text, setText] = useState("");
+  const params = useSearchParams();
+  const [text, setText] = useState(() => params.get("asins") ?? "");
   const [supplier, setSupplier] = useState("");
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [profileId, setProfileId] = useState("");

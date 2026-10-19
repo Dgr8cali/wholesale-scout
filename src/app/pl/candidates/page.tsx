@@ -34,7 +34,7 @@ function Candidates() {
   const params = useSearchParams();
   const [list, setList] = useState<ListResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [adding, setAdding] = useState(false);
+  const [adding, setAdding] = useState(() => params.get("new") === "1");
   const selected = params.get("c");
 
   const load = useCallback(() => api<ListResponse>("/api/pl/candidates").then(setList).catch((e: Error) => setError(e.message)), []);

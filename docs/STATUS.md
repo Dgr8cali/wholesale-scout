@@ -32,6 +32,10 @@ and the Listing writer (a section of each candidate). Top bar: the page title, o
 with a popover of Database, SP-API, Keepa tokens, Ads API (information only until it's approved) and the last nightly cron
 (`/api/shell`, which also carries the sidebar counts), the cart, Help and a light/dark button. The breadcrumb sits above each
 page's title.
+⌘K / Ctrl+K command palette (`CommandPalette.tsx`, cmdk via `ui/command.tsx`; "Search or jump to…" at the top of the sidebar):
+every page (More included), quick actions (Check an ASIN → `/check?asins=`, Import ads bulk file, New candidate →
+`/pl/candidates?new=1`, New run → Upload; an ASIN typed opens its product), and products (ASIN, EAN, title), candidates and
+suppliers from `/api/search` (debounced, 8 each). It replaces the top bar's product search box.
 Phases 3–5 to do.
 
 ## Workspaces

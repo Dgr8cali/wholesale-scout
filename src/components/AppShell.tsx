@@ -1,22 +1,17 @@
 "use client";
 
-import {
-  ArrowLeftRightIcon, AwardIcon, BanknoteIcon, CalendarCheckIcon, ChartPieIcon, ChevronRightIcon, CircleHelpIcon, ClipboardListIcon,
-  CloudDownloadIcon, CrosshairIcon, EyeIcon, FactoryIcon, FileSpreadsheetIcon, FileUpIcon, FlaskConicalIcon, HouseIcon, LayoutDashboardIcon,
-  LightbulbIcon, ListChecksIcon, ListFilterIcon, ListTodoIcon, PackagePlusIcon, PackageSearchIcon, ReceiptTextIcon, RepeatIcon, RocketIcon,
-  ScanSearchIcon, SettingsIcon, StarIcon, StoreIcon, TelescopeIcon, TextSearchIcon, TrendingUpIcon, TruckIcon, UploadIcon, WarehouseIcon,
-  WholeWordIcon, type LucideIcon,
-} from "lucide-react";
+import { ChevronRightIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createContext, Fragment, useContext, useEffect, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
+import { CommandPaletteButton, CommandPaletteProvider } from "@/components/CommandPalette";
 import { Logo } from "@/components/Logo";
+import { NAV_ICON } from "@/components/navIcons";
 import { SHARED_NAV, WORKSPACES, type NavItem, type Workspace } from "@/lib/workspaces";
 import { CrumbsProvider, useCrumbs } from "@/components/Crumbs";
 import { QogitaCartButton, QogitaCartProvider } from "@/components/QogitaCart";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { HelpButton } from "@/components/help/HelpButton";
-import { ProductSearch } from "@/components/product/ProductSearch";
 import { HelpProvider } from "@/components/help/HelpPanel";
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -28,20 +23,6 @@ import { StatusChip } from "@/components/ui/status-chip";
 import type { ShellCheck, ShellData } from "@/app/api/shell/route";
 import { api } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
-
-/** Each page's own icon. "?" is Help's alone. */
-export const NAV_ICON: Record<string, LucideIcon> = {
-  "/": HouseIcon, "/settings": SettingsIcon, "/help": CircleHelpIcon,
-  "/runs": ListChecksIcon, "/products": PackageSearchIcon, "/suppliers": TruckIcon, "/watchlist": EyeIcon, "/tracker": TrendingUpIcon,
-  "/upload": UploadIcon, "/check": ScanSearchIcon, "/qogita": CloudDownloadIcon, "/sellers": StoreIcon, "/brands": AwardIcon,
-  "/favourites": StarIcon, "/plan": ClipboardListIcon, "/hunt": CrosshairIcon,
-  "/pl/candidates": FlaskConicalIcon, "/pl/niches": ChartPieIcon, "/pl/suppliers": FactoryIcon, "/pl/quotes": ReceiptTextIcon,
-  "/pl/niche-hunt": TelescopeIcon, "/pl/launch": ListTodoIcon,
-  "/ads/dashboard": LayoutDashboardIcon, "/ads/proposals": LightbulbIcon, "/ads/launch": RocketIcon, "/ads/keywords": TextSearchIcon,
-  "/ads/imports": FileUpIcon, "/ads/rules": ListFilterIcon, "/ads/ngrams": WholeWordIcon, "/ads/review": CalendarCheckIcon,
-  "/stock/levels": WarehouseIcon, "/stock/orders": PackagePlusIcon, "/stock/reorder": RepeatIcon, "/stock/movements": ArrowLeftRightIcon,
-  "/stock/sales": BanknoteIcon, "/stock/import": FileSpreadsheetIcon,
-};
 
 const isActive = (href: string, path: string) => (href === "/" ? path === "/" : path === href || path.startsWith(`${href}/`));
 
@@ -116,7 +97,7 @@ function WorkspaceGroup({ w, path }: { w: Workspace; path: string }) {
   );
 }
 
-function AppSidebar({ top }: { top?: ReactNode }) {
+function AppSidebar() {
   const path = usePathname();
   const today = SHARED_NAV.filter((n) => n.href === "/"), pinned = SHARED_NAV.filter((n) => n.href !== "/");
   return (
@@ -132,7 +113,7 @@ function AppSidebar({ top }: { top?: ReactNode }) {
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
-        {top}
+        <CommandPaletteButton />
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
@@ -220,6 +201,7 @@ export function AppShell({ defaultOpen, qogita, children }: { defaultOpen: boole
     <QogitaCartProvider enabled={qogita}>
     <CrumbsProvider>
     <HelpProvider>
+    <CommandPaletteProvider>
       <SidebarProvider defaultOpen={defaultOpen} style={{ "--sidebar-width": "15rem", "--sidebar-width-icon": "4rem" } as CSSProperties}>
         <AppSidebar />
         <SidebarInset className="min-w-0">
@@ -227,7 +209,6 @@ export function AppShell({ defaultOpen, qogita, children }: { defaultOpen: boole
             <SidebarTrigger className="-ml-1 size-9" aria-label="Menu" />
             <TopTitle />
             <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
-              <ProductSearch />
               <StatusPopover />
               <QogitaCartButton />
               <HelpButton />
@@ -240,6 +221,7 @@ export function AppShell({ defaultOpen, qogita, children }: { defaultOpen: boole
           </div>
         </SidebarInset>
       </SidebarProvider>
+    </CommandPaletteProvider>
     </HelpProvider>
     </CrumbsProvider>
     </QogitaCartProvider>
