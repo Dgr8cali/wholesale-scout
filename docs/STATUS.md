@@ -1,7 +1,7 @@
 # Wholesale Scout: status
 
 Read this first in a new session. Keep it current: every commit that changes a feature updates
-it (what's built, the backlog, the rough edges). Last updated: 19 Oct 2026 (UI redesign phase 2: tokens, components, grouped sidebar, ⌘K, proof pages).
+it (what's built, the backlog, the rough edges). Last updated: 20 Oct 2026 (UI redesign phase 3a: ten page merges, old addresses redirected).
 
 Wholesale Scout is a single-user Amazon UK seller's workbench: Next.js 16 (App Router, `proxy.ts`
 password gate), self-hosted Supabase (Postgres, RLS on, service-role access from the server only),
@@ -45,7 +45,7 @@ Appearance tab with System / Light / Dark, every section's explanation in an Inf
 confirms). Every other page keeps its old layout inside the new shell until phase 3. Checked: at 390px no page (all 57 views) is wider than
 the screen (Bulk exports' snapshots table was the last; it scrolls in its card now). After-screenshots go to
 `docs/ui-audit/after/` (gitignored, local only).
-Phase 3a, merge overlapping pages (in progress; one commit per merge). Old addresses answer with a permanent (308) redirect
+Phase 3a, merge overlapping pages, done (19–20 Oct 2026; one commit per merge, UI only: no table, data or bulk-export change). The sidebar went from 36 items to 27. Old addresses answer with a permanent (308) redirect
 to the new page and tab, keeping their query string: `src/lib/moved.ts` (`MOVED`, `movedTo()`), applied first thing in
 `src/proxy.ts`; tabs are links (`?tab=`, `useTab()` in `src/lib/ui/useTab.ts`).
 
@@ -79,6 +79,9 @@ Ads → Search terms (`src/app/ads/search-terms`): tabs Keywords (the keyword ba
 Stock → Purchases (`src/app/stock/purchases`, the old Tracker page): Tracker and Stock → Orders read the same `purchases` records, so a true merge, shown once (no Type column needed); order number, tracking and expected date sit on each row, Received fills a Stock bucket. The Wholesale group no longer has Tracker.
 Private label → Suppliers & quotes (`src/app/pl/suppliers`): tabs Suppliers and Quotes. The Alibaba supplier table is one component, `AlibabaSupplierTable` (`src/components/pl/AlibabaSupplierTable.tsx`, via `SuppliersPanel`), on the Suppliers tab and in each candidate's Suppliers section; the Quotes tab no longer repeats it (it links to the Suppliers tab filtered to that candidate).
 One `FileDrop` (`src/components/ui/file-drop.tsx`: drop or click/Enter to choose; large or compact) behind every drop zone: New run → Upload file, the Ads Import sheet, Stock → Import and Niches' Opportunity Explorer CSV. One `DocumentUploader` (`src/components/documents/Documents.tsx`, the old `Documents`) on Brand and Supplier pages, its Attach files now a FileDrop; the Product page only lists documents (`DocumentLine`), it never had an uploader.
+Checked: every old address above answers 308 and lands on its page and tab (query kept; `/private-label?tab=hunt` goes via
+`/pl/niche-hunt`, two hops); the extension's links (`/pl/candidates?c=…#suppliers`, `/pl/niches`, `/products/…`, `/runs/…`) are
+unchanged pages; at 390px none of the merged pages is wider than the screen. Screenshots: `docs/ui-audit/after/3a/` (gitignored).
 To do: phase 3b, restyle every remaining page (the other pages onto PageHeader / DataTable / InfoTip, one verdict vocabulary, page titles = menu labels:
 Keyword bank → Keywords, Launch → Launch checklist, …), phase 4 (Private label Launch + Ads Launch, the candidate page, one results table for Run detail / Brand detail / Products) and phase 5 (polish).
 

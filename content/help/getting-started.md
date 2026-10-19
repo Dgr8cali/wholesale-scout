@@ -12,10 +12,10 @@ Wholesale Scout takes a supplier's price list, or products pulled from Qogita, a
 
 The app has four workspaces, each a group in the sidebar:
 
-- **Wholesale**: resell existing listings. Runs, Products, Suppliers, Watchlist and Tracker; under More: Upload, Check ASINs, Qogita, Sellers, Brands, Favourites, Plan and Hunt.
-- **Private label**: launch your own product. [Candidates](/help/pages/private-label), Niches, Suppliers and Quotes; under More: [Niche Hunt](/help/concepts/niche-hunt) and the Launch checklist.
-- **Ads**: run and tune Sponsored Products. [Dashboard, Proposals, Launch and Keywords](/help/pages/ads); under More: Imports, Rules, N-grams and Review.
-- **Stock**: track what you hold. Levels, Orders and Reorder; under More: Movements, Sales and Import.
+- **Wholesale**: resell existing listings. Runs, [New run](/help/pages/new-run) (Upload file, Check ASINs, Qogita, Hunt and Scan a seller, as tabs), Products, Suppliers and Shortlist (the starred products and the Watching list); under More: Sellers, Brands and Plan.
+- **Private label**: launch your own product. [Candidates](/help/pages/private-label), Niches (My niches and [Find niches](/help/concepts/niche-hunt)) and Suppliers & quotes; under More: the Launch checklist.
+- **Ads**: run and tune Sponsored Products. [Dashboard (with Import and the imports history), Proposals (To review and Exports), Launch and Search terms (Keywords, N-grams, All search terms)](/help/pages/ads); under More: Rules (with the Ad settings) and Review.
+- **Stock**: track what you hold. Levels, Purchases (the old Tracker and Orders) and Reorder; under More: Movements, Sales and Import.
 
 The sidebar lists every workspace as a labelled group: its main pages, then **More** (closed until you open it; the app remembers) with the rest. **Today** is at the top; **Settings** and **Help** are pinned at the bottom. Collapse the sidebar to an icon rail with the button at the top left (or Ctrl/Cmd+B); on a phone it slides out from the menu button. Browser tabs read "Candidates · Private label · Wholesale Scout".
 
