@@ -94,15 +94,14 @@ function AdsProposals() {
       cell: (p) => (
         <div className="min-w-0">
           <div className="font-medium">{p.entity.label}</div>
-          <div className="text-meta text-muted-foreground">{p.entity.type} · {p.campaign_name}{p.campaign_state && /paused/i.test(p.campaign_state) ? " (campaign paused)" : ""}</div>
+          <div className="text-meta text-muted-foreground">{p.entity.type} · {p.campaign_name}{p.campaign_state && /paused/i.test(p.campaign_state) ? " (campaign paused)" : ""}{p.asin && <> · <span className="num">{p.asin}</span></>}</div>
         </div>
       ),
     },
     { id: "rule", header: "Rule", sortValue: (p) => RULE_IDS.indexOf(p.rule), cell: (p) => <span className="whitespace-nowrap">{RULE_LABEL[p.rule]}{p.grp === "word-level" && <span className="block text-meta text-muted-foreground">word-level</span>}</span> },
     { id: "change", header: "Change", mobile: 1, sortValue: (p) => p.proposed_value, cell: (p) => <span className="whitespace-nowrap"><span className="text-muted-foreground">{p.current_value}</span> → <b>{p.proposed_value}</b></span> },
-    { id: "reason", header: "Reason", sortValue: (p) => p.reason, className: "min-w-[22rem]", cell: (p) => <><p>{p.reason}</p>{p.effect && <p className="text-meta text-muted-foreground">{p.effect}</p>}</> },
+    { id: "reason", header: "Reason", sortValue: (p) => p.reason, className: "min-w-[18rem]", cell: (p) => <><p>{p.reason}</p>{p.effect && <p className="text-meta text-muted-foreground">{p.effect}</p>}</> },
     { id: "confidence", header: "Confidence", mobile: 2, sortValue: (p) => CONF_RANK[p.confidence], cell: (p) => <StatusChip tone={CONF_TONE[p.confidence]} title="Low under 10 clicks, medium 10–29, high from 30 clicks or 3 orders">{p.confidence}</StatusChip> },
-    { id: "asin", header: "Product", sortValue: (p) => p.asin, cell: (p) => <span className="num text-meta">{p.asin ?? "—"}</span> },
     {
       id: "act", header: <span className="sr-only">Actions</span>, mobile: 3, className: "text-right whitespace-nowrap",
       cell: (p) => p.status === "approved" ? (

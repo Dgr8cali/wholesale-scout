@@ -42,3 +42,6 @@ yarn-error.log*
 next-env.d.ts
 /screenshots
 scripts/.b.mjs
+
+# UI redesign after-screenshots (local only)
+docs/ui-audit/after/

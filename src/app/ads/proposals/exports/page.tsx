@@ -161,16 +161,17 @@ export default function AdsExportsPage() {
         </div>
       )}
 
-      <section className="panel space-y-3 p-4">
+      <section className="panel min-w-0 space-y-3 p-4">
         <div className="flex flex-wrap items-end gap-3">
           <div className="mr-auto max-w-2xl">
             <h2 className="section-label flex items-center gap-1.5"><History className="size-4" /> Snapshots</h2>
             <p className="text-sm text-muted-foreground">Every keyword&apos;s bid and state, every budget, ad-group bid, target and placement percentage as last imported. Restore writes the sheet that takes the account back to it. The last 20 are kept.</p>
           </div>
-          <Input className="h-8 w-56" placeholder="Label (e.g. before Black Friday)" value={label} onChange={(e) => setLabel(e.target.value)} />
+          <Input className="h-8 w-full sm:w-56" placeholder="Label (e.g. before Black Friday)" value={label} onChange={(e) => setLabel(e.target.value)} />
           <Button onClick={() => call(() => api("/api/ads/snapshots", { method: "POST", json: { label } }).then(() => setLabel("")), "Snapshot taken")}><CameraIcon /> Snapshot now</Button>
         </div>
         {!snaps.length ? <p className="text-sm text-muted-foreground">None yet.</p> : (
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead><tr className="text-left text-xs tracking-wide text-muted-foreground uppercase">
               <SortTh {...ss.th("label")} className="py-1 pr-3">Snapshot</SortTh><SortTh {...ss.th("created")} className="pr-3">Taken</SortTh>
@@ -184,6 +185,7 @@ export default function AdsExportsPage() {
               <td className="text-right"><Button size="xs" variant="outline" onClick={() => restore(s)}>Restore snapshot</Button></td>
             </tr>
           ))}</tbody></table>
+          </div>
         )}
       </section>
     </div>

@@ -1,7 +1,7 @@
 # Wholesale Scout: status
 
 Read this first in a new session. Keep it current: every commit that changes a feature updates
-it (what's built, the backlog, the rough edges). Last updated: 19 Oct 2026 (hosting cutover closed out: Cloud-only work merged, vercel.app redirects, crons fixed).
+it (what's built, the backlog, the rough edges). Last updated: 19 Oct 2026 (UI redesign phase 2: tokens, components, grouped sidebar, ⌘K, proof pages).
 
 Wholesale Scout is a single-user Amazon UK seller's workbench: Next.js 16 (App Router, `proxy.ts`
 password gate), self-hosted Supabase (Postgres, RLS on, service-role access from the server only),
@@ -13,7 +13,7 @@ four workspaces, each a labelled group in one sidebar (main pages, then a collap
 
 **Logo** (18 Oct 2026): the master mark is `public/logo.svg` (teal tile, magnifier, amber bars), drawn by `<Logo size>` (`src/components/Logo.tsx`, alt "Wholesale Scout") in the sidebar header, the Help centre header, and as the default mark of an `EmptyState` given no icon. Favicon and app icons by Next's file conventions: `src/app/favicon.ico` (16/32/48), `icon.svg`, `apple-icon.png` (180, full-bleed teal: iOS rounds it), and `manifest.ts` (Wholesale Scout / Scout, theme #2F7F8C, `public/icon-192.png` and `icon-512.png`). The proxy serves those files without the password (a browser fetches the manifest without credentials). The extension (0.6.0 on) uses the same mark: `extension/icons/` 16/32/48/128 for its icon and toolbar button, the popup's heading, and a 16 px mark in every panel heading (built as SVG nodes, so no page's CSP blocks it). There's no login page to put it on: the password is the browser's own Basic-auth dialog.
 
-**UI redesign** ("Calm Workbench", from `docs/ui-audit.md`). Phase 1, the audit, done (19 Oct 2026). Phase 2, foundations, in progress:
+**UI redesign** ("Calm Workbench", from `docs/ui-audit.md`). Phase 1, the audit, done (19 Oct 2026). Phase 2, foundations, done (19 Oct 2026):
 tokens in `src/app/globals.css` (one source of truth: the logo teal #2F7F8C as primary with hover/soft/ink, the amber #F2B544 as
 `highlight` (shadcn's `accent` stays the hover surface), warn/danger/success soft+ink pairs, light and dark; the old names
 pass/warn/fail/empty, brand, surface-2, ink-2, line-strong are aliases of the new ones); IBM Plex Sans for all text and IBM Plex Mono
@@ -42,8 +42,11 @@ per row, Export bulk sheet as the header's primary action with a loading state),
 candidates with Verdict chips, score, stage, landed · multiple and Keepa age, Show parked; the chosen candidate below; New
 candidate in the header) and Settings (a vertical tab list on desktop, a dropdown on phones, `?tab=` kept in the address, a new
 Appearance tab with System / Light / Dark, every section's explanation in an InfoTip via `SectionTitle`; IP-risk removal now
-confirms). Every other page keeps its old layout inside the new shell until phase 3.
-Phases 3–5 to do.
+confirms). Every other page keeps its old layout inside the new shell until phase 3. Checked: at 390px no page (all 57 views) is wider than
+the screen (Bulk exports' snapshots table was the last; it scrolls in its card now). After-screenshots go to
+`docs/ui-audit/after/` (gitignored, local only).
+To do: phase 3 (the other pages onto PageHeader / DataTable / InfoTip, one verdict vocabulary, page titles = menu labels:
+Keyword bank → Keywords, Launch → Launch checklist, …), phase 4 (the merges in `docs/ui-audit.md` §d) and phase 5 (polish).
 
 ## Workspaces
 
