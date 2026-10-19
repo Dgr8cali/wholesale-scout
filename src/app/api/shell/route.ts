@@ -46,7 +46,7 @@ export async function GET() {
     { key: "ads", label: "Ads API", ok: null, detail: process.env.ADS_LWA_CLIENT_ID ? "Waiting for approval: reports come in as files" : "Not connected: reports come in as files", href: "/ads/imports" },
     !last
       ? { key: "cron", label: "Last cron run", ok: false, detail: "No nightly Qogita pull recorded yet" }
-      : { key: "cron", label: "Last cron run", ok: !last.error && Date.now() - Date.parse(last.started_at) < CRON_STALE_MS, detail: `Qogita nightly ${ago(last.started_at)}${last.error ? `: ${last.error}` : ""}`, href: "/qogita" },
+      : { key: "cron", label: "Last cron run", ok: !last.error && Date.now() - Date.parse(last.started_at) < CRON_STALE_MS, detail: `Qogita nightly ${ago(last.started_at)}${last.error ? `: ${last.error}` : ""}`, href: "/new-run?tab=qogita" },
   ];
   const data: ShellData = { checks, issues: checks.filter((c) => c.ok === false).length, counts: { "/ads/proposals": proposals.count ?? 0 } };
   return Response.json(data);

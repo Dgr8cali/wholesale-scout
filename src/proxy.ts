@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { movedTo } from "@/lib/moved";
 import { db } from "@/lib/server/db";
 import { authBlockedUntil, clientIp, EXTENSION_LIMITS, overLimit, recordAuthFailure } from "@/lib/server/rateLimit";
 
@@ -22,6 +23,9 @@ export function vercelRedirect(host: string | null, pathAndQuery: string): strin
 export async function proxy(req: NextRequest) {
   const moved = vercelRedirect(req.headers.get("host"), req.nextUrl.pathname + req.nextUrl.search);
   if (moved) return NextResponse.redirect(moved, 308);
+  // A page merged into another (src/lib/moved.ts): permanently to its new home and tab.
+  const merged = movedTo(req.nextUrl.pathname, req.nextUrl.search);
+  if (merged) return NextResponse.redirect(new URL(merged, req.nextUrl), 308);
   const password = process.env.APP_PASSWORD;
   if (!password) {
     if (process.env.NODE_ENV === "production") {

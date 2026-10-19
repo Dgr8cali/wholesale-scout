@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  ArchiveIcon, ArchiveRestoreIcon, ChevronRightIcon, ChevronsUpIcon, DownloadCloudIcon, DownloadIcon, ExternalLinkIcon, FileSpreadsheetIcon, ImageIcon, ListChecksIcon, MoonIcon, MoreHorizontalIcon, PauseIcon, PencilIcon, PlayIcon, RefreshCwIcon, ScanSearchIcon, SearchIcon, StarIcon, StoreIcon, Trash2Icon, UploadIcon,
+  ArchiveIcon, ArchiveRestoreIcon, ChevronRightIcon, ChevronsUpIcon, DownloadCloudIcon, DownloadIcon, ExternalLinkIcon, FileSpreadsheetIcon, ImageIcon, ListChecksIcon, MoonIcon, MoreHorizontalIcon, PauseIcon, PencilIcon, PlayIcon, PlusIcon, RefreshCwIcon, ScanSearchIcon, SearchIcon, StarIcon, StoreIcon, Trash2Icon, UploadIcon,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -302,6 +302,8 @@ export default function RunsPage() {
           <h1 className="page-title">Runs</h1>
           <p className="text-sm text-muted-foreground">Every price list you&apos;ve screened. Repeat uploads of the same file are grouped.</p>
         </div>
+        <div className="flex items-center gap-2">
+        <Button asChild><Link href="/new-run"><PlusIcon /> New run</Link></Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild><Button variant="outline" size="icon" aria-label="More actions"><MoreHorizontalIcon /></Button></DropdownMenuTrigger>
           <DropdownMenuContent align="end">
@@ -309,6 +311,7 @@ export default function RunsPage() {
             <ImageBackfillItem />
           </DropdownMenuContent>
         </DropdownMenu>
+        </div>
         {dgInput}
       </div>
 
@@ -335,7 +338,7 @@ export default function RunsPage() {
       ) : !runs ? (
         <div className="panel space-y-3 p-4">{Array.from({ length: 6 }, (_, i) => <Skeleton key={i} className="h-10" />)}</div>
       ) : !runs.length ? (
-        <EmptyState icon={<ListChecksIcon />} title={archived ? "No runs" : "No runs yet"} action={<Button asChild><Link href="/upload"><UploadIcon /> Upload price list</Link></Button>}>
+        <EmptyState icon={<ListChecksIcon />} title={archived ? "No runs" : "No runs yet"} action={<Button asChild><Link href="/new-run"><PlusIcon /> New run</Link></Button>}>
           Upload a supplier price list, or pull from Qogita, to screen it against Amazon UK.
         </EmptyState>
       ) : !groups.length ? (

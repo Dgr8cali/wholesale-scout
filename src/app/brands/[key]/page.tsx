@@ -155,7 +155,7 @@ export default function BrandPage() {
                     {s.name ?? s.id} <span className="text-xs text-muted-foreground">· on {s.count} of its listings</span>
                   </span>
                   <Button size="sm" variant="outline" asChild>
-                    <Link href={`/sellers/scan?seller=${s.id}`}><ScanSearchIcon /> Scan</Link>
+                    <Link href={`/new-run?tab=seller&seller=${s.id}`}><ScanSearchIcon /> Scan</Link>
                   </Button>
                 </li>
               ))}

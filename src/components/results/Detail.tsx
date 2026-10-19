@@ -79,7 +79,7 @@ function Sellers({ sellers, flaggedText }: { sellers: Seller[]; flaggedText: str
               <span className={flagged(s) ? "font-semibold text-warn" : "text-muted-foreground"}> · {s.brandCount != null ? `${s.brandCount.toLocaleString("en-GB")} (${Math.round(s.brandSharePct)}%)` : `${Math.round(Math.min(100, s.brandSharePct))}%`} this brand{flagged(s) ? " (likely distributor)" : ""}</span>
             )}
             <span className="text-muted-foreground"> · </span>
-            <Link className="font-medium text-brand hover:underline" href={`/sellers/scan?seller=${s.sellerId}`} onClick={(e) => e.stopPropagation()}>Scan this seller</Link>
+            <Link className="font-medium text-brand hover:underline" href={`/new-run?tab=seller&seller=${s.sellerId}`} onClick={(e) => e.stopPropagation()}>Scan this seller</Link>
           </li>
         ))}
       </ul>

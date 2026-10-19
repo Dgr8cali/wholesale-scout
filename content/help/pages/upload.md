@@ -2,9 +2,11 @@
 title: Upload
 summary: Screen supplier price lists: drop xlsx or csv files, map their columns, check the rows and start a run.
 synonyms: [price list, supplier sheet, import, csv, xlsx, column mapping, ingest, spreadsheet]
-route: /upload
+workspace: wholesale
 order: 3
 ---
+*Where: **Wholesale → New run → Upload file** ([open it](/new-run?tab=upload)).*
+
 Upload turns one or more supplier price lists into a run. You go through four steps: **Drop**, **Map**, **Review** and **Screen**. A layout you've mapped before is recognised, so a supplier's next file needs no setup.
 
 The step buttons at the top take you back to any step you've finished, and forward to one you're allowed to reach (Map needs a file; Review needs every file mapped; Screen needs rows to screen).

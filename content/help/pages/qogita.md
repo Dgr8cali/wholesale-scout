@@ -2,9 +2,11 @@
 title: Qogita
 summary: Pull in-stock products from Qogita by category or brand, screen them like a price list, and save the pull to run again or re-pull nightly.
 synonyms: [qogita pull, wholesale marketplace, preset, saved pull, nightly, mov, cart, supplier offers]
-route: /qogita
+workspace: wholesale
 order: 5
 ---
+*Where: **Wholesale → New run → Qogita** ([open it](/new-run?tab=qogita)).*
+
 The Qogita page pulls in-stock products straight from Qogita and screens them like an uploaded price list: supplier "Qogita", prices per piece, ex-VAT. Each pull is saved by name so you can run it again, or have it re-pulled every night.
 
 If Qogita isn't set up, the page says "Qogita isn't connected" and asks for QOGITA_EMAIL and QOGITA_PASSWORD in the environment. See [Add an environment variable](/help/howto/add-an-env-var).

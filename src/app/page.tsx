@@ -105,7 +105,7 @@ export default function HomePage() {
           <p>One row per workspace: Wholesale, Private label, Ads and Stock. Each tile opens the page behind it.</p>
           <p>Below: the latest runs, last night&apos;s Qogita pulls, favourites to re-screen and the brands worth asking for approval.</p>
         </>}
-        actions={<Button asChild><Link href="/upload"><UploadIcon /> New run</Link></Button>}
+        actions={<Button asChild><Link href="/new-run"><UploadIcon /> New run</Link></Button>}
       />
 
       <Row title="Wholesale" href="/runs">
@@ -267,7 +267,7 @@ export default function HomePage() {
                 <CardHeader>
                   <CardTitle>Qogita overnight</CardTitle>
                   <CardDescription>Saved pulls re-pulled last night; only new or re-priced products were screened.</CardDescription>
-                  <CardAction><Button variant="ghost" size="sm" asChild><Link href="/qogita">Pulls <ArrowRightIcon /></Link></Button></CardAction>
+                  <CardAction><Button variant="ghost" size="sm" asChild><Link href="/new-run?tab=qogita">Pulls <ArrowRightIcon /></Link></Button></CardAction>
                 </CardHeader>
                 <CardContent>
                   <ul className="space-y-3">

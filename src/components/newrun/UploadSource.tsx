@@ -106,7 +106,8 @@ async function fetchFx(currency: string) {
   return api<{ rate: number; date: string; source: string }>(`/api/fx?from=${currency}`);
 }
 
-export default function UploadPage() {
+/** New run → Upload file: price lists (xlsx, csv) through Drop, Map, Review and Screen. */
+export function UploadSource() {
   const router = useRouter();
   const [files, setFiles] = useState<FileState[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -310,11 +311,7 @@ export default function UploadPage() {
   const next = (s: Step) => canReach(s) && setStep(s);
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
-      <div>
-        <h1 className="page-title">Upload price lists</h1>
-        <p className="mt-1 text-sm text-muted-foreground">xlsx or csv, several at once. A layout you&apos;ve mapped before is recognised and needs no setup.</p>
-      </div>
+    <div className="space-y-6">
 
       <ol className="flex items-center gap-2" aria-label="Upload steps">
         {STEPS.map((label, i) => {

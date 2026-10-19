@@ -3,9 +3,8 @@
 import { ExternalLinkIcon, SearchIcon, StoreIcon } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { usePageCrumbs } from "@/components/Crumbs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,8 +18,8 @@ interface Profile { id: string; name: string; is_default?: boolean }
 
 const n = (x: number) => x.toLocaleString("en-GB");
 
-function ScanSeller() {
-  usePageCrumbs([{ label: "Sellers", href: "/sellers" }, { label: "Scan a seller" }]);
+/** New run → Scan a seller: a storefront's ASINs screened as a run with no cost; ?seller= prefills it. Inside a <Suspense>. */
+export function SellerSource() {
   const router = useRouter();
   const params = useSearchParams();
   const [input, setInput] = useState(params.get("seller") ?? "");
@@ -79,15 +78,7 @@ function ScanSeller() {
   const t = p?.tokens;
   const total = t ? t.storefront + t.history : 0;
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
-      <div>
-        <h1 className="page-title">Scan a seller</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Screen a seller&apos;s storefront: its ASINs (up to {n(SCAN_CAP)}) become a run like Check ASINs with no cost, so you see the Buy Box,
-          sales, sellers, Amazon, gating and the most each can cost landed, and whether this seller holds the Buy Box.
-        </p>
-      </div>
-
+    <div className="max-w-5xl space-y-6">
       <form className="panel grid gap-4 p-4 sm:grid-cols-[1fr_auto_auto]" onSubmit={(e) => { e.preventDefault(); if (needsLookup) void lookUp(); }}>
         <div className="space-y-1.5">
           <Label htmlFor="seller">Seller ID or storefront link</Label>
@@ -172,6 +163,3 @@ function ScanSeller() {
   );
 }
 
-export default function ScanSellerPage() {
-  return <Suspense><ScanSeller /></Suspense>;
-}

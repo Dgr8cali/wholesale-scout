@@ -28,8 +28,8 @@ describe("workspaces", () => {
     ]);
     const main = (id: Parameters<typeof workspace>[0]) => workspace(id).nav.filter((n) => !n.more).map((n) => n.label);
     const more = (id: Parameters<typeof workspace>[0]) => workspace(id).nav.filter((n) => n.more).map((n) => n.label);
-    expect(main("wholesale")).toEqual(["Runs", "Products", "Suppliers", "Watchlist", "Tracker"]);
-    expect(more("wholesale")).toEqual(["Upload", "Check ASINs", "Qogita", "Sellers", "Brands", "Favourites", "Plan", "Hunt"]);
+    expect(main("wholesale")).toEqual(["Runs", "New run", "Products", "Suppliers", "Watchlist", "Tracker"]);
+    expect(more("wholesale")).toEqual(["Sellers", "Brands", "Favourites", "Plan"]);
     expect(main("pl")).toEqual(["Candidates", "Niches", "Suppliers", "Quotes"]);
     expect(more("pl")).toEqual(["Niche Hunt", "Launch checklist"]);
     expect(main("ads")).toEqual(["Dashboard", "Proposals", "Launch", "Keywords"]);

@@ -2,9 +2,11 @@
 title: Check ASINs
 summary: Paste ASINs, EANs or Amazon links, with an optional landed cost, and screen them without a price list.
 synonyms: [asin lookup, quick check, single product, verdict card, fetch anyway, re-check, one-off]
-route: /check
+workspace: wholesale
 order: 4
 ---
+*Where: **Wholesale → New run → Check ASINs** ([open it](/new-run?tab=check)).*
+
 Check ASINs screens a handful of products without a file: paste them, press **Check**, and they go through the same gates, fees, Keepa and gating checks as an upload. Each check is a run, so it lands in [Runs](/help/pages/runs) too. The [Chrome extension](/help/pages/extension) gives the same verdict while you're on Amazon.
 
 ## The form

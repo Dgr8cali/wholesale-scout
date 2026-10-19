@@ -3,9 +3,8 @@
 import { RotateCcwIcon, ScanSearchIcon } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { usePageCrumbs } from "@/components/Crumbs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,13 +34,8 @@ B0C62XSQS9, 4.73
 https://www.amazon.co.uk/dp/B0F2HKZMPT  12.50
 3337875597197  £6.20`;
 
-export default function CheckPage() {
-  return <Suspense><Check /></Suspense>;
-}
-
-/** Check ASINs; ?asins= prefills the box (the command palette's "Check an ASIN"). */
-function Check() {
-  usePageCrumbs([{ label: "Check ASINs" }]);
+/** New run → Check ASINs; ?asins= prefills the box (the command palette's "Check an ASIN"). Inside a <Suspense>. */
+export function CheckSource() {
   const router = useRouter();
   const params = useSearchParams();
   const [text, setText] = useState(() => params.get("asins") ?? "");
@@ -83,15 +77,7 @@ function Check() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
-      <div>
-        <h1 className="page-title">Check ASINs</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Paste ASINs, EANs or Amazon links, one per line, each with a landed cost if you have one. They&apos;re screened like an upload
-          (gates, fees, Keepa, gating) and land in Runs. With no cost you still get everything else, and the most it can cost landed.
-        </p>
-      </div>
-
+    <div className="space-y-6">
       <form className="panel space-y-4 p-4" onSubmit={(e) => { e.preventDefault(); check(); }}>
         <div className="space-y-1.5">
           <Label htmlFor="check-input">ASINs, EANs or links, with an optional landed cost</Label>

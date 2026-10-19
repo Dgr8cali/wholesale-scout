@@ -45,8 +45,22 @@ Appearance tab with System / Light / Dark, every section's explanation in an Inf
 confirms). Every other page keeps its old layout inside the new shell until phase 3. Checked: at 390px no page (all 57 views) is wider than
 the screen (Bulk exports' snapshots table was the last; it scrolls in its card now). After-screenshots go to
 `docs/ui-audit/after/` (gitignored, local only).
-To do: phase 3 (the other pages onto PageHeader / DataTable / InfoTip, one verdict vocabulary, page titles = menu labels:
-Keyword bank → Keywords, Launch → Launch checklist, …), phase 4 (the merges in `docs/ui-audit.md` §d) and phase 5 (polish).
+Phase 3a, merge overlapping pages (in progress; one commit per merge). Old addresses answer with a permanent (308) redirect
+to the new page and tab, keeping their query string: `src/lib/moved.ts` (`MOVED`, `movedTo()`), applied first thing in
+`src/proxy.ts`; tabs are links (`?tab=`, `useTab()` in `src/lib/ui/useTab.ts`).
+
+| Old | New |
+|---|---|
+| `/upload` | `/new-run?tab=upload` |
+| `/check` | `/new-run?tab=check` (`?asins=` prefills) |
+| `/qogita` | `/new-run?tab=qogita` |
+| `/hunt` | `/new-run?tab=hunt` |
+| `/sellers/scan` | `/new-run?tab=seller` (`?seller=` prefills) |
+
+New run (`src/app/new-run`, the sources in `src/components/newrun/`) is one page with a tab per source; Runs has a New run
+button; ⌘K's Check an ASIN opens its tab prefilled.
+To do: phase 3b, restyle every remaining page (the other pages onto PageHeader / DataTable / InfoTip, one verdict vocabulary, page titles = menu labels:
+Keyword bank → Keywords, Launch → Launch checklist, …), phase 4 (Private label Launch + Ads Launch, the candidate page, one results table for Run detail / Brand detail / Products) and phase 5 (polish).
 
 ## Workspaces
 

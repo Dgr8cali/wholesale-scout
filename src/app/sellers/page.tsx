@@ -39,14 +39,14 @@ export default function SellersPage() {
           <h1 className="page-title">Sellers</h1>
           <p className="mt-1 text-sm text-muted-foreground">Storefronts you&apos;ve scanned: who they are, what they sell, and how their listings screened.</p>
         </div>
-        <Button asChild><Link href="/sellers/scan"><ScanSearchIcon /> Scan a seller</Link></Button>
+        <Button asChild><Link href="/new-run?tab=seller"><ScanSearchIcon /> Scan a seller</Link></Button>
       </div>
 
       {error ? <ErrorState title="Couldn't load sellers" message={error} onRetry={() => window.location.reload()} />
         : sellers == null ? <p className="text-sm text-muted-foreground">Loading…</p>
         : !sellers.length ? (
           <EmptyState icon={<StoreIcon />} title="No sellers scanned yet"
-            action={<Button variant="outline" asChild><Link href="/sellers/scan">Scan a seller</Link></Button>}>
+            action={<Button variant="outline" asChild><Link href="/new-run?tab=seller">Scan a seller</Link></Button>}>
             Paste a seller ID or storefront link, or use “Scan this seller” on a row&apos;s Buy Box sellers.
           </EmptyState>
         ) : (
@@ -107,7 +107,7 @@ export default function SellersPage() {
                         ) : <span className="text-xs text-muted-foreground">Looked up, not scanned</span>}
                       </TableCell>
                       <TableCell className="pr-4 text-right">
-                        <Button size="sm" variant="outline" asChild><Link href={`/sellers/scan?seller=${s.sellerId}`}>{s.lastScan ? "Re-scan" : "Scan"}</Link></Button>
+                        <Button size="sm" variant="outline" asChild><Link href={`/new-run?tab=seller&seller=${s.sellerId}`}>{s.lastScan ? "Re-scan" : "Scan"}</Link></Button>
                       </TableCell>
                     </TableRow>
                   );

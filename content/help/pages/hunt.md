@@ -2,9 +2,11 @@
 title: Hunt
 summary: Find products shaped the way your default profile wants with Keepa's Product Finder, screen them without a supplier, then look for one on Qogita.
 synonyms: [product finder, keepa finder, sourcing, product research, find products, reverse sourcing, qogita search]
-route: /hunt
+workspace: wholesale
 order: 6
 ---
+*Where: **Wholesale → New run → Hunt** ([open it](/new-run?tab=hunt)).*
+
 Hunt starts from Amazon instead of a price list. It asks Keepa's Product Finder for products with the shape your default profile wants, screens the matches as a run with no cost, and lets you look each pass up on Qogita by its EAN to find a supplier.
 
 ## The shape

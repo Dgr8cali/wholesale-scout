@@ -67,7 +67,8 @@ function describeFilters(f: Filters, currency = "€"): string[] {
   return out;
 }
 
-export default function QogitaPage() {
+/** New run → Qogita: pull in-stock products and screen them; saved pulls re-run nightly. */
+export function QogitaSource() {
   const router = useRouter();
   const { confirm } = useDialogs();
   const [cats, setCats] = useState<Category[] | null>(null);
@@ -157,7 +158,6 @@ export default function QogitaPage() {
   if (!available) {
     return (
       <div className="space-y-5">
-        <Header />
         <EmptyState icon={<DownloadCloudIcon />} title="Qogita isn't connected">Set QOGITA_EMAIL and QOGITA_PASSWORD in the environment, then reload.</EmptyState>
       </div>
     );
@@ -165,7 +165,6 @@ export default function QogitaPage() {
 
   return (
     <div className="space-y-6">
-      <Header />
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_24rem]">
         <section className="panel space-y-5 p-5">
           <div className="grid gap-4 sm:grid-cols-2">
@@ -280,18 +279,6 @@ export default function QogitaPage() {
             ))}
         </aside>
       </div>
-    </div>
-  );
-}
-
-function Header() {
-  return (
-    <div>
-      <h1 className="page-title">Pull from Qogita</h1>
-      <p className="max-w-3xl text-sm text-muted-foreground">
-        Pull in-stock products straight from Qogita and screen them like an uploaded price list (supplier Qogita, prices per piece, ex-VAT).
-        Price and delivery are filtered after the pull; the MOV limit applies to each passing row&apos;s supplier offers.
-      </p>
     </div>
   );
 }

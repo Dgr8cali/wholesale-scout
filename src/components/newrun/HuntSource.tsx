@@ -4,7 +4,6 @@ import { CrosshairIcon, LoaderIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { usePageCrumbs } from "@/components/Crumbs";
 import { ErrorState } from "@/components/States";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,8 +30,8 @@ function Num({ label, value, onChange, step, hint }: { label: string; value: num
 }
 
 /** Hunt: Keepa's Product Finder with the default profile's shape, screened as a run with no cost. */
-export default function HuntPage() {
-  usePageCrumbs([{ label: "Hunt" }]);
+/** New run → Hunt: Keepa Product Finder matches for a profile, screened as a run with no cost. */
+export function HuntSource() {
   const router = useRouter();
   const [start, setStart] = useState<Start | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -86,15 +85,7 @@ export default function HuntPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <div className="space-y-1">
-        <h1 className="page-title">Hunt</h1>
-        <p className="text-sm text-muted-foreground">
-          Products shaped the way <b>{start.profile}</b> wants, found with Keepa&apos;s Product Finder before you have a supplier. The matches are screened as a run
-          with no cost (each shows the most it can cost landed); a pass links to <b>Find on Qogita</b> to look for a supplier by its EAN.
-        </p>
-      </div>
-
+    <div className="max-w-4xl space-y-6">
       <section className="panel space-y-4 p-4">
         <div className="flex flex-wrap items-end gap-3">
           <label className="min-w-56 flex-1 space-y-1.5">

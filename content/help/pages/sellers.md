@@ -5,7 +5,7 @@ synonyms: [storefront, seller scan, competitor, merchant, seller id, keepa selle
 route: /sellers
 order: 6
 ---
-The Sellers page lists the Amazon storefronts you've looked up or scanned. **Scan a seller** screens a seller's listings as a run, so you can see which of the products they sell would work for you.
+The Sellers page lists the Amazon storefronts you've looked up or scanned. **Scan a seller** (a tab of [New run](/help/pages/new-run)) screens a seller's listings as a run, so you can see which of the products they sell would work for you.
 
 ## The Sellers list
 
