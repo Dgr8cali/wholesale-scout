@@ -81,9 +81,9 @@ They're grouped by product, then rule, and filtered by rule, confidence or campa
 
 1. On **Proposals**, click **Export bulk sheet**. The approved proposals become a batch (named by date, e.g. "2026-10-02 #1"), and its .xlsx downloads. The sheet has one tab, **Sponsored Products Campaigns** (Amazon rejects the whole file if any other tab doesn't start Product, Entity, Operation, so don't add one), with Amazon's own columns in the bulk export's order: **Update** rows for bids, states, budgets and placement percentages, and **Create** rows for new keywords, negatives and campaigns.
 2. In Amazon Ads, go to **Campaign manager → Bulk operations**, choose **Upload**, and pick the file. Amazon checks it and lists any row it rejects.
-3. Back on **Proposals → Exports**, click **Mark batch as uploaded**. Its changes won't be proposed again for 30 days, which gives the next export time to show their effect.
+3. Back on **Proposals → Exports**, click **Mark uploaded**. Its changes won't be proposed again for 30 days, which gives the next export time to show their effect.
 
-**Exports** lists every batch with its change list, the file to download again, and when it was uploaded. Import a fresh bulk export after the changes have run for a while, and the rules work from the new figures.
+**Exports** (a tab of Proposals, next to **To review**; the old `/ads/proposals/exports` address opens it) lists every batch (click its name for the change list), the file to download again, and when it was uploaded. Import a fresh bulk export after the changes have run for a while, and the rules work from the new figures.
 
 ## Reverting a batch, and snapshots
 

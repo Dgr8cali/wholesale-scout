@@ -27,6 +27,8 @@ export const MOVED: Moved[] = [
   { from: "/ads/imports", to: "/ads/dashboard?tab=imports" },
   // 5. Settings → Ads → Ads → Rules → Ad settings (one home for the rules and what they work from).
   { from: "/settings", tab: "ads", to: "/ads/rules?tab=settings" },
+  // 6. Bulk exports → the Exports tab of Proposals.
+  { from: "/ads/proposals/exports", to: "/ads/proposals?tab=exports" },
 ];
 
 /** Where an old address now lives (path + query), or null when it hasn't moved. */

@@ -7,6 +7,9 @@ import { toast } from "sonner";
 import { ErrorState } from "@/components/States";
 import { Button } from "@/components/ui/button";
 import { DataTable, type DataColumn } from "@/components/ui/data-table";
+import { ExportsTab } from "@/components/ads/ExportsTab";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useTab } from "@/lib/ui/useTab";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatusChip, type Tone } from "@/components/ui/status-chip";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
@@ -32,7 +35,12 @@ export default function AdsProposalsPage() {
   return <Suspense><AdsProposals /></Suspense>;
 }
 
+const TABS = ["review", "exports"] as const;
+type Tab = (typeof TABS)[number];
+
 function AdsProposals() {
+  // ?asin= (the product picker) is the To review tab's, but survives a trip to Exports.
+  const [tab, setTab] = useTab(TABS, ["asin"]);
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [rule, setRule] = useState<"" | RuleId>("");
@@ -79,6 +87,7 @@ function AdsProposals() {
       link.download = "";
       link.click();
       await load();
+      setTab("exports");
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -122,17 +131,23 @@ function AdsProposals() {
       <PageHeader
         title="Proposals"
         crumbs={[{ label: "Ads", href: "/ads/dashboard" }, { label: "Proposals" }]}
-        subtitle="What your rules suggest. Approve what you agree with, then export the bulk sheet."
+        subtitle={tab === "review" ? "What your rules suggest. Approve what you agree with, then export the bulk sheet." : "Every bulk sheet: download it, mark it uploaded, revert or discard it."}
         info={<>
           <p>Proposals come from your <Link className="text-primary underline" href="/ads/rules">rules</Link>, run on the imported data. Approve what you agree with, then export the bulk sheet and upload it in Amazon Ads (Campaign manager → Bulk operations).</p>
           <p>Nothing changes in Amazon Ads until you upload it. Skip keeps a proposal away for 30 days, Snooze for 14. Confidence: low under 10 clicks, medium 10–29, high from 30 clicks or 3 orders.</p>
         </>}
         actions={<>
-          <Button variant="secondary" asChild><Link href="/ads/proposals/exports">Exports{data.batchesAwaitingUpload ? ` (${data.batchesAwaitingUpload} to upload)` : ""}</Link></Button>
           <Button onClick={exportSheet} disabled={!approved.length} loading={busy === "export"} title={approved.length ? undefined : "Approve a proposal first"}><DownloadIcon /> Export bulk sheet ({approved.length})</Button>
         </>}
       />
 
+      <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)} className="gap-6">
+        <TabsList aria-label="Proposals">
+          <TabsTrigger value="review" className="px-3"><LightbulbIcon /> To review{data.proposals.some((p) => p.status === "open") && <span className="num text-muted-foreground"> {data.proposals.filter((p) => p.status === "open").length}</span>}</TabsTrigger>
+          <TabsTrigger value="exports" className="px-3"><DownloadIcon /> Exports{data.batchesAwaitingUpload ? <span className="text-warn-ink"> <span className="num">{data.batchesAwaitingUpload}</span> to upload</span> : null}</TabsTrigger>
+        </TabsList>
+        <TabsContent value="exports"><ExportsTab /></TabsContent>
+        <TabsContent value="review" className="space-y-6">
       <div className="flex flex-wrap items-end gap-3">
         {(productIds.length > 1 || (!!pick && !productIds.includes(pick))) && <ProductPicker products={productIds.map((asin) => ({ asin }))} value={pick} onChange={setPick} />}
         <label className="space-y-1"><span className="field-label">Rule</span>
@@ -175,6 +190,8 @@ function AdsProposals() {
           <ul className="mt-2 space-y-1 text-muted-foreground">{notes.flatMap(([r, ns]) => ns.map((n) => <li key={r + n}><b className="text-foreground">{RULE_LABEL[r]}:</b> {n}</li>))}</ul>
         </details>
       )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

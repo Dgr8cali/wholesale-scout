@@ -171,7 +171,7 @@ function AdsLaunch() {
               <div className="flex flex-wrap items-center gap-3">
                 <Button onClick={create} disabled={busy}>{busy ? <LoaderIcon className="animate-spin" /> : <RocketIcon />} Create launch sheet ({preview.rows} rows)</Button>
                 {made && <Button variant="outline" asChild><a href={`/api/ads/exports/${made.id}`}><DownloadIcon /> Download {made.label}</a></Button>}
-                {made && <Link href="/ads/proposals/exports" className="text-sm text-brand hover:underline">All bulk exports →</Link>}
+                {made && <Link href="/ads/proposals?tab=exports" className="text-sm text-brand hover:underline">All bulk exports →</Link>}
               </div>
               <p className="text-xs text-muted-foreground">Creating it saves the sheet under Bulk exports, puts the product in its launch phase (weeks 1–2: the rules propose harvests and negatives only) and shows the plan on the dashboard.</p>
             </>
