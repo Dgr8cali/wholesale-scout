@@ -214,6 +214,7 @@ A combined filter (profit, ROI, sales, BSR, not gated) went from ~4.1 s to ~0.3 
 **Brand detail's drawer** pushes the page aside on wide screens (`xl:mr-[27rem]`, as on Run detail and Products) instead of covering the table's right edge.
 **Results on a phone: 10 cards a page** (was 20; Run detail, Brand detail, Shortlist, and Products' server pages, `?size=10`), the pager under them worded Previous / Next (44px) with a page picker ("Page [n] of N"), and a new page scrolls back to its first card.
 **My niches on a phone**: each niche is a card (need, its terms, score; SV 360d, growth 180d, average price; flags, shape, status; tap to open its detail), the table from 640px; no sideways scroll at 390px.
+**Ads import previews** (a CSV report's rows, a bulk export's campaigns, in the Import sheet) are DataTables (sortable, 25 a page, cards on a phone) instead of hand-made tables; the reading and import calls are unchanged.
 **Extension 0.8.0**: the product panel and search results show the app's words, colours and icons (Buy / Check / Skip / Not scored as round chips; the panel lists each gate as Pass / Check / Fail), and candidate links open `/pl/candidates/<id>` (Suppliers & quotes, Reviews or Gate 3 tab) instead of the old `?c=` redirect.
 
 ## Workspaces

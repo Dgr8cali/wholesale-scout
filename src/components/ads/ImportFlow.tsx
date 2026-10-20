@@ -8,7 +8,6 @@ import { useDialogs } from "@/components/Dialogs";
 import { Button } from "@/components/ui/button";
 import { DataTable, type DataColumn } from "@/components/ui/data-table";
 import { Input } from "@/components/ui/input";
-import { SortTh, useSortable } from "@/components/SortableTable";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatusChip } from "@/components/ui/status-chip";
 import { parseBulk, type ParsedBulk } from "@/lib/ads/bulk";
@@ -141,12 +140,19 @@ export function ImportsHistory({ refresh = 0 }: { refresh?: number }) {
   );
 }
 
+type ReportRow = ParsedReport["rows"][number];
+const reportDates = (x: ReportRow) => (x.dateFrom ? (x.dateFrom === x.dateTo ? day(x.dateFrom) : `${day(x.dateFrom)} – ${day(x.dateTo)}`) : x.campaignStart ? `from ${day(x.campaignStart)} (as exported)` : "as exported");
+const reportColumns = (isTerms: boolean): DataColumn<ReportRow & { i: number }>[] => [
+  { id: "campaign", header: "Campaign", cell: (x) => x.campaignName, sortValue: (x) => x.campaignName, mobile: "title" },
+  ...(isTerms ? [{ id: "term", header: "Search term", cell: (x: ReportRow) => x.searchTerm, sortValue: (x: ReportRow) => x.searchTerm, mobile: 1 as const }] : []),
+  { id: "dates", header: "Dates", cell: reportDates, sortValue: (x) => x.dateFrom ?? x.campaignStart, className: "whitespace-nowrap" },
+  { id: "clicks", header: "Clicks", cell: (x) => x.clicks, sortValue: (x) => x.clicks, numeric: true, mobile: 2 },
+  { id: "cost", header: "Spend", cell: (x) => gbp(x.cost), sortValue: (x) => x.cost, numeric: true, mobile: 3 },
+  { id: "orders", header: "Orders", cell: (x) => x.orders, sortValue: (x) => x.orders, numeric: true },
+  { id: "sales", header: "Sales", cell: (x) => gbp(x.sales), sortValue: (x) => x.sales, numeric: true },
+];
+
 function Preview({ p, onRemove }: { p: Picked; onRemove: () => void }) {
-  const s = useSortable("ads.import-preview", p.parsed?.rows ?? [], {
-    campaign: { value: (x) => x.campaignName, kind: "text" }, term: { value: (x) => x.searchTerm, kind: "text" },
-    dates: { value: (x) => x.dateFrom ?? x.campaignStart, kind: "date" }, clicks: { value: (x) => x.clicks, kind: "number" },
-    cost: { value: (x) => x.cost, kind: "number" }, orders: { value: (x) => x.orders, kind: "number" }, sales: { value: (x) => x.sales, kind: "number" },
-  });
   if (!p.parsed) {
     return (
       <div className="panel flex items-start gap-3 border-danger/40 p-3">
@@ -171,36 +177,12 @@ function Preview({ p, onRemove }: { p: Picked; onRemove: () => void }) {
         </div>
         <Button type="button" size="icon-sm" variant="ghost" onClick={onRemove} aria-label="Remove from this import"><XIcon /></Button>
       </div>
-      <div className="overflow-x-auto rounded-lg border border-border">
-        <table className="w-full text-xs">
-          <thead><tr className="border-b border-border text-left text-xs font-semibold tracking-[0.06em] text-muted-foreground uppercase">
-            <SortTh {...s.th("campaign")} className="px-2 py-1">Campaign</SortTh>{isTerms && <SortTh {...s.th("term")} className="px-2 py-1">Search term</SortTh>}<SortTh {...s.th("dates")} className="px-2 py-1">Dates</SortTh>
-            <SortTh {...s.th("clicks")} numeric className="px-2 py-1 text-right">Clicks</SortTh><SortTh {...s.th("cost")} numeric className="px-2 py-1 text-right">Spend</SortTh>
-            <SortTh {...s.th("orders")} numeric className="px-2 py-1 text-right">Orders</SortTh><SortTh {...s.th("sales")} numeric className="px-2 py-1 text-right">Sales</SortTh>
-          </tr></thead>
-          <tbody>{s.rows.slice(0, 8).map((x, i) => (
-            <tr key={i} className="border-b border-divider last:border-b-0">
-              <td className="px-2 py-1">{x.campaignName}</td>{isTerms && <td className="px-2 py-1">{x.searchTerm}</td>}
-              <td className="px-2 py-1 whitespace-nowrap">{x.dateFrom ? (x.dateFrom === x.dateTo ? day(x.dateFrom) : `${day(x.dateFrom)} – ${day(x.dateTo)}`) : x.campaignStart ? `from ${day(x.campaignStart)} (as exported)` : "as exported"}</td>
-              <td className="num px-2 py-1 text-right">{x.clicks}</td><td className="num px-2 py-1 text-right">{gbp(x.cost)}</td>
-              <td className="num px-2 py-1 text-right">{x.orders}</td><td className="num px-2 py-1 text-right">{gbp(x.sales)}</td>
-            </tr>
-          ))}</tbody>
-        </table>
-        {r.rows.length > 8 && <p className="border-t border-divider px-2 py-1 text-xs text-muted-foreground">… and {r.rows.length - 8} more</p>}
-      </div>
+      <DataTable rows={r.rows.map((x, i) => ({ ...x, i }))} columns={reportColumns(isTerms)} getRowId={(x) => String(x.i)} pageSize={25} caption={`${p.name}: rows read`} />
     </div>
   );
 }
 
 function BulkPreview({ b, onChange, onRemove }: { b: PickedBulk; onChange: (patch: Partial<PickedBulk>) => void; onRemove: () => void }) {
-  const bp = b.parsed;
-  const s = useSortable("ads.import-bulk", bp?.campaigns ?? [], {
-    campaign: { value: (c) => c.name, kind: "text" }, asin: { value: (c) => bp?.campaignAsins.get(c.campaignId) ?? null, kind: "text" },
-    state: { value: (c) => c.state, kind: "text" }, keywords: { value: (c) => bp?.keywords.filter((k) => k.campaignId === c.campaignId).length ?? 0, kind: "number" },
-    clicks: { value: (c) => c.clicks, kind: "number" }, cost: { value: (c) => c.cost, kind: "number" },
-    orders: { value: (c) => c.orders, kind: "number" }, sales: { value: (c) => c.sales, kind: "number" },
-  });
   if (!b.parsed) {
     return (
       <div className="panel flex items-start gap-3 border-danger/40 p-3">
@@ -230,25 +212,23 @@ function BulkPreview({ b, onChange, onRemove }: { b: PickedBulk; onChange: (patc
         </div>
         <Button type="button" size="icon-sm" variant="ghost" onClick={onRemove} aria-label="Remove from this import"><XIcon /></Button>
       </div>
-      <div className="overflow-x-auto rounded-lg border border-border">
-        <table className="w-full text-xs">
-          <thead><tr className="border-b border-border text-left text-xs font-semibold tracking-[0.06em] text-muted-foreground uppercase">
-            <SortTh {...s.th("campaign")} className="px-2 py-1">Campaign</SortTh><SortTh {...s.th("asin")} className="px-2 py-1">ASIN (from product ads)</SortTh><SortTh {...s.th("state")} className="px-2 py-1">State</SortTh>
-            <SortTh {...s.th("keywords")} numeric className="px-2 py-1 text-right">Keywords</SortTh><SortTh {...s.th("clicks")} numeric className="px-2 py-1 text-right">Clicks</SortTh>
-            <SortTh {...s.th("cost")} numeric className="px-2 py-1 text-right">Spend</SortTh><SortTh {...s.th("orders")} numeric className="px-2 py-1 text-right">Orders</SortTh><SortTh {...s.th("sales")} numeric className="px-2 py-1 text-right">Sales</SortTh>
-          </tr></thead>
-          <tbody>{s.rows.map((c) => (
-            <tr key={c.campaignId} className="border-b border-divider last:border-b-0">
-              <td className="px-2 py-1">{c.name}</td>
-              <td className="px-2 py-1">{r.campaignAsins.get(c.campaignId) ?? <span className="text-muted-foreground">{r.productAds.some((p) => p.campaignId === c.campaignId) ? "several" : "none"}</span>}</td>
-              <td className="px-2 py-1">{c.state}</td>
-              <td className="num px-2 py-1 text-right">{r.keywords.filter((k) => k.campaignId === c.campaignId).length}</td>
-              <td className="num px-2 py-1 text-right">{c.clicks}</td><td className="num px-2 py-1 text-right">{gbp(c.cost)}</td>
-              <td className="num px-2 py-1 text-right">{c.orders}</td><td className="num px-2 py-1 text-right">{gbp(c.sales)}</td>
-            </tr>
-          ))}</tbody>
-        </table>
-      </div>
+      <DataTable rows={r.campaigns} columns={bulkColumns(r)} getRowId={(c) => c.campaignId} pageSize={25} caption={`${b.name}: campaigns read`} />
     </div>
   );
 }
+
+type BulkCampaign = ParsedBulk["campaigns"][number];
+const bulkColumns = (r: ParsedBulk): DataColumn<BulkCampaign>[] => {
+  const keywords = (c: BulkCampaign) => r.keywords.filter((k) => k.campaignId === c.campaignId).length;
+  return [
+    { id: "campaign", header: "Campaign", cell: (c) => c.name, sortValue: (c) => c.name, mobile: "title" },
+    { id: "asin", header: "ASIN (from product ads)", sortValue: (c) => r.campaignAsins.get(c.campaignId) ?? null, mobile: 1,
+      cell: (c) => r.campaignAsins.get(c.campaignId) ?? <span className="text-muted-foreground">{r.productAds.some((p) => p.campaignId === c.campaignId) ? "several" : "none"}</span> },
+    { id: "state", header: "State", cell: (c) => c.state, sortValue: (c) => c.state },
+    { id: "keywords", header: "Keywords", cell: keywords, sortValue: keywords, numeric: true },
+    { id: "clicks", header: "Clicks", cell: (c) => c.clicks, sortValue: (c) => c.clicks, numeric: true, mobile: 2 },
+    { id: "cost", header: "Spend", cell: (c) => gbp(c.cost), sortValue: (c) => c.cost, numeric: true, mobile: 3 },
+    { id: "orders", header: "Orders", cell: (c) => c.orders, sortValue: (c) => c.orders, numeric: true },
+    { id: "sales", header: "Sales", cell: (c) => gbp(c.sales), sortValue: (c) => c.sales, numeric: true },
+  ];
+};
