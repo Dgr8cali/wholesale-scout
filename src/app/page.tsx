@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Kpi } from "@/components/ui/kpi";
+import { StatusChip } from "@/components/ui/status-chip";
 import { PageHeader } from "@/components/ui/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import { GATING_LABELS, GATING_VARIANT, type BrandSummary } from "@/lib/brandMap";
@@ -127,7 +128,7 @@ export default function HomePage() {
             )}
           </Section>
           <Section load={alerts} skeleton={<StatSkeleton />}>
-            {(a) => <Stat icon={<BellIcon />} label="Watchlist: now passes" href="/shortlist?tab=watching" value={a.count}
+            {(a) => <Stat icon={<BellIcon />} label="Watching: now a buy" href="/shortlist?tab=watching" value={a.count}
               hint={a.count ? "passed, met a condition or found a supplier" : "nothing new in the last 14 days"} />}
           </Section>
           <Section load={favs} skeleton={<StatSkeleton />}>
@@ -136,7 +137,7 @@ export default function HomePage() {
           </Section>
           <Section load={brands} skeleton={<StatSkeleton />}>
             {(b) => <Stat icon={<BuildingIcon />} label="Brands awaiting approval" href="/brands" value={b.awaiting.brands}
-              hint={`${b.awaiting.passing.toLocaleString("en-GB")} passing products held back`} />}
+              hint={`${b.awaiting.passing.toLocaleString("en-GB")} Buy products held back`} />}
           </Section>
         </div>
       </Row>
@@ -284,7 +285,7 @@ export default function HomePage() {
                         </div>
                         {q.runId && (
                           <Link href={`/runs/${q.runId}`} className="flex-none">
-                            <Badge variant={q.passes ? "pass" : "muted"}><span className="num">{q.passes}</span> new pass{q.passes === 1 ? "" : "es"}</Badge>
+                            <StatusChip tone={q.passes ? "good" : "neutral"}><span className="num">{q.passes}</span> new Buy</StatusChip>
                           </Link>
                         )}
                       </li>

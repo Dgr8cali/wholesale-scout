@@ -46,11 +46,11 @@ Settings, **Gates** tab, card **11 Gating and blocks** (Needs: SP-API).
 
 | Status | Example | Meaning |
 |---|---|---|
-| fail / warn | Blocked for your account (brand: Nuxe): You cannot list products in this brand. | Blocked. The part after the colon is Amazon's own message. Tagged BLOCKED. |
-| warn / fail | Brand approval needed (Nuxe): You need approval to list in this brand. | Brand approval. Also "Category approval needed (Beauty): …", "Product approval needed: …" or "Approval needed: …" when the kind isn't clear. Tagged APPROVAL. |
-| pass | Open to list | |
-| pass | Open: brand approval for Nuxe recorded as approved on 2026-08-14 | You marked the brand approved on the Brands page. Tagged BRAND_APPROVED. |
-| pass | Approval needed (allowed by profile) | **Approval needed counts as** is **off**. |
+| **Fail** / **Check** | Blocked for your account (brand: Nuxe): You cannot list products in this brand. | Blocked. The part after the colon is Amazon's own message. Tagged BLOCKED. |
+| **Check** / **Fail** | Brand approval needed (Nuxe): You need approval to list in this brand. | Brand approval. Also "Category approval needed (Beauty): …", "Product approval needed: …" or "Approval needed: …" when the kind isn't clear. Tagged APPROVAL. |
+| **Pass** | Open to list | |
+| **Pass** | Open: brand approval for Nuxe recorded as approved on 2026-08-14 | You marked the brand approved on the Brands page. Tagged BRAND_APPROVED. |
+| **Pass** | Approval needed (allowed by profile) | **Approval needed counts as** is **off**. |
 | skipped | Not checked (SP-API not configured) | No SP-API credentials. |
 | skipped | Restriction check failed: … | The check errored; Amazon's or the network's error follows. Or "Restriction status unknown". |
 | off | Gate off in this profile | |

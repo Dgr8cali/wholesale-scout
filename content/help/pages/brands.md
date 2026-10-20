@@ -47,7 +47,7 @@ Click any column heading except Gating and Carried by to sort by it. Click it ag
 | **Brand** | Links to the brand's page. |
 | **Score** | The wholesale-friendly score. |
 | **ASINs** | Distinct ASINs seen in any run. |
-| **Pass / warn** | Products that pass or warn on your default profile. Only products that have a price are counted. |
+| **Pass / warn** | Products whose verdict is **Buy** or **Check** on your default profile. Only products that have a price are counted. |
 | **Sellers** | Average number of FBA sellers. |
 | **Amazon** | The share of its listings that Amazon sells or has sold. It shows in red at 50% or more. |
 | **Buy Box** | Average Buy Box. |
@@ -99,7 +99,7 @@ This is one row per product, with the best offer for each EAN.
 | Column | What it shows |
 |---|---|
 | **Product** | Thumbnail, title, EAN, ASIN (links to Amazon) and **latest run**. |
-| **Verdict** | pass, warn or fail on your default profile. It shows "—" for a product that was never priced, which isn't judged. |
+| **Verdict** | **Buy**, **Check** or **Skip** on your default profile. It shows "—" for a product that was never priced, which isn't judged. |
 | **Buy Box**, **Sellers** | The latest figures. |
 | **Amazon** | "sells / sold" (in red) or "no". |
 | **Max landed** | The most a unit can cost landed and still clear the floors. |

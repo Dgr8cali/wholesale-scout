@@ -57,7 +57,7 @@ A check of a single item opens its run with a verdict card above the table:
 
 | Part | Shows |
 | --- | --- |
-| Verdict | **PASS**, **WARN** or **FAIL**; **Screening** while it's working and **updating** while more data is arriving. |
+| Verdict | **Buy** (passed every gate), **Check** (a gate warned) or **Skip** (failed a gate); **Screening** while it's working and **updating** while more data is arriving. |
 | **Score** | The win score, coloured by band (see [Score](/help/concepts/score)). |
 | **no Keepa history** | Sales, history and Amazon presence need Keepa, and there isn't any. |
 | Title, ASIN, EAN, **Amazon** | The product, with a link to its Amazon page. |
@@ -82,12 +82,12 @@ If the item failed a gate before Keepa was asked (such as [Price band](/help/gat
 
 Sales, your share and months to sell read "not fetched: failed at price band".
 
-**Fetch anyway** screens it again, gathering every source (Amazon, Keepa, gating and fees) past the failing gate. It spends Keepa tokens. The gates still decide the verdict, so a fail stays a fail; you just see the full picture, for example to judge whether to [waive the gate](/help/howto/waive-a-gate).
+**Fetch anyway** screens it again, gathering every source (Amazon, Keepa, gating and fees) past the failing gate. It spends Keepa tokens. The gates still decide the verdict, so it stays **Skip**; you just see the full picture, for example to judge whether to [waive the gate](/help/howto/waive-a-gate).
 
 A check of several items opens an ordinary run: read it like any other on [Runs](/help/pages/runs).
 
 ## Recent checks
 
-Your last 20 checks (archived ones are left out), newest first. Each shows what was checked (click to open its run), when, the supplier, and "with cost" if a cost was given. On the right: **Screening** while it runs; for a single item its verdict and score (for example "PASS · 78"); for several, "2 pass · 0 warn · 1 fail".
+Your last 20 checks (archived ones are left out), newest first. Each shows what was checked (click to open its run), when, the supplier, and "with cost" if a cost was given. On the right: **Screening** while it runs; for a single item its verdict and score (for example "Buy · 78"); for several, "2 Buy · 0 Check · 1 Skip".
 
 **Re-run** checks the same input again with fresh data, as a new check. It also puts the input back in the box.

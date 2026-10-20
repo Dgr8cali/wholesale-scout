@@ -53,17 +53,17 @@ First order lowers the ceiling to £35.00; the other shipped [profiles](/help/co
 
 | Status | Why-line | Example | Meaning |
 |---|---|---|---|
-| fail / warn | `Sells at £X, under the £MIN floor` | Sells at £9.99, under the £12.00 floor | The scoring price is below your min. |
-| fail / warn | `Sells at £X, over the £MAX ceiling` | Sells at £45.50, over the £40.00 ceiling | The scoring price is above your max. |
-| pass | `£X is inside £MIN–£MAX` | £18.49 is inside £12.00–£40.00 | Inside the band. |
+| **Fail** / **Check** | `Sells at £X, under the £MIN floor` | Sells at £9.99, under the £12.00 floor | The scoring price is below your min. |
+| **Fail** / **Check** | `Sells at £X, over the £MAX ceiling` | Sells at £45.50, over the £40.00 ceiling | The scoring price is above your max. |
+| **Pass** | `£X is inside £MIN–£MAX` | £18.49 is inside £12.00–£40.00 | Inside the band. |
 | skipped | No sell price yet | | No Buy Box, median or last-seen price yet. It's never failed for missing data. |
 | off | Gate off in this profile | | The profile has the gate off. |
 
-It shows as fail when the gate's mode is **fail**, and as warn when it's **warn**.
+It shows **Fail** when the gate's mode is **fail**, and **Check** when it's **warn**.
 
 ## What to do about a fail
 
 - The scoring price may be low because of the "lower of" rule. Check **Sells at** and its source in the result's details. If the median is dragging it down and you trust today's price, change **Score on** and re-screen.
 - To take cheaper or dearer items generally, [change the threshold](/help/howto/change-a-threshold).
-- To accept this one product anyway, [waive the gate](/help/howto/waive-a-gate): the fail becomes a warning and later gates still run.
+- To accept this one product anyway, [waive the gate](/help/howto/waive-a-gate): the fail becomes a warning (the gate shows **Check**) and later gates still run.
 - On a single check that stopped here before Keepa, **Fetch anyway** on the [Check](/help/pages/check) page gathers sales and history anyway. The verdict is still decided by the gates.

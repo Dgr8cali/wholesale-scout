@@ -9,8 +9,8 @@ Some brands and categories are gated: Amazon wants you to request approval befor
 
 ## Find what needs approval
 
-- **In a run**: the Gating and blocks gate says, for example, "Brand approval needed (Nuxe): …" with Amazon's reason. By default this is a warning, so the row stays in. Change **Approval needed counts as** on [Settings](/help/pages/settings) → **Gates** if you want it to fail instead.
-- **On the Brands page**: filter by **Approval needed** to see every brand you'd need approval for, with how many products pass or warn on your default profile. See [Brands](/help/pages/brands).
+- **In a run**: the Gating and blocks gate says, for example, "Brand approval needed (Nuxe): …" with Amazon's reason. By default this is a warning, so the row stays in with the verdict **Check**. Change **Approval needed counts as** on [Settings](/help/pages/settings) → **Gates** if you want it to fail instead.
+- **On the Brands page**: filter by **Approval needed** to see every brand you'd need approval for, with how many of its products are **Buy** or **Check** on your default profile. See [Brands](/help/pages/brands).
 - **In the Chrome extension**: the product panel shows gating with Amazon's Apply link.
 
 The gate needs SP-API with your seller ID (SPAPI_SELLER_ID). Without it the gate is skipped: "Not checked (SP-API not configured)". See [Add an environment variable](/help/howto/add-an-env-var).

@@ -18,7 +18,7 @@ Three ways:
 - **On a product's page**, under **Your purchases**: **Record a purchase**, then the units, the landed cost per unit (filled in from the cheapest supplier; change it to what you actually paid landed), the supplier, the order date and an optional note. **Save**.
 - **On [Plan](/help/pages/plan)**, after placing a supplier's order: **Record as bought** on that supplier's group records every line with its quantity and landed cost, dated today.
 
-The prediction is frozen then, from the product's latest screening: sell price, Amazon's fees per unit, profit per unit at your landed cost (with ROI and margin), total sales and [your share](/help/reference/glossary#your-share) a month, the FBA sellers, [months to sell](/help/reference/glossary#months-to-sell) your units, profit a month, the score, verdict, the [product page's](/help/pages/products) Buy/Wait/Skip and confidence, the profile, and which run it came from. Later screenings don't change it.
+The prediction is frozen then, from the product's latest screening: sell price, Amazon's fees per unit, profit per unit at your landed cost (with ROI and margin), total sales and [your share](/help/reference/glossary#your-share) a month, the FBA sellers, [months to sell](/help/reference/glossary#months-to-sell) your units, profit a month, the score, verdict, the [product page's](/help/pages/products) Buy/Check/Skip and confidence, the profile, and which run it came from. Later screenings don't change it.
 
 ## Moving it along
 

@@ -3,14 +3,14 @@ import { cn } from "@/lib/utils";
 export interface VerdictCounts { pass: number; warn: number; fail: number; error: number; pending: number }
 
 const SEGMENTS = [
-  { key: "pass", label: "pass", className: "bg-pass" },
-  { key: "warn", label: "warn", className: "bg-highlight" },
-  { key: "fail", label: "fail", className: "bg-fail" },
-  { key: "error", label: "error", className: "bg-fail/40" },
+  { key: "pass", label: "Buy", className: "bg-pass" },
+  { key: "warn", label: "Check", className: "bg-highlight" },
+  { key: "fail", label: "Skip", className: "bg-fail" },
+  { key: "error", label: "Error", className: "bg-fail/40" },
   { key: "pending", label: "to screen", className: "bg-muted-foreground/20" },
 ] as const;
 
-/** A run's rows as one stacked bar (pass / warn / fail / error / still to screen), with counts under it. */
+/** A run's rows as one stacked bar (Buy / Check / Skip / Error / still to screen), with counts under it. */
 export function VerdictBar({ counts, legend = true, legendClassName, className }: { counts: VerdictCounts; legend?: boolean; legendClassName?: string; className?: string }) {
   const total = SEGMENTS.reduce((s, x) => s + counts[x.key], 0);
   const summary = SEGMENTS.filter((s) => counts[s.key]).map((s) => `${counts[s.key]} ${s.label}`).join(", ") || "no rows";

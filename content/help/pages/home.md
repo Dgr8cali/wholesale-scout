@@ -25,7 +25,7 @@ A tile that couldn't load shows "Couldn't load:" and the reason; the rest of the
 
 ## Private label
 
-- **Candidates by verdict**: how many candidates you have, split into order samples, check, drop and not scored yet. Opens [Candidates](/help/pages/private-label).
+- **Candidates by verdict**: how many candidates you have, split into **Order samples**, **Check**, **Drop** and **Not scored**. Opens [Candidates](/help/pages/private-label).
 - **Last Niche Hunt**: when it ran, whether it's done, and what it cost. Opens [Niche Hunt](/help/concepts/niche-hunt).
 - **Private label Keepa tokens this month**: what candidates' Keepa refreshes and Niche Hunts have spent this calendar month (UK days).
 
@@ -35,7 +35,7 @@ One tile, "No ad data yet — import a report", until the [Ads](/help/pages/ads)
 
 ## Recent runs
 
-Your six most recent runs, newest first. Each shows its name (click to open the run), when it started, and a bar split into pass, warn and fail (plus errors and rows still "to screen" when there are any). A run still screening shows "Screening ·" with its time left, such as "about 12 min left" or "waiting for Keepa tokens, resumes at 14:32". While any run is screening, the list refreshes every 15 seconds.
+Your six most recent runs, newest first. Each shows its name (click to open the run), when it started, and a bar split into **Buy**, **Check** and **Skip** (plus errors and rows still "to screen" when there are any). A run still screening shows "Screening ·" with its time left, such as "about 12 min left" or "waiting for Keepa tokens, resumes at 14:32". While any run is screening, the list refreshes every 15 seconds.
 
 **All runs** opens [Runs](/help/pages/runs). With no runs yet it says "No runs yet. Upload a price list to screen it against Amazon UK."
 

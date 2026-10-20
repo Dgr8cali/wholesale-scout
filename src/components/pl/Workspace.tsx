@@ -23,6 +23,7 @@ import { VatTag } from "@/components/VatTag";
 import { targetExworks } from "@/lib/pl/supplierScore";
 import { cn } from "@/lib/utils";
 import { Readout, SourceChip, StatusPill } from "./bits";
+import { CANDIDATE_DECISION, decisionLabel } from "@/components/ui/status-chip";
 import { STATUSES, TONE, valuesOf, type CandidateDetail, type FieldMap } from "./types";
 import { CandidateExtras } from "./Extras";
 import type { PlStatus } from "@/lib/pl/launch";
@@ -248,7 +249,7 @@ function Header({ data, ev, card, busy, onRefresh, onPatch }: {
           <div className="flex flex-col items-end leading-tight"><span className="num font-heading text-2xl font-bold">{ev.passed}<small className="text-sm font-medium text-muted-foreground">/8</small></span><span className="text-xs tracking-wide text-muted-foreground uppercase">gates clear</span></div>
           <div className="flex flex-col items-end leading-tight"><span className="num font-heading text-2xl font-bold">{sc.answered === 10 ? sc.total : "–"}<small className="text-sm font-medium text-muted-foreground">/30</small></span><span className="text-xs tracking-wide text-muted-foreground uppercase">score</span></div>
         </div>
-        <StatusPill status={ev.v.cls} label={ev.v.title} big />
+        <StatusPill status={ev.v.cls} label={decisionLabel(CANDIDATE_DECISION, ev.v.cls)} big />
         <div className="ml-auto flex items-center gap-2">
           <span className="text-xs text-muted-foreground">{c.refreshed_at ? `Keepa ${ago(c.refreshed_at)}` : "Not fetched"} · {c.token_cost} token{c.token_cost === 1 ? "" : "s"} so far</span>
           <Button size="sm" onClick={onRefresh} disabled={busy || !data.asins.length}>{busy ? <LoaderIcon className="animate-spin" /> : <RefreshCwIcon />} Refresh from Keepa</Button>

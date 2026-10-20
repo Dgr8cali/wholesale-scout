@@ -7,6 +7,8 @@ order: 2
 ---
 A run is one screening job: an upload, a Qogita pull, an ASIN check, a seller scan or a re-screen of selected rows. The Runs page lists them all; a run's own page is where you read its results and act on them.
 
+A row's verdict is shown as **Buy** (it passed every gate), **Check** (a gate warned) or **Skip** (it failed a gate), and **Error** when the row couldn't be processed; exports and the API keep pass, warn and fail.
+
 ## The runs list
 
 Repeat uploads of the same file are grouped: the newest is shown, with the older ones folded under it.
@@ -29,7 +31,7 @@ Repeat uploads of the same file are grouped: the newest is shown, with the older
 | **Supplier** | The suppliers in the run. |
 | **Started** | When it started. |
 | **Rows** | How many rows it has. |
-| **Results** | A bar of pass, warn and fail (plus errors and rows still to screen), with counts. |
+| **Results** | A bar of **Buy**, **Check** and **Skip** (plus errors and rows still to screen), with counts. |
 | **Status** | **Done**, **Error**, **Paused** ("at N of M"), or **Screening** with a progress bar. A screening run also shows **Using Keepa** (it's the one spending Keepa tokens) or **Waiting for Keepa** (another run has Keepa; this one waits its turn). |
 
 Click **Run**, **Started** or **Rows** to sort by it; click again to reverse. The list refreshes every 10 seconds while any run is still screening. On a phone the hidden columns are summarised under the name.
@@ -94,13 +96,13 @@ Only one run spends Keepa tokens at a time. If another run has Keepa, you'll see
 
 A run made by [Check ASINs](/help/pages/check) (or Re-check) for a single item shows a verdict card above the table:
 
-- The verdict (**PASS**, **WARN**, **FAIL**, or **Screening** while it's working; **updating** while more data arrives), the score, and **no Keepa history** when there's none.
+- The verdict (**Buy**, **Check**, **Skip**, or **Screening** while it's working; **updating** while more data arrives), the score, and **no Keepa history** when there's none.
 - Title, ASIN, EAN, a link to Amazon, and "Checked 2 h ago · **Re-check**". Re-check checks the same ASIN (and cost) again as a new check.
 - **Apply to sell** when Amazon gives an application link (see [Apply for brand approval](/help/howto/apply-for-brand-approval)).
 - Eight figures: **Profit at £X** (with ROI and margin), or **Profit** "no cost given"; **Hurdle** (the [hurdle price](/help/reference/glossary#hurdle-price)) or, with no cost, **Max landed** ("clears the floors at or under", see [max landed](/help/reference/glossary#max-landed)); **Sells at**; **Sales / mo** with the seller count; **Your share** per month; **Months to sell** with the first order quantity; **Amazon** (selling now, not now with when it was last seen, or never); **Gating** (Open, Approval needed, Blocked or Unknown) with the fees.
 - The why-line.
 
-When the item failed a gate before Keepa was asked, the card says "Stopped at **Price band** before Keepa: Buy Box, offers and Amazon are from Amazon's current offers (free); sales, your share and history weren't fetched." Those figures say "not fetched: failed at price band". **Fetch anyway** screens it again gathering every source (Amazon, Keepa, gating, fees) past the failing gate, which spends Keepa tokens. The verdict is still decided by the gates, so it stays a fail; you just get the full picture.
+When the item failed a gate before Keepa was asked, the card says "Stopped at **Price band** before Keepa: Buy Box, offers and Amazon are from Amazon's current offers (free); sales, your share and history weren't fetched." Those figures say "not fetched: failed at price band". **Fetch anyway** screens it again gathering every source (Amazon, Keepa, gating, fees) past the failing gate, which spends Keepa tokens. The verdict is still decided by the gates, so it stays **Skip**; you just get the full picture.
 
 ### Filters
 
@@ -108,7 +110,7 @@ The filter bar works on products (one per EAN). Filters are remembered for this 
 
 | Filter | What it keeps |
 | --- | --- |
-| **pass**, **warn**, **fail**, **error**, **dormant** | Rows with that verdict, each with its count. **error** only appears when rows errored. **dormant** picks [dormant](/help/reference/glossary#dormant) listings (nobody sells them now) whatever their verdict. |
+| **Buy**, **Check**, **Skip**, **Error**, **Dormant** | Rows with that verdict, each with its count. **Error** only appears when rows errored. **Dormant** picks [dormant](/help/reference/glossary#dormant) listings (nobody sells them now) whatever their verdict. |
 | **green**, **amber**, **grey** | Rows in that score band (see [Score](/help/concepts/score)). |
 | **Failed gate** | Rows that stopped at the gates you tick; each gate shows how many. |
 | **Brand** | Rows of the brands you tick (searchable). |
@@ -164,7 +166,7 @@ There are two ways to open a row:
 The details hold:
 
 - "Checked 2 h ago · **Re-check**": when the verdict was reached. Re-check checks the same ASIN, with the same landed cost, as a new [check](/help/pages/check).
-- **Gates**: each gate's result and detail. A failed or warning gate has **Waive**: type a reason (optional) and press **Waive** (or Enter). The waiver applies to this product in every run: a fail becomes a warning and later gates run; a warning stops counting, so the row can go green. The product is re-screened now, fetching what later gates need. A waived gate has **Un-waive**. See [Waive a gate](/help/howto/waive-a-gate) and [waiver](/help/reference/glossary#waiver). "Stopped at Price band; later gates didn't run." marks where it stopped. A failed catalog lookup shows what was tried.
+- **Gates**: each gate's result (**Pass**, **Check** or **Fail**) and detail. A failed or warning gate has **Waive**: type a reason (optional) and press **Waive** (or Enter). The waiver applies to this product in every run: a fail becomes a warning and later gates run; a warning stops counting, so the row can go green. The product is re-screened now, fetching what later gates need. A waived gate has **Un-waive**. See [Waive a gate](/help/howto/waive-a-gate) and [waiver](/help/reference/glossary#waiver). "Stopped at Price band; later gates didn't run." marks where it stopped. A failed catalog lookup shows what was tried.
 - **Days without a seller** and, for a dormant listing, when it last had a Buy Box. **Amazon:** selling now, when it was last seen, or never.
 - **Per unit at £X**: referral, FBA, storage, returns allowance, output VAT, landed cost and profit, with where the fees came from. **Fees by source** compares Amazon's estimate, Keepa and the rate card (see [Fees](/help/concepts/fees)).
 - **Source**: the supplier (links to its page), the quoted cost, GBP ex-VAT cost, MOQ, and a warning when the listing's pack differs from the supplier's (see [multipack](/help/reference/glossary#multipack)).
@@ -178,7 +180,7 @@ The details hold:
 
 ### Qogita cart
 
-On a Qogita row that passed or warned, the details end with **Quantity** (in cases where the supplier sells by the case) and **Add to Qogita cart**. The quantity starts at the most your line budget buys, in whole cases and no more than the supplier holds. "Order whole cases of 6." appears if you type a number that isn't. **Cart** in the top bar opens the cart: one order per supplier with progress to its MOV, where you can change quantities, remove lines, **Refresh**, and **Check out on Qogita**.
+On a Qogita row whose verdict is **Buy** or **Check**, the details end with **Quantity** (in cases where the supplier sells by the case) and **Add to Qogita cart**. The quantity starts at the most your line budget buys, in whole cases and no more than the supplier holds. "Order whole cases of 6." appears if you type a number that isn't. **Cart** in the top bar opens the cart: one order per supplier with progress to its MOV, where you can change quantities, remove lines, **Refresh**, and **Check out on Qogita**.
 
 ### Star, note and watch
 
@@ -208,7 +210,7 @@ Exports are .xlsx files named after the run, one line per listing:
 - **Export selected** exports the ticked rows, even ones the current filters hide.
 - **Export to xlsx** on the runs list exports every screened row of the run, whatever filters you have on it.
 
-The **Listing** column says "only" for an EAN with one ASIN, or "best" and "alternative" where it matched several. Other columns: Verdict, Score, Band, Product, Brand, EAN, ASIN, Supplier, the cost per unit quoted and in GBP ex-VAT, Est. sales / month and its source, Sellers and their source, Your share / mo, Your profit / mo, Order qty, Months to sell, Buy Box, Landed cost, Sell price and its source, Amazon fees and their source, Profit, ROI %, Margin %, Hurdle price, Failed gate, Why, MOQ, Offers seen and Source.
+The **Listing** column says "only" for an EAN with one ASIN, or "best" and "alternative" where it matched several. Other columns: Verdict (pass, warn or fail, the stored values), Score, Band, Product, Brand, EAN, ASIN, Supplier, the cost per unit quoted and in GBP ex-VAT, Est. sales / month and its source, Sellers and their source, Your share / mo, Your profit / mo, Order qty, Months to sell, Buy Box, Landed cost, Sell price and its source, Amazon fees and their source, Profit, ROI %, Margin %, Hurdle price, Failed gate, Why, MOQ, Offers seen and Source.
 
 ### Stale data
 

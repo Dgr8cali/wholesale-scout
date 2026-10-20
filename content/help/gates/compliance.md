@@ -36,9 +36,9 @@ When Medical device fires, the **Cosmetic** rule's keyword match is dropped for 
 ### How the status is worked out
 
 - Rules set to **off** are ignored.
-- Nothing matched: pass.
-- The gate fails only when the gate's mode is **fail** and at least one matched rule is set to **fail**. Amazon's DG lookup saying "not fulfillable" counts as a rule on **fail** whatever that rule's mode. The IP-risk rule on **fail** only fails **high**-risk brands; medium and low only warn.
-- Anything else that matched is a warn.
+- Nothing matched: the gate shows **Pass**.
+- The gate fails (shows **Fail**) only when the gate's mode is **fail** and at least one matched rule is set to **fail**. Amazon's DG lookup saying "not fulfillable" counts as a rule on **fail** whatever that rule's mode. The IP-risk rule on **fail** only fails **high**-risk brands; medium and low only warn.
+- Anything else that matched is a warning: the gate shows **Check**.
 
 So a rule on **fail** inside a gate on **warn** only warns.
 
@@ -89,7 +89,7 @@ Each matched rule reads `Rule name (reason)`, several joined with "; ".
 
 Other outcomes:
 
-- pass: "No compliance rule matched".
+- **Pass**: "No compliance rule matched".
 - off: "Gate off in this profile".
 
 Matches from Amazon's data add the tag AMAZON_DG. Compliance flags also lower the Risk group of the [score](/help/concepts/score).

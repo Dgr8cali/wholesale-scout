@@ -1,11 +1,11 @@
 ---
 title: Product page
-summary: Everything the app knows about one product: Buy, Wait or Skip with reasons and confidence, its history, every supplier's price, and the paperwork.
-synonyms: [product, asin page, decision, buy wait skip, confidence, product history, find a product, search]
+summary: Everything the app knows about one product: Buy, Check or Skip with reasons and confidence, its history, every supplier's price, and the paperwork.
+synonyms: [product, asin page, decision, buy check skip, buy wait skip, confidence, product history, find a product, search]
 route: /products
 order: 5
 ---
-**Products** in the sidebar lists every product the app has screened, one per ASIN, newest screening first, with its latest verdict on your default profile, sell price, [max landed](/help/reference/glossary#max-landed), FBA sellers, [your share](/help/reference/glossary#your-share) a month and when it was screened. Search by name, brand, ASIN or EAN; filter by **Pass**, **Warn** or **Fail**, or **Bought** (products you've recorded a purchase of); 50 a page. Click a product for its page.
+**Products** in the sidebar lists every product the app has screened, one per ASIN, newest screening first, with its latest verdict on your default profile (**Buy**, **Check**, **Skip**, or **Not scored** if it has none), sell price, [max landed](/help/reference/glossary#max-landed), FBA sellers, [your share](/help/reference/glossary#your-share) a month and when it was screened. Search by name, brand, ASIN or EAN; filter by **Pass**, **Warn** or **Fail**, or **Bought** (products you've recorded a purchase of); 50 a page. Click a product for its page.
 
 Each product's page, at `/products/<ASIN>`, brings together every run, supplier price, Keepa history and document the app has for it. You can also reach it from **Product page →** in a row's details, the product's name in the details drawer, the Brands, Shortlist, Plan and Purchases pages, the extension's **Open in app**, or the search box in the top bar (an ASIN or Amazon link opens the page; an EAN or words of the name list matches).
 
@@ -13,12 +13,12 @@ Each product's page, at `/products/<ASIN>`, brings together every run, supplier 
 
 ## The decision
 
-A badge says **Buy**, **Wait** or **Skip**, with the reasons:
+A badge says **Buy**, **Check** or **Skip**, with the reasons:
 
 | Decision | When |
 |---|---|
 | **Buy** | The latest screening passes every gate, a supplier cost is known, and you can list it (open, or the brand is marked approved). Confidence isn't low. |
-| **Wait** | It only warns (each warning is listed), needs approval or is blocked, has no supplier price yet, or the data is too thin to trust. |
+| **Check** | It only warns (each warning is listed), needs approval or is blocked, has no supplier price yet, or the data is too thin to trust. |
 | **Skip** | It fails a gate: which one and why. |
 
 **Confidence** (high, medium, low) says how far to trust the figures, and **Why not more confident** lists what lowered it:

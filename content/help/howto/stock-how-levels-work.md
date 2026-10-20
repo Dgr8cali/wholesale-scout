@@ -29,7 +29,7 @@ A bucket can't go below 0: a sale, transfer or negative adjustment larger than w
 
 ## Days of cover, low and out
 
-**Demand** is units a day over the last 30 days: Amazon's orders (by the item's ASIN) for FBA, and the sales recorded here for the other buckets. **Days of cover** = units ÷ units a day, per bucket and in all ("—" when nothing sells). **Out** at 0 in all buckets, **low** at or under the item's reorder level (else Settings → Stock's low-stock default, 10), **ok** above.
+**Demand** is units a day over the last 30 days: Amazon's orders (by the item's ASIN) for FBA, and the sales recorded here for the other buckets. **Days of cover** = units ÷ units a day, per bucket and in all ("—" when nothing sells). The status shows **Out** at 0 in all buckets, **Low** at or under the item's reorder level (else Settings → Stock's low-stock default, 10), and **In stock** above.
 
 ## Reorder
 

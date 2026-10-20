@@ -39,8 +39,8 @@ Settings, **Gates** tab, card **9 Price regime** (Needs: Keepa).
 
 | Status | Example | Meaning |
 |---|---|---|
-| warn / fail | SPIKE: Buy Box £24.99 is 32% over the £18.99 median with offers falling; scored on the median | A spike. Tagged SPIKE. |
-| pass | Buy Box £18.49 vs median £18.99 | No spike (either the rise is within tolerance or offers aren't falling). |
+| **Check** / **Fail** | SPIKE: Buy Box £24.99 is 32% over the £18.99 median with offers falling; scored on the median | A spike. Tagged SPIKE. |
+| **Pass** | Buy Box £18.49 vs median £18.99 | No spike (either the rise is within tolerance or offers aren't falling). |
 | skipped | Needs Keepa history | No history, or no current Buy Box or median. |
 | off | Gate off in this profile | |
 

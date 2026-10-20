@@ -75,7 +75,7 @@ In the row's details on the run page, **Qogita offers** lists every supplier wit
 
 ## Adding to your Qogita cart
 
-For a Qogita row that passed or warned, the row's details on the run page end with **Quantity** and **Add to Qogita cart**. The quantity starts at the most your line budget (budget × max line share) buys from the chosen supplier, in whole cases and no more than they hold. A quantity that isn't whole cases shows "Order whole cases of 6." and can't be added. [Plan](/help/pages/plan) can add a whole order at once with **Add N to Qogita cart**.
+For a Qogita row whose verdict is **Buy** or **Check**, the row's details on the run page end with **Quantity** and **Add to Qogita cart**. The quantity starts at the most your line budget (budget × max line share) buys from the chosen supplier, in whole cases and no more than they hold. A quantity that isn't whole cases shows "Order whole cases of 6." and can't be added. [Plan](/help/pages/plan) can add a whole order at once with **Add N to Qogita cart**.
 
 **Cart** in the top bar (with the number of lines) opens your Qogita cart:
 

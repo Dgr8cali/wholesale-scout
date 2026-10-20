@@ -9,7 +9,7 @@ The Order plan page turns your passing products into an order. It picks the prod
 
 ## What it plans from
 
-The candidates are every product whose latest result **passes** on your **default profile** (shown in the page description, with "as of" the time of the latest figures). To be a candidate, a product needs at least one costed offer. For each product the planner considers:
+The candidates are every product whose latest result **passes** (its verdict is **Buy**) on your **default profile** (shown in the page description, with "as of" the time of the latest figures). To be a candidate, a product needs at least one costed offer. For each product the planner considers:
 
 When results have changed since the figures were worked out (a re-score after a waiver, approval or cost override, or a profile save), the page says "Some results changed since: the figures are updating, reload in a minute." and the update runs in the background.
 
@@ -44,10 +44,10 @@ It's a good heuristic rather than a guaranteed best answer. A month's profit for
 
 | Control | What it does |
 |---|---|
-| **Include warns** | Adds products that warn, as well as those that pass. Off by default. |
+| **Include warns** | Adds products that warn (verdict **Check**), as well as those that pass (**Buy**). Off by default. |
 | **Reset** | Clears all your pins, exclusions and quantities. It only appears once you've made a change. |
 | **Add N to Qogita cart** | Adds every Qogita line in the plan to your Qogita cart, at the planned quantity, and opens the cart. It then tells you "N of M Qogita lines added". It only appears when Qogita is set up and the plan has Qogita lines. See [Qogita](/help/pages/qogita). |
-| **Export xlsx** | Downloads `wholesale-scout-plan-<date>.xlsx` with three sheets. **Plan** has one row per line: supplier, product, brand, EAN, ASIN, qty, unit cost ex VAT, landed and profit per unit, sell price, your share, months to sell, line total, profit a month, verdict, pinned, notes. **Suppliers** has goods ex VAT, MOV, whether the MOV is met, and the landed total. **Summary** has the profile, budget, line cap, months limit, plan total, profit a month and payback. |
+| **Export xlsx** | Downloads `wholesale-scout-plan-<date>.xlsx` with three sheets. **Plan** has one row per line: supplier, product, brand, EAN, ASIN, qty, unit cost ex VAT, landed and profit per unit, sell price, your share, months to sell, line total, profit a month, verdict (pass or warn, the stored values), pinned, notes. **Suppliers** has goods ex VAT, MOV, whether the MOV is met, and the landed total. **Summary** has the profile, budget, line cap, months limit, plan total, profit a month and payback. |
 
 Your pins, exclusions and quantities are remembered in this browser between visits.
 
@@ -75,7 +75,7 @@ A line with a problem is tinted amber, and its notes say what's wrong, for examp
 
 Lines are grouped by supplier. The biggest order comes first, and the supplier name links to its [supplier page](/help/pages/suppliers). The supplier row shows goods ex VAT, "MOV £150.00 met" (green) or "not met" (red), and the landed total.
 
-The columns are **Qty**, **Landed / unit**, **Profit / unit**, **Your share** (sales a month), **Months to sell**, **Line total** and **Profit / mo**. Under the product you'll see its brand, ASIN, MOQ and case size. For a warn, it also shows "warns:" and the gates that warned.
+The columns are **Qty**, **Landed / unit**, **Profit / unit**, **Your share** (sales a month), **Months to sell**, **Line total** and **Profit / mo**. Under the product you'll see its brand, ASIN, MOQ and case size. For a product whose verdict is **Check**, it also shows "warns:" and the gates that warned.
 
 ### If approved
 

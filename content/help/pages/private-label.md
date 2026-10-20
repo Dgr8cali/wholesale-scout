@@ -107,18 +107,18 @@ First order units, samples, inspection, photography, trademark and launch ads. A
 
 ## Gates, scorecard and verdict
 
-Each check in a gate is **pass**, **warn**, **fail** or empty (not answered yet). A gate takes its worst check. It passes only when every check passes. The thresholds are Gatekeeper's. For example, the sell price passes at £18–35 and warns at £15–40; landed cost passes at 30% of the sell price or less and warns at up to 35%.
+Each check in a gate shows **Pass**, **Check** (a warning), **Fail** or **Not scored** (not answered yet). A gate takes its worst check. It passes only when every check passes. The thresholds are Gatekeeper's. For example, the sell price passes at £18–35 and warns at £15–40; landed cost passes at 30% of the sell price or less and warns at up to 35%.
 
 The **scorecard** has 10 lines worth 0–3 points each, 30 in all: review depth, demand (bought in past month: 0 under 50, 1 for 50–199, 2 for 200–499, 3 for 500+; Keepa rank drops only when Amazon shows no bought figure), demand stability, Opportunity Explorer volume, review-driven differentiation, long-tail keywords, price multiple, steady-state margin, launch fits capital and competitive risk. Four lines are **structural**: review depth, demand stability, price multiple and competitive risk. Trying harder can't fix them. An eleventh line, **Search-term conversion (unscored)**, reads Gate 3's best search-term conversion (filled from an Opportunity Explorer capture): **Buying** at 4%+, **Browse-only** under 2.5%. It's outside the 30 points and the ten lines the verdict needs.
 
-The **verdict** appears once all ten lines are scored:
+The **verdict** appears once all ten lines are scored (until then the candidate is **Not scored**). It's a chip, **Order samples**, **Check** or **Drop**; hover over it for the longer title. The verdict card also shows that title, with the reasoning:
 
-| Verdict | When |
-|---|---|
-| **Order samples** | 24 or more with no gate failed. |
-| **Strong score, but a gate failed** | 24 or more, but at least one gate failed. Fix the gate or drop it. |
-| **Samples only if you can move the weak lines** | 18–23, and the weak lines (1 point or less) aren't structural. |
-| **Drop it** | 18–23 with a weak structural line, or under 18. The verdict names only the structural lines that scored 1 point or less, with their score (*1. Page-one review depth (1/3)*), not all four. |
+| Verdict | Title on hover | When |
+|---|---|---|
+| **Order samples** | Order samples | 24 or more with no gate failed. |
+| **Check** | Strong score, but a gate failed | 24 or more, but at least one gate failed. Fix the gate or drop the candidate. |
+| **Check** | Samples only if you can move the weak lines | 18–23, and the weak lines (1 point or less) aren't structural. |
+| **Drop** | Drop it | 18–23 with a weak structural line, or under 18. The verdict names only the structural lines that scored 1 point or less, with their score (*1. Page-one review depth (1/3)*), not all four. |
 
 ### Waiving a gate
 

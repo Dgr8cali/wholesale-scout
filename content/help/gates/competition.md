@@ -55,12 +55,12 @@ Because every shipped profile has this gate on **warn**, it never rules a row ou
 
 | Status | Example | Meaning |
 |---|---|---|
-| warn / fail | 2 sellers, under 3 | Fewer FBA sellers than your minimum. |
-| warn / fail | 15 sellers, over 12 | More than your maximum. |
-| warn / fail | one seller held the Buy Box 82% of the year | One seller dominates. |
-| warn | likely brand distributor: Acme Beauty Ltd (800 of 1,250 storefront listings (64%) are Nuxe, 71% of the Buy Box) | A top seller looks like the brand's distributor. Tagged BRAND_DISTRIBUTOR. |
-| pass | 5 sellers, top Buy Box share 38% | |
-| pass | 5 sellers | Before the Buy Box data is in. |
+| **Check** / **Fail** | 2 sellers, under 3 | Fewer FBA sellers than your minimum. |
+| **Check** / **Fail** | 15 sellers, over 12 | More than your maximum. |
+| **Check** / **Fail** | one seller held the Buy Box 82% of the year | One seller dominates. |
+| **Check** | likely brand distributor: Acme Beauty Ltd (800 of 1,250 storefront listings (64%) are Nuxe, 71% of the Buy Box) | A top seller looks like the brand's distributor. Tagged BRAND_DISTRIBUTOR. |
+| **Pass** | 5 sellers, top Buy Box share 38% | |
+| **Pass** | 5 sellers | Before the Buy Box data is in. |
 | skipped | dormant: no sellers now, none for 60 days | Nobody sells it now. |
 | skipped | No offer count | No seller count from either source. |
 | off | Gate off in this profile | |

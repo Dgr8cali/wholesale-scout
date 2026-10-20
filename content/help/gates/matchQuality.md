@@ -41,12 +41,12 @@ Settings, **Gates** tab, card **4 Match quality** (Needs: Keepa / catalog). It h
 
 | Status | Example | Meaning |
 |---|---|---|
-| fail / warn | EAN didn't resolve to an Amazon UK listing: search miss: tried EAN 3264680023323; Amazon returned no items | No listing. The note after the colon says what was tried. The result's details also show a **Catalog lookup** section with each attempt. |
-| fail | Doubtful match: Amazon lists this as Garnier, the sheet says L'Oreal | Brands clash. Tagged DOUBTFUL_MATCH. |
-| fail | Doubtful match: Amazon's title "Phone case for iPhone 15" shares nothing with the sheet's "Micellar Water 400ml" | Titles have nothing in common. |
-| warn | EAN maps to 3 ASINs; each is scored | Several listings share the EAN. Tagged MULTI_ASIN. |
-| warn | pack mismatch, check: title says 3, Amazon's attributes say 1 | Title and attributes disagree. Also "title doesn't say, Amazon's attributes say 6". Tagged PACK_MISMATCH. |
-| pass | Matched B0C1234XYZ | One listing, no doubts. |
+| **Fail** / **Check** | EAN didn't resolve to an Amazon UK listing: search miss: tried EAN 3264680023323; Amazon returned no items | No listing. The note after the colon says what was tried. The result's details also show a **Catalog lookup** section with each attempt. |
+| **Fail** | Doubtful match: Amazon lists this as Garnier, the sheet says L'Oreal | Brands clash. Tagged DOUBTFUL_MATCH. |
+| **Fail** | Doubtful match: Amazon's title "Phone case for iPhone 15" shares nothing with the sheet's "Micellar Water 400ml" | Titles have nothing in common. |
+| **Check** | EAN maps to 3 ASINs; each is scored | Several listings share the EAN. Tagged MULTI_ASIN. |
+| **Check** | pack mismatch, check: title says 3, Amazon's attributes say 1 | Title and attributes disagree. Also "title doesn't say, Amazon's attributes say 6". Tagged PACK_MISMATCH. |
+| **Pass** | Matched B0C1234XYZ | One listing, no doubts. |
 | skipped | Not looked up yet | The lookup hasn't happened. |
 | off | Gate off in this profile | |
 

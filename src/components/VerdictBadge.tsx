@@ -1,8 +1,8 @@
-import { Verdict } from "@/components/ui/status-chip";
+import { ProductDecision, StatusChip } from "@/components/ui/status-chip";
 
-/** A row's verdict (or "error" for a row that failed to process): the shared Verdict chip. */
+/** A row's verdict as the product decision (Buy / Check / Skip), or "Error" for a row that failed to process. */
 export function VerdictBadge({ verdict, error = false }: { verdict: "pass" | "warn" | "fail" | null | undefined; error?: boolean }) {
-  if (error) return <Verdict verdict="error" tone="bad" />;
+  if (error) return <StatusChip tone="bad">Error</StatusChip>;
   if (!verdict) return null;
-  return <Verdict verdict={verdict} />;
+  return <ProductDecision verdict={verdict} />;
 }

@@ -7,8 +7,8 @@ workspace: wholesale
 ---
 A [waiver](/help/reference/glossary#waiver) tells the app you accept a gate's result for one product:
 
-- **A fail** becomes a warning, so the row carries on through the later gates, fees and the [score](/help/concepts/score).
-- **A warning** becomes a pass, so it no longer counts against the row: if nothing else warns, the row goes green.
+- **A fail** becomes a warning (the gate shows **Check** instead of **Fail**), so the row carries on through the later gates, fees and the [score](/help/concepts/score).
+- **A warning** becomes a pass (the gate shows **Pass**), so it no longer counts against the row: if nothing else warns, the row's verdict becomes **Buy** and it goes green.
 
 Use it when you know better than the gate, for example you already hold the paperwork a compliance rule asks for, or you're happy with the seller count.
 

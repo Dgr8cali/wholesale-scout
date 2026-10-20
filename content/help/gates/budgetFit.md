@@ -46,11 +46,11 @@ The line cap also sets the first-order quantity that [Demand](/help/gates/demand
 
 | Status | Example | Meaning |
 |---|---|---|
-| fail / warn | MOQ 48 × £6.90 = £331.20, over the £300.00 line cap; 43 units fit | The MOQ at landed cost is over the cap; the cap would buy 43. "not one unit fits" means even one unit is over it. |
-| fail / warn | No line MOQ: the supplier's £400.00 minimum order is 80 × £5.90 = £472.00, over the £300.00 line cap; 50 units fit | No MOQ on the line, so the supplier's MOV sets the order. Tagged MOV. |
-| fail / warn | Supplier minimum order £1500.00 is over the £1000.00 budget | The supplier's MOV is bigger than your whole budget. |
-| pass | First order £240.00 of £1000.00 | The smallest order, against the whole budget. |
-| pass | First order £177.00 of £1000.00 (30 units to reach the supplier's £150.00 minimum order) | Sized by the MOV. |
+| **Fail** / **Check** | MOQ 48 × £6.90 = £331.20, over the £300.00 line cap; 43 units fit | The MOQ at landed cost is over the cap; the cap would buy 43. "not one unit fits" means even one unit is over it. |
+| **Fail** / **Check** | No line MOQ: the supplier's £400.00 minimum order is 80 × £5.90 = £472.00, over the £300.00 line cap; 50 units fit | No MOQ on the line, so the supplier's MOV sets the order. Tagged MOV. |
+| **Fail** / **Check** | Supplier minimum order £1500.00 is over the £1000.00 budget | The supplier's MOV is bigger than your whole budget. |
+| **Pass** | First order £240.00 of £1000.00 | The smallest order, against the whole budget. |
+| **Pass** | First order £177.00 of £1000.00 (30 units to reach the supplier's £150.00 minimum order) | Sized by the MOV. |
 | skipped | No cost given | An ASIN check with no cost: there's nothing to size. |
 | off | Gate off in this profile | |
 

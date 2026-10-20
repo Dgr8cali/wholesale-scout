@@ -63,19 +63,19 @@ When it trips, each failed check is listed, joined with "; ".
 
 | Status | Example | Meaning |
 |---|---|---|
-| fail / warn | 18 sales in 30 days, under 30; 90-day average rank 8,210 (shown, not gated: sales decide) | Too few sales in total; the rank is only for reference. |
-| fail / warn | your share 3.8/mo, under 5 (30 sales ÷ 7 other sellers, Amazon counted as 3 + you) | 4 FBA sellers plus Amazon counted as 3, plus you: 30 ÷ 8. |
-| fail / warn | 47 units at 6/mo = 7.8 months, over 3 | The first order takes too long to sell at your share. |
-| fail / warn | 96 units (MOQ) at 12/mo = 8 months, over 3 | The MOQ is bigger than the line cap buys, so the order is the MOQ. |
-| fail / warn | 43 units at 0/mo = never at your share, over 3 | No sales, so the order never sells. |
-| fail / warn | no sales data: 90-day average rank 72,400, over 60,000 for Beauty | No sales figure, and the rank is past the category's ceiling. Reads "current rank …" when there's no 90-day average. |
-| fail / warn | no sales data and no rank in the last 90 days | Nothing to judge on. |
-| pass | no sales data: judged on rank, 90-day average rank 12,000 (Beauty max 60,000) | No sales figure; the rank is within the ceiling. |
-| pass | 60 sales/mo, your share 15/mo; order 40 sells in 2.7 months; 90-day average rank 72,400 (shown, not gated: sales decide) | Sales and share are enough; a poor rank doesn't fail it. |
-| fail / warn | dormant: no sales history (Keepa has no sales rank for it in 12 months) | Dormant with nothing to go on. Also "(no rank drops in 12 months)". Tagged DORMANT. |
-| fail / warn | dormant: 120 rank drops in 12 months (10/mo), under 30/mo | Dormant, too slow. |
-| pass | dormant: 480 rank drops in 12 months (40/mo); order 40 sells in 1 month; 12-month average rank 15,300 (shown, not gated: sales decide) | Dormant but sold well over the year. |
-| pass / fail | dormant, no sales data: judged on rank, 12-month average 9,000 (DIY & Tools max 150,000) | Dormant with no rank drops to count: the 12-month rank against the ceiling. |
+| **Fail** / **Check** | 18 sales in 30 days, under 30; 90-day average rank 8,210 (shown, not gated: sales decide) | Too few sales in total; the rank is only for reference. |
+| **Fail** / **Check** | your share 3.8/mo, under 5 (30 sales ÷ 7 other sellers, Amazon counted as 3 + you) | 4 FBA sellers plus Amazon counted as 3, plus you: 30 ÷ 8. |
+| **Fail** / **Check** | 47 units at 6/mo = 7.8 months, over 3 | The first order takes too long to sell at your share. |
+| **Fail** / **Check** | 96 units (MOQ) at 12/mo = 8 months, over 3 | The MOQ is bigger than the line cap buys, so the order is the MOQ. |
+| **Fail** / **Check** | 43 units at 0/mo = never at your share, over 3 | No sales, so the order never sells. |
+| **Fail** / **Check** | no sales data: 90-day average rank 72,400, over 60,000 for Beauty | No sales figure, and the rank is past the category's ceiling. Reads "current rank …" when there's no 90-day average. |
+| **Fail** / **Check** | no sales data and no rank in the last 90 days | Nothing to judge on. |
+| **Pass** | no sales data: judged on rank, 90-day average rank 12,000 (Beauty max 60,000) | No sales figure; the rank is within the ceiling. |
+| **Pass** | 60 sales/mo, your share 15/mo; order 40 sells in 2.7 months; 90-day average rank 72,400 (shown, not gated: sales decide) | Sales and share are enough; a poor rank doesn't fail it. |
+| **Fail** / **Check** | dormant: no sales history (Keepa has no sales rank for it in 12 months) | Dormant with nothing to go on. Also "(no rank drops in 12 months)". Tagged DORMANT. |
+| **Fail** / **Check** | dormant: 120 rank drops in 12 months (10/mo), under 30/mo | Dormant, too slow. |
+| **Pass** | dormant: 480 rank drops in 12 months (40/mo); order 40 sells in 1 month; 12-month average rank 15,300 (shown, not gated: sales decide) | Dormant but sold well over the year. |
+| **Pass** / **Fail** | dormant, no sales data: judged on rank, 12-month average 9,000 (DIY & Tools max 150,000) | Dormant with no rank drops to count: the 12-month rank against the ceiling. |
 | skipped | Needs Keepa history to count sales (current rank 12,345) | No history yet. Or just "Needs Keepa history". |
 | off | Gate off in this profile | |
 

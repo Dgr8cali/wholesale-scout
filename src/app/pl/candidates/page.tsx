@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { PageHeader } from "@/components/ui/page-header";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { StatusChip, Verdict, type Tone } from "@/components/ui/status-chip";
+import { CandidateDecision, StatusChip, Verdict } from "@/components/ui/status-chip";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { capitalText, evaluate, referralOptions, type Status } from "@/lib/pl/gatekeeper";
@@ -25,7 +25,6 @@ import { api } from "@/lib/ui/client";
 import { ago } from "@/lib/ui/when";
 import { cn } from "@/lib/utils";
 
-const VERDICT_TONE: Record<Status, Tone> = { pass: "good", warn: "warn", fail: "bad", empty: "neutral" };
 const VERDICT_RANK: Record<Status, number> = { pass: 3, warn: 2, fail: 1, empty: 0 };
 type Scored = { c: CandidateRow; ev: ReturnType<typeof evaluate> };
 
@@ -80,7 +79,7 @@ function Candidates() {
       id: "verdict", header: "Verdict", mobile: 1, sortValue: ({ ev }) => VERDICT_RANK[ev.v.cls],
       cell: ({ c, ev }) => c.status === "parked"
         ? <Verdict verdict="parked" tone="neutral" title={c.park_reason ?? undefined} />
-        : <Verdict verdict={ev.v.title} tone={VERDICT_TONE[ev.v.cls]} title={ev.v.text} />,
+        : <CandidateDecision cls={ev.v.cls === "empty" ? null : ev.v.cls} title={`${ev.v.title}. ${ev.v.text}`} />,
     },
     { id: "score", header: "Score", numeric: true, mobile: 2, sortValue: ({ ev }) => (ev.sc.answered === 10 ? ev.sc.total : -1), cell: ({ ev }) => (ev.sc.answered === 10 ? `${ev.sc.total}/30` : <span className="text-muted-foreground">{ev.sc.answered}/10 scored</span>) },
     { id: "status", header: "Stage", mobile: 3, sortValue: ({ c }) => c.status, cell: ({ c, ev }) => <span className="inline-flex flex-wrap items-center gap-1.5"><StatusChip tone="neutral" icon={false}>{c.status}</StatusChip>{ev.waivedCount > 0 && <StatusChip tone="warn" title={ev.waivedLine ?? ""}>{ev.waivedCount} waived</StatusChip>}</span> },

@@ -17,7 +17,7 @@ Each row is a seller whose storefront has been looked up through Keepa. The newe
 | **Rating** | Positive feedback %, with the number of ratings underneath. |
 | **Storefront** | How many listings Keepa counts on the storefront, and "holds N% of its Buy Boxes" when Keepa knows. |
 | **Brand mix** | The top five brands on the storefront, each with its listing count. When Keepa gives no brand breakdown, the brands of the scanned products are counted instead. |
-| **Last scan** | When the last scan ran, linking to its run. Below that is a bar of pass, warn and fail results, for example "12 pass · 30 warn · 410 fail · 1,200 to go · holds Buy Box on 85". "holds Buy Box on" counts the scanned listings where this seller has the Buy Box. **Looked up, not scanned** means the storefront was fetched but no scan was started. |
+| **Last scan** | When the last scan ran, linking to its run. Below that is a bar of **Buy**, **Check** and **Skip** results, for example "12 Buy · 30 Check · 410 Skip · 1,200 to go · holds Buy Box on 85". "holds Buy Box on" counts the scanned listings where this seller has the Buy Box. **Looked up, not scanned** means the storefront was fetched but no scan was started. |
 | **Scan** / **Re-scan** | Opens Scan a seller with this seller already filled in. |
 
 The **Scan a seller** button at the top right does the same with an empty form. You can also reach the scan form from a result's details: under **Top Buy Box sellers (365 days)**, each seller has a **Scan this seller** link. A brand's page has a **Scan** button next to each of its top sellers. See [Brands](/help/pages/brands).

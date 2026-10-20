@@ -42,11 +42,11 @@ Settings, **Gates** tab, card **5 Borrowed rank (mirage)** (Needs: Keepa).
 
 | Status | Example | Meaning |
 |---|---|---|
-| warn / fail | Borrowed rank: rank history is 41 days old | Less history than your minimum. |
-| warn / fail | Borrowed rank: reviews jumped 120% in a day | A review merge or import. |
-| warn / fail | Borrowed rank: variation child younger than its parent | The rank may be the family's. |
+| **Check** / **Fail** | Borrowed rank: rank history is 41 days old | Less history than your minimum. |
+| **Check** / **Fail** | Borrowed rank: reviews jumped 120% in a day | A review merge or import. |
+| **Check** / **Fail** | Borrowed rank: variation child younger than its parent | The rank may be the family's. |
 | | Borrowed rank: rank history is 41 days old, reviews jumped 120% in a day | Several reasons are joined with commas. |
-| pass | 412 days of history, no review jumps | |
+| **Pass** | 412 days of history, no review jumps | |
 | skipped | Needs Keepa history | No history yet. |
 | off | Gate off in this profile | |
 

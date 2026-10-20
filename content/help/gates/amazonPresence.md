@@ -41,11 +41,11 @@ Settings, **Gates** tab, card **6 Amazon presence** (Needs: Keepa).
 
 | Status | Example | Meaning |
 |---|---|---|
-| fail / warn | Amazon is selling now (current offers) | From SP-API's current offers, before any Keepa history. |
-| fail / warn | Amazon is selling now | From Keepa: Amazon holds an offer today. |
-| fail / warn | Amazon sold 42 days ago | Amazon was on the listing within your window. |
-| pass | Amazon last sold 400 days ago | Outside your window. |
-| pass | Amazon never on the listing | Keepa has never seen Amazon on it. |
+| **Fail** / **Check** | Amazon is selling now (current offers) | From SP-API's current offers, before any Keepa history. |
+| **Fail** / **Check** | Amazon is selling now | From Keepa: Amazon holds an offer today. |
+| **Fail** / **Check** | Amazon sold 42 days ago | Amazon was on the listing within your window. |
+| **Pass** | Amazon last sold 400 days ago | Outside your window. |
+| **Pass** | Amazon never on the listing | Keepa has never seen Amazon on it. |
 | skipped | Needs Keepa history | No history yet, and Amazon isn't selling now. |
 | off | Gate off in this profile | |
 
@@ -58,4 +58,4 @@ Days since Amazon last sold also feed the Competition group of the [score](/help
 - Amazon on the listing now is usually a no. If it left some time ago, look at the Keepa history to see how often it comes back.
 - To accept listings Amazon left sooner, lower the days: [change a threshold](/help/howto/change-a-threshold).
 - To accept this one product, [waive the gate](/help/howto/waive-a-gate).
-- On a single check that stopped here before Keepa, **Fetch anyway** on the [Check](/help/pages/check) page fetches sales and history anyway. The verdict still fails while the gate does.
+- On a single check that stopped here before Keepa, **Fetch anyway** on the [Check](/help/pages/check) page fetches sales and history anyway. The row's decision is still **Skip** while the gate fails.

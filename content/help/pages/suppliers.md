@@ -20,7 +20,7 @@ Suppliers are created for you. A new one appears the first time you upload a pri
 | **Stock** | Stock items naming them · purchases (orders) from them. |
 | **Runs** | How many runs included their offers. |
 | **Products** | Distinct products they've offered. |
-| **Pass / warn** | Their products that pass or warn on your default profile. Only products with a price are counted. |
+| **Pass / warn** | Their products whose verdict is **Buy** or **Check** on your default profile. Only products with a price are counted. |
 | **Brands** | Their top three brands, and "+N" for the rest. |
 | **Terms** | Currency, "ex VAT" or "inc VAT", the MOV if one is set, and delivery days. |
 | **Paperwork** | "IoR yes/no/—" (importer of record), labelling (UK, EU or mixed), and "invoice yes/no/—" (whether their invoice is accepted for brand approval). |
@@ -28,7 +28,7 @@ Suppliers are created for you. A new one appears the first time you upload a pri
 
 ## A supplier's page
 
-The header shows the source, the number of runs, the number of products seen, and pass and warn counts on your default profile.
+The header shows the source, the number of runs, the number of products seen, and how many products are **Buy** and **Check** on your default profile.
 
 ### The record
 

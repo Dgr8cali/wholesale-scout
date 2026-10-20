@@ -51,11 +51,11 @@ Changing these also moves the hurdle price and max landed. Fee assumptions (VAT,
 
 | Status | Example | Meaning |
 |---|---|---|
-| fail / warn | At £14.99: profit £1.42 < £2.00, ROI 16% < 20%; passes at £16.29 | The floors it misses, and the hurdle price that would clear them. |
-| fail / warn | At £14.99: margin 12% < 15%; passes at £15.60; size tier disagreement: SP-API catalog says Small parcel, Keepa says Standard parcel | The catalog's size and Keepa's put it in different FBA tiers, so check the fee. Tagged TIER_MISMATCH. |
-| fail / warn | No FBA fee: Standard parcel | No FBA fee could be worked out for this size tier, or "No FBA fee: unknown size". |
-| pass | £3.12 profit, 34% ROI, 22% margin at £18.49 | Clears every floor. |
-| pass | £3.12 profit, 34% ROI, 22% margin at £18.49 (size assumed) | No dimensions: the assumed size on the Fees tab was used. Or "(size from Keepa)". |
+| **Fail** / **Check** | At £14.99: profit £1.42 < £2.00, ROI 16% < 20%; passes at £16.29 | The floors it misses, and the hurdle price that would clear them. |
+| **Fail** / **Check** | At £14.99: margin 12% < 15%; passes at £15.60; size tier disagreement: SP-API catalog says Small parcel, Keepa says Standard parcel | The catalog's size and Keepa's put it in different FBA tiers, so check the fee. Tagged TIER_MISMATCH. |
+| **Fail** / **Check** | No FBA fee: Standard parcel | No FBA fee could be worked out for this size tier, or "No FBA fee: unknown size". |
+| **Pass** | £3.12 profit, 34% ROI, 22% margin at £18.49 | Clears every floor. |
+| **Pass** | £3.12 profit, 34% ROI, 22% margin at £18.49 (size assumed) | No dimensions: the assumed size on the Fees tab was used. Or "(size from Keepa)". |
 | skipped | No sell price: see hurdle price | No price to test at. The details show the hurdle price. |
 | skipped | No cost given: clears the floors at £7.40 landed or less (sells at £18.49) | An ASIN check with no cost: £7.40 is the max landed. |
 | skipped | No cost given: at £6.99 not even a free unit clears the floors | Fees alone eat the price. |

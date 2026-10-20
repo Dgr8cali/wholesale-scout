@@ -39,13 +39,15 @@ Screening happens in the background, so you can close the page. Rows are matched
 
 Each row gets a verdict:
 
-- **pass**: cleared every gate.
-- **warn**: cleared the gates that fail, but something needs a look (a gate set to warn, or brand approval needed).
-- **fail**: stopped at a gate. Later gates didn't run, and the **Why** column says what stopped it.
+- **Buy**: cleared every gate.
+- **Check**: cleared the gates that fail, but something needs a look (a gate set to warn, or brand approval needed).
+- **Skip**: stopped at a gate. Later gates didn't run, and the **Why** column says what stopped it.
 
-Rows that pass or warn also get a **score** from 0 to 100, banded green, amber or grey (see [Score](/help/concepts/score)). The gates themselves are explained one by one under Gates, starting with [Price band](/help/gates/priceBand). If you disagree with a gate for one product, you can [waive it](/help/howto/waive-a-gate).
+Exports and the API keep the stored values: pass, warn and fail.
 
-On the [run's page](/help/pages/runs) you filter the table (say, pass and warn only, green band), sort by score or **Your profit / mo**, and open a row to see its gates, fees and sellers.
+Rows marked **Buy** or **Check** also get a **score** from 0 to 100, banded green, amber or grey (see [Score](/help/concepts/score)). The gates themselves are explained one by one under Gates, starting with [Price band](/help/gates/priceBand). If you disagree with a gate for one product, you can [waive it](/help/howto/waive-a-gate).
+
+On the [run's page](/help/pages/runs) you filter the table (say, **Buy** and **Check** only, green band), sort by score or **Your profit / mo**, and open a row to see its gates, fees and sellers.
 
 ### 4. Keep what's interesting
 

@@ -37,9 +37,9 @@ Settings, **Gates** tab, card **10 Price drift** (Needs: Keepa).
 
 | Status | Example | Meaning |
 |---|---|---|
-| warn / fail | EROSION: Buy Box falling 27% a year | Falling faster than your maximum. Tagged EROSION. |
-| pass | Buy Box trend -8% a year | Falling, but within tolerance. |
-| pass | Buy Box trend +4% a year | Rising or flat. |
+| **Check** / **Fail** | EROSION: Buy Box falling 27% a year | Falling faster than your maximum. Tagged EROSION. |
+| **Pass** | Buy Box trend -8% a year | Falling, but within tolerance. |
+| **Pass** | Buy Box trend +4% a year | Rising or flat. |
 | skipped | Needs Keepa history | |
 | off | Gate off in this profile | |
 
