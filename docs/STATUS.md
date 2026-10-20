@@ -362,7 +362,7 @@ StockPilot data is imported (3 items). Ads days of cover and the stock guard cou
   comes back each day it's still low (its condition has no change to wait for). Ad spend in the key numbers reads daily campaign
   rows only; with range reports alone it shows the date the data stops.
 - Ask Scout's £ uses the AI price table's Sonnet 5.5 row ($3 / $15 per million tokens); Anthropic now lists Sonnet 5.5 at $2 / $10, so the
-  costs shown are about a third high until the prices in Ads → Rules → Ad settings are updated. A lead's "contacted" status is the only
+  costs shown are 1.5 times the real cost until the prices in Ads → Rules → Ad settings are updated. A lead's "contacted" status is the only
   sign of no reply: the app doesn't read messages.
 
 - **Extension 0.5.6** fixes what it could put in chrome://extensions → Errors (an uncaught "Amazon took over 30 s to load" when a rank-check tab was closed, uncaught background errors, unchecked `lastError` in the popup, the reviews parser's warning on product pages, whose new `reviewTitle`/`reviewText` markup it couldn't read). Checked in a scratch Chromium with the shipped and fixed copies; old entries stay listed until **Clear all**.
