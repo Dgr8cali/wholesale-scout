@@ -1,15 +1,16 @@
 "use client";
 
-import { LoaderIcon, PlayIcon } from "lucide-react";
+import { ListFilterIcon, PlayIcon } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { ErrorState } from "@/components/States";
+import { EmptyState, ErrorState } from "@/components/States";
 import { Button } from "@/components/ui/button";
+import { DataTable, type DataColumn } from "@/components/ui/data-table";
+import { SectionTitle } from "@/components/ui/info-tip";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
-import { SortTh, useSortable } from "@/components/SortableTable";
 import { LOOKBACKS, RULES, type RuleConfig, type RuleId, type RuleMeta, type RulesConfig, type Threshold } from "@/lib/ads/rules";
 import { api } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
@@ -58,8 +59,9 @@ export function RulesTab() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-end justify-end gap-3">
-        <Button variant="outline" onClick={() => run(draft)} disabled={running}>{running ? <LoaderIcon className="animate-spin" /> : <PlayIcon />} Dry run with these settings</Button>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <SectionTitle title="Dry run by product">The proposals each rule would make now, with the settings on screen (saved or not). Nothing is proposed or changed by a dry run.</SectionTitle>
+        <Button variant="secondary" onClick={() => run(draft)} loading={running}><PlayIcon /> Dry run with these settings</Button>
       </div>
       {dry && <DryRunByProduct dry={dry} />}
       <div className="grid gap-3 lg:grid-cols-2">
@@ -76,16 +78,16 @@ function RuleCard({ meta, cfg, changed, dry, running, onEdit, onSave, onReset }:
     <section className={cn("panel space-y-3 p-4", !cfg.enabled && "opacity-70")}>
       <div className="flex items-start gap-3">
         <div className="flex-1 space-y-1">
-          <h2 className="font-semibold">{meta.label}</h2>
-          <p className="text-sm text-muted-foreground">{meta.summary}</p>
+          <h2 className="text-base font-semibold">{meta.label}</h2>
+          <p className="text-meta text-muted-foreground">{meta.summary}</p>
         </div>
-        <label className="flex items-center gap-2 text-sm"><Switch checked={cfg.enabled} onCheckedChange={(v) => onEdit({ enabled: v })} aria-label={`${meta.label} on`} />{cfg.enabled ? "On" : "Off"}</label>
+        <label className="flex flex-none cursor-pointer items-center gap-2 text-sm"><Switch checked={cfg.enabled} onCheckedChange={(v) => onEdit({ enabled: v })} aria-label={`${meta.label} on`} />{cfg.enabled ? "On" : "Off"}</label>
       </div>
       <div className="grid grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-3">
         {meta.lookback != null && (
           <label className="space-y-1" title="The days of data this rule reads, to the latest import: search terms from the imports in the window, daily rows in it, rank checks in it">
             <span className="field-label">Looks back over</span>
-            <NativeSelect className="h-8 w-full" value={String(cfg.lookbackDays ?? meta.lookback)} onChange={(e) => onEdit({ lookbackDays: Number(e.target.value) })}>
+            <NativeSelect className="w-full" value={String(cfg.lookbackDays ?? meta.lookback)} onChange={(e) => onEdit({ lookbackDays: Number(e.target.value) })}>
               {LOOKBACKS.map((d) => <NativeSelectOption key={d} value={d}>{d} days{d === meta.lookback ? " (default)" : ""}</NativeSelectOption>)}
             </NativeSelect>
           </label>
@@ -93,7 +95,7 @@ function RuleCard({ meta, cfg, changed, dry, running, onEdit, onSave, onReset }:
         {meta.thresholds.map((t) => (
           <label key={t.key} className="space-y-1">
             <span className="field-label">{t.label}{UNIT[t.unit] ? ` (${UNIT[t.unit]})` : ""}</span>
-            <Input className="num h-8" type="number" step="any" min={0} value={cfg.thresholds[t.key]} onChange={(e) => onEdit({ thresholds: { [t.key]: e.target.value === "" ? t.default : Number(e.target.value) } })} />
+            <Input className="num" type="number" step="any" min={0} value={cfg.thresholds[t.key]} onChange={(e) => onEdit({ thresholds: { [t.key]: e.target.value === "" ? t.default : Number(e.target.value) } })} />
           </label>
         ))}
       </div>
@@ -104,16 +106,16 @@ function RuleCard({ meta, cfg, changed, dry, running, onEdit, onSave, onReset }:
             <NativeSelectOption value="auto">Auto</NativeSelectOption>
           </NativeSelect></label>
         <span className="text-xs text-muted-foreground">{cfg.mode === "auto" ? "Applies automatically once the Amazon Ads API is connected. Until then it proposes, like Propose." : "Each change waits for your approval."}</span>
-        {changed && <span className="ml-auto flex gap-1"><Button size="xs" variant="ghost" onClick={onReset}>Reset</Button><Button size="xs" onClick={onSave}>Save</Button></span>}
+        {changed && <span className="ml-auto flex gap-1"><Button size="sm" variant="ghost" onClick={onReset}>Reset</Button><Button size="sm" variant="secondary" onClick={onSave}>Save</Button></span>}
       </div>
-      <div className="rounded-md bg-surface-2 px-3 py-2 text-sm">
+      <div className="rounded-lg bg-subtle px-3 py-2 text-sm">
         {!count ? <span className="text-muted-foreground">{running ? "Running…" : "—"}</span> : (
           <>
-            <b>{count.total}</b> proposal{count.total === 1 ? "" : "s"} now{changed ? " (with these unsaved settings, after a dry run)" : ""}
+            <b className="num">{count.total}</b> proposal{count.total === 1 ? "" : "s"} now{changed ? " (with these unsaved settings, after a dry run)" : ""}
             {Object.entries(count.byAsin).length > 0 && <span className="text-muted-foreground">: {Object.entries(count.byAsin).map(([a, n]) => `${a} ${n}`).join(", ")}</span>}
           </>
         )}
-        {notes.map((n) => <p key={n} className="text-xs text-warn">{n}</p>)}
+        {notes.map((n) => <p key={n} className="text-xs text-warn-ink">{n}</p>)}
       </div>
     </section>
   );
@@ -121,31 +123,14 @@ function RuleCard({ meta, cfg, changed, dry, running, onEdit, onSave, onReset }:
 
 /** The dry run per product: what each rule would propose for it now. */
 function DryRunByProduct({ dry }: { dry: DryRun }) {
-  const asins = [...new Set(Object.values(dry.counts).flatMap((c) => Object.keys(c.byAsin)))].sort();
+  const rows = [...new Set(Object.values(dry.counts).flatMap((c) => Object.keys(c.byAsin)))].sort().map((asin) => ({ asin }));
   const firing = RULES.filter((r) => dry.counts[r.id]?.total);
-  const s = useSortable("ads.dryrun", asins, {
-    product: { value: (a) => a, kind: "text" },
-    ...Object.fromEntries(firing.map((r) => [r.id, { value: (a: string) => dry.counts[r.id].byAsin[a] ?? null, kind: "number" as const }])),
-    all: { value: (a) => firing.reduce((x, r) => x + (dry.counts[r.id].byAsin[a] ?? 0), 0), kind: "number" },
-  });
-  if (!asins.length) return <p className="panel p-3 text-sm text-muted-foreground">Dry run: no rule would propose anything on the data imported now.</p>;
-  return (
-    <section className="panel space-y-2 p-3">
-      <h2 className="text-sm font-semibold">Dry run by product <span className="font-normal text-muted-foreground">(the proposals each rule would make now, with the settings on screen)</span></h2>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead><tr className="border-b text-left text-xs tracking-wide text-muted-foreground uppercase">
-            <SortTh {...s.th("product")} className="px-2 py-1">Product</SortTh>{firing.map((r) => <SortTh key={r.id} {...s.th(r.id)} numeric className="px-2 py-1 text-right">{r.label}</SortTh>)}<SortTh {...s.th("all")} numeric className="px-2 py-1 text-right">All</SortTh>
-          </tr></thead>
-          <tbody>{s.rows.map((a) => (
-            <tr key={a} className="border-b last:border-b-0">
-              <td className="num px-2 py-1">{a}</td>
-              {firing.map((r) => <td key={r.id} className="num px-2 py-1 text-right">{dry.counts[r.id].byAsin[a] ?? "—"}</td>)}
-              <td className="num px-2 py-1 text-right font-medium">{firing.reduce((x, r) => x + (dry.counts[r.id].byAsin[a] ?? 0), 0)}</td>
-            </tr>
-          ))}</tbody>
-        </table>
-      </div>
-    </section>
-  );
+  const total = (asin: string) => firing.reduce((x, r) => x + (dry.counts[r.id].byAsin[asin] ?? 0), 0);
+  if (!rows.length) return <EmptyState icon={<ListFilterIcon />} title="Nothing to propose">No rule would propose anything on the data imported now.</EmptyState>;
+  const columns: DataColumn<{ asin: string }>[] = [
+    { id: "product", header: "Product", mobile: "title", sortValue: (r) => r.asin, cell: (r) => <span className="num">{r.asin}</span> },
+    ...firing.map((rule): DataColumn<{ asin: string }> => ({ id: rule.id, header: rule.label, numeric: true, sortValue: (r) => dry.counts[rule.id].byAsin[r.asin] ?? null, cell: (r) => dry.counts[rule.id].byAsin[r.asin] ?? "—" })),
+    { id: "all", header: "All", numeric: true, mobile: 1, sortValue: (r) => total(r.asin), cell: (r) => <span className="font-medium">{total(r.asin)}</span> },
+  ];
+  return <DataTable rows={rows} columns={columns} getRowId={(r) => r.asin} storageKey="ads.dryrun" caption="Dry run by product" />;
 }

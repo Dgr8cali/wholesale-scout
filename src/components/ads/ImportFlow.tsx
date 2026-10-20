@@ -1,6 +1,6 @@
 "use client";
 
-import { FileUpIcon, LoaderIcon, Undo2Icon, UploadIcon, XIcon } from "lucide-react";
+import { FileUpIcon, Undo2Icon, UploadIcon, XIcon } from "lucide-react";
 import { FileDrop } from "@/components/ui/file-drop";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -10,6 +10,7 @@ import { DataTable, type DataColumn } from "@/components/ui/data-table";
 import { Input } from "@/components/ui/input";
 import { SortTh, useSortable } from "@/components/SortableTable";
 import { Skeleton } from "@/components/ui/skeleton";
+import { StatusChip } from "@/components/ui/status-chip";
 import { parseBulk, type ParsedBulk } from "@/lib/ads/bulk";
 import { parseReport, REPORT_LABEL, type ParsedReport, type ReportType } from "@/lib/ads/parse";
 import { api } from "@/lib/ui/client";
@@ -102,10 +103,10 @@ export function ImportFlow({ onImported }: { onImported: () => void }) {
           {bulks.map((b) => <BulkPreview key={b.name} b={b} onChange={(patch) => setBulks((c) => c.map((x) => (x.name === b.name ? { ...x, ...patch } : x)))} onRemove={() => setBulks((c) => c.filter((x) => x.name !== b.name))} />)}
           {picked.map((p) => <Preview key={p.name} p={p} onRemove={() => setPicked((c) => c.filter((x) => x.name !== p.name))} />)}
           <div className="flex flex-wrap items-center gap-3">
-            <Button onClick={run} disabled={busy || !count || !bulkReady}>{busy ? <LoaderIcon className="animate-spin" /> : <UploadIcon />} Import {count} file{count === 1 ? "" : "s"}</Button>
+            <Button onClick={run} disabled={!count || !bulkReady} loading={busy}><UploadIcon /> Import {count} file{count === 1 ? "" : "s"}</Button>
             <Button variant="ghost" onClick={() => { setPicked([]); setBulks([]); }}>Clear</Button>
-            {!bulkReady && <span className="text-sm text-warn">Give the date range each bulk export covers.</span>}
-            {picked.length + bulks.length > count && <span className="text-sm text-fail">{picked.length + bulks.length - count} file{picked.length + bulks.length - count === 1 ? "" : "s"} can&apos;t be read and won&apos;t be imported.</span>}
+            {!bulkReady && <span className="text-sm text-warn-ink">Give the date range each bulk export covers.</span>}
+            {picked.length + bulks.length > count && <span className="text-sm text-danger">{picked.length + bulks.length - count} file{picked.length + bulks.length - count === 1 ? "" : "s"} can&apos;t be read and won&apos;t be imported.</span>}
           </div>
         </section>
       )}
@@ -148,9 +149,9 @@ function Preview({ p, onRemove }: { p: Picked; onRemove: () => void }) {
   });
   if (!p.parsed) {
     return (
-      <div className="panel flex items-start gap-3 border-fail/40 p-3">
-        <div className="flex-1"><p className="font-medium">{p.name}</p><p className="text-sm text-fail">{p.error}</p></div>
-        <button type="button" onClick={onRemove} aria-label="Remove"><XIcon className="size-4 text-muted-foreground" /></button>
+      <div className="panel flex items-start gap-3 border-danger/40 p-3">
+        <div className="flex-1"><p className="font-medium">{p.name}</p><p className="text-sm text-danger">{p.error}</p></div>
+        <Button type="button" size="icon-sm" variant="ghost" onClick={onRemove} aria-label="Remove from this import"><XIcon /></Button>
       </div>
     );
   }
@@ -161,24 +162,24 @@ function Preview({ p, onRemove }: { p: Picked; onRemove: () => void }) {
     <div className="panel space-y-2 p-3">
       <div className="flex items-start gap-3">
         <div className="flex-1">
-          <p className="font-medium">{p.name} <span className="rounded-full bg-brand-soft px-2 py-0.5 text-xs font-semibold text-brand">{r.label}</span></p>
+          <p className="flex flex-wrap items-center gap-2 font-medium">{p.name} <StatusChip tone="info" icon={false}>{r.label}</StatusChip></p>
           <p className="text-xs text-muted-foreground">
             {r.rows.length} rows · {new Set(r.rows.map((x) => x.campaignName)).size} campaigns · {r.dateFrom ? `${day(r.dateFrom)} – ${day(r.dateTo)}` : "no date range"} ·
             {` ${totals.clicks.toLocaleString("en-GB")} clicks, ${gbp(totals.cost)} spend, ${totals.orders} orders, ${gbp(totals.sales)} sales`}
           </p>
-          {r.warnings.map((w) => <p key={w} className="text-xs text-warn">{w}</p>)}
+          {r.warnings.map((w) => <p key={w} className="text-xs text-warn-ink">{w}</p>)}
         </div>
-        <button type="button" onClick={onRemove} aria-label="Remove"><XIcon className="size-4 text-muted-foreground" /></button>
+        <Button type="button" size="icon-sm" variant="ghost" onClick={onRemove} aria-label="Remove from this import"><XIcon /></Button>
       </div>
-      <div className="overflow-x-auto rounded border">
+      <div className="overflow-x-auto rounded-lg border border-border">
         <table className="w-full text-xs">
-          <thead><tr className="border-b text-left text-xs tracking-wide text-muted-foreground uppercase">
+          <thead><tr className="border-b border-border text-left text-xs font-semibold tracking-[0.06em] text-muted-foreground uppercase">
             <SortTh {...s.th("campaign")} className="px-2 py-1">Campaign</SortTh>{isTerms && <SortTh {...s.th("term")} className="px-2 py-1">Search term</SortTh>}<SortTh {...s.th("dates")} className="px-2 py-1">Dates</SortTh>
             <SortTh {...s.th("clicks")} numeric className="px-2 py-1 text-right">Clicks</SortTh><SortTh {...s.th("cost")} numeric className="px-2 py-1 text-right">Spend</SortTh>
             <SortTh {...s.th("orders")} numeric className="px-2 py-1 text-right">Orders</SortTh><SortTh {...s.th("sales")} numeric className="px-2 py-1 text-right">Sales</SortTh>
           </tr></thead>
           <tbody>{s.rows.slice(0, 8).map((x, i) => (
-            <tr key={i} className="border-b last:border-b-0">
+            <tr key={i} className="border-b border-divider last:border-b-0">
               <td className="px-2 py-1">{x.campaignName}</td>{isTerms && <td className="px-2 py-1">{x.searchTerm}</td>}
               <td className="px-2 py-1 whitespace-nowrap">{x.dateFrom ? (x.dateFrom === x.dateTo ? day(x.dateFrom) : `${day(x.dateFrom)} – ${day(x.dateTo)}`) : x.campaignStart ? `from ${day(x.campaignStart)} (as exported)` : "as exported"}</td>
               <td className="num px-2 py-1 text-right">{x.clicks}</td><td className="num px-2 py-1 text-right">{gbp(x.cost)}</td>
@@ -186,7 +187,7 @@ function Preview({ p, onRemove }: { p: Picked; onRemove: () => void }) {
             </tr>
           ))}</tbody>
         </table>
-        {r.rows.length > 8 && <p className="border-t px-2 py-1 text-xs text-muted-foreground">… and {r.rows.length - 8} more</p>}
+        {r.rows.length > 8 && <p className="border-t border-divider px-2 py-1 text-xs text-muted-foreground">… and {r.rows.length - 8} more</p>}
       </div>
     </div>
   );
@@ -202,9 +203,9 @@ function BulkPreview({ b, onChange, onRemove }: { b: PickedBulk; onChange: (patc
   });
   if (!b.parsed) {
     return (
-      <div className="panel flex items-start gap-3 border-fail/40 p-3">
-        <div className="flex-1"><p className="font-medium">{b.name}</p><p className="text-sm text-fail">{b.error}</p></div>
-        <button type="button" onClick={onRemove} aria-label="Remove"><XIcon className="size-4 text-muted-foreground" /></button>
+      <div className="panel flex items-start gap-3 border-danger/40 p-3">
+        <div className="flex-1"><p className="font-medium">{b.name}</p><p className="text-sm text-danger">{b.error}</p></div>
+        <Button type="button" size="icon-sm" variant="ghost" onClick={onRemove} aria-label="Remove from this import"><XIcon /></Button>
       </div>
     );
   }
@@ -216,7 +217,7 @@ function BulkPreview({ b, onChange, onRemove }: { b: PickedBulk; onChange: (patc
     <div className="panel space-y-2 p-3">
       <div className="flex items-start gap-3">
         <div className="flex-1 space-y-1">
-          <p className="font-medium">{b.name} <span className="rounded-full bg-brand-soft px-2 py-0.5 text-xs font-semibold text-brand">{r.label}</span></p>
+          <p className="flex flex-wrap items-center gap-2 font-medium">{b.name} <StatusChip tone="info" icon={false}>{r.label}</StatusChip></p>
           <p className="text-xs text-muted-foreground">{counts.filter(([n]) => n).map(([n, w]) => `${n} ${w}`).join(" · ")} · {`${t.clicks.toLocaleString("en-GB")} clicks, ${gbp(t.cost)} spend, ${t.orders} orders, ${gbp(t.sales)} sales`}</p>
           <div className="flex flex-wrap items-center gap-2 text-sm">
             <span>Figures cover</span>
@@ -225,19 +226,19 @@ function BulkPreview({ b, onChange, onRemove }: { b: PickedBulk; onChange: (patc
             <Input type="date" className="h-7 w-auto" value={b.to} onChange={(e) => onChange({ to: e.target.value })} aria-label="To" />
             <span className="text-xs text-muted-foreground">the range chosen when exporting (the file doesn&apos;t say)</span>
           </div>
-          {warnings.map((w) => <p key={w} className="text-xs text-warn">{w}</p>)}
+          {warnings.map((w) => <p key={w} className="text-xs text-warn-ink">{w}</p>)}
         </div>
-        <button type="button" onClick={onRemove} aria-label="Remove"><XIcon className="size-4 text-muted-foreground" /></button>
+        <Button type="button" size="icon-sm" variant="ghost" onClick={onRemove} aria-label="Remove from this import"><XIcon /></Button>
       </div>
-      <div className="overflow-x-auto rounded border">
+      <div className="overflow-x-auto rounded-lg border border-border">
         <table className="w-full text-xs">
-          <thead><tr className="border-b text-left text-xs tracking-wide text-muted-foreground uppercase">
+          <thead><tr className="border-b border-border text-left text-xs font-semibold tracking-[0.06em] text-muted-foreground uppercase">
             <SortTh {...s.th("campaign")} className="px-2 py-1">Campaign</SortTh><SortTh {...s.th("asin")} className="px-2 py-1">ASIN (from product ads)</SortTh><SortTh {...s.th("state")} className="px-2 py-1">State</SortTh>
             <SortTh {...s.th("keywords")} numeric className="px-2 py-1 text-right">Keywords</SortTh><SortTh {...s.th("clicks")} numeric className="px-2 py-1 text-right">Clicks</SortTh>
             <SortTh {...s.th("cost")} numeric className="px-2 py-1 text-right">Spend</SortTh><SortTh {...s.th("orders")} numeric className="px-2 py-1 text-right">Orders</SortTh><SortTh {...s.th("sales")} numeric className="px-2 py-1 text-right">Sales</SortTh>
           </tr></thead>
           <tbody>{s.rows.map((c) => (
-            <tr key={c.campaignId} className="border-b last:border-b-0">
+            <tr key={c.campaignId} className="border-b border-divider last:border-b-0">
               <td className="px-2 py-1">{c.name}</td>
               <td className="px-2 py-1">{r.campaignAsins.get(c.campaignId) ?? <span className="text-muted-foreground">{r.productAds.some((p) => p.campaignId === c.campaignId) ? "several" : "none"}</span>}</td>
               <td className="px-2 py-1">{c.state}</td>

@@ -8,6 +8,7 @@ import { NgramsTab } from "@/components/ads/NgramsTab";
 import { ProductPicker, useAdsProduct } from "@/components/ads/ProductPicker";
 import { SearchTermsTable, type TermRow } from "@/components/ads/SearchTermsTable";
 import { EmptyState, ErrorState } from "@/components/States";
+import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -59,7 +60,7 @@ function SearchTerms() {
       />
       {error ? <ErrorState title="Couldn't load the products" message={error} />
         : !d ? <Skeleton className="h-64 rounded-xl" />
-        : !products.length && !asin ? <EmptyState title="No product has ad campaigns yet">Import a bulk export on the Dashboard to see its search terms.</EmptyState>
+        : !products.length && !asin ? <EmptyState icon={<TextSearchIcon />} title="No product has ad campaigns yet" action={<Button variant="secondary" asChild><Link href="/ads/dashboard?import=1">Import a bulk export</Link></Button>}>Import a bulk export on the Dashboard to see its search terms.</EmptyState>
         : (
           <>
             <div><ProductPicker products={products} value={asin} onChange={setAsin} all={false} /></div>

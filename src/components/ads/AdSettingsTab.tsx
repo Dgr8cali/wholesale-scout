@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import { costTxt, type AiModel } from "@/lib/ads/ai";
 import { api } from "@/lib/ui/client";
 
@@ -46,12 +47,17 @@ export function AdsSettingsTab() {
     <section className="panel space-y-4 p-4 sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
-          <SectionTitle title={<>Ads</>}>The default target ACoS for the Ads dashboard&apos;s products and search-term chips (a product can have its own), and the CPC behind Private label&apos;s ads-per-unit estimate.</SectionTitle>
+          <SectionTitle title="Ad settings">The default target ACoS for the Ads dashboard&apos;s products and search-term chips (a product can have its own), and the CPC behind Private label&apos;s ads-per-unit estimate.</SectionTitle>
         </div>
-        <Button variant="outline" onClick={save}>Save</Button>
+        <Button onClick={save}>Save</Button>
       </div>
       <label className="block max-w-xs space-y-1.5">
-        <span className="field-label">Target ACoS (%)</span>
+        <span className="flex items-center gap-1"><span className="field-label">Target ACoS (%)</span>
+          <InfoTip label="About break-even ACoS">
+            <p><b>Break-even ACoS</b> is a product&apos;s margin before ads: profit before advertising ÷ sale price. Spend more than that on ads per sale and each ad sale loses money.</p>
+            <p>A product with a 35% margin breaks even at 35% ACoS; a 30% target leaves 5 points of profit on ad sales. Keep the target below each product&apos;s break-even, and lower for products with thin margins.</p>
+          </InfoTip>
+        </span>
         <Input className="num" type="number" step="any" min={1} max={99} value={acos} onChange={(e) => setAcos(e.target.value)} />
         <span className="block text-xs text-muted-foreground">Default 30%. A product&apos;s own target (launch or steady) is set on the dashboard</span>
       </label>
@@ -65,9 +71,11 @@ export function AdsSettingsTab() {
       </div>
       <div className="flex flex-wrap items-start gap-4">
         <label className="block w-56 space-y-1.5">
-          <span className="field-label">Conversion smoothing (clicks)</span>
+          <span className="flex items-center gap-1"><span className="field-label">Conversion smoothing (clicks)</span>
+            <InfoTip label="About conversion smoothing">Bids use (orders + k × the product&apos;s conversion) ÷ (clicks + k), so 3 orders from 12 clicks doesn&apos;t read as 25%.</InfoTip>
+          </span>
           <Input className="num" type="number" step={1} min={0} value={smoothK} onChange={(e) => setSmoothK(e.target.value)} />
-          <span className="block text-xs text-muted-foreground">Bids use (orders + k × the product&apos;s conversion) ÷ (clicks + k), so 3 orders from 12 clicks doesn&apos;t read as 25%. Default 20; 0 turns it off</span>
+          <span className="block text-xs text-muted-foreground">Default 20; 0 turns it off</span>
         </label>
         <label className="block w-56 space-y-1.5">
           <span className="field-label">CTR benchmark (%)</span>
@@ -77,10 +85,7 @@ export function AdsSettingsTab() {
       </div>
       <KeywordListsEditor />
       <p className="max-w-3xl text-sm text-muted-foreground">
-        The rules&apos; thresholds (harvest, negatives, bid changes, pause, placements, budgets, revive) are set on the <Link className="underline" href="/ads/rules">Rules</Link> tab, with on/off, mode and a dry run per rule.
-      </p>
-      <p className="max-w-3xl rounded-lg bg-surface-2 px-3 py-2 text-sm text-muted-foreground">
-        <b className="text-foreground">Break-even ACoS</b> is a product&apos;s margin before ads: profit before advertising ÷ sale price. Spend more than that on ads per sale and each ad sale loses money. A product with a 35% margin breaks even at 35% ACoS; a 30% target leaves 5 points of profit on ad sales. Keep the target below each product&apos;s break-even, and lower for products with thin margins.
+        Each rule&apos;s thresholds, on/off and mode are on the <Link className="text-primary underline" href="/ads/rules">Rules</Link> tab.
       </p>
       <AiSettings />
     </section>
@@ -116,15 +121,15 @@ function AiSettings() {
     }
   };
   return (
-    <div className="space-y-3 border-t pt-4">
+    <div className="space-y-3 border-t border-divider pt-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
           <div className="flex items-center gap-1"><h3 className="text-sm font-semibold">AI review (Claude)</h3><InfoTip label="More about AI review (Claude)">
-            Explain this product, Recommend targets and the <Link className="underline" href="/ads/review">monthly review</Link>. The API is called only when you click, or by the monthly schedule if you turn it on. {data.settings.keySet ? <span className="text-pass">ANTHROPIC_API_KEY is set.</span> : <span className="text-warn">ANTHROPIC_API_KEY isn&apos;t set.</span>}
+            Explain this product, Recommend targets and the <Link className="text-primary underline" href="/ads/review">monthly review</Link>. The API is called only when you click, or by the monthly schedule if you turn it on. {data.settings.keySet ? <span className="text-success">ANTHROPIC_API_KEY is set.</span> : <span className="text-warn-ink">ANTHROPIC_API_KEY isn&apos;t set.</span>}
           </InfoTip></div>
-          <p className="text-sm">Spent: <b>{costTxt(data.spend.last30Gbp)}</b> over {data.spend.last30Calls} call{data.spend.last30Calls === 1 ? "" : "s"} in the last 30 days · {costTxt(data.spend.totalGbp)} in all ({data.spend.calls})</p>
+          <p className="text-sm">Spent: <b className="num">{costTxt(data.spend.last30Gbp)}</b> over {data.spend.last30Calls} call{data.spend.last30Calls === 1 ? "" : "s"} in the last 30 days · {costTxt(data.spend.totalGbp)} in all ({data.spend.calls})</p>
         </div>
-        <Button variant="outline" onClick={save}>Save</Button>
+        <Button variant="secondary" onClick={save}>Save</Button>
       </div>
       <div className="flex flex-wrap items-end gap-4">
         <label className="block space-y-1.5">
@@ -148,7 +153,7 @@ function AiSettings() {
         </label>
       </div>
       <p className="text-xs text-muted-foreground">Prices are the cost line&apos;s defaults per model; check them against Anthropic&apos;s pricing page and edit if they differ.</p>
-      <label className="flex items-center gap-2 text-sm"><Switch checked={draft.reviewSchedule} onCheckedChange={(v) => setDraft({ ...draft, reviewSchedule: v })} /> Run the monthly review on the 1st at 06:00 (last month; off by default)</label>
+      <label className="flex cursor-pointer items-center gap-2 text-sm"><Switch checked={draft.reviewSchedule} onCheckedChange={(v) => setDraft({ ...draft, reviewSchedule: v })} /> Run the monthly review on the 1st at 06:00 (last month; off by default)</label>
     </div>
   );
 }
@@ -182,12 +187,12 @@ function KeywordListsEditor() {
     }
   };
   return (
-    <div className="space-y-3 border-t pt-4" id="keyword-lists">
+    <div className="space-y-3 border-t border-divider pt-4" id="keyword-lists">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
           <div className="flex items-center gap-1"><h3 className="text-sm font-semibold">Keyword lists</h3><InfoTip label="More about Keyword lists"><b>Whitelist</b>: terms never negatived or paused (your brand name, the product&apos;s exact head terms); the rules skip them and say so. <b>Blacklist</b>: words or phrases always added as negative phrase to a product&apos;s new campaigns (the launcher and harvest&apos;s new Exact campaign), and proposed for its broad and auto campaigns. One term a line.</InfoTip></div>
         </div>
-        <Button variant="outline" onClick={save}>Save lists</Button>
+        <Button variant="secondary" onClick={save}>Save lists</Button>
       </div>
       <label className="flex items-center gap-2 text-sm"><span className="field-label">Lists for</span>
         <NativeSelect value={scope} onChange={(e) => { setScope(e.target.value); fill(data, e.target.value); }}>
@@ -199,9 +204,9 @@ function KeywordListsEditor() {
       )}
       <div className="grid gap-3 md:grid-cols-2">
         <label className="space-y-1"><span className="field-label">Whitelist{scope !== "account" ? " (this product's own)" : ""}</span>
-          <textarea className="min-h-24 w-full rounded-md border bg-transparent px-2 py-1.5 text-sm" value={draft.whitelist} onChange={(e) => setDraft({ ...draft, whitelist: e.target.value })} placeholder="your brand\npill organiser 7 day" /></label>
+          <Textarea className="min-h-24" value={draft.whitelist} onChange={(e) => setDraft({ ...draft, whitelist: e.target.value })} placeholder={"your brand\npill organiser 7 day"} /></label>
         <label className="space-y-1"><span className="field-label">Blacklist{scope !== "account" ? " (this product's own)" : ""}</span>
-          <textarea className="min-h-24 w-full rounded-md border bg-transparent px-2 py-1.5 text-sm" value={draft.blacklist} onChange={(e) => setDraft({ ...draft, blacklist: e.target.value })} placeholder="free\nused\nreplacement" /></label>
+          <Textarea className="min-h-24" value={draft.blacklist} onChange={(e) => setDraft({ ...draft, blacklist: e.target.value })} placeholder={"free\nused\nreplacement"} /></label>
       </div>
       {scope !== "account" && draft.useAccount && (data.account.whitelist.length > 0 || data.account.blacklist.length > 0) && (
         <p className="text-xs text-muted-foreground">Plus the account&apos;s: whitelist {data.account.whitelist.join(", ") || "—"}; blacklist {data.account.blacklist.join(", ") || "—"}.</p>

@@ -1,12 +1,13 @@
 "use client";
 
-import { LoaderIcon, RefreshCwIcon, SparklesIcon } from "lucide-react";
+import { RefreshCwIcon, SparklesIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { InfoTip } from "@/components/ui/info-tip";
+import { StatusChip, type Tone } from "@/components/ui/status-chip";
 import { costTxt } from "@/lib/ads/ai";
 import { api } from "@/lib/ui/client";
-import { cn } from "@/lib/utils";
 
 export interface Run<T> { result: T; cached?: boolean; model: string; at: string; costGbp: number; tokens: { input: number; output: number }; uncited?: string[] }
 
@@ -24,8 +25,8 @@ export function CostLine({ run, what }: { run: Run<unknown>; what: string }) {
 
 /** Figures in the answer that aren't in the data sent: shown, never hidden. */
 export function Uncited({ list }: { list?: string[] }) {
-  if (!list?.length) return <p className="text-xs text-pass">Every figure checked against the data sent.</p>;
-  return <p className="text-xs text-warn">Not found in the data sent (check them): {list.join(", ")}</p>;
+  if (!list?.length) return <p className="text-xs text-success">Every figure checked against the data sent.</p>;
+  return <p className="text-xs text-warn-ink">Not found in the data sent (check them): {list.join(", ")}</p>;
 }
 
 /** See exactly what would be sent (free: no API call). */
@@ -35,7 +36,7 @@ export function DataSent({ url }: { url: string }) {
   return (
     <details className="text-xs" open={open} onToggle={(e) => { const o = (e.target as HTMLDetailsElement).open; setOpen(o); if (o && !data) api<{ context: unknown; contextTokens: number }>(url).then(setData).catch((err: Error) => toast.error(err.message)); }}>
       <summary className="cursor-pointer text-muted-foreground hover:text-foreground">The data sent{data ? ` (about ${data.contextTokens.toLocaleString("en-GB")} tokens)` : ""}</summary>
-      {data ? <pre className="mt-1 max-h-72 overflow-auto rounded bg-surface-2 p-2 text-xs">{JSON.stringify(data.context, null, 1)}</pre> : open ? <p className="mt-1 text-muted-foreground">Loading…</p> : null}
+      {data ? <pre className="mt-1 max-h-72 overflow-auto rounded-lg bg-subtle p-2 text-xs">{JSON.stringify(data.context, null, 1)}</pre> : open ? <p className="mt-1 text-muted-foreground">Loading…</p> : null}
     </details>
   );
 }
@@ -60,14 +61,14 @@ export function ExplainPanel({ asin }: { asin: string }) {
     }
   };
   return (
-    <div className="space-y-2 rounded-lg border border-dashed p-3">
+    <div className="space-y-2 rounded-lg border border-border p-3">
       <div className="flex flex-wrap items-center gap-2">
-        <SparklesIcon className="size-4 text-brand" />
+        <SparklesIcon className="size-4 text-primary" />
         <span className="text-sm font-semibold">Explain this product</span>
-        <span className="text-xs text-muted-foreground">A short read of the period from these figures (Claude). Facts only from the data; it never sets bids or budgets.</span>
+        <InfoTip label="About Explain this product">A short read of the period from these figures (Claude). Facts only from the data; it never sets bids or budgets. It runs only when you click.</InfoTip>
         <span className="ml-auto flex gap-1">
-          {run && <Button size="xs" variant="ghost" disabled={busy} onClick={() => go(true)} title="Ask again even if the data hasn't changed"><RefreshCwIcon /> Re-run</Button>}
-          {!run && <Button size="xs" disabled={busy} onClick={() => go(false)}>{busy ? <LoaderIcon className="animate-spin" /> : <SparklesIcon />} Explain</Button>}
+          {run && <Button size="sm" variant="ghost" loading={busy} onClick={() => go(true)} title="Ask again even if the data hasn't changed"><RefreshCwIcon /> Re-run</Button>}
+          {!run && <Button size="sm" variant="secondary" loading={busy} onClick={() => go(false)}><SparklesIcon /> Explain</Button>}
         </span>
       </div>
       {busy && run && <p className="text-xs text-muted-foreground">Asking…</p>}
@@ -111,16 +112,16 @@ export function TargetsPanel({ asin, onApplied }: { asin: string; onApplied: () 
       toast.error((e as Error).message);
     }
   };
-  const tone = { low: "bg-empty-soft text-ink-2", medium: "bg-warn-soft text-warn", high: "bg-pass-soft text-pass" } as const;
+  const tone: Record<Targets["confidence"], Tone> = { low: "neutral", medium: "warn", high: "good" };
   return (
-    <div className="space-y-2 rounded-lg border border-dashed p-3">
+    <div className="space-y-2 rounded-lg border border-border p-3">
       <div className="flex flex-wrap items-center gap-2">
-        <SparklesIcon className="size-4 text-brand" />
+        <SparklesIcon className="size-4 text-primary" />
         <span className="text-sm font-semibold">Recommend targets</span>
-        <span className="text-xs text-muted-foreground">Launch and steady target ACoS from break-even, reviews, rank, stock cover and conversion. Nothing changes until you Apply.</span>
+        <InfoTip label="About Recommend targets">Launch and steady target ACoS from break-even, reviews, rank, stock cover and conversion (Claude). Nothing changes until you Apply.</InfoTip>
         <span className="ml-auto flex gap-1">
-          {run && <Button size="xs" variant="ghost" disabled={busy} onClick={() => go(true)}><RefreshCwIcon /> Re-run</Button>}
-          {!run && <Button size="xs" disabled={busy} onClick={() => go(false)}>{busy ? <LoaderIcon className="animate-spin" /> : <SparklesIcon />} Recommend</Button>}
+          {run && <Button size="sm" variant="ghost" loading={busy} onClick={() => go(true)}><RefreshCwIcon /> Re-run</Button>}
+          {!run && <Button size="sm" variant="secondary" loading={busy} onClick={() => go(false)}><SparklesIcon /> Recommend</Button>}
         </span>
       </div>
       {run && (
@@ -128,11 +129,11 @@ export function TargetsPanel({ asin, onApplied }: { asin: string; onApplied: () 
           <div className="flex flex-wrap items-center gap-3">
             <span>Launch <b className="num">{run.result.launch_target_pct}%</b></span>
             <span>Steady <b className="num">{run.result.steady_target_pct}%</b></span>
-            <span className={cn("rounded-full px-2 py-0.5 text-xs font-semibold", tone[run.result.confidence])}>{run.result.confidence} confidence</span>
-            <Button size="xs" onClick={apply}>Apply</Button>
+            <StatusChip tone={tone[run.result.confidence]}>{run.result.confidence} confidence</StatusChip>
+            <Button size="sm" variant="secondary" onClick={apply}>Apply</Button>
           </div>
           <p>{run.result.justification}</p>
-          {run.result.warnings?.map((w) => <p key={w} className="text-xs text-warn">{w}</p>)}
+          {run.result.warnings?.map((w) => <p key={w} className="text-xs text-warn-ink">{w}</p>)}
           <Uncited list={run.uncited} />
           <CostLine run={run} what="recommendation" />
         </div>

@@ -1,14 +1,18 @@
 "use client";
 
-import { ChevronRightIcon, FileUpIcon, HistoryIcon, LayoutDashboardIcon, LoaderIcon } from "lucide-react";
+import { ChevronRightIcon, FileUpIcon, HistoryIcon, KeyRoundIcon, LayoutDashboardIcon, MegaphoneIcon } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Fragment, Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { ImportFlow, ImportsHistory } from "@/components/ads/ImportFlow";
 import { EmptyState, ErrorState } from "@/components/States";
 import { Button } from "@/components/ui/button";
+import { DataTable, type DataColumn } from "@/components/ui/data-table";
+import { InfoTip, SectionTitle } from "@/components/ui/info-tip";
+import { Kpi } from "@/components/ui/kpi";
 import { PageHeader } from "@/components/ui/page-header";
+import { StatusChip, type Tone } from "@/components/ui/status-chip";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useTab } from "@/lib/ui/useTab";
@@ -16,7 +20,6 @@ import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Sparkline } from "@/components/results/Sparkline";
 import { ProductPicker, useAdsProduct } from "@/components/ads/ProductPicker";
-import { SortTh, useSortable } from "@/components/SortableTable";
 import { ProductThumb } from "@/components/ProductThumb";
 import { ExplainPanel, TargetsPanel } from "@/components/ads/AiPanels";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -58,10 +61,11 @@ const day = (d: string | null) => (d ? new Date(d).toLocaleDateString("en-GB", {
 /** ACoS against the target and break-even: green at or under the target, amber up to break-even, red over it. */
 function acosTone(acos: number | null, target: number, breakEven: number | null) {
   if (acos == null) return "";
-  if (acos <= target) return "text-pass";
-  if (breakEven != null && acos > breakEven) return "text-fail";
-  return "text-warn";
+  if (acos <= target) return "text-success";
+  if (breakEven != null && acos > breakEven) return "text-danger";
+  return "text-warn-ink";
 }
+const profitTone = (v: number | null) => (v == null ? "" : v >= 0 ? "text-success" : "text-danger");
 
 const SOURCE_LABEL: Record<string, string> = {
   campaign: "bulk export or campaign report", campaign_daily: "daily report", grid: "Campaign Manager export (range unknown)", search_term: "search terms summed",
@@ -117,8 +121,8 @@ function AdsDashboard() {
           {error ? <ErrorState title="Couldn't load Ads" message={error} onRetry={load} />
             : !d ? <div className="space-y-4"><Skeleton className="h-40 rounded-xl" /><Skeleton className="h-64 rounded-xl" /></div>
             : !d.campaigns.length ? (
-              <EmptyState icon={<FileUpIcon />} title="No ad data yet — import a report" action={<Button onClick={() => setImporting(true)}><FileUpIcon /> Import</Button>}>
-                Export the bulk export from Amazon Ads and import it. New to running ads here? <Link className="text-primary underline" href="/help/ads-playbook">Ads: the playbook</Link> goes from setting a product up to the weekly loop.
+              <EmptyState icon={<FileUpIcon />} title="No ad data yet" action={<Button variant="secondary" onClick={() => setImporting(true)}><FileUpIcon /> Import</Button>}>
+                Import the bulk export from Amazon Ads; <Link className="text-primary underline" href="/help/ads-playbook">the playbook</Link> covers the rest.
               </EmptyState>
             ) : <Dashboard d={d} load={load} />}
         </TabsContent>
@@ -152,8 +156,8 @@ function Dashboard({ d, load }: { d: Dash; load: () => void }) {
         <FetchStock onDone={load} />
       </div>
 
-      {unlisted && <p className="panel p-4 text-sm text-muted-foreground"><span className="num">{pick}</span> has no ads data yet: no imported campaign and no launch plan. <button type="button" className="text-brand underline" onClick={() => setPick("")}>Show all products</button></p>}
-      {!products.length && <p className="panel p-4 text-sm text-muted-foreground">No campaign is linked to a product yet: assign one below. Then see <Link className="text-brand underline" href="/help/ads-playbook">Ads: the playbook</Link> for the weekly loop.</p>}
+      {unlisted && <p className="panel p-4 text-sm text-muted-foreground"><span className="num">{pick}</span> has no ads data yet: no imported campaign and no launch plan. <button type="button" className="cursor-pointer text-primary underline" onClick={() => setPick("")}>Show all products</button></p>}
+      {!products.length && <p className="panel p-4 text-sm text-muted-foreground">No campaign is linked to a product yet: assign one below. Then see <Link className="text-primary underline" href="/help/ads-playbook">Ads: the playbook</Link> for the weekly loop.</p>}
       {d.asins.filter((a) => shown(a.asin)).map((a) => (
         <ProductSection key={a.asin} asin={a.asin} look={d.looks?.[a.asin]} stock={d.stock[a.asin]} plan={d.plans.find((p) => p.asin === a.asin)} onSaved={load}
           sub={`${a.campaigns} campaign${a.campaigns === 1 ? "" : "s"} · ${day(a.from)} – ${day(a.to)} · ${a.phase} · target ACoS ${pct(a.targetAcos, 0)}`}>
@@ -163,7 +167,7 @@ function Dashboard({ d, load }: { d: Dash; load: () => void }) {
           <KeywordBankPanel asin={a.asin} />
           <CampaignTable rows={d.campaigns.filter((c) => c.asin === a.asin)} onSaved={load} />
           <KeywordTable rows={d.keywords.filter((k) => k.asin === a.asin)} />
-          <p className="text-sm"><Link className="font-medium text-primary hover:underline" href={`/ads/search-terms?tab=all&asin=${a.asin}`}>Search terms ({d.terms.filter((t) => t.asin === a.asin).length}) →</Link> <span className="text-muted-foreground">with their status, the n-grams and the keyword bank</span></p>
+          <p className="text-sm"><Link className="font-medium text-primary hover:underline" href={`/ads/search-terms?tab=all&asin=${a.asin}`}>Search terms (<span className="num">{d.terms.filter((t) => t.asin === a.asin).length}</span>) →</Link> <span className="text-muted-foreground">with their status, the n-grams and the keyword bank</span></p>
         </ProductSection>
       ))}
       {launchOnly.filter((p) => shown(p.asin)).map((p) => (
@@ -177,7 +181,7 @@ function Dashboard({ d, load }: { d: Dash; load: () => void }) {
           <p className="mt-1 text-xs text-muted-foreground">Left out of the dashboard and the rules. Their data stays.</p>
           <ul className="mt-2 space-y-1">{d.archived.map((c) => (
             <li key={c.id} className="flex items-center gap-2">{c.name} <span className="text-xs text-muted-foreground">{c.state}</span>
-              <Button size="xs" variant="ghost" onClick={async () => { await api(`/api/ads/campaigns/${c.id}`, { method: "PATCH", json: { archived: false } }); load(); }}>Unarchive</Button></li>
+              <Button size="sm" variant="ghost" onClick={async () => { await api(`/api/ads/campaigns/${c.id}`, { method: "PATCH", json: { archived: false } }); load(); }}>Unarchive</Button></li>
           ))}</ul>
         </details>
       )}
@@ -204,19 +208,19 @@ function ProductSection({ asin, look, sub, stock, plan, onSaved, children }: { a
   return (
     <section className="panel space-y-4 p-4">
       <div className="flex flex-wrap items-center gap-3">
-        <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-label={open ? "Collapse" : "Expand"}>
-          <ChevronRightIcon className={cn("size-4 text-muted-foreground transition-transform", open && "rotate-90")} />
-        </button>
+        <Button size="icon-sm" variant="ghost" onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-label={open ? "Collapse" : "Expand"}>
+          <ChevronRightIcon className={cn("text-muted-foreground transition-transform", open && "rotate-90")} />
+        </Button>
         <ProductThumb url={look?.image} asin={asin} title={look?.title ?? null} brand={null} size={44} />
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-baseline gap-2">
-            <span className="font-heading text-base font-bold">{look?.title ?? asin}</span>
-            <a className="num text-xs text-brand hover:underline" href={`https://www.amazon.co.uk/dp/${asin}`} target="_blank" rel="noreferrer">{asin}</a>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <h2 className="section-title">{look?.title ?? asin}</h2>
+            <a className="num text-xs text-primary hover:underline" href={`https://www.amazon.co.uk/dp/${asin}`} target="_blank" rel="noreferrer">{asin}</a>
             <StockChip s={stock} />
           </div>
-          <div className="text-xs text-muted-foreground">{sub}{look?.candidate && <> · <Link href={`/pl/candidates?c=${look.candidate}`} className="text-brand hover:underline">Private label candidate →</Link></>}</div>
+          <div className="text-meta text-muted-foreground">{sub}{look?.candidate && <> · <Link href={`/pl/candidates?c=${look.candidate}`} className="text-primary hover:underline">Private label candidate →</Link></>}</div>
         </div>
-        {(!look?.image || !look?.title) && <Button size="xs" variant="outline" disabled={busy} onClick={fetchLook} title="Keepa: title, image, size and weight">{busy ? <LoaderIcon className="animate-spin" /> : null} Title and image (1 token)</Button>}
+        {(!look?.image || !look?.title) && <Button size="sm" variant="secondary" loading={busy} onClick={fetchLook} title="Keepa: title, image, size and weight">Title and image (1 token)</Button>}
       </div>
       {open && (
         <>
@@ -236,10 +240,13 @@ function UnassignedSection({ campaigns, onSaved }: { campaigns: CampaignRow[]; o
   return (
     <section className="panel space-y-3 p-4">
       <div>
-        <h2 className="section-label">Campaigns without a product</h2>
-        <p className="text-sm text-muted-foreground">They don&apos;t count towards any product until you assign one. Search by ASIN or by words of the title (Ads products, your wholesale products, Niche Hunt and Keepa&apos;s cache: free). Archive the ones you don&apos;t care about: they leave the dashboard and the rules.</p>
+        <SectionTitle title={<>Campaigns without a product <span className="num">({campaigns.length})</span></>}>
+          <p>They don&apos;t count towards any product until you assign one. Search by ASIN or by words of the title (Ads products, your wholesale products, Niche Hunt and Keepa&apos;s cache: free).</p>
+          <p>Archive the ones you don&apos;t care about: they leave the dashboard and the rules.</p>
+        </SectionTitle>
+        <p className="text-meta text-muted-foreground">Assign each to the product it advertises, or archive it.</p>
       </div>
-      <div className="divide-y rounded-lg border">
+      <div className="divide-y divide-divider rounded-lg border border-border">
         {campaigns.map((c) => <UnassignedRow key={c.id} c={c} onSaved={onSaved} />)}
       </div>
     </section>
@@ -295,16 +302,16 @@ function UnassignedRow({ c, onSaved }: { c: CampaignRow; onSaved: () => void }) 
           <div className="font-medium">{c.name}</div>
           <div className="text-xs text-muted-foreground">{[c.state, c.targeting, c.totals ? `${n0(c.totals.clicks)} clicks, ${gbp(c.totals.cost)} spent, ${n0(c.totals.orders)} orders` : "no figures", c.advertised.length ? `product ads: ${c.advertised.join(", ")}` : null].filter(Boolean).join(" · ")}</div>
         </div>
-        <Input className="h-8 w-64" placeholder="ASIN or product name" value={q} onChange={(e) => { setQ(e.target.value); setChosen(null); }} aria-label={`Find the product for ${c.name}`} />
-        <Button size="xs" variant="ghost" onClick={archive}>Archive</Button>
+        <Input className="h-8 w-full sm:w-64" placeholder="ASIN or product name" value={q} onChange={(e) => { setQ(e.target.value); setChosen(null); }} aria-label={`Find the product for ${c.name}`} />
+        <Button size="sm" variant="ghost" onClick={archive}>Archive</Button>
       </div>
       {c.advertised.length > 1 && !q && (
-        <div className="flex flex-wrap gap-1 text-xs"><span className="text-muted-foreground">Its product ads:</span>{c.advertised.map((a) => <button key={a} type="button" className="rounded border px-1.5 hover:bg-surface-2" onClick={() => setQ(a)}>{a}</button>)}</div>
+        <div className="flex flex-wrap gap-1 text-xs"><span className="text-muted-foreground">Its product ads:</span>{c.advertised.map((a) => <button key={a} type="button" className="num cursor-pointer rounded-md border border-border px-1.5 hover:bg-subtle" onClick={() => setQ(a)}>{a}</button>)}</div>
       )}
       {searching && matches && !chosen && (
         <div className="space-y-1">
           {matches.map((m) => (
-            <button key={m.asin} type="button" onClick={() => setChosen(m)} className="flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-sm hover:bg-surface-2">
+            <button key={m.asin} type="button" onClick={() => setChosen(m)} className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1 text-left text-sm hover:bg-subtle">
               <ProductThumb url={m.image} asin={m.asin} title={m.title} brand={null} size={28} />
               <span className="min-w-0 flex-1 truncate">{m.title ?? <span className="text-muted-foreground">no title yet</span>}</span>
               <span className="num text-xs">{m.asin}</span><span className="text-xs text-muted-foreground">{m.source}</span>
@@ -312,50 +319,45 @@ function UnassignedRow({ c, onSaved }: { c: CampaignRow; onSaved: () => void }) 
           ))}
           {!matches.length && <p className="px-2 text-xs text-muted-foreground">Nothing in the app matches.{isAsin ? "" : " Try the ASIN."}</p>}
           {isAsin && !matches.some((m) => m.asin === q.trim().toUpperCase() && m.title) && (
-            <Button size="xs" variant="outline" disabled={busy} onClick={keepa}>{busy ? <LoaderIcon className="animate-spin" /> : null} Look up {q.trim().toUpperCase()} on Keepa (1 token)</Button>
+            <Button size="sm" variant="secondary" loading={busy} onClick={keepa}>Look up {q.trim().toUpperCase()} on Keepa (1 token)</Button>
           )}
         </div>
       )}
       {chosen && (
-        <div className="flex flex-wrap items-center gap-3 rounded-md bg-surface-2 p-2 text-sm">
+        <div className="flex flex-wrap items-center gap-3 rounded-lg bg-subtle p-2 text-sm">
           <ProductThumb url={chosen.image} asin={chosen.asin} title={chosen.title} brand={null} size={44} />
           <div className="min-w-0 flex-1"><div className="font-medium">{chosen.title ?? "No title yet"}</div><div className="num text-xs text-muted-foreground">{chosen.asin} · {chosen.source}</div></div>
-          <Button size="xs" onClick={assign}>Assign to this product</Button>
-          <Button size="xs" variant="ghost" onClick={() => setChosen(null)}>Back</Button>
+          <Button size="sm" variant="secondary" onClick={assign}>Assign to this product</Button>
+          <Button size="sm" variant="ghost" onClick={() => setChosen(null)}>Back</Button>
         </div>
       )}
     </div>
   );
 }
 
+/** A product figure as a Kpi tile: the value in mono, coloured when it's judged (ACoS, profit). */
 function Metric({ label, value, sub, cls }: { label: string; value: string; sub?: string; cls?: string }) {
-  return (
-    <div className="rounded-lg bg-surface-2 px-3 py-2">
-      <div className="text-xs tracking-wide text-muted-foreground uppercase">{label}</div>
-      <div className={cn("num text-base font-medium", cls)}>{value}</div>
-      {sub && <div className="text-xs text-muted-foreground">{sub}</div>}
-    </div>
-  );
+  return <Kpi label={label} value={<span className={cn("num", cls)}>{value}</span>} hint={sub} />;
 }
 
 /** Days of cover: red under 3, amber under 10, plain to 21, green above. */
 function StockChip({ s }: { s: Stock | undefined }) {
-  if (!s) return <span className="text-xs text-muted-foreground" title="No FBA inventory for this ASIN in the last sync">stock unknown</span>;
+  if (!s) return <StatusChip tone="neutral" title="No FBA inventory for this ASIN in the last sync">Stock unknown</StatusChip>;
   const d = s.daysOfCover;
-  const cls = d == null ? "bg-empty-soft text-ink-2" : d < 3 ? "bg-fail-soft text-fail" : d < 10 ? "bg-warn-soft text-warn" : d <= 21 ? "bg-empty-soft text-ink-2" : "bg-pass-soft text-pass";
+  const tone: Tone = d == null ? "neutral" : d < 3 ? "bad" : d < 10 ? "warn" : d <= 21 ? "neutral" : "good";
   const days = d == null ? "—" : d >= 9999 ? "no sales" : `${d < 10 ? d.toFixed(1) : Math.round(d)} days`;
   return (
-    <span className={cn("cursor-help rounded-full px-2 py-0.5 text-xs font-semibold", cls)}
+    <StatusChip tone={tone} className="cursor-help"
       title={`${s.fulfillable} fulfillable at FBA${s.inbound ? `, ${s.inbound} inbound` : ""}${s.home || s.tiktok_fbt ? `; ${s.home ?? 0} self-ship, ${s.tiktok_fbt ?? 0} TikTok FBT (Stock)` : ""}; ${s.unitsPerDay != null ? `${s.unitsPerDay.toFixed(2)} units a day` : "no sales rate"} (${s.source})${s.updatedAt ? `; stock as of ${new Date(s.updatedAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}` : ""}`}>
       {s.total ?? s.fulfillable} in stock · {days} of cover
-    </span>
+    </StatusChip>
   );
 }
 
 function FetchStock({ onDone }: { onDone: () => void }) {
   const [busy, setBusy] = useState(false);
   return (
-    <Button variant="outline" disabled={busy} onClick={async () => {
+    <Button variant="secondary" loading={busy} onClick={async () => {
       setBusy(true);
       try {
         const r = await api<{ ok: boolean; skus: number; error: string | null }>("/api/ads/inventory", { method: "POST" });
@@ -366,7 +368,7 @@ function FetchStock({ onDone }: { onDone: () => void }) {
       } finally {
         setBusy(false);
       }
-    }}>{busy ? <LoaderIcon className="animate-spin" /> : null} Fetch stock</Button>
+    }}>Fetch stock</Button>
   );
 }
 
@@ -376,7 +378,7 @@ function PlanLine({ plan }: { plan: Plan }) {
   const cur = [...plan.plan].reverse().find((p) => p.from <= today);
   const next = plan.plan.find((p) => p.from > today);
   return (
-    <div className="rounded-lg bg-surface-2 px-3 py-2 text-sm">
+    <div className="rounded-lg bg-subtle px-3 py-2 text-sm">
       <b>Launch plan</b> from {day(plan.start_date)}: {cur ? <><b>{cur.title}</b> <span className="text-muted-foreground">({cur.detail})</span></> : <>starts {day(plan.start_date)}</>}
       {next && <span className="text-muted-foreground"> Next: {next.title} on {day(next.from)}.</span>}
       <div className="mt-1 flex flex-wrap gap-x-4 text-xs text-muted-foreground">{plan.plan.map((p) => <span key={p.from}>{day(p.from)}: {p.title}</span>)}</div>
@@ -391,12 +393,12 @@ function AsinTile({ a, onSaved }: { a: AsinRow; onSaved: () => void }) {
   const t = a.totals, r = a.ratios;
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-4 xl:grid-cols-6">
         <Metric label="Spend" value={gbp(t.cost)} />
         <Metric label="Sales" value={gbp(t.sales)} sub={`${n0(t.orders)} orders${t.units != null ? `, ${n0(t.units)} units` : ""}`} />
         <Metric label="ACoS" value={pct(r.acos)} cls={acosTone(r.acos, a.targetAcos, e.breakEvenAcos)} sub={`break-even ${pct(e.breakEvenAcos)}`} />
         <Metric label="Break-even ACoS" value={pct(e.breakEvenAcos)} sub={e.breakEvenAcos == null ? `needs ${e.needs.join(", ")}` : `margin ${gbp(e.margin)} of ${gbp(e.price)}`} />
-        <Metric label="Profit after ads" value={gbp(a.profitAfterAds)} cls={a.profitAfterAds == null ? "" : a.profitAfterAds >= 0 ? "text-pass" : "text-fail"} sub="sales − fees − landed − spend" />
+        <Metric label="Profit after ads" value={gbp(a.profitAfterAds)} cls={profitTone(a.profitAfterAds)} sub="sales − fees − landed − spend" />
         <Metric label="Cost per order" value={gbp(r.costPerOrder)} />
         <Metric label="CPC" value={gbp(r.cpc)} />
         <Metric label="Conversion" value={pct(r.conversion)} sub="orders ÷ clicks" />
@@ -408,9 +410,9 @@ function AsinTile({ a, onSaved }: { a: AsinRow; onSaved: () => void }) {
         <p className="text-xs text-muted-foreground">TACoS mode: target TACoS {pct(a.insights.targetTacos, 0)}{a.insights.acosForTacos.adShare ? ` ÷ ${pct(a.insights.acosForTacos.adShare, 0)} ad share of sales = ${pct(a.insights.acosForTacos.acos, 0)} ACoS allowed${a.insights.acosForTacos.capped ? " (capped at 100%)" : ""}` : " (no sales split yet: used as the ACoS target)"}. The bid rules use it.</p>
       )}
       {a.insights?.suggestTacos && (
-        <p className="rounded-md bg-brand-soft/50 px-3 py-1.5 text-xs">Organic sales are {pct(a.insights.share30?.value ?? null, 0)} of units ({a.insights.share30?.period}) with {a.insights.reviews} reviews: consider <b>TACoS mode</b> (Price, costs and target), so the ads are judged on all sales, not only their own.</p>
+        <p className="rounded-lg bg-primary-soft px-3 py-1.5 text-xs text-primary-ink">Organic sales are {pct(a.insights.share30?.value ?? null, 0)} of units ({a.insights.share30?.period}) with {a.insights.reviews} reviews: consider <b>TACoS mode</b> (Price, costs and target), so the ads are judged on all sales, not only their own.</p>
       )}
-      <button type="button" className="flex items-center gap-1 text-xs font-medium text-brand hover:underline" onClick={() => setOpen((v) => !v)}>
+      <button type="button" aria-expanded={open} className="flex cursor-pointer items-center gap-1 text-meta font-medium text-primary hover:underline" onClick={() => setOpen((v) => !v)}>
         <ChevronRightIcon className={cn("size-3.5 transition-transform", open && "rotate-90")} /> Price, costs and target
       </button>
       {open && <EconEditor a={a} onSaved={onSaved} />}
@@ -466,7 +468,7 @@ function EconEditor({ a, onSaved }: { a: AsinRow; onSaved: () => void }) {
     </label>
   );
   return (
-    <div className="space-y-3 rounded-lg border p-3">
+    <div className="space-y-3 rounded-lg border border-border p-3">
       <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
         {field("price", "Sale price (£)", e.priceSource !== "manual" ? String(e.price) : undefined, e.priceSource === "ads" ? "Blank: the ads' average (sales ÷ units)" : e.priceSource === "keepa" ? "Blank: Keepa's Buy Box" : undefined)}
         {field("landed", "Landed cost a unit (£)", undefined, "Needed for break-even")}
@@ -486,21 +488,24 @@ function EconEditor({ a, onSaved }: { a: AsinRow; onSaved: () => void }) {
         {field("launch", "Target ACoS, launch (%)", undefined, "Blank: Ads → Rules → Ad settings")}
         {field("steady", "Target ACoS, steady (%)", undefined, "Blank: Ads → Rules → Ad settings")}
       </div>
-      <div className="grid gap-3 rounded-md bg-surface-2 p-3 sm:grid-cols-[12rem_12rem_1fr]">
+      <div className="grid items-start gap-3 rounded-lg bg-subtle p-3 sm:grid-cols-[12rem_12rem_1fr]">
         <label className="space-y-1">
-          <span className="field-label">Optimise for</span>
+          <span className="flex items-center gap-1"><span className="field-label">Optimise for</span>
+            <InfoTip label="About TACoS">
+              <p><b>TACoS</b> = ad spend ÷ all sales (ads and organic){ins?.tacos != null ? `: ${pct(ins.tacos)} ${ins.period}` : ""}. Break-even TACoS = margin ÷ price{ins?.breakEvenTacos != null ? ` = ${pct(ins.breakEvenTacos)}` : ""}: the ads may take the whole margin of every unit sold, organic + ad{ins?.split.totalUnits != null ? ` (${n0(ins.split.totalUnits)} units, ${n0(ins.split.adUnits)} from ads)` : ""}, not only the ad-attributed ones.</p>
+              <p>In TACoS mode the bid rules compare with the ACoS the target TACoS allows (target TACoS ÷ the ad share of sales), Ranked eases off 25% instead of 20%, and their reasons say &ldquo;TACoS mode&rdquo;. Worth it once organic sales carry the product (over half for 30 days, 30+ reviews).</p>
+            </InfoTip>
+          </span>
           <NativeSelect className="w-full" value={f.optimise} onChange={(ev) => setF({ ...f, optimise: ev.target.value as "acos" | "tacos" })}>
             <NativeSelectOption value="acos">ACoS (default)</NativeSelectOption><NativeSelectOption value="tacos">TACoS</NativeSelectOption>
           </NativeSelect>
         </label>
         {f.optimise === "tacos" ? field("tacos", "Target TACoS (%)", ins?.breakEvenTacos != null ? (ins.breakEvenTacos * 100).toFixed(1) : undefined, `Blank: break-even TACoS ${pct(ins?.breakEvenTacos ?? null)}`) : <span />}
-        <p className="text-xs text-muted-foreground">
-          <b>TACoS</b> = ad spend ÷ all sales (ads and organic){ins?.tacos != null ? `: ${pct(ins.tacos)} ${ins.period}` : ""}. Break-even TACoS = margin ÷ price{ins?.breakEvenTacos != null ? ` = ${pct(ins.breakEvenTacos)}` : ""}: the ads may take the whole margin of every unit sold, organic + ad{ins?.split.totalUnits != null ? ` (${n0(ins.split.totalUnits)} units, ${n0(ins.split.adUnits)} from ads)` : ""}, not only the ad-attributed ones. In TACoS mode the bid rules compare with the ACoS the target TACoS allows (target TACoS ÷ the ad share of sales), Ranked eases off 25% instead of 20%, and their reasons say &ldquo;TACoS mode&rdquo;. Worth it once organic sales carry the product (over half for 30 days, 30+ reviews).
-        </p>
+        <p className="text-xs text-muted-foreground sm:self-end sm:pb-2">TACoS = ad spend ÷ all sales (ads and organic){ins?.tacos != null ? `: ${pct(ins.tacos)} ${ins.period}` : ""}.</p>
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <Button size="sm" onClick={save} disabled={!!busy}>{busy === "save" && <LoaderIcon className="animate-spin" />} Save</Button>
-        {!e.sizeKnown && <Button size="sm" variant="outline" onClick={keepa} disabled={!!busy}>{busy === "keepa" && <LoaderIcon className="animate-spin" />} Size and weight from Keepa (1 token)</Button>}
+        <Button size="sm" variant="secondary" onClick={save} disabled={!!busy} loading={busy === "save"}>Save</Button>
+        {!e.sizeKnown && <Button size="sm" variant="ghost" onClick={keepa} disabled={!!busy} loading={busy === "keepa"}>Size and weight from Keepa (1 token)</Button>}
         <span className="text-xs text-muted-foreground">Referral category: {e.referralCategory}. Fees from the active rate card, VAT and the digital services fee included.</span>
       </div>
       <TargetsPanel asin={a.asin} onApplied={onSaved} />
@@ -522,93 +527,75 @@ function AsinCell({ c, onSaved }: { c: CampaignRow; onSaved: () => void }) {
   };
   if (!editing) {
     return (
-      <button type="button" className={cn("num text-xs hover:underline", c.asin ? "" : "font-medium text-brand")} onClick={() => setEditing(true)} title={c.asin_source === "product_ad" ? "From the campaign's product ads" : c.asin_source === "name" ? "From the campaign's name" : c.asin ? "Set by you" : c.advertised.length > 1 ? `Its product ads advertise ${c.advertised.join(", ")}: set which one it counts towards` : "Set the ASIN this campaign advertises"}>
+      <button type="button" className={cn("num cursor-pointer text-xs hover:underline", c.asin ? "" : "font-medium text-primary")} onClick={() => setEditing(true)} title={c.asin_source === "product_ad" ? "From the campaign's product ads" : c.asin_source === "name" ? "From the campaign's name" : c.asin ? "Set by you" : c.advertised.length > 1 ? `Its product ads advertise ${c.advertised.join(", ")}: set which one it counts towards` : "Set the ASIN this campaign advertises"}>
         {c.asin ?? "Set ASIN"}
       </button>
     );
   }
   return (
     <span className="flex items-center gap-1">
-      <Input autoFocus className="num h-7 w-28 text-xs uppercase" value={v} onChange={(e) => setV(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") save(); if (e.key === "Escape") setEditing(false); }} />
-      <Button size="xs" onClick={save}>Save</Button>
+      <Input autoFocus className="num h-8 w-28 text-xs uppercase" value={v} onChange={(e) => setV(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") save(); if (e.key === "Escape") setEditing(false); }} aria-label={`ASIN for ${c.name}`} />
+      <Button size="sm" variant="secondary" onClick={save}>Save</Button>
     </span>
   );
 }
 
+const campaignMeta = (c: CampaignRow) => [c.state?.toLowerCase(), c.targeting?.toLowerCase(), c.budget != null ? `${gbp(c.budget)}/day` : null, c.keywords ? `${c.keywords} keywords` : null, c.negatives ? `${c.negatives} negatives` : null, c.source ? SOURCE_LABEL[c.source] : "no figures", c.from ? `${day(c.from)} – ${day(c.to)}` : c.source === "grid" ? `as exported ${day(c.to)}` : null].filter(Boolean).join(" · ");
+
+type PlacementRow = CampaignRow["placements"][number] & { c: CampaignRow };
+
 function CampaignTable({ rows, onSaved }: { rows: CampaignRow[]; onSaved: () => void }) {
-  const [open, setOpen] = useState<Set<string>>(new Set());
-  const s = useSortable("ads.campaigns", rows, {
-    name: { value: (c) => c.name, kind: "text" }, asin: { value: (c) => c.asin, kind: "text" },
-    impressions: { value: (c) => c.totals?.impressions, kind: "number" }, clicks: { value: (c) => c.totals?.clicks, kind: "number" },
-    ctr: { value: (c) => c.ratios?.ctr, kind: "number" }, cost: { value: (c) => c.totals?.cost, kind: "number" },
-    cpc: { value: (c) => c.ratios?.cpc, kind: "number" }, orders: { value: (c) => c.totals?.orders, kind: "number" },
-    conversion: { value: (c) => c.ratios?.conversion, kind: "number" }, sales: { value: (c) => c.totals?.sales, kind: "number" },
-    acos: { value: (c) => c.ratios?.acos, kind: "number" }, breakEven: { value: (c) => c.breakEvenAcos, kind: "number" },
-    perOrder: { value: (c) => c.ratios?.costPerOrder, kind: "number" }, profit: { value: (c) => c.profitAfterAds, kind: "number" },
-  });
-  const toggle = (id: string) => setOpen((cur) => { const next = new Set(cur); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+  const columns: DataColumn<CampaignRow>[] = [
+    {
+      id: "name", header: "Campaign", mobile: "title", sortValue: (c) => c.name, className: "min-w-[14rem]",
+      cell: (c) => <div className="min-w-0"><div className="font-medium">{c.name}</div><div className="text-meta text-muted-foreground">{campaignMeta(c)}</div></div>,
+    },
+    { id: "asin", header: "ASIN", sortValue: (c) => c.asin, cell: (c) => <AsinCell c={c} onSaved={onSaved} /> },
+    { id: "impressions", header: "Impr.", numeric: true, sortValue: (c) => c.totals?.impressions, cell: (c) => n0(c.totals?.impressions) },
+    { id: "clicks", header: "Clicks", numeric: true, sortValue: (c) => c.totals?.clicks, cell: (c) => n0(c.totals?.clicks) },
+    { id: "ctr", header: "CTR", numeric: true, sortValue: (c) => c.ratios?.ctr, cell: (c) => pct(c.ratios?.ctr, 2) },
+    { id: "cost", header: "Spend", numeric: true, mobile: 1, sortValue: (c) => c.totals?.cost, cell: (c) => gbp(c.totals?.cost) },
+    { id: "cpc", header: "CPC", numeric: true, sortValue: (c) => c.ratios?.cpc, cell: (c) => gbp(c.ratios?.cpc) },
+    { id: "orders", header: "Orders", numeric: true, sortValue: (c) => c.totals?.orders, cell: (c) => n0(c.totals?.orders) },
+    { id: "conversion", header: "Conv.", numeric: true, sortValue: (c) => c.ratios?.conversion, cell: (c) => pct(c.ratios?.conversion) },
+    { id: "sales", header: "Sales", numeric: true, sortValue: (c) => c.totals?.sales, cell: (c) => gbp(c.totals?.sales) },
+    { id: "acos", header: "ACoS", numeric: true, mobile: 2, sortValue: (c) => c.ratios?.acos, cell: (c) => <span className={cn("font-medium", acosTone(c.ratios?.acos ?? null, c.targetAcos, c.breakEvenAcos))}>{pct(c.ratios?.acos)}</span> },
+    { id: "breakEven", header: "Break-even", numeric: true, sortValue: (c) => c.breakEvenAcos, cell: (c) => <span className="text-muted-foreground">{pct(c.breakEvenAcos)}</span> },
+    { id: "perOrder", header: "Per order", numeric: true, sortValue: (c) => c.ratios?.costPerOrder, cell: (c) => gbp(c.ratios?.costPerOrder) },
+    { id: "profit", header: "Profit after ads", numeric: true, mobile: 3, sortValue: (c) => c.profitAfterAds, cell: (c) => <span className={profitTone(c.profitAfterAds)}>{gbp(c.profitAfterAds)}</span> },
+  ];
+  const placements: PlacementRow[] = rows.flatMap((c) => c.placements.map((p) => ({ ...p, c })));
+  const placementColumns: DataColumn<PlacementRow>[] = [
+    {
+      id: "placement", header: "Placement", mobile: "title", sortValue: (p) => p.placement,
+      cell: (p) => <div className="min-w-0"><div>{p.placement[0].toUpperCase() + p.placement.slice(1)}</div><div className="text-meta text-muted-foreground">{p.c.name} · bid +{p.percentage ?? 0}%{p.c.bidding_strategy ? ` · ${p.c.bidding_strategy}` : ""}</div></div>,
+    },
+    { id: "impressions", header: "Impr.", numeric: true, sortValue: (p) => p.totals.impressions, cell: (p) => n0(p.totals.impressions) },
+    { id: "clicks", header: "Clicks", numeric: true, sortValue: (p) => p.totals.clicks, cell: (p) => n0(p.totals.clicks) },
+    { id: "ctr", header: "CTR", numeric: true, sortValue: (p) => p.ratios.ctr, cell: (p) => pct(p.ratios.ctr, 2) },
+    { id: "cost", header: "Spend", numeric: true, mobile: 1, sortValue: (p) => p.totals.cost, cell: (p) => gbp(p.totals.cost) },
+    { id: "cpc", header: "CPC", numeric: true, sortValue: (p) => p.ratios.cpc, cell: (p) => gbp(p.ratios.cpc) },
+    { id: "orders", header: "Orders", numeric: true, mobile: 3, sortValue: (p) => p.totals.orders, cell: (p) => n0(p.totals.orders) },
+    { id: "conversion", header: "Conv.", numeric: true, sortValue: (p) => p.ratios.conversion, cell: (p) => pct(p.ratios.conversion) },
+    { id: "sales", header: "Sales", numeric: true, sortValue: (p) => p.totals.sales, cell: (p) => gbp(p.totals.sales) },
+    { id: "acos", header: "ACoS", numeric: true, mobile: 2, sortValue: (p) => p.ratios.acos, cell: (p) => <span className={acosTone(p.ratios.acos, p.c.targetAcos, p.c.breakEvenAcos)}>{pct(p.ratios.acos)}</span> },
+    { id: "perOrder", header: "Per order", numeric: true, sortValue: (p) => p.ratios.costPerOrder, cell: (p) => gbp(p.ratios.costPerOrder) },
+  ];
   return (
     <section className="space-y-2">
-      <h2 className="section-label">Campaigns</h2>
-      <div className="overflow-x-auto rounded-lg border">
-        <table className="w-full text-sm">
-          <thead><tr className="border-b text-left text-xs tracking-wide text-muted-foreground uppercase">
-            <SortTh {...s.th("name")} className="px-2 py-1.5">Campaign</SortTh><SortTh {...s.th("asin")} className="px-2 py-1.5">ASIN</SortTh>
-            <SortTh {...s.th("impressions")} numeric className="px-2 py-1.5 text-right">Impr.</SortTh><SortTh {...s.th("clicks")} numeric className="px-2 py-1.5 text-right">Clicks</SortTh>
-            <SortTh {...s.th("ctr")} numeric className="px-2 py-1.5 text-right">CTR</SortTh><SortTh {...s.th("cost")} numeric className="px-2 py-1.5 text-right">Spend</SortTh>
-            <SortTh {...s.th("cpc")} numeric className="px-2 py-1.5 text-right">CPC</SortTh><SortTh {...s.th("orders")} numeric className="px-2 py-1.5 text-right">Orders</SortTh>
-            <SortTh {...s.th("conversion")} numeric className="px-2 py-1.5 text-right">Conv.</SortTh><SortTh {...s.th("sales")} numeric className="px-2 py-1.5 text-right">Sales</SortTh>
-            <SortTh {...s.th("acos")} numeric className="px-2 py-1.5 text-right">ACoS</SortTh><SortTh {...s.th("breakEven")} numeric className="px-2 py-1.5 text-right">Break-even</SortTh>
-            <SortTh {...s.th("perOrder")} numeric className="px-2 py-1.5 text-right">Per order</SortTh><SortTh {...s.th("profit")} numeric className="px-2 py-1.5 text-right">Profit after ads</SortTh>
-          </tr></thead>
-          <tbody>{s.rows.map((c) => (
-            <Fragment key={c.id}>
-            <tr className="border-b last:border-b-0">
-              <td className="px-2 py-1.5">
-                <div className="flex items-center gap-1 font-medium">
-                  {c.placements.length > 0 && (
-                    <button type="button" onClick={() => toggle(c.id)} aria-label={open.has(c.id) ? "Hide placements" : "Show placements"} aria-expanded={open.has(c.id)}>
-                      <ChevronRightIcon className={cn("size-3.5 text-muted-foreground transition-transform", open.has(c.id) && "rotate-90")} />
-                    </button>
-                  )}
-                  {c.name}
-                </div>
-                <div className="text-xs text-muted-foreground">{[c.state?.toLowerCase(), c.targeting?.toLowerCase(), c.budget != null ? `${gbp(c.budget)}/day` : null, c.keywords ? `${c.keywords} keywords` : null, c.negatives ? `${c.negatives} negatives` : null, c.source ? SOURCE_LABEL[c.source] : "no figures", c.from ? `${day(c.from)} – ${day(c.to)}` : c.source === "grid" ? `as exported ${day(c.to)}` : null].filter(Boolean).join(" · ")}</div>
-              </td>
-              <td className="px-2 py-1.5"><AsinCell c={c} onSaved={onSaved} /></td>
-              <td className="num px-2 py-1.5 text-right">{n0(c.totals?.impressions)}</td>
-              <td className="num px-2 py-1.5 text-right">{n0(c.totals?.clicks)}</td>
-              <td className="num px-2 py-1.5 text-right">{pct(c.ratios?.ctr, 2)}</td>
-              <td className="num px-2 py-1.5 text-right">{gbp(c.totals?.cost)}</td>
-              <td className="num px-2 py-1.5 text-right">{gbp(c.ratios?.cpc)}</td>
-              <td className="num px-2 py-1.5 text-right">{n0(c.totals?.orders)}</td>
-              <td className="num px-2 py-1.5 text-right">{pct(c.ratios?.conversion)}</td>
-              <td className="num px-2 py-1.5 text-right">{gbp(c.totals?.sales)}</td>
-              <td className={cn("num px-2 py-1.5 text-right font-medium", acosTone(c.ratios?.acos ?? null, c.targetAcos, c.breakEvenAcos))}>{pct(c.ratios?.acos)}</td>
-              <td className="num px-2 py-1.5 text-right text-muted-foreground">{pct(c.breakEvenAcos)}</td>
-              <td className="num px-2 py-1.5 text-right">{gbp(c.ratios?.costPerOrder)}</td>
-              <td className={cn("num px-2 py-1.5 text-right", c.profitAfterAds == null ? "" : c.profitAfterAds >= 0 ? "text-pass" : "text-fail")}>{gbp(c.profitAfterAds)}</td>
-            </tr>
-            {open.has(c.id) && c.placements.map((p) => (
-              <tr key={p.placement} className="border-b bg-muted/40 text-xs last:border-b-0">
-                <td className="py-1 pr-2 pl-7">{p.placement[0].toUpperCase() + p.placement.slice(1)} <span className="text-muted-foreground">· bid +{p.percentage ?? 0}%{c.bidding_strategy ? ` · ${c.bidding_strategy}` : ""}</span></td>
-                <td />
-                <td className="num px-2 py-1 text-right">{n0(p.totals.impressions)}</td>
-                <td className="num px-2 py-1 text-right">{n0(p.totals.clicks)}</td>
-                <td className="num px-2 py-1 text-right">{pct(p.ratios.ctr, 2)}</td>
-                <td className="num px-2 py-1 text-right">{gbp(p.totals.cost)}</td>
-                <td className="num px-2 py-1 text-right">{gbp(p.ratios.cpc)}</td>
-                <td className="num px-2 py-1 text-right">{n0(p.totals.orders)}</td>
-                <td className="num px-2 py-1 text-right">{pct(p.ratios.conversion)}</td>
-                <td className="num px-2 py-1 text-right">{gbp(p.totals.sales)}</td>
-                <td className={cn("num px-2 py-1 text-right", acosTone(p.ratios.acos, c.targetAcos, c.breakEvenAcos))}>{pct(p.ratios.acos)}</td>
-                <td /><td className="num px-2 py-1 text-right">{gbp(p.ratios.costPerOrder)}</td><td />
-              </tr>
-            ))}
-            </Fragment>
-          ))}</tbody>
-        </table>
-      </div>
+      <SectionTitle title={<>Campaigns <span className="num">({rows.length})</span></>}>
+        ACoS is green at or under the target, amber up to break-even, red past it. Click a campaign&apos;s ASIN to change the product it counts towards.
+      </SectionTitle>
+      <DataTable rows={rows} columns={columns} getRowId={(c) => c.id} pageSize={25} storageKey="ads.campaigns" caption="Campaigns"
+        empty={{ icon: <MegaphoneIcon />, title: "No campaigns for this product", description: "Import a bulk export that includes its campaigns." }} />
+      {placements.length > 0 && (
+        <details className="group">
+          <summary className="flex cursor-pointer list-none items-center gap-1 text-meta font-medium text-primary hover:underline [&::-webkit-details-marker]:hidden">
+            <ChevronRightIcon className="size-3.5 transition-transform group-open:rotate-90" /> Placements <span className="num">({placements.length})</span>
+          </summary>
+          <DataTable className="mt-2" rows={placements} columns={placementColumns} getRowId={(p) => `${p.c.id}|${p.placement}`} pageSize={25} storageKey="ads.placements" caption="Placements by campaign" />
+        </details>
+      )}
     </section>
   );
 }
@@ -628,46 +615,33 @@ function RankCell({ ranks }: { ranks: KeywordRow["ranks"] }) {
 
 function KeywordTable({ rows }: { rows: KeywordRow[] }) {
   const [all, setAll] = useState(false);
-  const s = useSortable("ads.keywords", rows.filter((r) => all || r.clicks > 0 || r.ranks.length > 0), {
-    keyword: { value: (k) => k.text, kind: "text" }, campaign: { value: (k) => k.campaignName, kind: "text" },
-    bid: { value: (k) => k.bid, kind: "number" }, clicks: { value: (k) => k.clicks, kind: "number" },
-    cost: { value: (k) => k.cost, kind: "number" }, orders: { value: (k) => k.orders, kind: "number" },
-    // Spend with no sales counts as the highest ACoS.
-    acos: { value: (k) => (k.sales ? k.cost / k.sales : k.cost ? 1e9 : null), kind: "number" },
-    // The latest check's position; not in the top 48, or never checked, last.
-    rank: { value: (k) => k.ranks.at(-1)?.position ?? null, kind: "number" },
-  });
   if (!rows.length) return null;
+  const shown = rows.filter((r) => all || r.clicks > 0 || r.ranks.length > 0);
+  const columns: DataColumn<KeywordRow>[] = [
+    {
+      id: "keyword", header: "Keyword", mobile: "title", sortValue: (k) => k.text,
+      cell: (k) => <span className={cn(/paused|archived/i.test(k.state ?? "") && "text-muted-foreground")}>{k.text} <span className="text-xs text-muted-foreground">{k.matchType.toLowerCase()}{k.state && k.state !== "enabled" ? ` · ${k.state}` : ""}</span></span>,
+    },
+    { id: "campaign", header: "Campaign", sortValue: (k) => k.campaignName, cell: (k) => <span className="text-meta text-muted-foreground">{k.campaignName}</span> },
+    { id: "bid", header: "Bid", numeric: true, sortValue: (k) => k.bid, cell: (k) => gbp(k.bid) },
+    { id: "clicks", header: "Clicks", numeric: true, sortValue: (k) => k.clicks, cell: (k) => n0(k.clicks) },
+    { id: "cost", header: "Spend", numeric: true, mobile: 1, sortValue: (k) => k.cost, cell: (k) => gbp(k.cost) },
+    { id: "orders", header: "Orders", numeric: true, sortValue: (k) => k.orders, cell: (k) => n0(k.orders) },
+    // Spend with no sales counts as the highest ACoS.
+    { id: "acos", header: "ACoS", numeric: true, mobile: 2, sortValue: (k) => (k.sales ? k.cost / k.sales : k.cost ? 1e9 : null), cell: (k) => (k.sales ? pct(k.cost / k.sales) : k.cost ? "no sales" : "—") },
+    // The latest check's position; not in the top 48, or never checked, last.
+    { id: "rank", header: "Organic rank", mobile: 3, sortValue: (k) => k.ranks.at(-1)?.position ?? null, cell: (k) => <RankCell ranks={k.ranks} /> },
+  ];
   return (
     <section className="space-y-2">
-      <div className="flex flex-wrap items-end gap-3">
-        <h2 className="section-label mr-auto">Keywords</h2>
-        <label className="flex items-center gap-2 pb-2 text-sm"><input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} /> Include keywords with no clicks</label>
+      <div className="flex flex-wrap items-center gap-3">
+        <SectionTitle title={<>Keywords <span className="num">({shown.length})</span></>} className="mr-auto">
+          Organic rank comes from the extension&apos;s manual rank checks (Help: Ads: rank checks): the latest position, with the last checks as a sparkline. Not in the top 48 shows as &gt;48.
+        </SectionTitle>
+        <label className="flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} /> Include keywords with no clicks</label>
       </div>
-      <div className="overflow-x-auto rounded-lg border">
-        <table className="w-full text-sm">
-          <thead><tr className="border-b text-left text-xs tracking-wide text-muted-foreground uppercase">
-            <SortTh {...s.th("keyword")} className="px-2 py-1.5">Keyword</SortTh><SortTh {...s.th("campaign")} className="px-2 py-1.5">Campaign</SortTh>
-            <SortTh {...s.th("bid")} numeric className="px-2 py-1.5 text-right">Bid</SortTh><SortTh {...s.th("clicks")} numeric className="px-2 py-1.5 text-right">Clicks</SortTh>
-            <SortTh {...s.th("cost")} numeric className="px-2 py-1.5 text-right">Spend</SortTh><SortTh {...s.th("orders")} numeric className="px-2 py-1.5 text-right">Orders</SortTh>
-            <SortTh {...s.th("acos")} numeric className="px-2 py-1.5 text-right">ACoS</SortTh>
-            <SortTh {...s.th("rank")} className="px-2 py-1.5" title="Organic position on the extension's rank checks: the latest, and the last 8">Organic rank</SortTh>
-          </tr></thead>
-          <tbody>{s.rows.slice(0, 200).map((k) => (
-            <tr key={k.keywordId} className={cn("border-b last:border-b-0", /paused|archived/i.test(k.state ?? "") && "text-muted-foreground")}>
-              <td className="px-2 py-1.5">{k.text} <span className="text-xs text-muted-foreground">{k.matchType.toLowerCase()}{k.state && k.state !== "enabled" ? ` · ${k.state}` : ""}</span></td>
-              <td className="px-2 py-1.5 text-xs text-muted-foreground">{k.campaignName}</td>
-              <td className="num px-2 py-1.5 text-right">{gbp(k.bid)}</td>
-              <td className="num px-2 py-1.5 text-right">{n0(k.clicks)}</td>
-              <td className="num px-2 py-1.5 text-right">{gbp(k.cost)}</td>
-              <td className="num px-2 py-1.5 text-right">{n0(k.orders)}</td>
-              <td className="num px-2 py-1.5 text-right">{k.sales ? pct(k.cost / k.sales) : k.cost ? "no sales" : "—"}</td>
-              <td className="px-2 py-1.5"><RankCell ranks={k.ranks} /></td>
-            </tr>
-          ))}</tbody>
-        </table>
-      </div>
-      <p className="text-xs text-muted-foreground">Organic rank comes from the extension&apos;s manual rank checks (Help: Ads: rank checks).</p>
+      <DataTable rows={shown} columns={columns} getRowId={(k) => k.keywordId} pageSize={25} storageKey="ads.keywords" caption="Keywords"
+        empty={{ icon: <KeyRoundIcon />, title: "No keyword has clicks yet", description: "Include the ones with no clicks to see them all.", action: <Button variant="secondary" onClick={() => setAll(true)}>Include keywords with no clicks</Button> }} />
     </section>
   );
 }
@@ -675,7 +649,7 @@ function KeywordTable({ rows }: { rows: KeywordRow[] }) {
 /** Listing health: the ad CTR and CVR against the niche; poor, and the listing (not the bids) needs work. */
 function ListingHealth({ h }: { h: Insights["health"] }) {
   return (
-    <p className={cn("rounded-md px-3 py-1.5 text-xs", h.status === "problem" ? "bg-warn-soft text-warn" : "bg-surface-2 text-muted-foreground")}>
+    <p className={cn("rounded-lg px-3 py-1.5 text-xs", h.status === "problem" ? "bg-warn-soft text-warn-ink" : "bg-subtle text-muted-foreground")}>
       <b className={h.status === "problem" ? "" : "text-foreground"}>Listing health:</b> {h.message}{h.status === "problem" ? " Bid up proposals are held back for this product meanwhile." : ""}
     </p>
   );

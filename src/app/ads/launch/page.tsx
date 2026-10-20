@@ -1,16 +1,17 @@
 "use client";
 
-import { DownloadIcon, LoaderIcon, RocketIcon } from "lucide-react";
+import { DownloadIcon, RocketIcon } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { asinOf } from "@/components/ads/ProductPicker";
-import { usePageCrumbs } from "@/components/Crumbs";
 import { ErrorState } from "@/components/States";
 import { Button } from "@/components/ui/button";
+import { DataTable, type DataColumn } from "@/components/ui/data-table";
 import { Input } from "@/components/ui/input";
-import { SortTh, useSortable } from "@/components/SortableTable";
+import { PageHeader } from "@/components/ui/page-header";
+import { Textarea } from "@/components/ui/textarea";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { LaunchCampaign, PlanStep } from "@/lib/ads/launch";
@@ -47,6 +48,13 @@ function bidHint(f: Form, b: Defaults["bidBasis"]): string | undefined {
   const c = `£${cpc.toFixed(2)} = £${b.cpc.toFixed(2)} account CPC × 0.8`;
   return `Higher of ${a}${won === "smoothed" ? " (used)" : ""} and ${c}${won === "cpc" ? " (used)" : ""}`;
 }
+/** The launcher's campaign preview: the four campaigns with their budget, bid and targets. */
+const CAMPAIGN_COLUMNS: DataColumn<LaunchCampaign>[] = [
+  { id: "name", header: "Campaign", mobile: "title", sortValue: (c) => c.name, cell: (c) => <span className="font-medium">{c.name}</span> },
+  { id: "budget", header: "Budget", numeric: true, mobile: 1, sortValue: (c) => c.budget, cell: (c) => <span className="whitespace-nowrap">£{c.budget.toFixed(2)}/day <span className="text-xs text-muted-foreground">{Math.round(c.share * 100)}%</span></span> },
+  { id: "bid", header: "Bid", numeric: true, mobile: 2, sortValue: (c) => c.bid, cell: (c) => `£${c.bid.toFixed(2)}` },
+  { id: "targets", header: "Targets", mobile: 3, sortValue: (c) => c.targets.length, cell: (c) => <span className="text-meta text-muted-foreground">{c.targets.join(", ")}</span> },
+];
 const day = (d: string) => new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 
 /** Ads → Launch: a product's four launch campaigns as a bulk Create sheet, with the 60-day plan. */
@@ -55,7 +63,6 @@ export default function AdsLaunchPage() {
 }
 
 function AdsLaunch() {
-  usePageCrumbs([{ label: "Ads", href: "/ads/dashboard" }, { label: "Launch" }]);
   const [pick, setPick] = useState<Picker | null>(null);
   const [form, setForm] = useState<Form | null>(null);
   // The URL is the source of truth: ?candidateId=… (from a private-label candidate's launch checklist, with
@@ -90,10 +97,6 @@ function AdsLaunch() {
     return () => clearTimeout(t);
   }, [form]);
 
-  const cs = useSortable("ads.launch", preview?.campaigns ?? [], {
-    name: { value: (c) => c.name, kind: "text" }, budget: { value: (c) => c.budget, kind: "number" },
-    bid: { value: (c) => c.bid, kind: "number" }, targets: { value: (c) => c.targets.length, kind: "number" },
-  });
   if (error) return <ErrorState title="Couldn't load the launcher" message={error} />;
   if (!pick || !form) return <Skeleton className="h-96 rounded-lg" />;
   const set = (k: keyof Form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setForm({ ...form, [k]: e.target.value });
@@ -110,15 +113,20 @@ function AdsLaunch() {
     }
   };
   const field = (k: keyof Form, label: string, hint?: string, props: React.InputHTMLAttributes<HTMLInputElement> = {}) => (
-    <label className="block space-y-1"><span className="field-label">{label}</span><Input className="h-8" value={form[k]} onChange={set(k)} {...props} />{hint && <span className="block text-xs text-muted-foreground">{hint}</span>}</label>
+    <label className="block space-y-1"><span className="field-label">{label}</span><Input value={form[k]} onChange={set(k)} {...props} />{hint && <span className="block text-xs text-muted-foreground">{hint}</span>}</label>
   );
 
   return (
-    <div className="space-y-5">
-      <div className="max-w-3xl">
-        <h1 className="page-title">Launch</h1>
-        <p className="text-sm text-muted-foreground">Four campaigns for a new product, as one bulk sheet to upload in Amazon Ads: <b>Auto</b> (close match and substitutes on, loose match and complements off), <b>Broad</b> research on the head terms (bid × 0.8), <b>Exact</b> on the head terms (bid × 1.0) and <b>product targeting</b> on competitors (bid × 0.9). Budget split 30 / 20 / 40 / 10; top-of-search adjustment 0% to start.</p>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Launch"
+        crumbs={[{ label: "Ads", href: "/ads/dashboard" }, { label: "Launch" }]}
+        subtitle="Four launch campaigns for a new product, as one bulk sheet to upload in Amazon Ads."
+        info={<>
+          <p><b>Auto</b> (close match and substitutes on, loose match and complements off), <b>Broad</b> research on the head terms (bid × 0.8), <b>Exact</b> on the head terms (bid × 1.0) and <b>product targeting</b> on competitors (bid × 0.9). Budget split 30 / 20 / 40 / 10; top-of-search adjustment 0% to start.</p>
+          <p>Creating the sheet saves it under Bulk exports, puts the product in its launch phase (weeks 1–2: the rules propose harvests and negatives only) and shows the 60-day plan on the dashboard.</p>
+        </>}
+      />
       <div className="flex flex-wrap items-end gap-3">
         <label className="space-y-1"><span className="field-label">Start from</span>
           <NativeSelect value={source} onChange={(e) => pickSource(e.target.value)} aria-label="Start from">
@@ -128,7 +136,7 @@ function AdsLaunch() {
             <optgroup label="Ads products">{pick.products.map((p) => <NativeSelectOption key={p.asin} value={`asin:${p.asin}`}>{p.asin}{p.title ? ` · ${p.title.slice(0, 40)}` : ""}</NativeSelectOption>)}</optgroup>
             <optgroup label="Private-label candidates">{pick.candidates.map((c) => <NativeSelectOption key={c.id} value={`cand:${c.id}`}>{c.name}</NativeSelectOption>)}</optgroup>
           </NativeSelect></label>
-        {pick.defaults.notes.map((n) => <p key={n} className="pb-2 text-xs text-warn">{n}</p>)}
+        {pick.defaults.notes.map((n) => <p key={n} className="pb-2 text-xs text-warn-ink">{n}</p>)}
       </div>
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
         <section className="panel space-y-3 p-4">
@@ -143,37 +151,27 @@ function AdsLaunch() {
             {field("startDate", "Start date", undefined, { type: "date" })}
           </div>
           <label className="block space-y-1"><span className="field-label">Head terms, one a line</span>
-            <textarea className="min-h-28 w-full rounded-md border bg-transparent px-2 py-1.5 text-sm" value={form.headTerms} onChange={set("headTerms")} placeholder="From a candidate: Gate 5's top 8 search terms by volume" /></label>
+            <Textarea className="min-h-28" value={form.headTerms} onChange={set("headTerms")} placeholder="From a candidate: Gate 5's top 8 search terms by volume" /></label>
           <label className="block space-y-1"><span className="field-label">Competitor ASINs</span>
-            <textarea className="min-h-16 w-full rounded-md border bg-transparent px-2 py-1.5 font-mono text-xs" value={form.competitorAsins} onChange={set("competitorAsins")} placeholder="From a candidate: its page-one list" /></label>
+            <Textarea className="num min-h-16 md:text-xs" value={form.competitorAsins} onChange={set("competitorAsins")} placeholder="From a candidate: its page-one list" /></label>
           <label className="block space-y-1"><span className="field-label">Negative phrases in every campaign (the blacklist)</span>
-            <textarea className="min-h-16 w-full rounded-md border bg-transparent px-2 py-1.5 text-sm" value={form.negatives} onChange={set("negatives")} placeholder="From Ads → Rules → Ad settings → Keyword lists and the product's own" /></label>
+            <Textarea className="min-h-16" value={form.negatives} onChange={set("negatives")} placeholder="From Ads → Rules → Ad settings → Keyword lists and the product's own" /></label>
         </section>
         <section className="space-y-3">
           {!preview ? <p className="panel p-4 text-sm text-muted-foreground">Fill in the ASIN, price, budget, target and bid to see the campaigns.</p> : (
             <>
-              <div className="overflow-x-auto rounded-lg border">
-                <table className="w-full text-sm">
-                  <thead><tr className="border-b text-left text-xs tracking-wide text-muted-foreground uppercase">
-                    <SortTh {...cs.th("name")} className="px-2 py-1.5">Campaign</SortTh><SortTh {...cs.th("budget")} numeric className="px-2 py-1.5 text-right">Budget</SortTh>
-                    <SortTh {...cs.th("bid")} numeric className="px-2 py-1.5 text-right">Bid</SortTh><SortTh {...cs.th("targets")} className="px-2 py-1.5">Targets</SortTh>
-                  </tr></thead>
-                  <tbody>{cs.rows.map((c) => (
-                    <tr key={c.name} className="border-b last:border-b-0"><td className="px-2 py-1.5 font-medium">{c.name}</td><td className="num px-2 py-1.5 text-right">£{c.budget.toFixed(2)}/day <span className="text-xs text-muted-foreground">{Math.round(c.share * 100)}%</span></td><td className="num px-2 py-1.5 text-right">£{c.bid.toFixed(2)}</td><td className="px-2 py-1.5 text-xs text-muted-foreground">{c.targets.join(", ")}</td></tr>
-                  ))}</tbody>
-                </table>
-              </div>
-              {preview.warnings.map((w) => <p key={w} className="text-xs text-warn">{w}</p>)}
+              <DataTable rows={preview.campaigns} columns={CAMPAIGN_COLUMNS} getRowId={(c) => c.name} caption="Launch campaigns" />
+              {preview.warnings.map((w) => <p key={w} className="text-xs text-warn-ink">{w}</p>)}
               <div className="panel space-y-2 p-4">
-                <h2 className="font-semibold">60-day plan</h2>
+                <h2 className="section-label">60-day plan</h2>
                 <ol className="space-y-1.5 text-sm">{preview.plan.map((p) => <li key={p.from}><b>{day(p.from)}</b>: {p.title}. <span className="text-muted-foreground">{p.detail}</span></li>)}</ol>
               </div>
               <div className="flex flex-wrap items-center gap-3">
-                <Button onClick={create} disabled={busy}>{busy ? <LoaderIcon className="animate-spin" /> : <RocketIcon />} Create launch sheet ({preview.rows} rows)</Button>
-                {made && <Button variant="outline" asChild><a href={`/api/ads/exports/${made.id}`}><DownloadIcon /> Download {made.label}</a></Button>}
-                {made && <Link href="/ads/proposals?tab=exports" className="text-sm text-brand hover:underline">All bulk exports →</Link>}
+                <Button onClick={create} loading={busy}><RocketIcon /> Create launch sheet ({preview.rows} rows)</Button>
+                {made && <Button variant="secondary" asChild><a href={`/api/ads/exports/${made.id}`}><DownloadIcon /> Download {made.label}</a></Button>}
+                {made && <Link href="/ads/proposals?tab=exports" className="text-sm text-primary hover:underline">All bulk exports →</Link>}
               </div>
-              <p className="text-xs text-muted-foreground">Creating it saves the sheet under Bulk exports, puts the product in its launch phase (weeks 1–2: the rules propose harvests and negatives only) and shows the plan on the dashboard.</p>
+              <p className="text-xs text-muted-foreground">Creating it saves the sheet under Bulk exports and puts the product in its launch phase.</p>
             </>
           )}
         </section>
