@@ -1,32 +1,33 @@
 "use client";
 
-import { FileUpIcon, LoaderIcon, UploadIcon } from "lucide-react";
+import { FileUpIcon, UploadIcon } from "lucide-react";
 import { FileDrop } from "@/components/ui/file-drop";
 import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
-import { usePageCrumbs } from "@/components/Crumbs";
-import { SortTh, useSortable } from "@/components/SortableTable";
 import { Button } from "@/components/ui/button";
+import { DataTable, type DataColumn } from "@/components/ui/data-table";
 import { Input } from "@/components/ui/input";
+import { PageHeader } from "@/components/ui/page-header";
+import { StatusChip } from "@/components/ui/status-chip";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ImportPreview } from "@/lib/server/stock";
 import { api } from "@/lib/ui/client";
-import { cn } from "@/lib/utils";
 
 type Kind = "stockpilot" | "csv";
 type Src = { kind: "stockpilot"; raw: unknown; name: string } | { kind: "csv"; text: string; name: string };
 
 /** Stock → Import: StockPilot's raw table export, or a CSV of items, previewed before anything is written. */
 export default function StockImportPage() {
-  usePageCrumbs([{ label: "Stock", href: "/stock/levels" }, { label: "Import" }]);
   const [tab, setTab] = useState<Kind>("stockpilot");
   return (
     <div className="space-y-4">
-      <div className="max-w-3xl">
-        <h1 className="page-title">Import</h1>
-        <p className="text-sm text-muted-foreground">Bring your stock in from StockPilot or a spreadsheet. Nothing is written until you click Import, and importing the same file again updates what&apos;s there rather than adding it twice.</p>
-      </div>
+      <PageHeader
+        title="Import"
+        crumbs={[{ label: "Stock", href: "/stock/levels" }, { label: "Import" }]}
+        subtitle="Bring your stock in from StockPilot or a spreadsheet."
+        info={<p>Nothing is written until you click Import, and importing the same file again updates what&apos;s there rather than adding it twice.</p>}
+      />
       <Tabs value={tab} onValueChange={(v) => setTab(v as Kind)}>
         <TabsList>
           <TabsTrigger value="stockpilot">StockPilot export</TabsTrigger>
@@ -94,54 +95,42 @@ function Importer({ kind }: { kind: Kind }) {
 
 function PreviewTable({ src, preview, asins, setAsins, busy, onImport }: { src: Src; preview: ImportPreview; asins: Record<string, string>; setAsins: (a: Record<string, string>) => void; busy: boolean; onImport: () => void }) {
   type R = ImportPreview["rows"][number];
-  const s = useSortable<R>("stock.import", preview.rows, {
-    sku: { value: (r) => r.sku }, name: { value: (r) => r.name }, asin: { value: (r) => asins[r.sku] || null }, supplier: { value: (r) => r.supplier },
-    action: { value: (r) => r.action }, home: { value: (r) => r.home, kind: "number" }, tiktok: { value: (r) => r.tiktok_fbt, kind: "number" },
-    fba: { value: (r) => r.fbaDropped, kind: "number" }, movements: { value: (r) => r.movements, kind: "number" },
-  });
+  const columns: DataColumn<R>[] = [
+    { id: "sku", header: "SKU", mobile: 1, sortValue: (r) => r.sku, cell: (r) => <span className="num">{r.sku}</span> },
+    { id: "name", header: "Name", mobile: "title", sortValue: (r) => r.name, cell: (r) => r.name },
+    {
+      id: "asin", header: "ASIN", className: "align-top", sortValue: (r) => asins[r.sku] || null,
+      cell: (r) => (
+        <div>
+          <Input className="num h-8 w-32 uppercase" value={asins[r.sku] ?? ""} placeholder="none" onChange={(e) => setAsins({ ...asins, [r.sku]: e.target.value })} aria-label={`ASIN for ${r.sku}`} />
+          {!r.asin && r.suggestion && <span className="block max-w-56 text-xs text-muted-foreground">Suggested from Ads product: {r.suggestion.title.slice(0, 50)} ({r.suggestion.shared.join(", ")}). Clear it if wrong.</span>}
+          {r.asin && <span className="block text-xs text-muted-foreground">Matched by SKU</span>}
+        </div>
+      ),
+    },
+    {
+      id: "supplier", header: "Supplier", sortValue: (r) => r.supplier,
+      cell: (r) => (r.supplier ? <span className="inline-flex flex-wrap items-center gap-1 text-meta">{r.supplier} <StatusChip tone={r.supplierAction === "match" ? "good" : "info"} icon={false}>{r.supplierAction === "match" ? "Matched" : "New"}</StatusChip></span> : "—"),
+    },
+    { id: "action", header: "Item", mobile: 2, sortValue: (r) => r.action, cell: (r) => <StatusChip tone={r.action === "new" ? "info" : "neutral"} icon={false}>{r.action === "new" ? "New" : "Update"}</StatusChip> },
+    { id: "home", header: "Self-ship", numeric: true, mobile: 3, sortValue: (r) => r.home, cell: (r) => r.home },
+    { id: "tiktok", header: "TikTok FBT", numeric: true, sortValue: (r) => r.tiktok_fbt, cell: (r) => r.tiktok_fbt },
+    { id: "fba", header: <span title="StockPilot's FBA quantity, left to SP-API">FBA dropped</span>, numeric: true, sortValue: (r) => r.fbaDropped, cell: (r) => <span className="text-muted-foreground">{r.fbaDropped}</span> },
+    { id: "movements", header: "Movements", numeric: true, sortValue: (r) => r.movements, cell: (r) => r.movements },
+  ];
   return (
     <section className="space-y-3">
       <div className="flex flex-wrap items-baseline gap-2">
-        <h2 className="font-semibold">{src.name}</h2>
-        <span className="text-sm text-muted-foreground">{preview.rows.length} item{preview.rows.length === 1 ? "" : "s"} · {preview.plan.listings.length} listings · {preview.plan.sales.length} sales · {preview.movementsNew} movement{preview.movementsNew === 1 ? "" : "s"} new, {preview.movementsExisting} already imported</span>
+        <h2 className="section-title">{src.name}</h2>
+        <span className="text-meta text-muted-foreground">{preview.rows.length} item{preview.rows.length === 1 ? "" : "s"} · {preview.plan.listings.length} listings · {preview.plan.sales.length} sales · {preview.movementsNew} movement{preview.movementsNew === 1 ? "" : "s"} new, {preview.movementsExisting} already imported</span>
       </div>
-      <div className="overflow-x-auto rounded-lg border">
-        <table className="w-full text-sm">
-          <thead><tr className="border-b text-left text-xs tracking-wide text-muted-foreground uppercase">
-            <SortTh {...s.th("sku")} className="px-2 py-1.5">SKU</SortTh>
-            <SortTh {...s.th("name")} className="px-2 py-1.5">Name</SortTh>
-            <SortTh {...s.th("asin")} className="px-2 py-1.5">ASIN</SortTh>
-            <SortTh {...s.th("supplier")} className="px-2 py-1.5">Supplier</SortTh>
-            <SortTh {...s.th("action")} className="px-2 py-1.5">Item</SortTh>
-            <SortTh {...s.th("home")} numeric className="px-2 py-1.5 text-right">Self-ship</SortTh>
-            <SortTh {...s.th("tiktok")} numeric className="px-2 py-1.5 text-right">TikTok FBT</SortTh>
-            <SortTh {...s.th("fba")} numeric className="px-2 py-1.5 text-right" title="StockPilot's FBA quantity, left to SP-API">FBA dropped</SortTh>
-            <SortTh {...s.th("movements")} numeric className="px-2 py-1.5 text-right">Movements</SortTh>
-          </tr></thead>
-          <tbody>{s.rows.map((r) => (
-            <tr key={r.ref} className="border-b align-top last:border-b-0">
-              <td className="num px-2 py-1.5">{r.sku}</td>
-              <td className="px-2 py-1.5">{r.name}</td>
-              <td className="px-2 py-1.5">
-                <Input className="num h-7 w-32 uppercase" value={asins[r.sku] ?? ""} placeholder="none" onChange={(e) => setAsins({ ...asins, [r.sku]: e.target.value })} aria-label={`ASIN for ${r.sku}`} />
-                {!r.asin && r.suggestion && <span className="block max-w-56 text-xs text-muted-foreground">Suggested from Ads product: {r.suggestion.title.slice(0, 50)} ({r.suggestion.shared.join(", ")}). Clear it if wrong.</span>}
-                {r.asin && <span className="block text-xs text-muted-foreground">Matched by SKU</span>}
-              </td>
-              <td className="px-2 py-1.5 text-xs">{r.supplier ? <>{r.supplier} <span className={cn("rounded px-1 text-xs font-semibold uppercase", r.supplierAction === "match" ? "bg-pass-soft text-pass" : "bg-brand-soft text-brand")}>{r.supplierAction === "match" ? "matched" : "new"}</span></> : "—"}</td>
-              <td className="px-2 py-1.5"><span className={cn("rounded px-1.5 text-xs font-semibold uppercase", r.action === "new" ? "bg-brand-soft text-brand" : "bg-empty-soft text-ink-2")}>{r.action === "new" ? "new" : "update"}</span></td>
-              <td className="num px-2 py-1.5 text-right">{r.home}</td>
-              <td className="num px-2 py-1.5 text-right">{r.tiktok_fbt}</td>
-              <td className="num px-2 py-1.5 text-right text-muted-foreground">{r.fbaDropped}</td>
-              <td className="num px-2 py-1.5 text-right">{r.movements}</td>
-            </tr>
-          ))}</tbody>
-        </table>
-      </div>
-      {preview.unknownColumns && preview.unknownColumns.length > 0 && <p className="text-xs text-warn">Columns not read: {preview.unknownColumns.join(", ")}</p>}
+      <DataTable rows={preview.rows} columns={columns} getRowId={(r) => r.ref} storageKey="stock.import" caption="Import preview"
+        empty={{ icon: <FileUpIcon />, title: "Nothing to import", description: "The file has no items in it." }} />
+      {preview.unknownColumns && preview.unknownColumns.length > 0 && <p className="text-xs text-warn-ink">Columns not read: {preview.unknownColumns.join(", ")}</p>}
       {preview.plan.notes.length > 0 && <ul className="list-inside list-disc space-y-0.5 text-xs text-muted-foreground">{preview.plan.notes.map((n) => <li key={n}>{n}</li>)}</ul>}
       <div className="flex items-center gap-3">
-        <Button onClick={onImport} disabled={busy || !preview.rows.length}>{busy ? <LoaderIcon className="animate-spin" /> : <UploadIcon />} Import</Button>
-        <Link href="/stock/levels" className="text-sm text-brand hover:underline">Levels →</Link>
+        <Button onClick={onImport} loading={busy} disabled={!preview.rows.length}><UploadIcon /> Import</Button>
+        <Link href="/stock/levels" className="text-sm text-primary hover:underline">Levels →</Link>
         <span className="text-xs text-muted-foreground">Self-ship and TikTok FBT are where each item ends up after the import.</span>
       </div>
     </section>

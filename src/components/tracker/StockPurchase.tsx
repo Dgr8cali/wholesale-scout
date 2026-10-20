@@ -89,7 +89,7 @@ export function StockPurchaseDialog({ itemId, qty, supplierId, open, onOpenChang
                   <NativeSelectOption value="">Pick an item…</NativeSelectOption>
                   {items.map((i) => <NativeSelectOption key={i.id} value={i.id}>{i.sku} · {i.name.slice(0, 50)}</NativeSelectOption>)}
                 </NativeSelect>
-                <Button type="button" size="sm" variant="outline" className="flex-none" onClick={() => setNewItem({ sku: "", name: "", asin: "" })}><PlusIcon /> New item</Button>
+                <Button type="button" size="sm" variant="secondary" className="flex-none" onClick={() => setNewItem({ sku: "", name: "", asin: "" })}><PlusIcon /> New item</Button>
               </div>
             )}
           </div>

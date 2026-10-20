@@ -43,7 +43,7 @@ export function OrderEditButton({ p, onSaved, label = "Edit" }: { p: OrderLike; 
   const [open, setOpen] = useState(false);
   return (
     <>
-      <Button variant="ghost" size="xs" onClick={(e) => { e.stopPropagation(); setOpen(true); }} title="Item, supplier, quantity, cost, order number and link, dates, tracking"><PencilIcon /> {label}</Button>
+      <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setOpen(true); }} title="Item, supplier, quantity, cost, order number and link, dates, tracking"><PencilIcon /> {label}</Button>
       {open && <OrderEditDialog p={p} onClose={() => setOpen(false)} onSaved={onSaved} />}
     </>
   );
@@ -85,7 +85,7 @@ function OrderEditDialog({ p, onClose, onSaved }: { p: OrderLike; onClose: () =>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl" onClick={(e) => e.stopPropagation()}>
         <DialogHeader>
           <DialogTitle>Edit order</DialogTitle>
-          <DialogDescription>The same order on Stock → Orders, the item&apos;s drawer, the Tracker and the product page.{p.status !== "ordered" ? " It's been received: its Stock receipt changes with it." : ""}</DialogDescription>
+          <DialogDescription>The same order on Stock → Purchases, the item&apos;s drawer and the product page.{p.status !== "ordered" ? " It's been received: its Stock receipt changes with it." : ""}</DialogDescription>
         </DialogHeader>
         <div className="grid grid-cols-2 gap-3">
           <label className="col-span-2 space-y-1"><span className="field-label">Item</span>
@@ -110,11 +110,11 @@ function OrderEditDialog({ p, onClose, onSaved }: { p: OrderLike; onClose: () =>
 }
 
 /** Delete an order that hasn't been received (one that has needs its receipt deleted first). */
-export function OrderDeleteButton({ p, onDeleted }: { p: OrderLike; onDeleted: () => void }) {
+export function OrderDeleteButton({ p, onDeleted, name }: { p: OrderLike; onDeleted: () => void; name?: string | null }) {
   const { confirm } = useDialogs();
   if (p.status !== "ordered") return null;
   const remove = async () => {
-    if (!(await confirm({ title: "Delete this order?", description: `${p.units} units${p.order_id ? `, order ${p.order_id}` : ""}${p.supplier_name ? ` from ${p.supplier_name}` : ""}, ordered ${p.ordered_on}. It leaves the Tracker and Stock. The audit log keeps a copy.`, confirmLabel: "Delete order", destructive: true }))) return;
+    if (!(await confirm({ title: `Delete the order${name ? ` for ${name}` : p.order_id ? ` ${p.order_id}` : ""}?`, description: `${p.units} units${p.order_id ? `, order ${p.order_id}` : ""}${p.supplier_name ? ` from ${p.supplier_name}` : ""}, ordered ${p.ordered_on}. It leaves Purchases and Stock. The audit log keeps a copy.`, confirmLabel: "Delete order", destructive: true }))) return;
     try {
       await api(`/api/purchases/${p.id}`, { method: "DELETE" });
       toast.success("Order deleted");
@@ -123,5 +123,5 @@ export function OrderDeleteButton({ p, onDeleted }: { p: OrderLike; onDeleted: (
       toast.error((e as Error).message);
     }
   };
-  return <Button variant="ghost" size="xs" className="text-muted-foreground hover:text-fail" onClick={(e) => { e.stopPropagation(); remove(); }} title="Delete (not received yet)"><Trash2Icon /> Delete</Button>;
+  return <Button variant="danger" size="sm" onClick={(e) => { e.stopPropagation(); remove(); }} title="Delete (not received yet)"><Trash2Icon /> Delete</Button>;
 }

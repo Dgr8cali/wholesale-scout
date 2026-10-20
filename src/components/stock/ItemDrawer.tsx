@@ -104,21 +104,21 @@ export function ItemDrawer({ row, onClose, onChanged }: { row: ItemLevels | null
         <SheetContent side="right" className="w-full gap-0 overflow-y-auto sm:max-w-xl">
           <SheetHeader className="border-b">
             <SheetTitle>{it.name}</SheetTitle>
-            <SheetDescription><span className="num">{it.sku}</span>{it.asin && <> · <a className="num text-brand hover:underline" href={`https://www.amazon.co.uk/dp/${it.asin}`} target="_blank" rel="noreferrer">{it.asin}</a></>}{it.supplier_name ? ` · ${it.supplier_name}` : ""}</SheetDescription>
+            <SheetDescription><span className="num">{it.sku}</span>{it.asin && <> · <a className="num text-primary hover:underline" href={`https://www.amazon.co.uk/dp/${it.asin}`} target="_blank" rel="noreferrer">{it.asin}</a></>}{it.supplier_name ? ` · ${it.supplier_name}` : ""}</SheetDescription>
           </SheetHeader>
           <div className="space-y-5 p-4">
             <div className="flex flex-wrap gap-1.5">
-              {(Object.keys(ACTION_LABEL) as StockAction[]).map((a) => <Button key={a} size="sm" variant={a === "sale" ? "default" : "outline"} onClick={() => setAction(a)}>{ACTION_LABEL[a]}</Button>)}
+              {(Object.keys(ACTION_LABEL) as StockAction[]).map((a) => <Button key={a} size="sm" variant={a === "sale" ? "primary" : "secondary"} onClick={() => setAction(a)}>{ACTION_LABEL[a]}</Button>)}
             </div>
 
             <section className="grid grid-cols-4 gap-2 text-center">
               {BUCKETS.map((b) => (
-                <div key={b} className="rounded-lg bg-surface-2 px-2 py-1.5">
+                <div key={b} className="rounded-lg bg-subtle px-2 py-1.5">
                   <div className="text-xs tracking-wide text-muted-foreground uppercase">{BUCKET_LABEL[b]}</div>
                   <div className="num text-lg font-medium">{b === "fba" && !row.fba.matched ? "—" : row.levels[b]}</div>
                 </div>
               ))}
-              <div className="rounded-lg bg-surface-2 px-2 py-1.5"><div className="text-xs tracking-wide text-muted-foreground uppercase">Total</div><div className="num text-lg font-semibold">{row.total}</div></div>
+              <div className="rounded-lg bg-subtle px-2 py-1.5"><div className="text-xs tracking-wide text-muted-foreground uppercase">Total</div><div className="num text-lg font-semibold">{row.total}</div></div>
             </section>
             <section className="space-y-1">
               <div className="flex items-center justify-between text-xs text-muted-foreground"><span>Level, last 30 days</span><span>{row.demand.total ? `${row.demand.total.toFixed(2)} a day sold` : "nothing sold in 30 days"}</span></div>
@@ -143,15 +143,15 @@ export function ItemDrawer({ row, onClose, onChanged }: { row: ItemLevels | null
                 <div className="col-span-2">{field("notes", "Notes")}</div>
               </div>
               <div className="flex items-center gap-3">
-                <Button size="sm" variant="outline" onClick={saveDetails}>Save details</Button>
-                {it.supplier_id && <Link href={`/suppliers/${it.supplier_id}`} className="text-xs text-brand hover:underline">Supplier →</Link>}
-                <Button size="sm" variant="ghost" className="ml-auto text-fail hover:text-fail" onClick={async () => { if (await acts.archive(it)) onClose(); }}><Trash2Icon /> Delete item</Button>
+                <Button size="sm" variant="secondary" onClick={saveDetails}>Save details</Button>
+                {it.supplier_id && <Link href={`/suppliers/${it.supplier_id}`} className="text-xs text-primary hover:underline">Supplier →</Link>}
+                <Button size="sm" variant="danger" className="ml-auto" onClick={async () => { if (await acts.archive(it)) onClose(); }}><Trash2Icon /> Delete item</Button>
               </div>
             </section>
 
             {orders.length > 0 && (
               <section className="space-y-2">
-                <div className="flex items-center"><h3 className="text-sm font-semibold">Orders</h3><Link href="/stock/purchases" className="ml-auto text-xs text-brand hover:underline">Purchases →</Link></div>
+                <div className="flex items-center"><h3 className="text-sm font-semibold">Orders</h3><Link href="/stock/purchases" className="ml-auto text-xs text-primary hover:underline">Purchases →</Link></div>
                 <table className="w-full text-xs"><tbody>{orders.slice(0, 10).map((o) => (
                   <tr key={o.id} className="border-t align-top">
                     <td className="py-1 pr-2 whitespace-nowrap">{o.ordered_on}</td>
@@ -159,7 +159,7 @@ export function ItemDrawer({ row, onClose, onChanged }: { row: ItemLevels | null
                     <td className="pr-2"><OrderLink id={o.order_id} url={o.order_url} /> <span className="text-muted-foreground">{o.supplier_name ?? ""}</span>
                       {(o.expected_date || o.tracking_number) && <div className="text-muted-foreground">{o.expected_date && o.status === "ordered" ? `expected ${o.expected_date}` : ""}{o.expected_date && o.tracking_number && o.status === "ordered" ? " · " : ""}{trackingText(o.tracking_carrier, o.tracking_number) ?? ""}</div>}</td>
                     <td className="text-right whitespace-nowrap">{o.status === "ordered"
-                      ? <Button size="xs" variant="outline" onClick={() => setReceiving(o)}>Receive</Button>
+                      ? <Button size="sm" variant="secondary" onClick={() => setReceiving(o)}>Receive</Button>
                       : <span className="text-muted-foreground">{o.status}{o.received_bucket ? ` · ${BUCKET_LABEL[o.received_bucket as Bucket]}` : ""}</span>}
                       <div><OrderEditButton p={o} onSaved={() => { load(); onChanged(); }} /><OrderDeleteButton p={o} onDeleted={() => { load(); onChanged(); }} /></div></td>
                   </tr>
@@ -177,7 +177,7 @@ export function ItemDrawer({ row, onClose, onChanged }: { row: ItemLevels | null
                     <span className="num ml-auto">{gbp(l.price)}</span>
                     <span className="text-xs text-muted-foreground">{l.fee_pct != null ? `${l.fee_pct}% fee` : "no fee"}{l.default_bucket ? ` · from ${BUCKET_LABEL[l.default_bucket]}` : ""}</span>
                     {l.url && <a href={l.url} target="_blank" rel="noreferrer" aria-label="Open listing"><ExternalLinkIcon className="size-3.5 text-muted-foreground" /></a>}
-                    <button type="button" onClick={() => removeListing(l)} aria-label="Remove listing"><Trash2Icon className="size-3.5 text-muted-foreground hover:text-fail" /></button>
+                    <Button size="sm" variant="danger" onClick={() => removeListing(l)} aria-label={`Delete the ${l.marketplace} listing`}><Trash2Icon /> Delete</Button>
                   </li>
                 ))}</ul>
               )}
@@ -191,18 +191,18 @@ export function ItemDrawer({ row, onClose, onChanged }: { row: ItemLevels | null
                   {BUCKETS.map((b) => <NativeSelectOption key={b} value={b}>from {BUCKET_LABEL[b]}</NativeSelectOption>)}
                 </NativeSelect>
               </div>
-              <Button size="xs" variant="outline" disabled={!newL.marketplace.trim()} onClick={addListing}><PlusIcon /> Add listing</Button>
+              <Button size="sm" variant="secondary" disabled={!newL.marketplace.trim()} onClick={addListing}><PlusIcon /> Add listing</Button>
             </section>
 
             <section className="space-y-2">
-              <div className="flex items-center"><h3 className="text-sm font-semibold">Movements</h3><Link href={`/stock/movements?item=${it.id}`} className="ml-auto text-xs text-brand hover:underline">All, to edit or delete →</Link></div>
+              <div className="flex items-center"><h3 className="text-sm font-semibold">Movements</h3><Link href={`/stock/movements?item=${it.id}`} className="ml-auto text-xs text-primary hover:underline">All, to edit or delete →</Link></div>
               {!moves.length ? <p className="text-xs text-muted-foreground">None yet.</p> : (
                 <table className="w-full text-xs"><tbody>{moves.slice(0, 30).map((m) => (
                   <tr key={m.id} className="border-t">
                     <td className="py-1 pr-2 whitespace-nowrap">{m.date}</td>
                     <td className="pr-2">{KIND_LABEL[m.kind]}</td>
                     <td className="pr-2 text-muted-foreground">{BUCKET_LABEL[m.bucket]}</td>
-                    <td className={cn("num pr-2 text-right font-medium", m.quantity > 0 ? "text-pass" : "text-fail")}>{m.quantity > 0 ? `+${m.quantity}` : m.quantity}</td>
+                    <td className={cn("num pr-2 text-right font-medium", m.quantity > 0 ? "text-success" : "text-danger")}>{m.quantity > 0 ? `+${m.quantity}` : m.quantity}</td>
                     <td className="text-muted-foreground">{m.order_id || m.order_url ? <><OrderLink id={m.order_id} url={m.order_url} />{m.reason || m.note ? " · " : ""}</> : null}{[m.reason, m.note].filter(Boolean).join(" · ")}</td>
                   </tr>
                 ))}</tbody></table>

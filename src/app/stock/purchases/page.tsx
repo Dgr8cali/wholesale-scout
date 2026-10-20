@@ -4,11 +4,10 @@ import Link from "next/link";
 import { VatTag } from "@/components/VatTag";
 import { useEffect, useMemo, useState } from "react";
 import { ProductThumb } from "@/components/ProductThumb";
-import { EmptyState, ErrorState } from "@/components/States";
-import { Card, CardContent } from "@/components/ui/card";
+import { ErrorState } from "@/components/States";
+import { DataTable, type DataColumn } from "@/components/ui/data-table";
+import { Kpi } from "@/components/ui/kpi";
 import { Skeleton } from "@/components/ui/skeleton";
-import { SortTableHead, useSortable } from "@/components/SortableTable";
-import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { Actuals } from "@/lib/actuals";
 import type { Purchase } from "@/lib/server/purchases";
@@ -31,16 +30,6 @@ type Row = Purchase & { actuals?: Actuals | null };
 const purchaseTitle = (p: Purchase) => p.stock?.name ?? p.product?.title ?? p.asin ?? "—";
 const purchaseImage = (p: Purchase) => p.stock?.image_url || p.product?.image_url || null;
 const label = (s: PurchaseStatus) => PURCHASE_STATUSES.find((x) => x.id === s)?.label ?? s;
-
-function Tile({ label, value, hint }: { label: React.ReactNode; value: React.ReactNode; hint?: React.ReactNode }) {
-  return (
-    <Card size="sm"><CardContent>
-      <p className="eyebrow">{label}</p>
-      <p className="stat-value">{value}</p>
-      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
-    </CardContent></Card>
-  );
-}
 
 function pctOff(pred: number | null | undefined, act: number | null | undefined) {
   if (pred == null || act == null || pred === 0) return null;
@@ -81,19 +70,6 @@ export default function PurchasesPage() {
       .catch((e: Error) => setError(e.message));
   }, [nonce]);
   const filtered = useMemo(() => (rows ?? []).filter((p) => show === "all" || p.status !== "closed"), [rows, show]);
-  // Status sorts in pipeline order; the predicted · actual columns by the actual figure.
-  const sorting = useSortable("wholesale.tracker", filtered, {
-    product: { value: (p) => p.product?.title ?? p.stock?.name ?? p.asin, kind: "text" },
-    status: { value: (p) => `${String(PURCHASE_STATUSES.findIndex((x) => x.id === p.status)).padStart(2, "0")} ${p.status}`, kind: "text" },
-    units: { value: (p) => p.units, kind: "number" },
-    landed: { value: (p) => p.landed_gbp, kind: "number" },
-    profit: { value: (p) => p.actuals?.profitPerUnit ?? null, kind: "number" },
-    sales: { value: (p) => p.actuals?.unitsPerMonth ?? null, kind: "number" },
-    sold: { value: (p) => p.actuals?.unitsSold ?? null, kind: "number" },
-    profitToDate: { value: (p) => p.actuals?.profitToDate ?? null, kind: "number" },
-  });
-  const shown = sorting.rows;
-
   const header = (
     <PageHeader
       title="Purchases"
@@ -101,7 +77,7 @@ export default function PurchasesPage() {
       subtitle="What you've bought, and the prediction against what happened."
       info={<>
         <p>Every purchase, one record each, whether recorded here, on a product page, from the Plan or from Stock → Reorder (this page was the Tracker and Stock → Orders).</p>
-        <p>Set a purchase to <b>Received</b> to put its units into a Stock bucket, with its order number on the receipt. Profit and sales show predicted (frozen when you bought) · actual (from Amazon&apos;s reports once the stock is live).</p>
+        <p>Set a purchase to <b>Received</b> to put its units into a Stock bucket, with its order number on the receipt. Profit / unit and Sales / mo show predicted (frozen when you bought) · actual (from Amazon&apos;s reports once the stock is live).</p>
       </>}
       actions={<>
         <SyncStatus onSynced={() => setNonce((n) => n + 1)} />
@@ -121,6 +97,52 @@ export default function PurchasesPage() {
   const counts = new Map<PurchaseStatus, number>();
   for (const p of open) counts.set(p.status, (counts.get(p.status) ?? 0) + 1);
 
+  const reload = () => setNonce((n) => n + 1);
+  const columns: DataColumn<Row>[] = [
+    {
+      id: "product", header: "Product", mobile: "title", className: "min-w-72 max-w-96 whitespace-normal", sortValue: (p) => p.product?.title ?? p.stock?.name ?? p.asin,
+      cell: (p) => (
+        <div className="flex gap-2.5">
+          <ProductThumb url={purchaseImage(p)} asin={p.asin} title={purchaseTitle(p)} brand={p.stock?.brand ?? p.product?.brand ?? null} size={36} />
+          <div className="min-w-0">
+            {p.asin && p.product
+              ? <Link className="line-clamp-2 text-sm hover:text-primary hover:underline" href={`/products/${p.asin}`}>{purchaseTitle(p)}</Link>
+              : <Link className="line-clamp-2 text-sm hover:text-primary hover:underline" href={p.stock_item_id ? `/stock/levels?item=${p.stock_item_id}` : `/products/${p.asin}`}>{purchaseTitle(p)}</Link>}
+            <p className="num text-xs text-muted-foreground">{p.asin ?? p.stock?.sku ?? "—"} · {p.supplier_name ?? "—"} · {p.ordered_on}{p.received_bucket ? ` · in Stock (${p.received_bucket === "home" ? "self-ship" : "TikTok FBT"})` : ""}</p>
+            <div className="mt-1 flex flex-wrap items-center gap-1"><OrderLine p={p} /><OrderEditButton p={p} onSaved={reload} /><OrderDeleteButton p={p} name={purchaseTitle(p)} onDeleted={reload} />{p.stock_item_id && <Link className="text-xs text-primary hover:underline" href={`/stock/levels?item=${p.stock_item_id}`}>Stock →</Link>}</div>
+          </div>
+        </div>
+      ),
+    },
+    {
+      // Status sorts in pipeline order.
+      id: "status", header: "Status", mobile: 1, sortValue: (p) => PURCHASE_STATUSES.findIndex((x) => x.id === p.status),
+      cell: (p) => (
+        <NativeSelect className="h-8 w-36" value={p.status} onChange={(e) => setStatus(p, e.target.value as PurchaseStatus)} aria-label="Status">
+          {PURCHASE_STATUSES.map((s) => <NativeSelectOption key={s.id} value={s.id}>{s.label}</NativeSelectOption>)}
+        </NativeSelect>
+      ),
+    },
+    { id: "units", header: "Units", numeric: true, mobile: 2, sortValue: (p) => p.units, cell: (p) => p.units },
+    { id: "landed", header: "Landed", numeric: true, sortValue: (p) => p.landed_gbp, cell: (p) => gbp(p.landed_gbp) },
+    // The predicted · actual columns sort by the actual figure.
+    { id: "profit", header: "Profit / unit", numeric: true, sortValue: (p) => p.actuals?.profitPerUnit ?? null, cell: (p) => <span className="whitespace-nowrap">{gbp(p.prediction.profitPerUnit)} · {p.actuals ? gbp(p.actuals.profitPerUnit) : "—"}</span> },
+    {
+      id: "sales", header: "Sales / mo", numeric: true, sortValue: (p) => p.actuals?.unitsPerMonth ?? null,
+      cell: (p) => {
+        const salesOff = pctOff(p.prediction.sharePerMonth, p.actuals?.unitsPerMonth);
+        return (
+          <span className="whitespace-nowrap">
+            {p.prediction.sharePerMonth ?? "—"} · {p.actuals?.unitsPerMonth ?? "—"}
+            {salesOff != null && <span className={cn("ml-1 text-xs", Math.abs(salesOff) < 15 ? "text-muted-foreground" : salesOff > 0 ? "text-success" : "text-danger")}>{salesOff > 0 ? "+" : ""}{salesOff}%</span>}
+          </span>
+        );
+      },
+    },
+    { id: "sold", header: "Sold", numeric: true, sortValue: (p) => p.actuals?.unitsSold ?? null, cell: (p) => <span className="whitespace-nowrap">{p.actuals ? `${p.actuals.unitsSold} / ${p.units}` : "—"}</span> },
+    { id: "profitToDate", header: "Profit to date", numeric: true, mobile: 3, sortValue: (p) => p.actuals?.profitToDate ?? null, cell: (p) => (p.actuals ? gbp(p.actuals.profitToDate) : "—") },
+  ];
+
   return (
     <div className="space-y-6">
       {header}
@@ -128,78 +150,31 @@ export default function PurchasesPage() {
       {receiving && <ReceiveDialog open units={receiving.units} onOpenChange={(o) => { if (!o) setReceiving(null); }} onReceive={(bucket) => { const p = receiving; setReceiving(null); setStatus(p, "received", bucket); }} />}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Tile label="Money in stock" value={gbp(invested, 0)} hint={`${open.length} open purchase${open.length === 1 ? "" : "s"}, landed`} />
-        <Tile label={<>Predicted profit / month <VatTag registered={vatReg} /></>} value={gbp(predictedMonth, 0)} hint="next month at your share, up to the units held" />
-        <Tile label={<>Profit to date <VatTag registered={vatReg} /></>} value={gbp(profitToDate, 0)} hint="from Amazon's reports" />
-        <Tile label="Pipeline" value={open.length} hint={PURCHASE_STATUSES.filter((s) => counts.get(s.id)).map((s) => `${counts.get(s.id)} ${s.label.toLowerCase()}`).join(" · ") || "nothing open"} />
+        <Kpi label="Money in stock" value={gbp(invested, 0)} hint={`${open.length} open purchase${open.length === 1 ? "" : "s"}, landed`} />
+        <Kpi label={<>Predicted profit / month <VatTag registered={vatReg} /></>} value={gbp(predictedMonth, 0)} hint="next month at your share, up to the units held" />
+        <Kpi label={<>Profit to date <VatTag registered={vatReg} /></>} value={gbp(profitToDate, 0)} hint="from Amazon's reports" />
+        <Kpi label="Pipeline" value={open.length} hint={PURCHASE_STATUSES.filter((s) => counts.get(s.id)).map((s) => `${counts.get(s.id)} ${s.label.toLowerCase()}`).join(" · ") || "nothing open"} />
       </div>
 
       <CalibrationPanel nonce={nonce} />
 
-      {rows.length === 0 ? (
-        <EmptyState icon={<PackageIcon />} title="Nothing bought yet">
-          Record a purchase from a product&apos;s page (Your purchases) or, after ordering, from the Plan (Record as bought). The app freezes its prediction then, and compares it with Amazon&apos;s real figures once the stock is live.
-        </EmptyState>
-      ) : (
-        <>
-          <ToggleGroup type="single" variant="outline" size="sm" value={show} onValueChange={(v) => v && setShow(v as "open" | "all")}>
-            <ToggleGroupItem value="open">Open</ToggleGroupItem>
-            <ToggleGroupItem value="all">All, with closed</ToggleGroupItem>
-          </ToggleGroup>
-          <div className="panel overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <SortTableHead {...sorting.th("product")} className="pl-4">Product</SortTableHead>
-                  <SortTableHead {...sorting.th("status")} title="In pipeline order">Status</SortTableHead>
-                  <SortTableHead {...sorting.th("units")} numeric>Units</SortTableHead>
-                  <SortTableHead {...sorting.th("landed")} numeric>Landed</SortTableHead>
-                  <SortTableHead {...sorting.th("profit")} numeric title="Sorts by the actual figure">Profit / unit<br /><span className="font-normal text-muted-foreground">predicted · actual</span></SortTableHead>
-                  <SortTableHead {...sorting.th("sales")} numeric title="Sorts by the actual figure">Sales / mo<br /><span className="font-normal text-muted-foreground">predicted · actual</span></SortTableHead>
-                  <SortTableHead {...sorting.th("sold")} numeric>Sold</SortTableHead>
-                  <SortTableHead {...sorting.th("profitToDate")} numeric className="pr-4">Profit to date</SortTableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {shown.map((p) => {
-                  const a = p.actuals;
-                  const salesOff = pctOff(p.prediction.sharePerMonth, a?.unitsPerMonth);
-                  return (
-                    <TableRow key={p.id} data-verdict={a?.profitPerUnit != null ? (a.profitPerUnit > 0 ? "pass" : "fail") : "empty"}>
-                      <TableCell className="max-w-80 pl-4 whitespace-normal">
-                        <div className="flex gap-2.5">
-                          <ProductThumb url={purchaseImage(p)} asin={p.asin} title={purchaseTitle(p)} brand={p.stock?.brand ?? p.product?.brand ?? null} size={36} />
-                          <div className="min-w-0">
-                            {p.asin && p.product
-                              ? <Link className="line-clamp-2 text-sm hover:text-brand hover:underline" href={`/products/${p.asin}`}>{purchaseTitle(p)}</Link>
-                              : <Link className="line-clamp-2 text-sm hover:text-brand hover:underline" href={p.stock_item_id ? `/stock/levels?item=${p.stock_item_id}` : `/products/${p.asin}`}>{purchaseTitle(p)}</Link>}
-                            <p className="num text-xs text-muted-foreground">{p.asin ?? p.stock?.sku ?? "—"} · {p.supplier_name ?? "—"} · {p.ordered_on}{p.received_bucket ? ` · in Stock (${p.received_bucket === "home" ? "self-ship" : "TikTok FBT"})` : ""}</p>
-                            <div className="flex flex-wrap items-center gap-1"><OrderLine p={p} /><OrderEditButton p={p} onSaved={() => setNonce((n) => n + 1)} /><OrderDeleteButton p={p} onDeleted={() => setNonce((n) => n + 1)} />{p.stock_item_id && <Link className="text-xs text-brand hover:underline" href={`/stock/levels?item=${p.stock_item_id}`}>Stock →</Link>}</div>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <NativeSelect className="h-8 w-36" value={p.status} onChange={(e) => setStatus(p, e.target.value as PurchaseStatus)} aria-label="Status">
-                          {PURCHASE_STATUSES.map((s) => <NativeSelectOption key={s.id} value={s.id}>{s.label}</NativeSelectOption>)}
-                        </NativeSelect>
-                      </TableCell>
-                      <TableCell className="num text-right">{p.units}</TableCell>
-                      <TableCell className="num text-right">{gbp(p.landed_gbp)}</TableCell>
-                      <TableCell className="num text-right">{gbp(p.prediction.profitPerUnit)} · {a ? gbp(a.profitPerUnit) : "—"}</TableCell>
-                      <TableCell className="num text-right">
-                        {p.prediction.sharePerMonth ?? "—"} · {a?.unitsPerMonth ?? "—"}
-                        {salesOff != null && <span className={cn("ml-1 text-xs", Math.abs(salesOff) < 15 ? "text-muted-foreground" : salesOff > 0 ? "text-pass" : "text-fail")}>{salesOff > 0 ? "+" : ""}{salesOff}%</span>}
-                      </TableCell>
-                      <TableCell className="num text-right">{a ? `${a.unitsSold} / ${p.units}` : "—"}</TableCell>
-                      <TableCell className="num pr-4 text-right">{a ? gbp(a.profitToDate) : "—"}</TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
-        </>
+      {rows.length > 0 && (
+        <ToggleGroup type="single" variant="outline" size="sm" value={show} onValueChange={(v) => v && setShow(v as "open" | "all")}>
+          <ToggleGroupItem value="open">Open</ToggleGroupItem>
+          <ToggleGroupItem value="all">All, with closed</ToggleGroupItem>
+        </ToggleGroup>
       )}
+      <DataTable
+        rows={filtered}
+        columns={columns}
+        getRowId={(p) => p.id}
+        storageKey="stock.purchases"
+        caption="Purchases"
+        rowAttrs={(p) => ({ "data-verdict": p.actuals?.profitPerUnit != null ? (p.actuals.profitPerUnit > 0 ? "pass" : "fail") : "empty" })}
+        empty={rows.length === 0
+          ? { icon: <PackageIcon />, title: "Nothing bought yet", description: "Record a purchase here, from a product's page or from the Plan; its prediction is frozen then.", action: <Button variant="secondary" onClick={() => setStockNew({ item: "", qty: null, supplier: null })}>Record a stock order</Button> }
+          : { icon: <PackageIcon />, title: "Nothing open", description: "Every purchase is closed.", action: <Button variant="secondary" onClick={() => setShow("all")}>Show all, with closed</Button> }}
+      />
     </div>
   );
 }

@@ -20,7 +20,7 @@ export function OrderLink({ id, url, className }: { id: string | null | undefine
   if (!id && !url) return null;
   if (!url) return <span className={cn("num", className)}>{id}</span>;
   return (
-    <a className={cn("num inline-flex items-center gap-0.5 text-brand hover:underline", className)} href={url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>
+    <a className={cn("num inline-flex items-center gap-0.5 text-primary hover:underline", className)} href={url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>
       {id || "Order"} <ExternalLinkIcon className="size-3" />
     </a>
   );
@@ -59,7 +59,7 @@ export function SupplierPicker({ value, onChange, className }: { value: string; 
           <NativeSelectOption value="">None</NativeSelectOption>
           {list.map((s) => <NativeSelectOption key={s.id} value={s.id}>{supplierLabel(s)}</NativeSelectOption>)}
         </NativeSelect>
-        <Button type="button" size="sm" variant="outline" className="flex-none" onClick={() => setAdding((a) => !a)}><PlusIcon /> New supplier</Button>
+        <Button type="button" size="sm" variant="secondary" className="flex-none" onClick={() => setAdding((a) => !a)}><PlusIcon /> New supplier</Button>
       </div>
       {adding && (
         <div className="grid grid-cols-2 gap-2 rounded-lg border border-dashed p-2.5">
