@@ -81,7 +81,7 @@
     ws.on(link, "click", async (e) => {
       e.preventDefault();
       const s = await ws.send({ type: "settings" });
-      ws.send({ type: "open", url: `${s.appUrl}/pl/candidates?c=${candidateId}#suppliers` });
+      ws.send({ type: "open", url: `${s.appUrl}/pl/candidates/${candidateId}?tab=suppliers` });
     });
     return link;
   }

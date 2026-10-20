@@ -15,7 +15,8 @@
     .hidden { display: none; }
     .row { display: flex; align-items: center; gap: 8px; }
     .between { justify-content: space-between; }
-    .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-weight: 700; font-size: 12px; color: #fff; text-transform: uppercase; }
+    .gates { list-style: none; padding: 0; margin: 6px 0 0; display: grid; gap: 4px; }
+    .gates li { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; }
     .muted { color: #5A6B70; font-size: 12px; }
     .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; margin: 10px 0; }
     .k { color: #5A6B70; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; }
@@ -113,9 +114,8 @@
     }
     if (card) {
       const c = card;
-      const colour = c.verdict ? ws.VERDICT_COLOUR[c.verdict] : "#5A6B70";
       panel.append(ws.h("div", { class: "row", style: "margin-top:8px" }, [
-        ws.h("span", { class: "badge", style: `background:${colour}`, text: c.verdict ?? (c.pending ? "screening" : "—") }),
+        c.verdict || !c.pending ? ws.chip(ws.PRODUCT_DECISION, c.verdict) : ws.chip(ws.PRODUCT_DECISION, null, { text: "Screening…" }),
         c.score != null ? ws.h("span", { class: "v", text: `Score ${Math.round(c.score)}` }) : null,
         c.pending ? ws.h("span", { class: "muted", text: "pending: Keepa and gating still coming" }) : null,
       ]));
@@ -142,9 +142,17 @@
         // Both prices side by side, and which the gates used.
         c.compare?.current ? kv(`Profit at current Buy Box (${ws.gbp(c.compare.current.price)})`, c.compare.current.profit == null ? "needs a cost" : ws.gbp(c.compare.current.profit)) : null,
         c.compare?.median90 ? kv(`Profit at ${c.compare.median90.label} (${ws.gbp(c.compare.median90.price)})`, c.compare.median90.profit == null ? "needs a cost" : ws.gbp(c.compare.median90.profit)) : null,
-        c.compare?.gatesUse ? kv("Gates use", c.compare.spike ? ws.h("span", {}, [c.compare.gatesUse, " ", ws.h("span", { style: "background:#FFF1D6;color:#6B4A00;border-radius:9px;padding:0 6px;font-size:10px;font-weight:700", text: "PRICE SPIKE" })]) : c.compare.gatesUse) : null,
+        c.compare?.gatesUse ? kv("Gates use", c.compare.spike ? ws.h("span", {}, [c.compare.gatesUse, " ", ws.chip(ws.GATE_RESULT, "warn", { text: "Price spike", style: "font-size:11px;padding:0 7px" })]) : c.compare.gatesUse) : null,
       ].filter(Boolean)));
       if (c.why) panel.append(ws.h("div", { class: "why", text: c.why }));
+      // Each gate in the app's words: Pass / Check / Fail (Not scored when it didn't run).
+      if (c.gates?.length) {
+        const passed = c.gates.filter((g) => g.status === "pass").length;
+        panel.append(ws.h("details", { open: c.gates.some((g) => g.status === "fail") ? true : null, style: "margin-bottom:8px" }, [
+          ws.h("summary", { class: "muted", style: "cursor:pointer", text: `Gates (${passed}/${c.gates.length} pass)` }),
+          ws.h("ul", { class: "gates" }, c.gates.map((g) => ws.h("li", { title: g.detail ?? "" }, [ws.h("span", { text: g.label }), ws.chip(ws.GATE_RESULT, g.status)]))),
+        ]));
+      }
       if (c.notFetched) {
         panel.append(ws.h("div", { class: "why", style: "background:#F4F6F6;padding:6px 8px;border-radius:6px" }, [
           `Not fetched: failed at ${c.notFetched.label.toLowerCase()}. Buy Box, sellers and Amazon are from current offers; sales, your share and history weren't fetched. `,

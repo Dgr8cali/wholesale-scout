@@ -143,6 +143,42 @@
   };
   /** addEventListener whose handler checks the extension is still there first. */
   ws.on = (el, type, fn, opts) => el.addEventListener(type, (...a) => (ws.alive() ? fn(...a) : ws.staleNotice()), opts);
-  ws.VERDICT_COLOUR = { pass: "#1F7A4D", warn: "#6B4A00", fail: "#B42318" };
+  // The app's verdict words and colours (src/components/ui/status-chip.tsx): sentence case, soft fill + ink, always an icon.
+  ws.TONE = {
+    good: { bg: "#E5F4EC", ink: "#1F7A4D", icon: "check" },
+    warn: { bg: "#FFF1D6", ink: "#6B4A00", icon: "alert" },
+    bad: { bg: "#FDECEA", ink: "#B42318", icon: "x" },
+    neutral: { bg: "#EEF1F2", ink: "#5A6B70", icon: "circle" },
+  };
+  /** A wholesale product decision: Buy / Check / Skip (stored pass / warn / fail). */
+  ws.PRODUCT_DECISION = { pass: { label: "Buy", tone: "good" }, warn: { label: "Check", tone: "warn" }, fail: { label: "Skip", tone: "bad" } };
+  /** A gate's result: Pass / Check / Fail. */
+  ws.GATE_RESULT = { pass: { label: "Pass", tone: "good" }, warn: { label: "Check", tone: "warn" }, fail: { label: "Fail", tone: "bad" } };
+  ws.NOT_SCORED = "Not scored";
+  /** The lucide icon the app's chips use for a tone (CheckCircle2, TriangleAlert, XCircle, Circle), as SVG nodes. */
+  ws.toneIcon = (tone, size = 12) => {
+    const NS = "http://www.w3.org/2000/svg";
+    const el = (tag, attrs) => { const n = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v); return n; };
+    const svg = el("svg", { viewBox: "0 0 24 24", width: size, height: size, fill: "none", stroke: "currentColor", "stroke-width": 2, "stroke-linecap": "round", "stroke-linejoin": "round", "aria-hidden": "true", style: "flex:none" });
+    const paths = {
+      check: [["circle", { cx: 12, cy: 12, r: 10 }], ["path", { d: "m9 12 2 2 4-4" }]],
+      alert: [["path", { d: "m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" }], ["path", { d: "M12 9v4" }], ["path", { d: "M12 17h.01" }]],
+      x: [["circle", { cx: 12, cy: 12, r: 10 }], ["path", { d: "m15 9-6 6" }], ["path", { d: "m9 9 6 6" }]],
+      circle: [["circle", { cx: 12, cy: 12, r: 10 }]],
+    }[ws.TONE[tone]?.icon ?? "circle"];
+    for (const [t, a] of paths) svg.append(el(t, a));
+    return svg;
+  };
+  /** A round chip like the app's StatusChip: icon + word, soft fill, ink text. `map` is PRODUCT_DECISION or GATE_RESULT. */
+  ws.chip = (map, value, opts = {}) => {
+    const m = value ? map[value] : null;
+    const tone = opts.tone ?? m?.tone ?? "neutral";
+    const t = ws.TONE[tone];
+    const node = document.createElement(opts.tag ?? "span");
+    node.className = opts.class ?? "ws-chip";
+    node.style.cssText = `display:inline-flex;align-items:center;gap:4px;border:0;border-radius:999px;padding:2px 9px;font:600 12px/1.5 'IBM Plex Sans',-apple-system,'Segoe UI',sans-serif;background:${t.bg};color:${t.ink};white-space:nowrap;${opts.style ?? ""}`;
+    node.append(ws.toneIcon(tone), document.createTextNode(opts.text ?? m?.label ?? ws.NOT_SCORED));
+    return node;
+  };
   globalThis.__ws = ws;
 })();

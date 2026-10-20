@@ -5,7 +5,7 @@ it (what's built, the backlog, the rough edges). Last updated: 20 Oct 2026 (UI r
 
 Wholesale Scout is a single-user Amazon UK seller's workbench: Next.js 16 (App Router, `proxy.ts`
 password gate), self-hosted Supabase (Postgres, RLS on, service-role access from the server only),
-hosted on the Netcup server at https://ws.dgr8cali.co.uk (`infra/`, `make deploy`), a Chrome extension (`extension/`, 0.7.0), and the Help centre in `content/help`. It has
+hosted on the Netcup server at https://ws.dgr8cali.co.uk (`infra/`, `make deploy`), a Chrome extension (`extension/`, 0.8.0), and the Help centre in `content/help`. It has
 four workspaces, each a labelled group in one sidebar (main pages, then a collapsible More); Today
 (Home), Settings and Help are shared.
 
@@ -204,7 +204,8 @@ Heights at 1440 / 390, before → after: Run detail 1,296 → 1,296 / 1,464 → 
 a table scrolled in its own box); Shortlist → Products 1,004 → 1,009 / 1,028 → 1,196; Brand detail (Beter, 90 products) 1,570 → 1,838
 / 6,172 → 4,463 (no longer 1px wider than the screen); Products 1,063 → 1,271 / 9,464 → 2,718. Screenshots: `docs/ui-audit/after/4c/`
 (gitignored).
-Phase 4c done. Next: phase 5 (the remaining polish, including the extension's PASS/WARN/FAIL badges in the new verdict words).
+Phase 4c done.
+Phase 5, polish (20 Oct 2026). **Extension 0.8.0**: the product panel and search results show the app's words, colours and icons (Buy / Check / Skip / Not scored as round chips; the panel lists each gate as Pass / Check / Fail), and candidate links open `/pl/candidates/<id>` (Suppliers & quotes, Reviews or Gate 3 tab) instead of the old `?c=` redirect.
 
 ## Workspaces
 

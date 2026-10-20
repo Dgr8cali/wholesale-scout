@@ -1,4 +1,4 @@
-// Search results: a small badge on each product with its verdict colour and score, from what the
+// Search results: a small chip on each product with its verdict (Buy / Check / Skip / Not scored, the app's colours and icon) and score, from what the
 // app already knows (batches of 20; nothing is screened). A grey "?" is unchecked: click to check.
 (() => {
   const ws = globalThis.__ws;
@@ -11,23 +11,23 @@
 
   function badge(el, b, asin) {
     el.querySelector(":scope .ws-badge")?.remove();
-    const colour = b?.verdict ? ws.VERDICT_COLOUR[b.verdict] : "#5A6B70";
-    const label = !b ? "?" : b.pending ? "…" : `${b.verdict ?? "—"}${b.score != null ? ` ${b.score}` : ""}`;
-    const node = ws.h("button", {
+    const word = !b ? "?" : b.pending ? "…" : b.verdict ? ws.PRODUCT_DECISION[b.verdict]?.label ?? b.verdict : ws.NOT_SCORED;
+    const node = ws.chip(ws.PRODUCT_DECISION, b?.verdict ?? null, {
+      tag: "button",
       class: "ws-badge",
-      title: !b ? "Not checked by Wholesale Scout: click to check it (a check run, a few Keepa tokens)" : `Wholesale Scout: ${b.verdict ?? "screening"}${b.score != null ? `, score ${b.score}` : ""}`,
-      style: `position:absolute;top:6px;left:6px;z-index:5;border:0;border-radius:999px;padding:2px 8px;font:700 11px/1.4 'IBM Plex Sans',sans-serif;color:#fff;background:${colour};cursor:pointer;text-transform:uppercase;box-shadow:0 1px 3px rgba(0,0,0,.25)`,
-      text: label,
-      onclick: async (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (b) return ws.send({ type: "settings" }).then((s) => ws.send({ type: "open", url: `${s.appUrl}/runs/${b.runId}` }));
-        node.textContent = "…";
-        const r = await ws.api("GET", `/api/extension/check?asin=${asin}`);
-        if (!r.ok) { node.textContent = "!"; node.title = r.error; return; }
-        const c = r.data.card;
-        badge(el, { verdict: c.verdict, score: c.score == null ? null : Math.round(c.score), pending: c.pending, runId: c.runId }, asin);
-      },
+      text: !b || b.pending ? word : `${word}${b.score != null ? ` · ${b.score}` : ""}`,
+      style: "position:absolute;top:6px;left:6px;z-index:5;cursor:pointer;min-height:24px;box-shadow:0 1px 3px rgba(0,0,0,.25)",
+    });
+    node.title = !b ? "Not checked by Wholesale Scout: click to check it (a check run, a few Keepa tokens)" : `Wholesale Scout: ${b.pending ? "screening" : word}${b.score != null ? `, score ${b.score}` : ""}`;
+    ws.on(node, "click", async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (b) return ws.send({ type: "settings" }).then((s) => ws.send({ type: "open", url: `${s.appUrl}/runs/${b.runId}` }));
+      node.lastChild.textContent = "…";
+      const r = await ws.api("GET", `/api/extension/check?asin=${asin}`);
+      if (!r.ok) { node.lastChild.textContent = "!"; node.title = r.error; return; }
+      const c = r.data.card;
+      badge(el, { verdict: c.verdict, score: c.score == null ? null : Math.round(c.score), pending: c.pending, runId: c.runId }, asin);
     });
     const box = el.querySelector(".s-product-image-container, [data-component-type='s-product-image']") || el;
     if (getComputedStyle(box).position === "static") box.style.position = "relative";
