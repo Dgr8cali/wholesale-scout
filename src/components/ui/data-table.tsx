@@ -48,6 +48,8 @@ const PAGE_SIZES = [25, 50, 100, 200]
 const PIN_END = "sticky right-0 bg-card shadow-[inset_1px_0_0_var(--border),-8px_0_8px_-8px_rgb(0_0_0/0.12)]"
 
 const readSize = (key: string | undefined, fallback: number) => {
+  // On a phone each row is a card: half a page by default keeps the page a sensible length.
+  try { if (window.matchMedia("(max-width: 639px)").matches) fallback = Math.min(fallback, PAGE_SIZES[0]) } catch { /* no window */ }
   if (!key) return fallback
   try {
     const n = Number(localStorage.getItem(`dt.size.${key}`))
@@ -57,7 +59,7 @@ const readSize = (key: string | undefined, fallback: number) => {
 
 /**
  * The shared table: uppercase 12px muted headers, divider rows, right-aligned mono numbers, a sticky
- * header, pagination (50 a page by default, with a page-size picker), an EmptyState when there are
+ * header, pagination (50 a page by default, 25 on a phone, with a page-size picker), an EmptyState when there are
  * no rows, and on a phone each row as a card with its 3–4 key fields and "Details" for the rest.
  */
 export function DataTable<T extends RowData>({

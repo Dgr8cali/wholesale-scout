@@ -1,7 +1,7 @@
 # Wholesale Scout: status
 
 Read this first in a new session. Keep it current: every commit that changes a feature updates
-it (what's built, the backlog, the rough edges). Last updated: 20 Oct 2026 (UI redesign phase 3a: ten page merges, old addresses redirected).
+it (what's built, the backlog, the rough edges). Last updated: 20 Oct 2026 (UI redesign phase 3b: every page restyled, one verdict vocabulary).
 
 Wholesale Scout is a single-user Amazon UK seller's workbench: Next.js 16 (App Router, `proxy.ts`
 password gate), self-hosted Supabase (Postgres, RLS on, service-role access from the server only),
@@ -82,8 +82,23 @@ One `FileDrop` (`src/components/ui/file-drop.tsx`: drop or click/Enter to choose
 Checked: every old address above answers 308 and lands on its page and tab (query kept; `/private-label?tab=hunt` goes via
 `/pl/niche-hunt`, two hops); the extension's links (`/pl/candidates?c=…#suppliers`, `/pl/niches`, `/products/…`, `/runs/…`) are
 unchanged pages; at 390px none of the merged pages is wider than the screen. Screenshots: `docs/ui-audit/after/3a/` (gitignored).
-To do: phase 3b, restyle every remaining page (the other pages onto PageHeader / DataTable / InfoTip, one verdict vocabulary, page titles = menu labels:
-Keyword bank → Keywords, Launch → Launch checklist, …), phase 4 (Private label Launch + Ads Launch, the candidate page, one results table for Run detail / Brand detail / Products) and phase 5 (polish).
+Phase 3b, restyle every remaining page, done (20 Oct 2026; look and consistency only: no data, schema, route or bulk-export
+change). One verdict vocabulary (display only; stored values, exports and the API keep pass/warn/fail etc.), in
+`src/components/ui/status-chip.tsx`, sentence case with an icon: wholesale product decision **Buy / Check / Skip**
+(`ProductDecision`; pass/warn/fail and the product page's buy/wait/skip), gate result **Pass / Check / Fail** (`GateResult`;
+the results drawer's gates, Private label's gates and checks), candidate decision **Order samples / Check / Drop**
+(`CandidateDecision`; Gatekeeper's longer title on hover), stock level **In stock / Low / Out** (`StockLevel`), and
+**Not scored**. Help uses the same words. Every page in Wholesale, Private label (not the candidate detail), Ads, Stock,
+Settings and Help now has a PageHeader (title = its menu label: Plan, Review, Launch checklist…; one primary action; intros in
+InfoTips), DataTable tables (50 a page, 25 on a phone; `paged={false}` where the server pages, e.g. Products and My niches;
+`pinEnd` keeps row actions in view on wide tables), quiet row actions, danger deletes that confirm naming the thing, and
+EmptyStates. The Ad settings keyword-list placeholders show real line breaks. Heights at 1440 → after (10 longest before):
+Brand detail 19,938 → 1,570; Candidates 14,741 → 8,649 (the candidate detail below the list is phase 4); My niches 10,323 →
+1,487; Find niches 9,398 → 2,013; Brands 8,244 → 1,063; Settings (Gates) 7,752 → 2,820; Suppliers & quotes 7,213 → 1,151;
+Products 3,464 → 1,063; Help article 6,312 and Help 4,038 unchanged (article length). No page is wider than 390px.
+Screenshots: `docs/ui-audit/after/3b/` (gitignored).
+To do: phase 4 (Today's layout, the candidate detail page, a pipeline board, Private label Launch + Ads Launch, one results table
+for Run detail / Brand detail / Products) and phase 5 (polish).
 
 ## Workspaces
 
