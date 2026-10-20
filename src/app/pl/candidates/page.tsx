@@ -6,7 +6,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { valuesOf, type CandidateRow, type ListResponse } from "@/components/pl/types";
 import { NewCandidate } from "@/components/pl/NewCandidate";
-import { Workspace } from "@/components/pl/Workspace";
 import { ErrorState } from "@/components/States";
 import { Button } from "@/components/ui/button";
 import { DataTable, type DataColumn } from "@/components/ui/data-table";
@@ -36,16 +35,9 @@ function Candidates() {
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(() => params.get("new") === "1");
   const [showParked, setShowParked] = useState(false);
-  const selected = params.get("c");
 
   const load = useCallback(() => api<ListResponse>("/api/pl/candidates").then(setList).catch((e: Error) => setError(e.message)), []);
   useEffect(() => { load(); }, [load]);
-  const select = useCallback((id: string | null) => router.replace(id ? `/pl/candidates?c=${id}` : "/pl/candidates", { scroll: false }), [router]);
-
-  useEffect(() => {
-    if (list && !selected && list.candidates.length) select((list.candidates.find((c) => c.status !== "parked") ?? list.candidates[0]).id);
-  }, [list, selected, select]);
-
   const all = useMemo(() => (list ? list.candidates.map((c) => ({ c, ev: evaluate(withAdsDefaults(valuesOf(c.fields), list.adsCpc), c.category, list.settings, list.card, new Date(), c.waivers ?? []) })) : []), [list]);
   // Parked candidates sit in their own collapsed section, newest parked first.
   const scored = all.filter((x) => x.c.status !== "parked");
@@ -54,21 +46,16 @@ function Candidates() {
   if (error) return <ErrorState title="Couldn't load Private label" message={error} onRetry={load} />;
   if (!list) return <div className="space-y-6"><Skeleton className="h-16 rounded-xl" /><Skeleton className="h-64 rounded-xl" /></div>;
 
-  const patchRow = (id: string, p: Partial<CandidateRow>) => setList((l) => l && { ...l, candidates: l.candidates.map((c) => (c.id === id ? { ...c, ...p } : c)) });
-
-  const rows = showParked || parked.some((x) => x.c.id === selected) ? [...scored, ...parked] : scored;
-  const open = (id: string) => {
-    select(id);
-    requestAnimationFrame(() => document.getElementById("candidate-detail")?.scrollIntoView({ behavior: "smooth", block: "start" }));
-  };
+  const rows = showParked ? [...scored, ...parked] : scored;
+  const open = (id: string) => router.push(`/pl/candidates/${id}`);
   const columns: DataColumn<Scored>[] = [
     {
       id: "name", header: "Candidate", mobile: "title", sortValue: ({ c }) => c.name,
       cell: ({ c }) => (
-        <button type="button" onClick={(e) => { e.stopPropagation(); open(c.id); }} className="min-w-0 cursor-pointer text-left">
+        <Link href={`/pl/candidates/${c.id}`} onClick={(e) => e.stopPropagation()} className="block min-w-0">
           <span className="block font-medium hover:underline">{c.name}</span>
           {c.niche_keyword && <span className="block text-meta text-muted-foreground">{c.niche_keyword}</span>}
-        </button>
+        </Link>
       ),
     },
     {
@@ -110,7 +97,7 @@ function Candidates() {
           storageKey="pl.candidates"
           caption="Candidates"
           onRowClick={(x) => open(x.c.id)}
-          rowClassName={(x) => cn(x.c.id === selected && "bg-primary-soft hover:bg-primary-soft", x.c.status === "parked" && "text-muted-foreground")}
+          rowClassName={(x) => cn(x.c.status === "parked" && "text-muted-foreground")}
           empty={{
             icon: <FlaskConicalIcon />, title: parked.length ? "Every candidate is parked" : "Score a product against the eight gates",
             description: parked.length ? "Show the parked ones, or add a new candidate." : "Add a candidate with up to ten page-one ASINs; Keepa fills the market and history gates.",
@@ -119,14 +106,7 @@ function Candidates() {
         />
       </div>
 
-      {selected && list.candidates.some((c) => c.id === selected) && (
-        <section id="candidate-detail" className="min-w-0 scroll-mt-20">
-          <Workspace key={selected} id={selected} settings={list.settings} card={list.card} adsCpc={list.adsCpc}
-            onChanged={(id, p) => patchRow(id, p as Partial<CandidateRow>)}
-            onDeleted={(id) => { setList((l) => l && { ...l, candidates: l.candidates.filter((c) => c.id !== id) }); select(null); }} />
-        </section>
-      )}
-      <NewCandidate open={adding} onOpenChange={setAdding} card={list.card} onCreated={async (id) => { await load(); select(id); }} />
+      <NewCandidate open={adding} onOpenChange={setAdding} card={list.card} onCreated={async (id) => router.push(`/pl/candidates/${id}`)} />
     </div>
   );
 }

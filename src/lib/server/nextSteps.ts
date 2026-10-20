@@ -274,7 +274,7 @@ export function buildSteps(f: TodayFacts, now: Date): NextStep[] {
   /* ---------- Private label ---------- */
   for (const c of f.pl.candidates) {
     const name = shortName(c.name, "a candidate");
-    const href = `/pl/candidates?c=${c.id}`;
+    const href = `/pl/candidates/${c.id}`;
     const done = c.gates.filter((g) => g.status !== "empty").length;
     const base = { workspace: "Private label" as const, priority: 2 as const, since: c.updatedAt, help: { label: "Show me how", href: "/help/pages/private-label" } };
     if (c.status === "samples" || c.launchDone > 0) {
@@ -282,7 +282,7 @@ export function buildSteps(f: TodayFacts, now: Date): NextStep[] {
       const action = LAUNCH_ACTION[c.nextLaunchStep] ?? c.nextLaunchStep.replace(/_/g, " ");
       out.push({ ...base, id: `pl:${c.id}`, title: `${action} for ${name}`, minutes: 15,
         why: `${plural(c.launchDone, "launch step")} of 13 done; this one is next on the checklist.`,
-        cta: { label: "Open the candidate", href }, help: { label: "Show me how", href: "/help/howto/pl-launch-checklist" }, fingerprint: `launch:${c.nextLaunchStep}` });
+        cta: { label: "Open its launch", href: `${href}?tab=launch` }, help: { label: "Show me how", href: "/help/howto/pl-launch-checklist" }, fingerprint: `launch:${c.nextLaunchStep}` });
       continue;
     }
     const failed = c.gates.find((g) => g.status === "fail");
@@ -290,15 +290,15 @@ export function buildSteps(f: TodayFacts, now: Date): NextStep[] {
     if (c.verdict.cls === "pass") {
       out.push({ ...base, id: `pl:${c.id}`, title: `Order samples for ${name}`, minutes: 20,
         why: `Scored ${c.score}/30 with every gate clear. Get three quotes and order samples from two suppliers.`,
-        cta: { label: "Open the candidate", href }, help: { label: "Show me how", href: "/help/howto/pl-quotes-and-landed-cost" }, fingerprint: "pass" });
+        cta: { label: "Open suppliers & quotes", href: `${href}?tab=suppliers` }, help: { label: "Show me how", href: "/help/howto/pl-quotes-and-landed-cost" }, fingerprint: "pass" });
     } else if (failed) {
       out.push({ ...base, id: `pl:${c.id}`, title: `Fix or drop ${name}`, minutes: 15,
         why: `Gate ${failed.n} (${failed.title}) failed${c.answered >= 10 ? ` and it scores ${c.score}/30` : `, with ${c.answered} of 10 score lines in`}. A failed gate isn't overridden by the score.`,
-        cta: { label: "Open the candidate", href }, help: { label: "Show me how", href: "/help/howto/waive-a-gate" }, fingerprint: `fail:${failed.n}` });
+        cta: { label: `Open Gate ${failed.n}`, href: `${href}?tab=gates&gate=${failed.n}` }, help: { label: "Show me how", href: "/help/howto/waive-a-gate" }, fingerprint: `fail:${failed.n}` });
     } else if (open) {
       out.push({ ...base, id: `pl:${c.id}`, title: `Finish Gate ${open.n} (${open.title}) for ${name}`, minutes: 20,
         why: `${done} of ${c.gates.length} gates have answers and ${c.answered} of 10 score lines are in; the verdict means something once all ten are.`,
-        cta: { label: "Open the candidate", href }, fingerprint: `open:${open.n}:${c.answered}` });
+        cta: { label: `Open Gate ${open.n}`, href: `${href}?tab=gates&gate=${open.n}` }, fingerprint: `open:${open.n}:${c.answered}` });
     } else {
       out.push({ ...base, id: `pl:${c.id}`, title: `Decide on ${name}`, minutes: 10,
         why: `Every gate has an answer and it scores ${c.score}/30: ${c.verdict.title.toLowerCase()}.`,
@@ -311,7 +311,7 @@ export function buildSteps(f: TodayFacts, now: Date): NextStep[] {
       out.push({
         id: `pl:suppliers:${l.candidateId}`, workspace: "Private label", title: `Message ${plural(l.toContact, "supplier")} for ${name}`, minutes: Math.min(30, 5 * Math.ceil((5 + l.toContact) / 5)), priority: 3, since: nowIso,
         why: `${plural(l.toContact, "Alibaba listing")} score 60 or more${l.best != null ? ` (best ${Math.round(l.best)})` : ""} and haven't been messaged yet.`,
-        cta: { label: "Open suppliers", href: `/pl/suppliers?candidate=${l.candidateId}` }, help: { label: "Show me how", href: "/help/howto/pl-finding-suppliers" },
+        cta: { label: "Open suppliers", href: `/pl/candidates/${l.candidateId}?tab=suppliers` }, help: { label: "Show me how", href: "/help/howto/pl-finding-suppliers" },
         fingerprint: String(l.toContact),
       });
     }
@@ -319,7 +319,7 @@ export function buildSteps(f: TodayFacts, now: Date): NextStep[] {
       out.push({
         id: `pl:chase:${l.candidateId}`, workspace: "Private label", title: `Chase ${plural(l.awaiting, "supplier")} for ${name}`, minutes: 5, priority: 3, since: l.oldestContacted,
         why: `Messaged ${l.awaiting === 1 ? "on" : "from"} ${shortDate(l.oldestContacted)} (${ago(l.oldestContacted, today)}) with no quote back yet.`,
-        cta: { label: "Open suppliers", href: `/pl/suppliers?candidate=${l.candidateId}` },
+        cta: { label: "Open suppliers", href: `/pl/candidates/${l.candidateId}?tab=suppliers` },
         fingerprint: `${l.awaiting}:${l.oldestContacted}`,
       });
     }

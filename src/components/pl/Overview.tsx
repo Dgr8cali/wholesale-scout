@@ -85,7 +85,7 @@ export function PlOverview({ mode }: { mode: "quotes" | "launch" }) {
         <div className="space-y-3">
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
             <h2 className="section-title">{sel.c.name}</h2>
-            <Link href={`/pl/candidates?c=${sel.c.id}`} className="text-meta text-primary hover:underline">Open the candidate →</Link>
+            <Link href={`/pl/candidates/${sel.c.id}${mode === "quotes" ? "?tab=suppliers" : "?tab=launch"}`} className="text-meta text-primary hover:underline">Open the candidate →</Link>
           </div>
           <CandidateExtras key={sel.c.id} show={mode}
             c={{ id: sel.c.id, name: sel.c.name, niche_keyword: sel.c.niche_keyword, category: sel.c.category, sell: sel.sell, fields: sel.c.fields }}

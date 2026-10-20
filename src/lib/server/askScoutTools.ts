@@ -70,7 +70,7 @@ async function findProducts(input: { query?: string }): Promise<ToolResult> {
     if (asin ? s.asin === asin : matches(q, s.name, s.sku, s.asin)) out.push({ asin: s.asin, name: s.name, where: `Stock item (SKU ${s.sku}, ${s.status})`, href: "/stock/levels" });
   }
   for (const c of must(cands, "candidates") as { id: string; name: string; status: string; listing_asin: string | null }[]) {
-    if (asin ? c.listing_asin === asin : matches(q, c.name)) out.push({ asin: c.listing_asin, name: c.name, where: `Private label candidate (${c.status})`, href: `/pl/candidates?c=${c.id}` });
+    if (asin ? c.listing_asin === asin : matches(q, c.name)) out.push({ asin: c.listing_asin, name: c.name, where: `Private label candidate (${c.status})`, href: `/pl/candidates/${c.id}` });
   }
   if (asin) for (const p of must(purchases, "purchases") as { asin: string; supplier_name: string | null; status: string }[]) {
     if (p.asin === asin && !out.some((o) => o.where.startsWith("Purchase"))) out.push({ asin, name: asin, where: `Purchase from ${p.supplier_name ?? "a supplier"} (${p.status})`, href: "/stock/purchases" });
@@ -157,12 +157,12 @@ async function candidatesLookup(input: { query?: string }): Promise<ToolResult> 
           name: c.name, status: c.status, parkReason: c.park_reason ?? null, verdict: e.v.title, verdictClass: e.v.cls, score: e.sc.total, scoreLinesIn: e.sc.answered,
           gates: e.gates.map((g) => `Gate ${g.g.n} ${g.g.title}: ${g.status}`), chosenLanded: r2(c.chosen_landed),
           launch: { done: done.map((s) => `${LAUNCH_STEPS.find((l) => l.key === s.step)?.label ?? s.step}${s.done_on ? ` (${s.done_on})` : ""}`), next: c.launch.next },
-          href: `/pl/candidates?c=${c.id}`,
+          href: `/pl/candidates/${c.id}`,
         };
       }),
       note: hit.length ? undefined : "No candidate matches.",
     },
-    links: hit.slice(0, 4).map((c) => ({ label: c.name, href: `/pl/candidates?c=${c.id}` })),
+    links: hit.slice(0, 4).map((c) => ({ label: c.name, href: `/pl/candidates/${c.id}` })),
   };
 }
 

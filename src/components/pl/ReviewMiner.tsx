@@ -142,7 +142,7 @@ export function ReviewMiner({ candidateId, asins, product, fields, onSave, onAsi
                   <Button size="xs" variant="ghost" disabled={!!busy} onClick={(e) => { e.preventDefault(); offAction(a.asin, "keep-separate"); }}>Keep separate</Button>
                 </span>
               )}
-              <Textarea rows={4} className="text-xs" placeholder="Paste the critical reviews page here" value={text}
+              <Textarea rows={4} className="max-h-48 overflow-y-auto text-xs" placeholder="Paste the critical reviews page here" value={text}
                 onChange={(e) => setDrafts((d) => ({ ...d, [a.asin]: e.target.value }))} onBlur={() => saveOne(a.asin)} />
             </label>
           );
@@ -153,7 +153,7 @@ export function ReviewMiner({ candidateId, asins, product, fields, onSave, onAsi
         <summary className="cursor-pointer text-muted-foreground hover:text-foreground">Paste all: several listings in one box</summary>
         <div className="mt-2 space-y-2">
           <p className="text-muted-foreground">Start each listing&apos;s reviews with a line <code>ASIN: B0…</code>. Each listing&apos;s paste replaces what was saved for it.</p>
-          <Textarea rows={6} className="text-xs" placeholder={"ASIN: B0XXXXXXXX\n…reviews…\n\nASIN: B0YYYYYYYY\n…reviews…"} value={all} onChange={(e) => setAll(e.target.value)} />
+          <Textarea rows={6} className="max-h-60 overflow-y-auto text-xs" placeholder={"ASIN: B0XXXXXXXX\n…reviews…\n\nASIN: B0YYYYYYYY\n…reviews…"} value={all} onChange={(e) => setAll(e.target.value)} />
           <Button size="sm" variant="outline" disabled={!all.trim() || busy === "all"} onClick={saveAll}>{busy === "all" && <LoaderIcon className="animate-spin" />} Split and save</Button>
         </div>
       </details>

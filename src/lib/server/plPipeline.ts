@@ -112,7 +112,7 @@ export async function pipelineBoard(now = new Date(), only?: string): Promise<{ 
       status: c.status as PlStatus, parked: c.status === "parked" || c.status === "dropped",
       verdict: { cls: ev.v.cls, title: ev.v.title }, gates: segs, gatesPassed: ev.passed, gateLabel: gateBarLabel(segs),
       next, detail: next?.detail ?? (c.status === "dropped" ? "Dropped" : ""), asin: c.listing_asin ?? null,
-      href: `/pl/candidates?c=${c.id}`, links: stage === "live" ? productLinks(c.listing_asin ?? null, r.stock) : [], updatedAt: c.updated_at,
+      href: `/pl/candidates/${c.id}`, links: stage === "live" ? productLinks(c.listing_asin ?? null, r.stock) : [], updatedAt: c.updated_at,
     });
   }
   if (!only) {

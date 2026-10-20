@@ -23,6 +23,16 @@ describe("merged pages", () => {
     expect(movedTo("/settings", "?tab=business")).toBeNull();
   });
 
+  it("open a candidate from the old list address on its own page, keeping the rest of the query", () => {
+    expect(movedTo("/pl/candidates", "?c=aed5a06e-1715-4197-9812-29aef4303174")).toBe("/pl/candidates/aed5a06e-1715-4197-9812-29aef4303174");
+    expect(movedTo("/pl/candidates", "?c=abc&tab=suppliers")).toBe("/pl/candidates/abc?tab=suppliers");
+    expect(existsSync("src/app/pl/candidates/[id]/page.tsx")).toBe(true);
+    // The list itself, and New candidate, stay.
+    expect(movedTo("/pl/candidates", "")).toBeNull();
+    expect(movedTo("/pl/candidates", "?new=1")).toBeNull();
+    expect(movedTo("/pl/candidates", "?c=../../etc")).toBeNull();
+  });
+
   it("aren't in the menu any more", () => {
     const hrefs = [...SHARED_NAV, ...WORKSPACES.flatMap((w) => w.nav)].map((n) => n.href);
     for (const m of MOVED) if (!m.tab) expect(hrefs, m.from).not.toContain(m.from);

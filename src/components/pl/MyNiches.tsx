@@ -345,7 +345,7 @@ function NicheTable({ data, loading, f, change, hide, setHide, sorting, page, se
                     <td className={cn(TD, "num text-right")}>{pct(n.return_rate, 2).replace("+", "")}</td>
                     <td className={TD}><span className="flex flex-wrap gap-1">{n.flags.map((x) => <StatusChip key={x} tone={FLAG_TONE[x as NicheFlag] ?? "neutral"} icon={false}>{FLAG_LABEL[x as NicheFlag] ?? x}</StatusChip>)}</span></td>
                     <td className={TD}>{n.shape ? <ShapeChip shape={n.shape} /> : <span className="text-muted-foreground">—</span>}</td>
-                    <td className={cn(TD, "text-meta")}>{n.status === "candidate" && n.candidate_id ? <Link className="text-primary underline" href={`/pl/candidates?c=${n.candidate_id}`}>Candidate</Link> : n.status[0].toUpperCase() + n.status.slice(1)}</td>
+                    <td className={cn(TD, "text-meta")}>{n.status === "candidate" && n.candidate_id ? <Link className="text-primary underline" href={`/pl/candidates/${n.candidate_id}`}>Candidate</Link> : n.status[0].toUpperCase() + n.status.slice(1)}</td>
                   </tr>
                   {open === n.id && <tr className="border-b border-divider bg-subtle/50"><td /><td colSpan={15} className="px-3 py-4"><NicheDetail n={n} onChanged={onChanged} /></td></tr>}
                 </Fragment>
@@ -396,7 +396,7 @@ function NicheDetail({ n, onChanged }: { n: NicheRow; onChanged: () => void }) {
     toast.success(r.existed ? "Already a candidate" : `Candidate created${r.category ? ` (fee category ${r.category})` : ""}`, r.existed ? undefined : {
       description: [`Keyword "${r.keyword}" (${r.keywordFrom === "conversion" ? "best-converting term" : "first term"})`, r.asins ? `${r.asins} page-one ASINs from the incumbent check` : "no incumbent check: add the page-one ASINs", r.sell != null ? `sell price £${r.sell.toFixed(2)} (niche average)` : null].filter(Boolean).join(" · "),
     });
-    router.push(`/pl/candidates?c=${r.candidateId}`);
+    router.push(`/pl/candidates/${r.candidateId}`);
   });
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,24rem)_1fr]">
@@ -407,7 +407,7 @@ function NicheDetail({ n, onChanged }: { n: NicheRow; onChanged: () => void }) {
           {(n.status === "shortlisted" || n.status === "dismissed") && <Button size="sm" variant="ghost" disabled={!!busy} onClick={() => status("new")}>Reset</Button>}
           {inc?.candidates?.length ? <Button size="sm" variant="secondary" disabled={!!busy} loading={busy === "rerun"} onClick={() => check(true)} title="Reuses the last check's products and the 7-day snapshots">Rerun check</Button>
             : <Button size="sm" variant="secondary" disabled={!!busy} loading={busy === "check"} onClick={() => check(false)}>Check incumbents (Keepa)</Button>}
-          {n.candidate_id ? <Button size="sm" variant="secondary" asChild><Link href={`/pl/candidates?c=${n.candidate_id}`}>Open candidate</Link></Button>
+          {n.candidate_id ? <Button size="sm" variant="secondary" asChild><Link href={`/pl/candidates/${n.candidate_id}`}>Open candidate</Link></Button>
             : <Button size="sm" variant="secondary" disabled={!!busy} loading={busy === "candidate"} onClick={candidate}>Create candidate</Button>}
         </div>
         <div className="space-y-1.5">

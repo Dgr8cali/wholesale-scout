@@ -218,7 +218,7 @@ function ProductSection({ asin, look, sub, stock, plan, onSaved, children }: { a
             <a className="num text-xs text-primary hover:underline" href={`https://www.amazon.co.uk/dp/${asin}`} target="_blank" rel="noreferrer">{asin}</a>
             <StockChip s={stock} />
           </div>
-          <div className="text-meta text-muted-foreground">{sub}{look?.candidate && <> · <Link href={`/pl/candidates?c=${look.candidate}`} className="text-primary hover:underline">Private label candidate →</Link></>}</div>
+          <div className="text-meta text-muted-foreground">{sub}{look?.candidate && <> · <Link href={`/pl/candidates/${look.candidate}`} className="text-primary hover:underline">Private label candidate →</Link></>}</div>
         </div>
         {(!look?.image || !look?.title) && <Button size="sm" variant="secondary" loading={busy} onClick={fetchLook} title="Keepa: title, image, size and weight">Title and image (1 token)</Button>}
       </div>

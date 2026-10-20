@@ -1,14 +1,17 @@
 import type { NextRequest } from "next/server";
 import { handle } from "@/lib/server/http";
-import { deleteCandidate, getCandidate, parseAsins, setAsins, switchReference, updateCandidate, type PlStatus } from "@/lib/server/pl";
+import { adsSettings } from "@/lib/server/ads";
+import { activeRateCard } from "@/lib/server/db";
+import { deleteCandidate, getCandidate, parseAsins, plSettings, setAsins, switchReference, updateCandidate, type PlStatus } from "@/lib/server/pl";
 import { advanceStage } from "@/lib/server/plPipeline";
 import { rescoreLeads } from "@/lib/server/plSuppliers";
 
 type Ctx = { params: Promise<{ id: string }> };
 
+/** The candidate with its fields, ASINs and capture, and what scoring it needs: the Private label settings, the rate card and the ads CPC. */
 export const GET = handle(async (_req: NextRequest, ctx: Ctx) => {
-  const c = await getCandidate((await ctx.params).id);
-  return c ? Response.json(c) : Response.json({ error: "No such candidate" }, { status: 404 });
+  const [c, settings, card, ads] = await Promise.all([getCandidate((await ctx.params).id), plSettings(), activeRateCard(), adsSettings()]);
+  return c ? Response.json({ ...c, settings, card, adsCpc: ads.cpc }) : Response.json({ error: "No such candidate" }, { status: 404 });
 });
 
 /** Name, niche keyword, category, status, notes, park_reason (parking needs one), unpark; a new ASIN list (refresh to fetch them); or { reference } for Gate 2. */

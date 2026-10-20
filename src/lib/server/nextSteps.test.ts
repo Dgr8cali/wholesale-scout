@@ -145,12 +145,14 @@ describe("Private label rules", () => {
     const s = one(facts({ pl: { candidates: [{ ...cand, gates: gates(["pass", "pass", "warn", "empty", "empty", "pass", "pass", "pass"]) }] } }), "pl:c1");
     expect(s.title).toBe("Finish Gate 3 (Gate title 3) for Lens cleaning wipes");
     expect(s.why).toBe("6 of 8 gates have answers and 7 of 10 score lines are in; the verdict means something once all ten are.");
-    expect(s.cta.href).toBe("/pl/candidates?c=c1");
+    // Straight to that gate on the candidate's Gates tab.
+    expect(s.cta.href).toBe("/pl/candidates/c1?tab=gates&gate=3");
   });
   it("a failed gate: fix or drop", () => {
     const s = one(facts({ pl: { candidates: [{ ...cand, answered: 10, score: 17, gates: gates(["pass", "fail", "pass", "pass", "pass", "pass", "pass", "pass"]) }] } }), "pl:c1");
     expect(s.title).toBe("Fix or drop Lens cleaning wipes");
     expect(s.why).toBe("Gate 1 (Gate title 1) failed and it scores 17/30. A failed gate isn't overridden by the score.");
+    expect(s.cta).toEqual({ label: "Open Gate 1", href: "/pl/candidates/c1?tab=gates&gate=1" });
   });
   it("a passing verdict: order samples", () => {
     const s = one(facts({ pl: { candidates: [{ ...cand, verdict: { cls: "pass", title: "Order samples" }, answered: 10, score: 25, gates: gates(Array(8).fill("pass")) }] } }), "pl:c1");
@@ -161,13 +163,14 @@ describe("Private label rules", () => {
     const s = one(facts({ pl: { candidates: [{ ...cand, status: "samples", nextLaunchStep: "samples_received", launchDone: 1, gates: gates(Array(8).fill("pass")) }] } }), "pl:c1");
     expect(s.title).toBe("Chase the samples for Lens cleaning wipes");
     expect(s.why).toBe("1 launch step of 13 done; this one is next on the checklist.");
+    expect(s.cta.href).toBe("/pl/candidates/c1?tab=launch");
   });
   it("suppliers scoring 60+ not messaged, and messaged ones with no quote after a week", () => {
     const f = facts({ pl: { leads: [{ candidateId: "c1", candidate: "Lens cleaning wipes", toContact: 16, best: 90, awaiting: 1, oldestContacted: "2026-10-05T23:42:56Z" }] } });
     const msg = one(f, "pl:suppliers:c1");
     expect(msg.title).toBe("Message 16 suppliers for Lens cleaning wipes");
     expect(msg.why).toBe("16 Alibaba listings score 60 or more (best 90) and haven't been messaged yet.");
-    expect(msg.cta.href).toBe("/pl/suppliers?candidate=c1");
+    expect(msg.cta.href).toBe("/pl/candidates/c1?tab=suppliers");
     expect(one(f, "pl:chase:c1").why).toBe("Messaged on 5 Oct (15 days ago) with no quote back yet.");
   });
   it("a supplier messaged yesterday isn't chased yet", () => {

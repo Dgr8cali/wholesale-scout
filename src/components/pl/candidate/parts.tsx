@@ -1,292 +1,33 @@
 "use client";
 
-import { ChevronRightIcon, ExternalLinkIcon, LoaderIcon, PencilIcon, RefreshCwIcon, Trash2Icon } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+/** The candidate page's building blocks: fields, gate extras, checks, the scorecard and waivers (from the old one-page Workspace). */
+
+import { ExternalLinkIcon, LoaderIcon } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { useDialogs } from "@/components/Dialogs";
 import { ProductThumb } from "@/components/ProductThumb";
 import { SortTh, useSortable } from "@/components/SortableTable";
-import { ErrorState } from "@/components/States";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { VatTag } from "@/components/VatTag";
 import type { RateCard } from "@/lib/fees/rateCard";
 import { defaultReference, listingAge, monthlySales, priceOf } from "@/lib/pl/fill";
-import { adsDefaults, withAdsDefaults } from "@/lib/pl/adsDefaults";
-import { budget, capitalFor, econ, gateBlurb, evaluate, money, pct, referralOptions, type Evaluation, type FieldDef, type GateDef, type GateResult, type Settings, type Status, type Waiver } from "@/lib/pl/gatekeeper";
+import { budget, econ, money, pct, type Evaluation, type FieldDef, type GateDef, type GateResult, type Settings, type Status, type Waiver } from "@/lib/pl/gatekeeper";
+import { TERM_SIGNAL_LABEL } from "@/lib/pl/termConversion";
 import { api } from "@/lib/ui/client";
 import { ago } from "@/lib/ui/when";
-import { TERM_SIGNAL_LABEL } from "@/lib/pl/termConversion";
-import { VatTag } from "@/components/VatTag";
-import { targetExworks } from "@/lib/pl/supplierScore";
 import { cn } from "@/lib/utils";
-import { Readout, SourceChip, StatusPill } from "./bits";
-import { CANDIDATE_DECISION, decisionLabel } from "@/components/ui/status-chip";
-import { STATUSES, TONE, valuesOf, type CandidateDetail, type FieldMap } from "./types";
-import { CandidateExtras } from "./Extras";
-import type { PlStatus } from "@/lib/pl/launch";
-import { ReviewMiner } from "./ReviewMiner";
-import { WaivePopover } from "./WaivePopover";
+import { Readout, SourceChip, StatusPill } from "../bits";
+import { ReviewMiner } from "../ReviewMiner";
+import { TONE, valuesOf, type CandidateDetail, type FieldMap } from "../types";
+import { WaivePopover } from "../WaivePopover";
 
 const CHECK_BG: Record<Status, string> = { pass: "bg-pass", warn: "bg-highlight", fail: "bg-fail", empty: "bg-empty" };
 const n0 = (v: number | null | undefined) => (v == null ? "—" : Math.round(v).toLocaleString("en-GB"));
 
-/** One candidate: its header, the eight gates, the scorecard and the verdict. */
-export function Workspace({ id, settings, card, adsCpc, onChanged, onDeleted }: {
-  id: string; settings: Settings; card: RateCard;
-  /** The CPC the ads-per-unit defaults use (Ads → Rules → Ad settings). */
-  adsCpc: number;
-  /** The list re-scores as you type. */
-  onChanged: (id: string, patch: { fields?: FieldMap; name?: string; status?: string; refreshed_at?: string | null; category?: string; waivers?: Waiver[]; notes?: string | null; park_reason?: string | null; parked_at?: string | null }) => void;
-  onDeleted: (id: string) => void;
-}) {
-  const [data, setData] = useState<CandidateDetail | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [fields, setFields] = useState<FieldMap>({});
-  const [open, setOpen] = useState<Set<string>>(new Set(["g0", "g1", "g2"]));
-  const [busy, setBusy] = useState(false);
-  const { confirm } = useDialogs();
-  const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-
-  const load = useMemo(() => async () => {
-    try {
-      const d = await api<CandidateDetail>(`/api/pl/candidates/${id}`);
-      setData(d);
-      setFields(d.fields);
-      setError(null);
-      return d;
-    } catch (e) {
-      setError((e as Error).message);
-      return null;
-    }
-  }, [id]);
-  // The page remounts this per candidate, so there's nothing stale to clear first.
-  useEffect(() => {
-    api<CandidateDetail>(`/api/pl/candidates/${id}`).then((d) => { setData(d); setFields(d.fields); }).catch((e: Error) => setError(e.message));
-  }, [id]);
-
-  const category = data?.candidate.category ?? "Everything else";
-  const waivers = data?.waivers;
-  const ev: Evaluation | null = useMemo(() => (data ? evaluate(withAdsDefaults(valuesOf(fields), adsCpc), category, settings, card, new Date(), waivers) : null), [data, fields, category, settings, card, waivers, adsCpc]);
-  const derived = useMemo(() => adsDefaults(valuesOf(fields), adsCpc), [fields, adsCpc]);
-  const exworksDerived = useMemo(() => {
-    const t = targetExworks(valuesOf(fields));
-    return t.derived && t.value != null ? { value: t.value, why: `Gate 0's landed cost £${Number(fields.landed?.value).toFixed(2)} ÷ 1.4` } : undefined;
-  }, [fields]);
-
-  if (error) return <ErrorState title="Couldn't load the candidate" message={error} onRetry={load} />;
-  if (!data || !ev) return <div className="space-y-3"><Skeleton className="h-28 rounded-xl" /><Skeleton className="h-64 rounded-xl" /><Skeleton className="h-64 rounded-xl" /></div>;
-  const c = data.candidate;
-
-  const setLocal = (next: FieldMap) => {
-    setFields(next);
-    onChanged(id, { fields: next });
-  };
-  /** Your own value: shown at once, saved shortly after you stop typing. */
-  const saveField = (k: string, value: string, delay = 500) => {
-    const next = { ...fields };
-    if (value === "") delete next[k];
-    else next[k] = { value, source: "manual" };
-    setLocal(next);
-    clearTimeout(timers.current[k]);
-    timers.current[k] = setTimeout(() => {
-      api<{ refilled?: string[] }>(`/api/pl/candidates/${id}/fields`, { method: "PUT", json: { key: k, value } })
-        // A new target price band re-reads Gate 1's price spread on the server.
-        .then(async (r) => { if (r.refilled?.length) { const d = await load(); if (d) onChanged(id, { fields: d.fields }); } })
-        .catch((e) => toast.error(`Not saved: ${(e as Error).message}`));
-    }, delay);
-  };
-  const patch = async (p: Record<string, unknown>, msg?: string) => {
-    try {
-      await api(`/api/pl/candidates/${id}`, { method: "PATCH", json: p });
-      if (p.status != null || p.unpark || p.park_reason !== undefined) {
-        // Parking and unparking are decided on the server (the reason, the status to go back to).
-        const d = await api<CandidateDetail>(`/api/pl/candidates/${id}`);
-        setData((x) => x && { ...x, candidate: d.candidate });
-        const { status, park_reason, parked_at } = d.candidate;
-        onChanged(id, { status, park_reason, parked_at });
-      } else {
-        setData((d) => d && { ...d, candidate: { ...d.candidate, ...(p as object) } });
-        onChanged(id, p as { name?: string });
-      }
-      if (msg) toast.success(msg);
-    } catch (e) {
-      toast.error((e as Error).message);
-    }
-  };
-  const refresh = async () => {
-    setBusy(true);
-    try {
-      const r = await api<{ tokensUsed: number; fetched: string[]; reused: string[]; missing: string[]; filled: string[]; skippedManual: string[]; keepa: boolean; exhausted: boolean }>(`/api/pl/candidates/${id}/refresh`, { method: "POST" });
-      const d = await load();
-      if (d) onChanged(id, { fields: d.fields, refreshed_at: d.candidate.refreshed_at });
-      if (!r.keepa) toast.error("Keepa isn't configured: set KEEPA_API_KEY.");
-      else toast.success(`Keepa: ${r.fetched.length} fetched, ${r.reused.length} reused (under 7 days old), ${r.tokensUsed} token${r.tokensUsed === 1 ? "" : "s"}.${r.skippedManual.length ? ` ${r.skippedManual.length} manual field${r.skippedManual.length === 1 ? "" : "s"} kept.` : ""}${r.missing.length ? ` Not found: ${r.missing.join(", ")}.` : ""}${r.exhausted ? " Keepa ran out of tokens." : ""}`);
-    } catch (e) {
-      toast.error((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-  const remove = async () => {
-    if (!(await confirm({ title: `Delete “${c.name}”?`, description: "Its fields, ASINs and Opportunity Explorer captures go with it.", confirmLabel: "Delete", destructive: true }))) return;
-    await api(`/api/pl/candidates/${id}`, { method: "DELETE" });
-    onDeleted(id);
-  };
-  const setWaivers = (next: Waiver[]) => {
-    setData((d) => d && { ...d, waivers: next });
-    onChanged(id, { waivers: next });
-  };
-  const waive = async (gate_id: string, check_label: string | null, reason: string) => {
-    const r = await api<{ waiver: Waiver }>(`/api/pl/candidates/${id}/waivers`, { method: "POST", json: { gate_id, check_label, reason } });
-    setWaivers([...(data.waivers ?? []).filter((w) => w.id !== r.waiver.id), r.waiver]);
-  };
-  const unwaive = async (w: Waiver) => {
-    try {
-      await api(`/api/pl/candidates/${id}/waivers?waiver=${w.id}`, { method: "DELETE" });
-      setWaivers((data.waivers ?? []).filter((x) => x.id !== w.id));
-    } catch (e) {
-      toast.error((e as Error).message);
-    }
-  };
-  const toggle = (g: string) => setOpen((s) => { const n = new Set(s); if (n.has(g)) n.delete(g); else n.add(g); return n; });
-
-  return (
-    <div className="flex min-w-0 flex-col gap-3.5">
-      <Header data={data} ev={ev} card={card} busy={busy} onRefresh={refresh} onPatch={patch} />
-      {ev.gates.map(({ g, rows, status, rawStatus, waiver: gateWaiver }) => (
-        <section key={g.id} className={cn("panel overflow-hidden")}>
-          <div className="flex w-full items-center gap-3 border-b px-4 py-3">
-            <button type="button" aria-expanded={open.has(g.id)} onClick={() => toggle(g.id)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
-              <span className={cn("flex size-8 flex-none items-center justify-center rounded-lg font-heading text-sm font-bold", TONE[status].solid)}>{g.n}</span>
-              <h2 className="min-w-0 flex-1 font-heading text-base font-bold">{g.title}</h2>
-              <span className="hidden text-xs text-muted-foreground sm:inline">{g.tool}</span>
-            </button>
-            {gateWaiver ? (
-              <span className="flex items-center gap-1.5">
-                <WaivedChip waiver={gateWaiver} />
-                <button type="button" className="text-xs font-medium text-brand hover:underline" onClick={() => unwaive(gateWaiver)}>Remove waiver</button>
-              </span>
-            ) : (rawStatus === "fail" || rawStatus === "warn") && (
-              <WaivePopover title={`Waive Gate ${g.n}: ${g.title}`} onWaive={(reason) => waive(g.id, null, reason)}
-                trigger={<button type="button" className="text-xs font-medium text-brand hover:underline">Waive gate</button>} />
-            )}
-            <StatusPill status={status} label={gateWaiver ? "Waived" : undefined} />
-            <button type="button" aria-label={open.has(g.id) ? "Collapse" : "Expand"} onClick={() => toggle(g.id)}>
-              <ChevronRightIcon className={cn("size-4 flex-none text-muted-foreground transition-transform", open.has(g.id) && "rotate-90")} />
-            </button>
-          </div>
-          {open.has(g.id) && (
-            <div className={cn("flex flex-col gap-3.5 border-l-[3px] px-4 pt-3.5 pb-4", TONE[status].border)}>
-              <p className="max-w-[70ch] text-sm text-ink-2">{gateBlurb(g, valuesOf(fields), settings)}</p>
-              <div className="grid grid-cols-1 gap-x-3.5 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
-                {g.fields.map((fd) => (
-                  <FieldRow key={fd.k} def={fd} field={fields[fd.k]} why={data.why[fd.k]} onSave={saveField}
-                    derived={fd.k === "adsLaunch" || fd.k === "adsSteady" ? derived[fd.k] : fd.k === "targetExworks" ? exworksDerived : undefined}
-                    manualOnly={g.id === "g5" && ["headBid", "ltBid", "sponsored"].includes(fd.k)} />
-                ))}
-              </div>
-              {g.id === "g2" && <ReferencePanel data={data} onChanged={async () => { const d = await load(); if (d) onChanged(id, { fields: d.fields }); }} />}
-              <GateExtras g={g} data={data} fields={fields} settings={settings} card={card} onSave={saveField} onAsinsChanged={async () => { const d = await load(); if (d) onChanged(id, { fields: d.fields }); }} />
-              <div className="overflow-hidden rounded-lg border">
-                {rows.map((r, i) => (
-                  <CheckRow key={i} row={r} gate={g} gateWaived={!!gateWaiver} onWaive={(reason) => waive(g.id, r.label, reason)} onUnwaive={unwaive} />
-                ))}
-              </div>
-            </div>
-          )}
-        </section>
-      ))}
-      <ScorecardPanel ev={ev} />
-      <WaiversPanel waivers={data.waivers ?? []} ev={ev} onUnwaive={unwaive} />
-      <CandidateExtras
-        c={{ id, name: c.name, niche_keyword: c.niche_keyword, category: c.category, sell: fields.sell?.value ? Number(fields.sell.value) : null, fields }}
-        status={c.status as PlStatus} verdictTitle={ev.v.title} budget={capitalFor(valuesOf(fields), settings).amount}
-        onFieldsChanged={async () => { const d = await load(); if (d) onChanged(id, { fields: d.fields }); }}
-        onStatus={(s) => { setData((d) => d && { ...d, candidate: { ...d.candidate, status: s } }); onChanged(id, { status: s }); }} />
-      <div className="flex flex-wrap items-center gap-2">
-        <Button variant="outline" size="sm" className="text-fail hover:text-fail" onClick={remove}><Trash2Icon /> Delete candidate</Button>
-        <span className="ml-auto text-xs text-muted-foreground">24–30 order samples · 18–23 only if weak lines are movable · under 18 drop</span>
-      </div>
-    </div>
-  );
-}
-
-function Header({ data, ev, card, busy, onRefresh, onPatch }: {
-  data: CandidateDetail; ev: Evaluation; card: RateCard; busy: boolean; onRefresh: () => void; onPatch: (p: Record<string, unknown>, msg?: string) => Promise<void>;
-}) {
-  const c = data.candidate;
-  const { prompt } = useDialogs();
-  const park = async (current?: string | null) => {
-    const reason = await prompt({
-      title: current ? "Change the reason it's parked" : `Park "${c.name}"?`,
-      description: "Shelved, not deleted: it moves to Parked on the list, keeps every gate, quote and note, and Unpark puts it back where it was.",
-      label: "Why (e.g. waiting for Q1 prices; supplier MOQ too high for now)", defaultValue: current ?? "", confirmLabel: current ? "Save" : "Park it",
-    });
-    if (reason) await onPatch(current ? { park_reason: reason } : { status: "parked", park_reason: reason }, current ? "Reason saved" : "Parked");
-  };
-  const [name, setName] = useState(c.name);
-  const [niche, setNiche] = useState(c.niche_keyword ?? "");
-  const [asinText, setAsinText] = useState(data.asins.map((a) => a.asin).join("\n"));
-  const [editAsins, setEditAsins] = useState(false);
-  const cats = referralOptions(card);
-  const sc = ev.sc;
-  return (
-    <div className="panel flex flex-col gap-3 p-4">
-      {c.status === "parked" && (
-        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-warn bg-warn-soft px-3 py-2 text-sm">
-          <b className="text-warn">Parked</b>
-          <span className="min-w-0 flex-1">{c.park_reason || "No reason given"}{c.parked_at && <span className="text-muted-foreground"> · since {new Date(c.parked_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>}</span>
-          <Button size="xs" variant="ghost" onClick={() => park(c.park_reason ?? "")}>Edit reason</Button>
-          <Button size="xs" variant="outline" onClick={() => onPatch({ unpark: true }, "Unparked")}>Unpark</Button>
-        </div>
-      )}
-      <NotesBox key={c.id} initial={c.notes ?? ""} onSave={(notes) => onPatch({ notes })} />
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex items-baseline gap-4">
-          <div className="flex flex-col items-end leading-tight"><span className="num font-heading text-2xl font-bold">{ev.passed}<small className="text-sm font-medium text-muted-foreground">/8</small></span><span className="text-xs tracking-wide text-muted-foreground uppercase">gates clear</span></div>
-          <div className="flex flex-col items-end leading-tight"><span className="num font-heading text-2xl font-bold">{sc.answered === 10 ? sc.total : "–"}<small className="text-sm font-medium text-muted-foreground">/30</small></span><span className="text-xs tracking-wide text-muted-foreground uppercase">score</span></div>
-        </div>
-        <StatusPill status={ev.v.cls} label={decisionLabel(CANDIDATE_DECISION, ev.v.cls)} big />
-        <div className="ml-auto flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">{c.refreshed_at ? `Keepa ${ago(c.refreshed_at)}` : "Not fetched"} · {c.token_cost} token{c.token_cost === 1 ? "" : "s"} so far</span>
-          <Button size="sm" onClick={onRefresh} disabled={busy || !data.asins.length}>{busy ? <LoaderIcon className="animate-spin" /> : <RefreshCwIcon />} Refresh from Keepa</Button>
-        </div>
-      </div>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <label className="space-y-1.5"><span className="field-label">Product</span>
-          <Input value={name} onChange={(e) => setName(e.target.value)} onBlur={() => name.trim() && name !== c.name && onPatch({ name: name.trim() })} /></label>
-        <label className="space-y-1.5"><span className="field-label">Niche keyword</span>
-          <Input value={niche} placeholder="As Opportunity Explorer names it" onChange={(e) => setNiche(e.target.value)} onBlur={() => niche !== (c.niche_keyword ?? "") && onPatch({ niche_keyword: niche })} /></label>
-        <label className="space-y-1.5"><span className="field-label">Referral category</span>
-          <NativeSelect className="w-full" value={c.category} onChange={(e) => onPatch({ category: e.target.value })}>
-            {cats.map((o) => <NativeSelectOption key={o.name} value={o.name}>{o.name} — {o.rates}</NativeSelectOption>)}
-          </NativeSelect></label>
-        <label className="space-y-1.5"><span className="field-label">Status</span>
-          <NativeSelect className="w-full" value={c.status} onChange={(e) => (e.target.value === "parked" ? park() : onPatch({ status: e.target.value }))}>
-            {STATUSES.map((s) => <NativeSelectOption key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</NativeSelectOption>)}
-          </NativeSelect></label>
-      </div>
-      <div className="flex flex-col gap-2">
-        <div className="flex items-center gap-2">
-          <span className="field-label">Page-one ASINs ({data.asins.length}/10, the first is the reference)</span>
-          <Button variant="ghost" size="xs" onClick={() => setEditAsins((v) => !v)}><PencilIcon /> {editAsins ? "Cancel" : "Edit"}</Button>
-        </div>
-        {editAsins ? (
-          <div className="flex flex-col gap-2">
-            <Textarea className="num h-28 text-xs" value={asinText} onChange={(e) => setAsinText(e.target.value)} placeholder="One per line or comma-separated, up to 10" />
-            <div><Button size="sm" variant="outline" onClick={async () => { await onPatch({ asins: asinText }); setEditAsins(false); onRefresh(); }}>Save and refresh</Button></div>
-          </div>
-        ) : <AsinTable data={data} />}
-      </div>
-    </div>
-  );
-}
-
 /** Free-text notes at the top of the candidate: saved a moment after you stop typing, and on leaving the box. */
-function NotesBox({ initial, onSave }: { initial: string; onSave: (notes: string | null) => Promise<void> }) {
+export function NotesBox({ initial, onSave }: { initial: string; onSave: (notes: string | null) => Promise<void> }) {
   const [text, setText] = useState(initial);
   const [state, setState] = useState<"saved" | "typing" | "saving">("saved");
   const saved = useRef(initial);
@@ -311,7 +52,7 @@ function NotesBox({ initial, onSave }: { initial: string; onSave: (notes: string
   );
 }
 
-function AsinTable({ data }: { data: CandidateDetail }) {
+export function AsinTable({ data }: { data: CandidateDetail }) {
   const t = useSortable("pl.pageOne", data.asins, {
     title: { value: (a) => a.title, kind: "text" },
     price: { value: (a) => priceOf(a), kind: "number" },
@@ -366,7 +107,7 @@ function AsinTable({ data }: { data: CandidateDetail }) {
 }
 
 /** One Gatekeeper field. Filled automatically: read-only with its source until you click edit. */
-function FieldRow({ def, field, why, onSave, manualOnly, derived }: {
+export function FieldRow({ def, field, why, onSave, manualOnly, derived }: {
   def: FieldDef; field?: { value: string; source: string }; why?: string; onSave: (k: string, v: string, delay?: number) => void; manualOnly?: boolean;
   /** A default worked out from other figures (ads per unit): shown until you type a value. */
   derived?: { value: number; why: string };
@@ -448,7 +189,7 @@ function FieldRow({ def, field, why, onSave, manualOnly, derived }: {
  * youngest listings and the two with the fewest reviews are marked: the ones proving a newcomer can
  * break in.
  */
-function PageOneTable({ asins }: { asins: CandidateDetail["asins"] }) {
+export function PageOneTable({ asins }: { asins: CandidateDetail["asins"] }) {
   const live = asins.filter((a) => a.snapshot_at);
   const pickTwo = (xs: typeof live, key: (a: (typeof live)[number]) => number | null, asc: boolean) =>
     new Set(xs.filter((a) => key(a) != null).sort((a, b) => (asc ? key(a)! - key(b)! : key(b)! - key(a)!)).slice(0, 2).map((a) => a.asin));
@@ -499,7 +240,7 @@ function PageOneTable({ asins }: { asins: CandidateDetail["asins"] }) {
  * Gate 2's reference listing: pick which page-one ASIN its 12-month figures come from (by default
  * the longest Keepa history), its listing age beside the 12-month verdict, and its rank sparkline.
  */
-function ReferencePanel({ data, onChanged }: { data: CandidateDetail; onChanged: () => Promise<void> }) {
+export function ReferencePanel({ data, onChanged }: { data: CandidateDetail; onChanged: () => Promise<void> }) {
   const [busy, setBusy] = useState(false);
   const { confirm } = useDialogs();
   const ref = data.asins.find((a) => a.is_reference) ?? data.asins[0];
@@ -552,7 +293,7 @@ function ReferencePanel({ data, onChanged }: { data: CandidateDetail; onChanged:
 const RANK_TREND_LABEL: Record<string, string> = { "0": "Spike or decline", "1": "Seasonal", "2": "Flat", "3": "Growing" };
 
 /** Sales rank over 12 months, a point a week; higher on the chart is better (a lower rank). */
-function RankSparkline({ points }: { points: [number, number][] }) {
+export function RankSparkline({ points }: { points: [number, number][] }) {
   if (points.length < 2) return null;
   const W = 180, H = 36;
   const t0 = points[0][0], t1 = points[points.length - 1][0];
@@ -573,7 +314,7 @@ function RankSparkline({ points }: { points: [number, number][] }) {
   );
 }
 
-function GateExtras({ g, data, fields, settings, card, onSave, onAsinsChanged }: { g: GateDef; data: CandidateDetail; fields: FieldMap; settings: Settings; card: RateCard; onSave: (k: string, v: string, delay?: number) => void; onAsinsChanged: () => void }) {
+export function GateExtras({ g, data, fields, settings, card, onSave, onAsinsChanged }: { g: GateDef; data: CandidateDetail; fields: FieldMap; settings: Settings; card: RateCard; onSave: (k: string, v: string, delay?: number) => void; onAsinsChanged: () => void }) {
   const f = valuesOf(fields);
   if (g.id === "g3" || g.id === "g5") {
     const p = data.poe;
@@ -645,7 +386,7 @@ function GateExtras({ g, data, fields, settings, card, onSave, onAsinsChanged }:
   return null;
 }
 
-function ScorecardPanel({ ev }: { ev: Evaluation }) {
+export function ScorecardPanel({ ev }: { ev: Evaluation }) {
   const sc = ev.sc;
   const t = useSortable("pl.scorecard", sc.rows, {
     n: { value: (r) => r.n, kind: "number" },
@@ -694,7 +435,7 @@ function ScorecardPanel({ ev }: { ev: Evaluation }) {
   );
 }
 
-function WaivedChip({ waiver }: { waiver: Waiver }) {
+export function WaivedChip({ waiver }: { waiver: Waiver }) {
   return <span title={`Waived: ${waiver.reason}`} className="cursor-help rounded bg-warn-soft px-1.5 py-px text-xs font-semibold tracking-wide text-warn uppercase">Waived</span>;
 }
 
@@ -702,7 +443,7 @@ function WaivedChip({ waiver }: { waiver: Waiver }) {
  * One check: its own pass / warn / fail, struck through when a waiver counts it as a pass (the
  * reason on hover). Failed and warned checks can be waived; waived ones un-waived.
  */
-function CheckRow({ row: r, gate, gateWaived, onWaive, onUnwaive }: { row: GateResult["rows"][number]; gate: GateDef; gateWaived: boolean; onWaive: (reason: string) => Promise<void>; onUnwaive: (w: Waiver) => void }) {
+export function CheckRow({ row: r, gate, gateWaived, onWaive, onUnwaive }: { row: GateResult["rows"][number]; gate: GateDef; gateWaived: boolean; onWaive: (reason: string) => Promise<void>; onUnwaive: (w: Waiver) => void }) {
   const waivable = r.status === "fail" || r.status === "warn";
   // Waived on its own (not only under a whole-gate waiver): it can be removed here.
   const own = r.waiver && r.waiver.check_label != null ? r.waiver : null;
@@ -726,7 +467,7 @@ function CheckRow({ row: r, gate, gateWaived, onWaive, onUnwaive }: { row: GateR
 }
 
 /** Every waiver on the candidate, with its reason and date; one no longer needed says so. */
-function WaiversPanel({ waivers, ev, onUnwaive }: { waivers: Waiver[]; ev: Evaluation; onUnwaive: (w: Waiver) => void }) {
+export function WaiversPanel({ waivers, ev, onUnwaive }: { waivers: Waiver[]; ev: Evaluation; onUnwaive: (w: Waiver) => void }) {
   const inEffect = (w: Waiver) => (w.check_label == null ? true : ev.waived.some((x) => x.waiver.id === w.id));
   const gateOf = (w: Waiver) => ev.gates.find((x) => x.g.id === w.gate_id)?.g;
   const t = useSortable("pl.waivers", waivers, {
@@ -766,7 +507,7 @@ function WaiversPanel({ waivers, ev, onUnwaive }: { waivers: Waiver[]; ev: Evalu
 type PoeTerm = NonNullable<CandidateDetail["poe"]>["search_terms"][number];
 
 /** Gate 5: the niche's top search terms; long-tail rows (300–2,000 a month) highlighted. */
-function SearchTermsTable({ terms, captured }: { terms: PoeTerm[]; captured: number }) {
+export function SearchTermsTable({ terms, captured }: { terms: PoeTerm[]; captured: number }) {
   const t = useSortable("pl.searchTerms", terms, {
     term: { value: (x) => x.term, kind: "text" },
     volume: { value: (x) => x.volume, kind: "number" },
@@ -792,7 +533,7 @@ function SearchTermsTable({ terms, captured }: { terms: PoeTerm[]; captured: num
 }
 
 /** Gate 4: every page-one listing, with a link to each one's critical reviews. */
-function CriticalReviewsTable({ asins }: { asins: CandidateDetail["asins"] }) {
+export function CriticalReviewsTable({ asins }: { asins: CandidateDetail["asins"] }) {
   const t = useSortable("pl.criticalReviews", asins, {
     listing: { value: (a) => a.asin, kind: "text" },
     rating: { value: (a) => a.rating, kind: "number" },

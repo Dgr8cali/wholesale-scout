@@ -27,6 +27,8 @@ export interface CandidateDetail {
   why: Record<string, string>;
   /** The reference listing's sales rank over 12 months, weekly (stored Keepa series). */
   refRank?: { asin: string; points: [number, number][]; fetchedAt: string } | null;
+  /** What scoring needs (the candidate page has no list to take them from). */
+  settings: Settings; card: RateCard; adsCpc: number;
 }
 
 export interface ListResponse { candidates: CandidateRow[]; settings: Settings; card: RateCard; adsCpc: number }

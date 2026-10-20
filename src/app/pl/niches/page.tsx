@@ -45,7 +45,7 @@ function Niches() {
           <TabsTrigger value="find" className="px-3"><TelescopeIcon /> Find niches</TabsTrigger>
         </TabsList>
         <TabsContent value="mine"><MyNiches /></TabsContent>
-        <TabsContent value="find"><NicheHunt onCandidate={(id) => router.push(`/pl/candidates?c=${id}`)} /></TabsContent>
+        <TabsContent value="find"><NicheHunt onCandidate={(id) => router.push(`/pl/candidates/${id}`)} /></TabsContent>
       </Tabs>
     </div>
   );

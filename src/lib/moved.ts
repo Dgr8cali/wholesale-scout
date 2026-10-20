@@ -43,6 +43,14 @@ export const MOVED: Moved[] = [
 export function movedTo(path: string, search: string): string | null {
   const clean = path.length > 1 ? path.replace(/\/+$/, "") : path;
   const q = new URLSearchParams(search);
+  // 10. A candidate below the Candidates list (?c=) → its own page (phase 4b). The browser keeps a
+  // #suppliers / #listing anchor across the redirect, and the page opens that tab.
+  const c = clean === "/pl/candidates" ? q.get("c") : null;
+  if (c && /^[\w-]{1,64}$/.test(c)) {
+    q.delete("c");
+    const rest = q.toString();
+    return `/pl/candidates/${c}${rest ? `?${rest}` : ""}`;
+  }
   const rule = MOVED.find((m) => m.from === clean && (m.tab === undefined || q.get("tab") === m.tab));
   if (!rule) return null;
   const [toPath, toQuery = ""] = rule.to.split("?");

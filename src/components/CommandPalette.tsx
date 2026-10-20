@@ -128,7 +128,7 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
           {!!data?.candidates.length && (
             <CommandGroup heading="Candidates">
               {data.candidates.map((c) => (
-                <CommandItem key={c.id} value={`candidate ${c.id} ${c.name} ${s}`} onSelect={() => go(`/pl/candidates?c=${c.id}`)}>
+                <CommandItem key={c.id} value={`candidate ${c.id} ${c.name} ${s}`} onSelect={() => go(`/pl/candidates/${c.id}`)}>
                   <FlaskConicalIcon /> <span className="min-w-0 flex-1 truncate">{c.name}</span>
                   <CommandShortcut className="tracking-normal">{c.niche_keyword ?? c.status}</CommandShortcut>
                 </CommandItem>

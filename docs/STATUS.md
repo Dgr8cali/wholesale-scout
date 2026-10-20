@@ -1,7 +1,7 @@
 # Wholesale Scout: status
 
 Read this first in a new session. Keep it current: every commit that changes a feature updates
-it (what's built, the backlog, the rough edges). Last updated: 20 Oct 2026 (UI redesign phase 4b: Private label pipeline board).
+it (what's built, the backlog, the rough edges). Last updated: 20 Oct 2026 (UI redesign phase 4b: Private label pipeline board and candidate page).
 
 Wholesale Scout is a single-user Amazon UK seller's workbench: Next.js 16 (App Router, `proxy.ts`
 password gate), self-hosted Supabase (Postgres, RLS on, service-role access from the server only),
@@ -141,7 +141,23 @@ Research/Validate → researching) so Today agrees (`POST /api/pl/candidates/[id
 "Show parked (n)" and only unpark from the menu. Header: Import niches, New candidate (the dialog is now `NewCandidate.tsx`, shared
 with Candidates). Phones: one column a screen, swiped, with a strip of column chips to jump. The Candidates table stays as
 "Candidates". `/pl` no longer redirects to Candidates; Private label crumbs point at the board.
-To do: phase 4b's tabbed candidate page and one launch flow, phase 4c (one
+**Candidate page** (`/pl/candidates/[id]`, `src/components/pl/candidate/`): the detail below the Candidates list is gone (Candidates is
+just the table now: 8,649 → 900 px at 1440); `/pl/candidates?c=<id>` answers 308 with the candidate's page (`movedTo()`; the
+extension's `#suppliers` anchor survives the redirect and opens that tab). Header: breadcrumb Candidates / name, chips ("All 8
+gates passed" or "Gates n/8", "Next: …", its column on the pipeline), Park (secondary; Unpark when parked) and the one primary
+action: a launch step it ticks ("Mark samples received"), else a link to the tab and gate that does it ("Chase 1 supplier" →
+Suppliers & quotes); the gate bar under it. Tabs (`?tab=`), each mounted only when open and loading its own data: **Overview**
+(Gatekeeper in one line a gate with Pass/Check/Fail, linking to that gate; "The numbers": price, landed per unit, profit after ads,
+first order, goods + freight from the chosen quote, break-even ACoS; the next action; then Details: notes, name, niche keyword,
+category, status, page-one ASINs, Refresh from Keepa, Delete), **Gates (n/8)** (one gate at a time with a stepper, `?gate=0–7` or
+`score` for the scorecard and waivers; every field, check, waiver and compliance rule as before; `useCandidate()` holds the
+scoring and autosave the old Workspace had), **Reviews** (Gate 4's review miner, pasted and extension-captured, its boxes capped
+in height, and each listing's critical reviews), **Suppliers & quotes** (the shared Alibaba supplier table for this candidate,
+then its quotes), **Listing** (the Listing Writer, unchanged), **Launch**. `GET /api/pl/candidates/[id]` now also returns the
+settings, rate card and ads CPC. Every link to a candidate (Today's steps, ⌘K, Ask Scout, Niches, the supplier table, the Ads
+dashboard) goes to the page and, from Today, the right tab and gate. Heights at 1440 for Lens cleaning wipes: Overview 1,758,
+Gates 1,226–1,446, Reviews 2,487, Suppliers & quotes 1,379, Listing 2,766 (the Listing Writer's own length), Launch 1,470.
+To do: phase 4b's one launch flow, phase 4c (one
 shared results table for Run detail / Brand detail / Products) and phase 5 (the remaining polish, including the extension's
 PASS/WARN/FAIL badges in the new verdict words and the Products page's length on phones).
 
