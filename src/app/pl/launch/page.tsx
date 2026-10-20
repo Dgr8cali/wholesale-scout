@@ -10,7 +10,7 @@ export default function LaunchPage() {
     <div className="space-y-6">
       <PageHeader
         title="Launch checklist"
-        crumbs={[{ label: "Private label", href: "/pl/candidates" }, { label: "Launch checklist" }]}
+        crumbs={[{ label: "Private label", href: "/pl" }, { label: "Launch checklist" }]}
         subtitle="From samples to the first review, one candidate at a time."
         info={<>
           <p>The checklist with dates, notes and costs, the listing ASIN that links the candidate to Ads, and the budget against Gate 7.</p>

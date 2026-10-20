@@ -1,7 +1,7 @@
 # Wholesale Scout: status
 
 Read this first in a new session. Keep it current: every commit that changes a feature updates
-it (what's built, the backlog, the rough edges). Last updated: 20 Oct 2026 (UI redesign phase 4a: Today is Next steps, plus Ask Scout).
+it (what's built, the backlog, the rough edges). Last updated: 20 Oct 2026 (UI redesign phase 4b: Private label pipeline board).
 
 Wholesale Scout is a single-user Amazon UK seller's workbench: Next.js 16 (App Router, `proxy.ts`
 password gate), self-hosted Supabase (Postgres, RLS on, service-role access from the server only),
@@ -126,7 +126,22 @@ database that records writes (none allowed) and checks the module's source and i
 20261020000200). Under each answer: tokens in / out, £, lookups, time. On Today it's the right-hand panel at 1280 px and wider; narrower,
 the header's Ask Scout button opens it in a sheet; ⌘K "Ask Scout…" from anywhere (a question typed there is asked straight away).
 Checked on real data, 20 Oct: three questions at £0.025–£0.033 each. Screenshots: `docs/ui-audit/after/4a/` (gitignored).
-To do: phase 4b (the candidate detail page as tabs, a pipeline board, the Private label Launch flow into Ads Launch), phase 4c (one
+Phase 4b, Private label pipeline (20 Oct 2026). **Pipeline board** (`/pl`, Private label's home and first menu item "Pipeline";
+`src/components/pl/PipelineBoard.tsx`, `GET /api/pl/pipeline`, `src/lib/server/plPipeline.ts`): columns Research (Gates 0–3) →
+Validate (Gates 4–7) → Sourcing (quotes, samples, artwork, PO) → Launch (inbound, listing, first ads) → Live (selling). The column
+(`src/lib/pl/pipeline.ts`, pure and tested): where you moved it (`pl_candidates.pipeline_stage`, the one new column, migration
+20261020000300, backfilled from the records), else what the records prove (listing live or launched → Live; inspection to ads launched
+→ Launch; samples status, a sourcing checklist step, a quote or a messaged supplier → Sourcing), else Gates 0–3 all passing → Validate,
+else Research. A launch step, a quote, a lead's status or a status change moves a stored column forwards, never back
+(`advanceStage()`). Each card: name, the next action in one line with the real figures, an 8-segment gate bar (passed teal, in progress
+amber, not started grey; its aria-label reads every gate), the verdict chip, Open; Live cards link to Ads and Stock for the ASIN.
+Products already selling without a candidate (Ads products with no `pl_candidate_id`) show in Live. Drag a card to another column, or
+use its Move to… menu (keyboard); moving back asks first; a move keeps the status in line (Sourcing/Launch → samples, Live → launched,
+Research/Validate → researching) so Today agrees (`POST /api/pl/candidates/[id]/stage`). Parked and dropped candidates hide behind
+"Show parked (n)" and only unpark from the menu. Header: Import niches, New candidate (the dialog is now `NewCandidate.tsx`, shared
+with Candidates). Phones: one column a screen, swiped, with a strip of column chips to jump. The Candidates table stays as
+"Candidates". `/pl` no longer redirects to Candidates; Private label crumbs point at the board.
+To do: phase 4b's tabbed candidate page and one launch flow, phase 4c (one
 shared results table for Run detail / Brand detail / Products) and phase 5 (the remaining polish, including the extension's
 PASS/WARN/FAIL badges in the new verdict words and the Products page's length on phones).
 

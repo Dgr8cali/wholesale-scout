@@ -25,7 +25,8 @@ import type { ShellCheck, ShellData } from "@/app/api/shell/route";
 import { api } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
 
-const isActive = (href: string, path: string) => (href === "/" ? path === "/" : path === href || path.startsWith(`${href}/`));
+/** Home and a workspace's own root (/pl, the Pipeline) match only themselves, not the pages under them. */
+const isActive = (href: string, path: string) => (href === "/" || href === "/pl" ? path === href : path === href || path.startsWith(`${href}/`));
 
 /** The top bar's checks and the sidebar's counts, refreshed every minute and on focus. */
 const ShellCtx = createContext<{ data: ShellData | null; down: boolean }>({ data: null, down: false });

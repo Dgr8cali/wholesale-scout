@@ -39,6 +39,8 @@ export interface PlCandidate {
   reference_pinned?: boolean;
   /** Parked: shelved with a reason (and the status to go back to). */
   park_reason?: string | null; parked_at?: string | null; parked_from?: string | null;
+  /** The pipeline board's column when you moved it there (null: follow the data; src/lib/pl/pipeline.ts). */
+  pipeline_stage?: string | null;
 }
 export interface PlField { value: string; source: FieldSource; updated_at: string }
 export interface PoeSnapshot extends Omit<PoeExtract, "niche_id" | "niche_title"> { id: string; candidate_id: string | null; niche_id: string | null; niche_title: string | null; captured_at: string }

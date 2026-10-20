@@ -29,7 +29,7 @@ function Niches() {
     <div className="space-y-6">
       <PageHeader
         title="Niches"
-        crumbs={[{ label: "Private label", href: "/pl/candidates" }, { label: "Niches" }]}
+        crumbs={[{ label: "Private label", href: "/pl" }, { label: "Niches" }]}
         subtitle={tab === "mine" ? "Opportunity Explorer niches, scored 0–100 from their own figures." : "Niches that already pass Gates 0 and 1, from Keepa's Product Finder."}
         info={tab === "mine" ? <>
           <p>Opportunity Explorer category downloads, every niche scored 0–100 from its own figures (demand, growth, price, fragmentation, units a product) and flagged. No Keepa tokens until you ask for an incumbent check.</p>

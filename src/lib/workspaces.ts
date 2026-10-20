@@ -41,8 +41,9 @@ export const WORKSPACES: Workspace[] = [
     ],
   },
   {
-    id: "pl", label: "Private label", tagline: "Launch your own product", landing: "/pl/candidates",
+    id: "pl", label: "Private label", tagline: "Launch your own product", landing: "/pl",
     nav: [
+      { href: "/pl", label: "Pipeline" },
       { href: "/pl/candidates", label: "Candidates" },
       { href: "/pl/niches", label: "Niches" },
       { href: "/pl/suppliers", label: "Suppliers & quotes" },
@@ -98,7 +99,8 @@ export function workspaceForPath(path: string): WorkspaceId | null {
 export function pageTitle(path: string, page: string | null | undefined): string {
   const ws = workspaceForPath(path);
   // A page without breadcrumbs: its name in the nav.
-  if (!page) page = [...SHARED_NAV, ...WORKSPACES.flatMap((w) => w.nav)].find((n) => (n.href === "/" ? path === "/" : path === n.href || path.startsWith(`${n.href}/`)))?.label;
+  // The longest matching item: /pl/candidates is Candidates, not the Pipeline at /pl.
+  if (!page) page = [...SHARED_NAV, ...WORKSPACES.flatMap((w) => w.nav)].filter((n) => (n.href === "/" ? path === "/" : path === n.href || path.startsWith(`${n.href}/`))).sort((a, b) => b.href.length - a.href.length)[0]?.label;
   // Today (Home) is titled with just the app's name.
   if (path === "/") page = null;
   const parts = [page, ws ? workspace(ws).label : null, "Wholesale Scout"].filter((x): x is string => !!x);
@@ -110,7 +112,6 @@ export function pageTitle(path: string, page: string | null | undefined): string
 export const LEGACY_REDIRECTS = [
   { source: "/private-label", has: [{ type: "query" as const, key: "tab", value: "hunt" }], destination: "/pl/niche-hunt", permanent: false },
   { source: "/private-label", destination: "/pl/candidates", permanent: false },
-  { source: "/pl", destination: "/pl/candidates", permanent: false },
   { source: "/ads", destination: "/ads/dashboard", permanent: false },
   { source: "/stock", destination: "/stock/levels", permanent: false },
 ];

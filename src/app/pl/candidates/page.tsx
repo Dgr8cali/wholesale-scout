@@ -4,21 +4,17 @@ import { FlaskConicalIcon, PlusIcon } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
 import { valuesOf, type CandidateRow, type ListResponse } from "@/components/pl/types";
+import { NewCandidate } from "@/components/pl/NewCandidate";
 import { Workspace } from "@/components/pl/Workspace";
 import { ErrorState } from "@/components/States";
 import { Button } from "@/components/ui/button";
 import { DataTable, type DataColumn } from "@/components/ui/data-table";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { PageHeader } from "@/components/ui/page-header";
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CandidateDecision, StatusChip, Verdict } from "@/components/ui/status-chip";
 import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
-import { capitalText, evaluate, referralOptions, type Status } from "@/lib/pl/gatekeeper";
+import { capitalText, evaluate, type Status } from "@/lib/pl/gatekeeper";
 import { withAdsDefaults } from "@/lib/pl/adsDefaults";
 import { priceMultiple } from "@/lib/pl/quotes";
 import { api } from "@/lib/ui/client";
@@ -92,7 +88,7 @@ function Candidates() {
     <div className="space-y-6">
       <PageHeader
         title="Candidates"
-        crumbs={[{ label: "Private label", href: "/pl/candidates" }, { label: "Candidates" }]}
+        crumbs={[{ label: "Private label", href: "/pl" }, { label: "Candidates" }]}
         subtitle={`Products you might launch, scored against Gatekeeper's eight gates.`}
         info={<>
           <p>Should ~{capitalText(list.settings.budget)} launch your own product into this niche? A candidate must clear every gate <em>and</em> score well; a good score never overrides a failed gate.</p>
@@ -130,56 +126,8 @@ function Candidates() {
             onDeleted={(id) => { setList((l) => l && { ...l, candidates: l.candidates.filter((c) => c.id !== id) }); select(null); }} />
         </section>
       )}
-      <NewCandidate open={adding} onOpenChange={setAdding} list={list} onCreated={async (id) => { await load(); select(id); }} />
+      <NewCandidate open={adding} onOpenChange={setAdding} card={list.card} onCreated={async (id) => { await load(); select(id); }} />
     </div>
-  );
-}
-
-function NewCandidate({ open, onOpenChange, list, onCreated }: { open: boolean; onOpenChange: (o: boolean) => void; list: ListResponse; onCreated: (id: string) => Promise<void> }) {
-  const [name, setName] = useState("");
-  const [niche, setNiche] = useState("");
-  const [category, setCategory] = useState("Home Products");
-  const [asins, setAsins] = useState("");
-  const [busy, setBusy] = useState(false);
-  const count = new Set(asins.toUpperCase().split(/[\s,;]+/).filter((a) => /^[A-Z0-9]{10}$/.test(a))).size;
-  const save = async () => {
-    setBusy(true);
-    try {
-      const r = await api<{ candidate: { id: string }; refresh: { tokensUsed: number; fetched: string[]; missing: string[] } | null }>("/api/pl/candidates", { method: "POST", json: { name, niche_keyword: niche, category, asins } });
-      if (r.refresh) toast.success(`Keepa: ${r.refresh.fetched.length} fetched, ${r.refresh.tokensUsed} tokens.${r.refresh.missing.length ? ` Not found on amazon.co.uk: ${r.refresh.missing.join(", ")}.` : ""}`);
-      await onCreated(r.candidate.id);
-      onOpenChange(false);
-      setName(""); setNiche(""); setAsins("");
-    } catch (e) {
-      toast.error((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>New candidate</DialogTitle>
-          <DialogDescription>Keepa is fetched on save: about 3 tokens for the reference listing (with its Buy Box history) and 1–2 for each other ASIN. Snapshots under 7 days old are reused.</DialogDescription>
-        </DialogHeader>
-        <div className="grid gap-3">
-          <label className="space-y-1.5"><span className="field-label">Name</span><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Working name" autoFocus /></label>
-          <label className="space-y-1.5"><span className="field-label">Niche keyword</span><Input value={niche} onChange={(e) => setNiche(e.target.value)} placeholder="e.g. bamboo cutlery tray" />
-            <span className="block text-xs text-muted-foreground">As Opportunity Explorer titles the niche: a capture with this title attaches by itself.</span></label>
-          <label className="space-y-1.5"><span className="field-label">Referral category</span>
-            <NativeSelect className="w-full" value={category} onChange={(e) => setCategory(e.target.value)}>
-              {referralOptions(list.card).map((o) => <NativeSelectOption key={o.name} value={o.name}>{o.name} — {o.rates}</NativeSelectOption>)}
-            </NativeSelect></label>
-          <label className="space-y-1.5"><span className="field-label">Page-one ASINs ({Math.min(count, 10)}/10)</span>
-            <Textarea className="num h-32 text-xs" value={asins} onChange={(e) => setAsins(e.target.value)} placeholder={"One per line or comma-separated.\nThe first is the reference listing."} /></label>
-        </div>
-        <DialogFooter>
-          <Button variant="secondary" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={save} disabled={!name.trim()} loading={busy}>{count ? "Save and fetch Keepa" : "Save"}</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   );
 }
 

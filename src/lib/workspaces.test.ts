@@ -30,7 +30,7 @@ describe("workspaces", () => {
     const more = (id: Parameters<typeof workspace>[0]) => workspace(id).nav.filter((n) => n.more).map((n) => n.label);
     expect(main("wholesale")).toEqual(["Runs", "New run", "Products", "Suppliers", "Shortlist"]);
     expect(more("wholesale")).toEqual(["Sellers", "Brands", "Plan"]);
-    expect(main("pl")).toEqual(["Candidates", "Niches", "Suppliers & quotes"]);
+    expect(main("pl")).toEqual(["Pipeline", "Candidates", "Niches", "Suppliers & quotes"]);
     expect(more("pl")).toEqual(["Launch checklist"]);
     expect(main("ads")).toEqual(["Dashboard", "Proposals", "Launch", "Search terms"]);
     expect(more("ads")).toEqual(["Rules", "Review"]);
@@ -69,7 +69,8 @@ describe("workspaces", () => {
     expect(await redirected("/private-label")).toBe("/pl/candidates");
     expect(await redirected("/private-label?c=abc-123")).toBe("/pl/candidates?c=abc-123");
     expect(await redirected("/private-label?tab=hunt")).toBe("/pl/niche-hunt?tab=hunt");
-    expect(await redirected("/pl")).toBe("/pl/candidates");
+    // /pl is the pipeline board now.
+    expect(await redirected("/pl")).toBeNull();
     expect(await redirected("/ads")).toBe("/ads/dashboard");
     expect(await redirected("/stock")).toBe("/stock/levels");
     expect(await redirected("/pl/candidates")).toBeNull();

@@ -28,7 +28,7 @@ function SuppliersAndQuotes() {
     <div className="space-y-6">
       <PageHeader
         title="Suppliers & quotes"
-        crumbs={[{ label: "Private label", href: "/pl/candidates" }, { label: "Suppliers & quotes" }]}
+        crumbs={[{ label: "Private label", href: "/pl" }, { label: "Suppliers & quotes" }]}
         subtitle={tab === "suppliers" ? "Alibaba listings from the extension, scored against each candidate's targets." : "Supplier quotes side by side, each turned into a landed cost per unit."}
         info={tab === "suppliers" ? <>
           <p>Supplier Scout: Alibaba listings you sent from the extension, each scored 0–100 against its candidate&apos;s Gate 6 target price, MOQ and unit (price 35, MOQ 20, trust 25, relevance 20), so you only message the top few. Open a candidate for its RFQ, then <b>Add quote</b> when they answer.</p>
