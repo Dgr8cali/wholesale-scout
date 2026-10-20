@@ -71,21 +71,3 @@ export function SortTh({ sortKey, sort, onSort, children, className, numeric, ..
     </th>
   );
 }
-
-/**
- * The same, styled as the shadcn table's <TableHead> (labels as written, not upper-cased), for
- * tables built from src/components/ui/table.tsx.
- */
-export function SortTableHead({ sortKey, sort, onSort, children, className, numeric, ...rest }: {
-  sortKey: string; sort: SortState | null; onSort: (key: string) => void; children: ReactNode; numeric?: boolean;
-} & Omit<ThHTMLAttributes<HTMLTableCellElement>, "children">) {
-  const active = sort?.key === sortKey;
-  const dir: SortDir | null = active ? sort!.dir : null;
-  return (
-    <th data-slot="table-head" {...rest}
-      className={cn("h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground select-none", numeric && "text-right", className)}
-      aria-sort={dir === "asc" ? "ascending" : dir === "desc" ? "descending" : undefined}>
-      <SortButton sorted={dir} numeric={numeric} onClick={() => onSort(sortKey)} className={cn(!active && "text-muted-foreground")}>{children}</SortButton>
-    </th>
-  );
-}

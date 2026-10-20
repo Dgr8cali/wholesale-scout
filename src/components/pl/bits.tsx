@@ -3,10 +3,6 @@ import { decisionLabel, GATE_RESULT, StatusChip, type Tone } from "@/components/
 import { cn } from "@/lib/utils";
 import { TONE, type FieldSource } from "./types";
 
-export function Dot({ status, className }: { status: Status; className?: string }) {
-  return <span aria-hidden className={cn("inline-block size-2 flex-none rounded-full bg-current", TONE[status].text, className)} />;
-}
-
 const STATUS_TONE: Record<Status, Tone> = { pass: "good", warn: "warn", fail: "bad", empty: "neutral" };
 
 /** A gate or check result (Pass / Check / Fail / Not scored), or another label in the same tone: the shared StatusChip. */

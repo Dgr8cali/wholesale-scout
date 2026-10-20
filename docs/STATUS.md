@@ -18,7 +18,7 @@ tokens in `src/app/globals.css` (one source of truth: the logo teal #2F7F8C as p
 `highlight` (shadcn's `accent` stays the hover surface), warn/danger/success soft+ink pairs, light and dark; the old names
 pass/warn/fail/empty, brand, surface-2, ink-2, line-strong are aliases of the new ones); IBM Plex Sans for all text and IBM Plex Mono
 (`.num`, tabular) for figures, Bricolage removed; a 12/13/14/15/18/22/28 type scale (`text-xs/meta/sm/base/lg/xl/2xl`, nothing else);
-radius 10px inputs and buttons, 14px cards (`panel`, Card), chips round. The extension (0.7.0) uses the same teal and Plex.
+radius 10px inputs and buttons, 14px cards (`panel`), chips round. The extension (0.7.0) uses the same teal and Plex.
 Building blocks (`src/components/ui`): Button primary/secondary/ghost/danger (default/outline/destructive alias them), 40px / 32px
 (`sm`), `loading` = spinner + "…"; `PageHeader` (crumbs, title = the menu label, one subtitle line, `info` InfoTip, the primary
 action); `InfoTip`; `DataTable` (TanStack v9 sorting + pagination, 50 a page, phone cards); `EmptyState` (`States.tsx`);
@@ -254,6 +254,10 @@ export clicked (`src/lib/ui/sheetjs.ts`; the run, product and plan exports, Uplo
 results drawer's details, the candidate page's tabs other than Overview, and the Ads Import sheet and history load when opened
 (`next/dynamic`). The Ads AI panels stay in the page (they're on the first screen: lazily, their request waited for their code,
 +300 ms). All the app's client JS together: 3,294 → 3,784 KB raw (1,062 → 1,218 KB gzip), more files that load later.
+**Dead code removed**: `ComingSoon` (the old placeholder page), shadcn's `ui/table.tsx` and `ui/card.tsx` (the old tables and
+cards; DataTable and `panel` replaced them), `SortTableHead`, the pipeline's unused `Dot`, `sharedGet`, and the old results
+table's `.table-scroll` / `.sticky-th` CSS. The workspace switcher, the old sidebar and the moved pages' components were
+already gone; the redirects stay (`src/lib/moved.ts`, `LEGACY_REDIRECTS` in next.config).
 **Extension 0.8.0**: the product panel and search results show the app's words, colours and icons (Buy / Check / Skip / Not scored as round chips; the panel lists each gate as Pass / Check / Fail), and candidate links open `/pl/candidates/<id>` (Suppliers & quotes, Reviews or Gate 3 tab) instead of the old `?c=` redirect.
 
 ## Workspaces
