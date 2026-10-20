@@ -182,7 +182,9 @@ bands, On Shortlist, Waived, Amazon on listing, approval, failed gate, brand, ev
 filters live in the address (`filtersFromQuery` / `filtersToQuery` in `src/lib/filters.ts`, tested; `?verdict=buy,check&profit=3
 &bsr=..50000&gated=no`; old `?verdict=pass` still reads), via `useUrlFilters()`. `useResultActions()` holds the star, note, watch,
 waiver and cost-override calls the pages share. The bulk bar says Add to Shortlist / Remove from Shortlist / Export selected (xlsx).
-To do: phase 4c's pages, then phase 5 (the remaining polish, including the extension's PASS/WARN/FAIL badges in the new verdict
+Run detail (`src/app/runs/[id]/page.tsx`) is on it: virtual scrolling over every row, EAN groups with their other ASINs, the filters
+in the address instead of remembered per run in the browser, the drawer, the full bulk bar (waive, cost, re-screen, export, remove).
+To do: phase 4c's other pages, then phase 5 (the remaining polish, including the extension's PASS/WARN/FAIL badges in the new verdict
 words).
 
 ## Workspaces

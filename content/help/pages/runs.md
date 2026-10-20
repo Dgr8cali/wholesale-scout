@@ -1,7 +1,7 @@
 ---
 title: Runs
 summary: Every run you've screened, and a run's own page where you filter, sort, open and act on its results.
-synonyms: [batch, screening job, results table, re-screen, pause, export, shortlist, keepa queue]
+synonyms: [batch, screening job, results table, filter bar, columns, re-screen, pause, export, shortlist, keepa queue]
 route: /runs
 order: 2
 ---
@@ -106,64 +106,51 @@ When the item failed a gate before Keepa was asked, the card says "Stopped at **
 
 ### Filters
 
-The filter bar works on products (one per EAN). Filters are remembered for this run in your browser. Every active filter must match.
+The same filter bar sits above the results on a run, [Shortlist → Products](/help/pages/favourites), a [brand's page](/help/pages/brands) and [Products](/help/pages/products). On a run it works on products (one per EAN). Every active filter must match.
+
+The filters live in the page's address (for example `?verdict=buy,check&profit=3&bsr=..50000&gated=no`), so a filtered view can be bookmarked, shared or opened from Today and ⌘K, and the browser's Back button undoes a change.
 
 | Filter | What it keeps |
 | --- | --- |
-| **Buy**, **Check**, **Skip**, **Error**, **Dormant** | Rows with that verdict, each with its count. **Error** only appears when rows errored. **Dormant** picks [dormant](/help/reference/glossary#dormant) listings (nobody sells them now) whatever their verdict. |
-| **green**, **amber**, **grey** | Rows in that score band (see [Score](/help/concepts/score)). |
-| **Failed gate** | Rows that stopped at the gates you tick; each gate shows how many. |
-| **Brand** | Rows of the brands you tick (searchable). |
+| **ASIN, EAN, title or brand** | Text search across those (and the supplier and why-line on a run). |
+| **Buy**, **Check**, **Skip**, **Not scored** | Rows with that verdict, each with its count; tick several to keep any of them. **Not scored** is a row with no verdict yet. |
+| **Profit ≥**, **ROI ≥**, **Sales/mo ≥**, **BSR ≤** | Profit per unit at least £X, ROI at least X%, estimated sales a month at least X, and a Best Sellers Rank of X or better. A row with no value drops out once one is set. |
+| **Gated** (**Any**, **Yes**, **No**) | Yes: approval needed or blocked; No: open to sell (a brand you're approved for counts as open). See [Gating](/help/gates/gating). |
 | **Any supplier** | Rows from one supplier. |
-| **Amazon on listing** (**any**, **yes**, **no**) | Whether Amazon sells on the listing, per the [Amazon presence](/help/gates/amazonPresence) gate. |
-| **Open**, **Approval needed**, **Blocked** | Your gating status for the listing (see [Gating](/help/gates/gating)). |
-| **Favourites only** | Starred products. Only shown once you have favourites. |
-| **Waived** | Rows with a gate you've waived. |
-| **Ranges** | Minimum and maximum for Sales / mo, Sellers, Profit (£), ROI (%), Margin (%) and Sell price (£). |
-| **Search name, brand, EAN, ASIN, why** | Text search across those. |
-| **Saved filters** | Applies a saved filter set. **Save current filters…** saves what's on now by name, for any run; the bin deletes a set for every run. |
+| **More filters** | **Error** (only when rows errored) and **Dormant** ([dormant](/help/reference/glossary#dormant) listings, whatever their verdict); the **green**, **amber** and **grey** score bands (see [Score](/help/concepts/score)); **On Shortlist** (starred products; shown once you have some); **Waived**; **Amazon on listing** per the [Amazon presence](/help/gates/amazonPresence) gate; **Open**, **Approval needed**, **Blocked**; **Failed gate** with counts; **Brand** (searchable); minimum and maximum **Ranges** for Offers, Margin, Sell price, Profit, ROI, Sales / mo and BSR; and **Saved filters**: **Save current filters…** saves what's on now by name, for every results page, and the bin deletes a set. |
 
-Under the bar: "Showing N of M products (L listings shown)", a chip for each active filter (click one to remove it), and **Clear all**. On a phone the controls fold behind **Filters**.
+Under the bar: "Showing N of M products (L listings shown)", a chip for each active filter (click one to remove it), and **Clear all**. On a phone everything but the search and the verdict chips folds behind **Filters**.
 
 ### The results table
 
-One line per EAN. Where an EAN matched several ASINs, the best one leads and "▸ N other ASINs for this EAN" unfolds the others (marked ↳). The table starts sorted by **Score**, highest first; click any header with a sort to sort by it, again to reverse. Empty values sort last.
+One line per EAN. Where an EAN matched several ASINs, the best one leads and "▸ N other ASINs for this EAN" unfolds the others (marked ↳). The table starts sorted by **Score**, highest first; click any header with a sort to sort by it, again to reverse. Empty values sort last. A long run scrolls inside its card (only the rows in view are drawn, so it stays quick); the header row, the checkbox and the product stay in view as you scroll down or sideways.
+
+The columns shown at first, on every results page:
 
 | Column | Shows |
 | --- | --- |
-| Select | A checkbox, and a chevron that opens the row's details under it. The coloured edge is the verdict. The header box selects every row the filters match, collapsed alternatives included. |
-| **Product** | Image, title, EAN, ASIN (links to Amazon), supplier ("(+2)" when other suppliers offer it). On a seller scan: **Holds Buy Box** or "Buy Box: another seller". |
-| **Verdict** | The star (favourite), the verdict, and **dormant**, **waived** or **cost overridden** badges. Hover over **cost overridden** to see your cost and the sheet's original. |
-| **Score** | 0–100 in its band colour. |
-| **Sales / mo** | Estimated sales a month. Hover for the source. |
-| **Your share / mo** | Sales / mo ÷ (FBA sellers + you), Amazon counted as 3 sellers. See [your share](/help/reference/glossary#your-share). |
-| **Order qty** | First order: the line cap ÷ landed cost, or the MOQ if that's more (flagged **MOQ**). The line cap is your budget × max line share; on First order, the shipped default, that's £1,000 × 25% = £250. |
-| **Months to sell** | Order qty ÷ your share / mo; red when over the profile's limit (3 by default). See [months to sell](/help/reference/glossary#months-to-sell). |
-| **Sellers** | FBA sellers from Keepa, else all new offers from Amazon. |
-| **Buy Box** | The current Buy Box price. |
-| **Rank 90 d**, **Buy Box 90 d** | Small charts of sales rank (up is better) and Buy Box price over 90 days, from the stored Keepa data. |
-| **Landed** | Your landed cost per unit. With no cost given (a check or a seller scan): "≤ £X", the most it can cost landed. |
-| **Sell** | The price it's scored at. |
+| Checkbox | Selects the row. The coloured edge is the verdict. The header box selects every row the filters match, collapsed alternatives included. |
+| **Product** | Image, title (★ when it's on your Shortlist), ASIN (links to Amazon), EAN, supplier ("(+2)" when other suppliers offer it). On a seller scan: **Holds Buy Box** or "Buy Box: another seller". |
+| **Verdict** | **Buy**, **Check**, **Skip**, **Not scored** or **Error**, with **Dormant**, **Waived** or **Cost overridden** under it. Hover over **Cost overridden** to see your cost and the sheet's original. |
+| **Buy price** | The supplier's unit cost, ex-VAT in GBP ("—" when no cost was given). |
+| **Sell price** | The price it's scored at. |
 | **Profit** | Profit per unit; red when negative. |
-| **Your profit / mo** | Your share × profit per unit. |
-| **ROI**, **Margin** | Return on landed cost and margin on the sell price. |
-| **Hurdle** | Sell price at which it clears every profit floor. |
-| **Why** | One line on what decided the verdict, with a link to apply to sell where Amazon offers one. |
+| **ROI** | Return on landed cost. |
+| **Sales / mo** | Estimated sales a month. Hover for the source. |
+| **BSR** | Best Sellers Rank now. |
+| **Offers** | FBA sellers from Keepa, else all new offers from Amazon. |
+| **Gated** | **Open**, **Approval** or **Blocked** for your account. |
+| **⋯** | The row's menu: **Add to Shortlist** (or **Remove from Shortlist**), **Re-screen** (this one row as a new run), **Product page**, **Open on Amazon** and **Copy ASIN**. |
 
-Table layout controls, above the table on the right, are remembered in your browser:
+More in **Columns**: **Score** (0–100 in its band colour), **Landed** (your landed cost; with no cost given, "≤ £X", the most it can cost landed), **Max landed**, **Margin**, **Your share / mo** (Sales / mo ÷ (FBA sellers + you), Amazon counted as 3; see [your share](/help/reference/glossary#your-share)), **Your profit / mo**, **Order qty** (the line cap ÷ landed cost, or the MOQ if that's more, flagged **MOQ**; on First order the line cap is £1,000 × 25% = £250), **Months to sell** (red when over the profile's limit; see [months to sell](/help/reference/glossary#months-to-sell)), **Buy Box**, **Rank 90 d** and **Buy Box 90 d** (small charts from the stored Keepa data), **Hurdle**, **Supplier**, **Screened** and **Why**.
 
-- **Comfortable** / **Compact**: row height.
-- **Columns**: tick to show or hide a column, arrows to move it; **Reset** restores the default layout. Select and Product can't be hidden, and they stay pinned on the left as you scroll sideways.
-- Drag a header to move a column; drag its right edge to resize it (double-click the edge to reset its width).
+Above the table, "Profit, ROI and margin" names the VAT basis they're on (**mixed** when rows differ: Settings → Business → Recalculate all). **Columns**, on the right, is remembered for each results page in your browser: tick to show or hide a column, arrows to move it, **Comfortable** / **Compact** for row height, **Reset** for the default set. Drag a header to move a column; drag its right edge to resize it (double-click the edge to reset its width).
+
+On a phone each row is a card: image, title, verdict, profit, ROI and sales a month, its **⋯** menu and **Details**, 20 to a page.
 
 ### A row's details
 
-There are two ways to open a row:
-
-- **Click the row** to open it in a panel on the right. It shows the image, title, verdict, score, Sell, Profit, ROI and Margin, 90-day charts, the why-line, then the full details. **↑** / **↓** (or K / J) step through the rows shown, **Esc** closes it.
-- **Click the chevron** to open the details under the row in the table.
-
-The details hold:
+**Click a row** (on a phone, **Details**) to open it in a panel on the right. It shows the image, title, verdict, score, Sell, Profit, ROI and Margin, 90-day charts, the why-line, then the full details. **↑** / **↓** (or K / J) step through the rows shown, **Esc** closes it. The details hold:
 
 - "Checked 2 h ago · **Re-check**": when the verdict was reached. Re-check checks the same ASIN, with the same landed cost, as a new [check](/help/pages/check).
 - **Gates**: each gate's result (**Pass**, **Check** or **Fail**) and detail. A failed or warning gate has **Waive**: type a reason (optional) and press **Waive** (or Enter). The waiver applies to this product in every run: a fail becomes a warning and later gates run; a warning stops counting, so the row can go green. The product is re-screened now, fetching what later gates need. A waived gate has **Un-waive**. See [Waive a gate](/help/howto/waive-a-gate) and [waiver](/help/reference/glossary#waiver). "Stopped at Price band; later gates didn't run." marks where it stopped. A failed catalog lookup shows what was tried.
@@ -182,9 +169,9 @@ The details hold:
 
 On a Qogita row whose verdict is **Buy** or **Check**, the details end with **Quantity** (in cases where the supplier sells by the case) and **Add to Qogita cart**. The quantity starts at the most your line budget buys, in whole cases and no more than the supplier holds. "Order whole cases of 6." appears if you type a number that isn't. **Cart** in the top bar opens the cart: one order per supplier with progress to its MOV, where you can change quantities, remove lines, **Refresh**, and **Check out on Qogita**.
 
-### Star, note and watch
+### Shortlist, note and watch
 
-The star in the **Verdict** column adds the product (EAN and ASIN) to [Favourites](/help/pages/favourites), which works across runs. Un-starring a product with a note asks first, because the note is deleted with it.
+**Add to Shortlist** in a row's **⋯** menu adds the product (EAN and ASIN) to the [Shortlist](/help/pages/favourites), which works across runs; a ★ marks it in the table. Removing a product with a note asks first, because the note is deleted with it.
 
 ### Bulk actions on selected rows
 
@@ -192,11 +179,11 @@ Tick rows and a bar appears:
 
 | Control | What it does |
 | --- | --- |
-| **Star** / **Unstar** | Stars or un-stars every selected product. |
+| **Add to Shortlist** / **Remove from Shortlist** | Stars or un-stars every selected product. |
 | Gate picker, **Reason for all (optional)**, **Waive** / **Un-waive** | Waives (or un-waives) the chosen gate for every selected product, re-screening them. |
 | **Set cost…** / **Clear cost** | Sets one cost override for every selected product (re-scoring them now), or clears it. See [Override a cost](/help/howto/override-a-cost). |
 | **Re-screen selected** | Makes a new run of just these rows ("… — N selected"), with this run's profile, and opens it. |
-| **Export selected** | Downloads just these rows. |
+| **Export selected (xlsx)** | Downloads just these rows. |
 | **Remove from run** | Takes the rows out of this run after you confirm. Products and favourites are kept. |
 | **Clear selection** | Unticks everything. |
 
@@ -207,7 +194,7 @@ Changing a filter clears the selection; "Selection of N cleared because the filt
 Exports are .xlsx files named after the run, one line per listing:
 
 - **Export N products to xlsx** on a run's page exports what the filters show.
-- **Export selected** exports the ticked rows, even ones the current filters hide.
+- **Export selected (xlsx)** exports the ticked rows, even ones the current filters hide. It's on Shortlist, a brand's page and Products too, in the same format.
 - **Export to xlsx** on the runs list exports every screened row of the run, whatever filters you have on it.
 
 The **Listing** column says "only" for an EAN with one ASIN, or "best" and "alternative" where it matched several. Other columns: Verdict (pass, warn or fail, the stored values), Score, Band, Product, Brand, EAN, ASIN, Supplier, the cost per unit quoted and in GBP ex-VAT, Est. sales / month and its source, Sellers and their source, Your share / mo, Your profit / mo, Order qty, Months to sell, Buy Box, Landed cost, Sell price and its source, Amazon fees and their source, Profit, ROI %, Margin %, Hurdle price, Failed gate, Why, MOQ, Offers seen and Source.

@@ -10,11 +10,12 @@ import { toast } from "sonner";
 import { BulkBar } from "@/components/BulkBar";
 import { useDialogs } from "@/components/Dialogs";
 import { EditableName } from "@/components/EditableName";
-import { FilterBar, type FilterOptions } from "@/components/FilterBar";
+import { ResultsFilterBar, type FilterOptions } from "@/components/results/ResultsFilterBar";
 import { Detail } from "@/components/results/Detail";
 import { DetailDrawer } from "@/components/results/DetailDrawer";
-import { ResultsTable, type DisplayRow } from "@/components/results/LegacyResultsTable";
-import { eanOf, type Fav, type Progress, type Result, type Run, type SortKey } from "@/components/results/types";
+import { ResultsTable, type ResultRow } from "@/components/results/ResultsTable";
+import { eanOf, type Progress, type Result, type Run, type SortKey } from "@/components/results/types";
+import { useResultActions } from "@/components/results/useResultActions";
 import { useSparks } from "@/components/results/useSparks";
 import { downloadXlsx, exportRows } from "@/components/results/exportXlsx";
 import { compareResults, loadResultSort, nextResultSort, saveResultSort } from "@/components/results/sort";
@@ -25,16 +26,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import Link from "next/link";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { etaLabel } from "@/lib/eta";
-import { EMPTY_FILTERS, matches, normalizeFilters, type FilterSet } from "@/lib/filters";
+import { matches, type FilterSet } from "@/lib/filters";
 import { GATE_LABELS, GATE_ORDER, withDefaults, type GateId } from "@/lib/screening/config";
 import { api, when } from "@/lib/ui/client";
-import { favouriteSync, favStore, type FavStore } from "@/lib/ui/favouriteSync";
-import { conditionLabel, type WatchCondition } from "@/lib/watch";
+import { useUrlFilters } from "@/lib/ui/useUrlFilters";
 import { storefrontUrl } from "@/lib/check/seller";
 import { groupRows } from "@/lib/ui/group";
-import { brandOf, dormantOf, favKey, toFilterRow } from "@/lib/ui/resultRows";
+import { brandOf, dormantOf, toFilterRow } from "@/lib/ui/resultRows";
 import { cn } from "@/lib/utils";
-import type { CostInput } from "@/lib/costOverride";
 
 export default function RunPage() {
   const { id } = useParams<{ id: string }>();
@@ -47,7 +46,6 @@ export default function RunPage() {
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<Progress | null>(null);
   const processing = !!progress && !progress.done;
-  const [open, setOpen] = useState<Set<string>>(new Set());
   const [activeId, setActiveId] = useState<string | null>(null);
   const { sparks, observe: observeSparks } = useSparks();
   // EANs whose other ASINs are shown.
@@ -56,17 +54,8 @@ export default function RunPage() {
   const setSort = (next: { key: SortKey; dir: 1 | -1 }) => { setSortState(next); saveResultSort("results", next); };
   // The sparklines only reorder rows when sorting by them (they load as rows scroll into view).
   const sortSparks = sort.key === "rank90" || sort.key === "bb90" ? sparks : undefined;
-  // Filters, remembered per run in this browser.
-  const storageKey = `ws.filters.run.${id}`;
-  const [filters, setFiltersState] = useState<FilterSet>(() => {
-    if (typeof window === "undefined") return EMPTY_FILTERS;
-    try {
-      const saved = window.localStorage.getItem(storageKey);
-      return saved ? normalizeFilters(JSON.parse(saved)) : EMPTY_FILTERS;
-    } catch {
-      return EMPTY_FILTERS;
-    }
-  });
+  // Filters live in the address (bookmarkable; Today and ⌘K link to filtered views).
+  const [filters, setUrlFilters] = useUrlFilters();
   // Selected result ids. Kept while scrolling; cleared when the filters change, with "Reselect".
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [stash, setStash] = useState<Set<string> | null>(null);
@@ -75,106 +64,33 @@ export default function RunPage() {
       setStash(selected);
       setSelected(new Set());
     }
-    setFiltersState(f);
-    try {
-      window.localStorage.setItem(storageKey, JSON.stringify(f));
-    } catch {
-      // Private window or storage blocked: the filters just won't be remembered.
-    }
+    setUrlFilters(f);
   };
-  // Favourites are per product (EAN + ASIN), not per run.
-  const [favs, setFavsState] = useState<Map<string, Fav>>(new Map());
-  // The star/note sync reads the latest map at once; React state lags a render behind.
-  const [favMap] = useState(() => favStore<Fav>(setFavsState));
-  const setFavs = favMap.update;
-  // Star and note run in order per product (a star clicked while the note saves waits for it).
-  const [favSync] = useState(() => favouriteSync(
-    {
-      star: async (i) => (await api<{ favourite: Fav }>("/api/favourites", { method: "POST", json: i })).favourite,
-      note: async (i, note) => (await api<{ favourite: Fav }>("/api/favourites", { method: "POST", json: { ...i, note } })).favourite,
-      remove: async (fid) => void (await api(`/api/favourites?id=${fid}`, { method: "DELETE" })),
-    },
-    favMap as FavStore,
-    { onError: (e) => toast.error(e.message) },
-  ));
-  const favOf = (r: Result) => (r.product ? favs.get(favKey(r.product.ean, r.product.asin)) : undefined);
-  const favourites = useMemo(() => new Set(favs.keys()), [favs]);
-  useEffect(() => {
-    api<{ favourites: Fav[] }>("/api/favourites?light=1")
-      .then((r) => setFavs(() => new Map(r.favourites.map((f) => [favKey(f.ean, f.asin), f]))))
-      .catch(() => {});
-  }, [setFavs]);
-  function toggleFavourite(r: Result) {
-    if (!r.product) return;
-    void favSync.toggle({ ean: r.product.ean, asin: r.product.asin }, (f) => confirm({
-      title: "Un-star this product?",
-      description: `Its note is deleted with it: “${(f.note ?? "").slice(0, 140)}”`,
-      confirmLabel: "Un-star",
-      destructive: true,
-    }));
-  }
+  const acts = useResultActions({ runId: id, onChanged: () => refresh() });
+  const { favourites, favOf } = acts;
   /** Waive or un-waive a gate for this product; its rows in this run are re-screened now. */
   async function waive(r: Result, gate: GateId, action: "waive" | "unwaive", reason?: string) {
-    if (!r.product) return;
-    const res = await api<{ requeued: number }>("/api/overrides", {
-      method: "POST",
-      json: { items: [{ ean: r.product.ean, asin: r.product.asin }], gate, action, reason, runId: id },
-    });
-    await refresh();
-    if (res.requeued) {
-      toast.success(`${GATE_LABELS[gate]} ${action === "waive" ? "waived" : "un-waived"}; fetching the data later gates need for this product.`);
-      setNonce((n) => n + 1);
-    }
+    if (await acts.waiveOne(r, gate, action, reason)) setNonce((n) => n + 1);
   }
+  const cost = acts.cost;
 
   // Bulk actions on the selection.
   const selectedRows = () => results.filter((r) => selected.has(r.id));
-  const itemsOf = (rs: Result[]) => [...new Map(rs.filter((r) => r.product).map((r) => [favKey(r.product!.ean, r.product!.asin), { ean: r.product!.ean, asin: r.product!.asin }])).values()];
-  async function bulkStar(action: "star" | "unstar") {
-    const items = itemsOf(selectedRows());
-    const res = await api<{ favourites: Fav[] }>("/api/favourites/bulk", { method: "POST", json: { items, action } });
-    setFavs((m) => {
-      const n = new Map(m);
-      if (action === "star") for (const f of res.favourites) n.set(favKey(f.ean, f.asin), f);
-      else for (const i of items) n.delete(favKey(i.ean, i.asin));
-      return n;
-    });
-  }
   async function bulkWaive(gate: GateId, action: "waive" | "unwaive", reason?: string) {
-    const res = await api<{ requeued: number }>("/api/overrides", { method: "POST", json: { items: itemsOf(selectedRows()), gate, action, reason, runId: id } });
-    await refresh();
-    if (res.requeued) setNonce((n) => n + 1);
+    if (await acts.waive(selectedRows(), gate, action, reason)) setNonce((n) => n + 1);
   }
-  /** Set or clear the cost override for these rows' products; they're re-scored now. */
-  async function cost(ids: string[], c: CostInput | null) {
-    await api("/api/cost-override", { method: c ? "POST" : "DELETE", json: c ? { resultIds: ids, cost: c } : { resultIds: ids } });
-    await refresh();
-  }
-  async function bulkRescreen() {
-    const r = await api<{ runId: string }>(`/api/runs/${id}/selection`, { method: "POST", json: { resultIds: [...selected] } });
-    router.push(`/runs/${r.runId}`);
+  async function rescreenRows(resultIds: string[]) {
+    try {
+      const r = await api<{ runId: string }>(`/api/runs/${id}/selection`, { method: "POST", json: { resultIds } });
+      router.push(`/runs/${r.runId}`);
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
   }
   async function bulkRemove() {
     await api(`/api/runs/${id}/selection`, { method: "DELETE", json: { resultIds: [...selected] } });
     setSelected(new Set());
     await loadAll();
-  }
-
-  /** Put a row on the watchlist (starring it) with its flip condition. */
-  async function watch(r: Result, condition: WatchCondition | null, noSupplier: boolean) {
-    if (!r.product) return;
-    try {
-      const { favourite } = await api<{ favourite: Fav }>("/api/watchlist", { method: "PUT", json: { ean: r.product.ean, asin: r.product.asin, condition, noSupplier } });
-      favMap.set(favKey(favourite.ean, favourite.asin), favourite);
-      toast.success(`Watching: ${conditionLabel(condition)}`);
-    } catch (e) {
-      toast.error((e as Error).message);
-    }
-  }
-
-  /** Save a note; on a product not yet starred, the note stars it (shown at once). */
-  function saveNote(r: Result, _f: Fav | undefined, note: string) {
-    if (r.product) void favSync.saveNote({ ean: r.product.ean, asin: r.product.asin }, note);
   }
   const [profiles, setProfiles] = useState<{ id: string; name: string }[]>([]);
   const [rescreenProfile, setRescreenProfile] = useState("");
@@ -320,7 +236,7 @@ export default function RunPage() {
   }, [done, filters, favourites, sort, lineBudget, sortSparks]);
   const listingCount = rows.reduce((a, g) => a + 1 + g.others.length, 0);
   // What the table shows: each EAN's lead, plus its other ASINs when expanded.
-  const displayRows = useMemo<DisplayRow[]>(() => rows.flatMap((g) => [
+  const displayRows = useMemo<ResultRow[]>(() => rows.flatMap((g) => [
     { r: g.lead, alt: false, groupKey: g.key, others: g.others.length },
     ...(expanded.has(g.key) ? g.others.map((r) => ({ r, alt: true, groupKey: g.key, others: 0 })) : []),
   ]), [rows, expanded]);
@@ -481,12 +397,12 @@ export default function RunPage() {
       <BulkBar count={selected.size} stashed={stash?.size ?? 0}
         onReselect={() => { if (stash) setSelected(new Set([...stash].filter((x) => results.some((r) => r.id === x)))); setStash(null); }}
         onClear={() => { setSelected(new Set()); setStash(null); }}
-        onStar={() => bulkStar("star")} onUnstar={() => bulkStar("unstar")}
+        onStar={() => acts.bulkStar(selectedRows(), "star")} onUnstar={() => acts.bulkStar(selectedRows(), "unstar")}
         onWaive={(gate, reason) => bulkWaive(gate, "waive", reason)} onUnwaive={(gate) => bulkWaive(gate, "unwaive")}
         onSetCost={(c) => cost([...selected], c)} onClearCost={() => cost([...selected], null)}
-        onRescreen={bulkRescreen} onExport={() => exportXlsx(selected)} onRemove={bulkRemove} />
+        onRescreen={() => rescreenRows([...selected])} onExport={() => exportXlsx(selected)} onRemove={bulkRemove} />
 
-      <FilterBar value={filters} onChange={setFilters} options={filterOptions} favouritesAvailable={favourites.size > 0}
+      <ResultsFilterBar value={filters} onChange={setFilters} options={filterOptions} favouritesAvailable={favourites.size > 0}
         matching={rows.length} total={products.length} unit={`products (${listingCount} listings shown)`} gateLabels={GATE_LABELS} />
       {loadingRest && (
         <p className="flex items-center gap-2 text-xs text-muted-foreground" role="status">
@@ -496,23 +412,21 @@ export default function RunPage() {
 
       <StaleBanner rows={results.map((x) => ({ id: x.id, run_id: id, fees: x.fees as never }))} onRechecked={() => setNonce((n) => n + 1)} />
 
-      <ResultsTable rows={displayRows} storageKey="ws.table.results.v1"
-        selected={selected} onToggleSelect={(rid) => setSelected((s) => { const n = new Set(s); if (n.has(rid)) n.delete(rid); else n.add(rid); return n; })}
-        visibleIds={visibleIds} onSelectAll={setSelected}
+      <ResultsTable rows={displayRows} page="run" paging={{ kind: "virtual" }}
+        selected={selected} onSelect={setSelected} visibleIds={visibleIds}
         expandedGroups={expanded} onToggleGroup={(k) => setExpanded((s) => { const n = new Set(s); if (n.has(k)) n.delete(k); else n.add(k); return n; })}
-        open={open} onToggleOpen={(rid) => setOpen((s) => { const n = new Set(s); if (n.has(rid)) n.delete(rid); else n.add(rid); return n; })}
-        activeId={active?.id ?? null} onActivate={(rid) => setActiveId((cur) => (cur === rid ? null : rid))}
-        favourites={favourites} onStar={toggleFavourite} scanSellerId={run.stats?.scan?.sellerId ?? null}
+        activeId={active?.id ?? null} onOpen={(rid) => setActiveId((cur) => (cur === rid ? null : rid))}
+        actions={{ starred: acts.starred, onStar: acts.toggleStar, onRescreen: (r) => rescreenRows([r.id]) }}
+        scanSellerId={run.stats?.scan?.sellerId ?? null}
         sort={sort} onSort={(key) => setSort(nextResultSort(sort, key))}
         sparks={sparks} observeSparks={observeSparks}
-        renderDetail={(r) => <Detail r={r} fav={favOf(r)} onNote={saveNote} onWaive={waive} onWatch={watch} onCost={(r, c) => cost([r.id], c)} budgetGbp={lineBudget} />}
         empty={done.length ? "Nothing matches these filters." : "Rows appear here as they're screened."}
         lineCapGbp={lineBudget} maxMonths={withDefaults(run.profile_snapshot ?? null).gates.demand.maxMonthsToSell} />
 
       {active && (
         <DetailDrawer r={active} index={activeIndex} count={displayRows.length} sparks={active.product?.asin ? sparks[active.product.asin] : null}
           onStep={step} onClose={closeDrawer}>
-          <Detail r={active} fav={favOf(active)} onNote={saveNote} onWaive={waive} onWatch={watch} onCost={(r, c) => cost([r.id], c)} stacked budgetGbp={lineBudget} />
+          <Detail r={active} fav={favOf(active)} onNote={acts.saveNote} onWaive={waive} onWatch={acts.watch} onCost={(r, c) => cost([r.id], c)} stacked budgetGbp={lineBudget} />
         </DetailDrawer>
       )}
     </div>
