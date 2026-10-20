@@ -97,6 +97,16 @@ Brand detail 19,938 → 1,570; Candidates 14,741 → 8,649 (the candidate detail
 1,487; Find niches 9,398 → 2,013; Brands 8,244 → 1,063; Settings (Gates) 7,752 → 2,820; Suppliers & quotes 7,213 → 1,151;
 Products 3,464 → 1,063; Help article 6,312 and Help 4,038 unchanged (article length). No page is wider than 390px.
 Screenshots: `docs/ui-audit/after/3b/` (gitignored).
+Phase 4a, Today becomes Next steps (in progress, 20 Oct 2026). The engine: `src/lib/server/nextSteps.ts` (rule-based, no AI;
+`buildSteps()` is pure and unit-tested per rule, `gatherFacts()` reads the data, `todaySteps()` ranks by priority then age and drops
+what you snoozed or dismissed), served by `GET /api/today`; `POST /api/today/steps` saves Later (24 h) or Done in `today_step_state`
+(migration 20261020000100). A dismissed step comes back only when its condition's fingerprint changes. Rules: System first (failed or
+missed nightly cron, Keepa under 100 tokens, SP-API unset / failed / no sync for 48 h); Ads (no bulk import since a launch started, or
+the last one over 7 days old; open proposals; launch milestones: week-1 review on day 7, bid changes day 14, lower target day 28, steady
+day 49, each shown until the next); Stock (open purchases with no supplier price or landed cost; Reorder due or soon); Private label
+(each active candidate's next action: the next launch checklist step, order samples on a pass, fix or drop on a failed gate, else the
+first gate with no answers; Alibaba leads scoring 60+ not messaged; messaged suppliers with no quote after 7 days); Wholesale (applied
+brand approvals over 7 days old, the best brand to apply for with a Buy product, one at a time; Shortlist items over a week old).
 To do: phase 4 (Today's layout, the candidate detail page, a pipeline board, Private label Launch + Ads Launch, one results table
 for Run detail / Brand detail / Products) and phase 5 (polish).
 
