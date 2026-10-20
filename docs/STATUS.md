@@ -193,8 +193,7 @@ runs as one new run, each on its own offer, default profile). Today's "Apply to 
 Products (`src/app/products/page.tsx`) is on it, still paged by the server (`listProducts()` in `src/lib/server/productPage.ts`): 50
 a page, 20 on a phone (`?size=`), `?page=` in the address; it returns each product's latest result for the table and drawer. Search,
 the plain verdicts (the brand map's priced verdict), brand and supplier (any supplier carrying it) go to the query; the other filters
-are matched against each product's latest result, reading down the list in chunks of 500 until the page fills
-(`planProductQuery()`, tested), so a combined filter takes up to ~4 s. Bought is the page's own toggle. Row and bulk actions: Add to
+(profit, ROI, sales, BSR, gated…) are answered by the `product_list` view (phase 5, below). Bought is the page's own toggle. Row and bulk actions: Add to
 Shortlist, Re-screen (via `/api/results/rescreen`), Export selected (xlsx, the run export's format), the selection kept across
 pages. ⌘K has "Buy products" (`/products?verdict=buy`).
 The small comparison tables have the DataTable look: `DataTable dense` (tighter cells, a table at every width that scrolls sideways
@@ -205,7 +204,13 @@ a table scrolled in its own box); Shortlist → Products 1,004 → 1,009 / 1,028
 / 6,172 → 4,463 (no longer 1px wider than the screen); Products 1,063 → 1,271 / 9,464 → 2,718. Screenshots: `docs/ui-audit/after/4c/`
 (gitignored).
 Phase 4c done.
-Phase 5, polish (20 Oct 2026). **Extension 0.8.0**: the product panel and search results show the app's words, colours and icons (Buy / Check / Skip / Not scored as round chips; the panel lists each gate as Pass / Check / Fail), and candidate links open `/pl/candidates/<id>` (Suppliers & quotes, Reviews or Gate 3 tab) instead of the old `?c=` redirect.
+Phase 5, polish (20 Oct 2026). **Products' filters fast**: `product_filter_facts` (migration 20261020000400) keeps what the
+results filters read of each product's latest result (the same `toFilterRow()`, `src/lib/server/productFacts.ts`), indexed on
+profit, ROI, sales, BSR and approval; the `product_list` view joins it to the brand map, one row per ASIN (newest), with
+`facts_fresh` false when the result's `updated_at` has moved on. Products refreshes stale facts first (normally none; the brand
+map's refresh also refreshes them when it finishes), narrows in the database, then `matches()` decides as on a run's table.
+A combined filter (profit, ROI, sales, BSR, not gated) went from ~4.1 s to ~0.3 s.
+**Extension 0.8.0**: the product panel and search results show the app's words, colours and icons (Buy / Check / Skip / Not scored as round chips; the panel lists each gate as Pass / Check / Fail), and candidate links open `/pl/candidates/<id>` (Suppliers & quotes, Reviews or Gate 3 tab) instead of the old `?c=` redirect.
 
 ## Workspaces
 

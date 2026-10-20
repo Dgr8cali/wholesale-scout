@@ -5,9 +5,9 @@ import { judge, type JudgeInput, type Judgement } from "../product";
 import { GATE_LABELS, type GateId } from "../screening/config";
 import { isDormant } from "../screening/dormant";
 import type { SeriesPoint } from "../sparkline";
-import { isEmpty, matches, type FilterSet, type Verdict } from "../filters";
-import { toFilterRow, type ResultLike } from "../ui/resultRows";
-import { activeRateCard, chunks, db, loadProfile, must } from "./db";
+import { isEmpty, matches, type FilterSet } from "../filters";
+import { activeRateCard, chunks, db, loadProfile, MAX_ROWS, must } from "./db";
+import { factsFilters, filterRowOf, refreshProductFacts } from "./productFacts";
 import { listDocuments } from "./documents";
 import type { DocumentRow } from "../documents";
 
@@ -181,16 +181,15 @@ export interface ProductListItem {
 
 /** The brand map's columns a product row needs. */
 const LIST_COLS = "asin, ean, title, brand, image_url, verdict, priced, sell_price, max_landed, fba_sellers, share_month, result_updated_at, result_id";
-/** What the filters read of a result (lean: no fees, sellers or Qogita offers). */
-const LEAN_RESULT = "id, status, verdict, band, failed_gate, sell_price, profit, roi, margin, why, error, gate_outcomes, market:inputs->market, restriction:inputs->restriction, product:products(ean, asin, title, brand), offer:offers(title, supplier:suppliers(name))";
+/** product_list's facts of each product's latest result (see productFacts). */
+const FACT_COLS = "band, failed_gate, amazon, approval, waived, dormant, sales, sellers, profit, roi, margin, sell, bsr";
 
 /**
  * Every product the app has screened, one per ASIN, newest screening first (from the brand map:
  * each product's latest result on the default profile), `size` a page (50, 20 on a phone), with the
  * results behind them (shaped like a run's rows) for the results table. The filters are the results
  * table's (lib/filters): search, verdict, brand and supplier run in the query; the rest (profit, ROI,
- * sales, BSR, gated…) are read from each product's latest result, so a page of those reads further
- * down the list until it fills. The verdict is the brand map's: Buy / Check / Skip when priced, else
+ * sales, BSR, gated…) on the facts kept of each product's latest result (productFacts), one query. The verdict is the brand map's: Buy / Check / Skip when priced, else
  * Not scored.
  */
 export async function listProducts(q: { filters: FilterSet; bought?: boolean; page?: number; size?: number }): Promise<{ items: ProductListItem[]; results: Record<string, Row>; more: boolean; suppliers: string[] }> {
@@ -200,8 +199,8 @@ export async function listProducts(q: { filters: FilterSet; bought?: boolean; pa
   const plan = planProductQuery(q.filters);
   const boughtAsins = (must(await d.from("purchases").select("asin"), "purchases") as { asin: string }[]).map((p) => p.asin);
   const bought = new Set(boughtAsins);
-  const base = () => {
-    let query = d.from("brand_products").select(LIST_COLS).not("asin", "is", null);
+  const base = (from: "brand_products" | "product_list" = "brand_products") => {
+    let query = d.from(from).select(LIST_COLS + (from === "product_list" ? `, ${FACT_COLS}` : "")).not("asin", "is", null);
     const text = plan.text?.replace(/[%_,()]/g, " ").trim();
     let textOr: string | null = null;
     if (text) {
@@ -227,26 +226,26 @@ export async function listProducts(q: { filters: FilterSet; bought?: boolean; pa
   const seen = new Set<string>();
   const matched: ProductListItem[] = [];
   const want = (page + 1) * size + 1;
-  const favourites = plan.rest.favouritesOnly ? new Set((must(await d.from("favourites").select("ean, asin"), "favourites") as { ean: string; asin: string | null }[]).map((f) => `${f.ean}/${f.asin ?? ""}`)) : new Set<string>();
-  const CHUNK = plan.scan ? 500 : (page + 1) * size + 40;
-  for (let from = 0; matched.length < want; from += CHUNK) {
-    const rows = must(await base().range(from, from + CHUNK - 1), "products") as Row[];
-    const fresh = rows.filter((r) => !seen.has(r.asin as string) && seen.add(r.asin as string));
-    if (plan.scan) {
-      const lean = new Map<string, Row>();
-      for (const c of chunks(fresh.map((r) => r.result_id as string).filter(Boolean), 200)) {
-        for (const x of must(await d.from("results").select(LEAN_RESULT).in("id", c), "results") as Row[]) lean.set(x.id as string, x);
-      }
-      for (const r of fresh) {
-        const res = lean.get(r.result_id as string);
-        if (!res) continue;
-        const fr = toFilterRow({ ...(res as never as ResultLike), inputs: { market: res.market as never, restriction: res.restriction as never } }, favourites);
-        if (matches({ ...fr, verdict: (r.priced ? (r.verdict as Verdict | null) : null) ?? null }, plan.rest)) matched.push(toItem(r));
-      }
-    } else {
-      matched.push(...fresh.map(toItem));
+  if (plan.scan) {
+    // Profit, ROI, sales, BSR, gated…: on each product's latest result's facts (product_list), brought
+    // up to date first; the database narrows, matches() decides, exactly as on a run's table.
+    await refreshProductFacts();
+    const favourites = plan.rest.favouritesOnly ? new Set((must(await d.from("favourites").select("ean, asin"), "favourites") as { ean: string; asin: string | null }[]).map((f) => `${f.ean}/${f.asin ?? ""}`)) : new Set<string>();
+    const narrow = factsFilters(plan.rest);
+    for (let from = 0; matched.length < want; from += MAX_ROWS) {
+      let query = base("product_list").not("result_id", "is", null);
+      for (const [op, col, val] of narrow) query = (query as unknown as Record<string, (c: string, v: unknown) => typeof query>)[op](col, val);
+      const rows = must(await query.range(from, from + MAX_ROWS - 1), "products") as unknown as Row[];
+      for (const r of rows) if (matches(filterRowOf(r, favourites.has(`${r.ean}/${r.asin ?? ""}`)), plan.rest)) matched.push(toItem(r));
+      if (rows.length < MAX_ROWS) break;
     }
-    if (rows.length < CHUNK) break;
+  } else {
+    const CHUNK = (page + 1) * size + 40;
+    for (let from = 0; matched.length < want; from += CHUNK) {
+      const rows = must(await base().range(from, from + CHUNK - 1), "products") as unknown as Row[];
+      matched.push(...rows.filter((r) => !seen.has(r.asin as string) && seen.add(r.asin as string)).map(toItem));
+      if (rows.length < CHUNK) break;
+    }
   }
   const items = matched.slice(page * size, page * size + size);
   const results: Record<string, Row> = {};
