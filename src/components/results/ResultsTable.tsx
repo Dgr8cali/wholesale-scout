@@ -12,7 +12,7 @@ import {
   MoreHorizontalIcon, PackageIcon, RefreshCwIcon, StarIcon, StarOffIcon,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import { toast } from "sonner";
 import { ProductThumb } from "@/components/ProductThumb";
 import { VerdictBadge } from "@/components/VerdictBadge";
@@ -213,10 +213,10 @@ export function ResultsTable(props: ResultsTableProps) {
   }
 
   // A new page on a phone starts at its first card.
-  const listTop = useRef<HTMLDivElement>(null);
+  const listTop = useId();
   const turn = (f: (n: number) => void) => (n: number) => {
     f(n);
-    if (phone) listTop.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+    if (phone) document.getElementById(listTop)?.scrollIntoView({ block: "start", behavior: "smooth" });
   };
   const pager = clientPaged
     ? rows.length > size && <Pager phone={phone} from={at * size + 1} to={Math.min(rows.length, (at + 1) * size)} total={rows.length} page={at} pages={pageCount} onPage={turn(setPageIndex)} />
@@ -239,7 +239,7 @@ export function ResultsTable(props: ResultsTableProps) {
 
   if (phone) {
     return (
-      <div className="scroll-mt-20 space-y-2" ref={listTop}>
+      <div className="scroll-mt-20 space-y-2" id={listTop}>
         {toolbar}
         <div className="panel overflow-hidden">
           {!shown.length ? <div className="px-4 py-10 text-center text-sm text-muted-foreground">{props.empty}</div> : (
