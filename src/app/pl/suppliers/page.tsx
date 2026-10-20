@@ -43,7 +43,7 @@ function SuppliersAndQuotes() {
           <TabsTrigger value="suppliers" className="px-3"><FactoryIcon /> Suppliers</TabsTrigger>
           <TabsTrigger value="quotes" className="px-3"><ReceiptTextIcon /> Quotes</TabsTrigger>
         </TabsList>
-        <TabsContent value="suppliers"><section className="panel p-4"><SuppliersPanel key={candidate} showCandidate initialFilter={candidate} /></section></TabsContent>
+        <TabsContent value="suppliers"><SuppliersPanel key={candidate} showCandidate initialFilter={candidate} /></TabsContent>
         <TabsContent value="quotes"><PlOverview mode="quotes" /></TabsContent>
       </Tabs>
     </div>

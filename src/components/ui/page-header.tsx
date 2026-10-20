@@ -22,7 +22,8 @@ export function PageHeader({ title, subtitle, info, actions, crumbs, className }
   usePageCrumbs(crumbs ?? null)
   return (
     <header data-slot="page-header" className={cn("flex flex-wrap items-start justify-between gap-x-6 gap-y-3", className)}>
-      <div className="min-w-0 flex-1">
+      {/* At least 16rem before it shares the row: on a phone the actions wrap below instead of squeezing the title. */}
+      <div className="min-w-0 flex-[1_1_16rem]">
         <div className="flex items-center gap-1.5">
           <h1 className="page-title">{title}</h1>
           {info && <InfoTip label={`About ${typeof title === "string" ? title : "this page"}`}>{info}</InfoTip>}

@@ -1,11 +1,15 @@
 "use client";
 
-import { ClipboardCopyIcon, LoaderIcon } from "lucide-react";
+import { ClipboardCopyIcon, FactoryIcon } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { EmptyState } from "@/components/States";
 import { Button } from "@/components/ui/button";
+import { InfoTip } from "@/components/ui/info-tip";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import { DEFAULT_HIDDEN_SUPPLIER_FLAGS, SUPPLIER_FLAG_LABEL, SUPPLIER_FLAGS, type SupplierFlag } from "@/lib/pl/supplierScore";
 import { api } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
@@ -24,34 +28,34 @@ export function SuppliersPanel({ candidateId, onQuoted, showCandidate, initialFi
   const load = useCallback(() => api<Data>(`/api/pl/suppliers${cand ? `?candidate=${cand}` : ""}`).then(setData).catch((e: Error) => toast.error(e.message)), [cand]);
   useEffect(() => { load(); }, [load]);
   const rows = useMemo(() => (data?.leads ?? []).filter((l) => !l.flags.some((f) => hide.has(f)) && (showRejected || l.status !== "rejected")), [data, hide, showRejected]);
-  if (!data) return <p className="text-sm text-muted-foreground">Loading suppliers…</p>;
+  if (!data) return <Skeleton className="h-48 rounded-xl" />;
   const s = data.summary;
   const hiddenCount = data.leads.length - rows.length;
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
         {([["Captured", s.captured], ["Scoring 60+", s.scoring60], ["To contact", s.toContact], ["Contacted", s.contacted], ["Quoted", s.quoted]] as const).map(([k, v]) => (
-          <span key={k}><span className="text-muted-foreground">{k}</span> <b className="num">{v}</b></span>
+          <span key={k}><span className="text-muted-foreground">{k}</span> <b className="num font-semibold">{v}</b></span>
         ))}
-        {data.targets && <span className="text-xs text-muted-foreground">Scored against £{data.targets.exworks?.toFixed(2) ?? "—"} a {data.targets.unit}{data.targets.exworksDerived && data.targets.exworks != null ? " (landed ÷ 1.4)" : ""}, MOQ up to {data.targets.maxMoq.toLocaleString("en-GB")} (Gate 6)</span>}
+        {data.targets && <span className="text-meta text-muted-foreground">Scored against £{data.targets.exworks?.toFixed(2) ?? "—"} a {data.targets.unit}{data.targets.exworksDerived && data.targets.exworks != null ? " (landed ÷ 1.4)" : ""}, MOQ up to {data.targets.maxMoq.toLocaleString("en-GB")} (Gate 6)</span>}
       </div>
       <div className="flex flex-wrap items-center gap-1.5 text-xs">
         {!candidateId && (
-          <NativeSelect className="h-8 w-56" value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Candidate">
+          <NativeSelect className="mr-2 w-full sm:w-56" value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Candidate">
             <NativeSelectOption value="">All candidates</NativeSelectOption>
             {data.candidates.map((c) => <NativeSelectOption key={c.id} value={c.id}>{c.name}</NativeSelectOption>)}
           </NativeSelect>
         )}
-        <span className="text-muted-foreground">Hide:</span>
+        <span className="text-meta text-muted-foreground">Hide:</span>
         {SUPPLIER_FLAGS.map((f) => (
           <button key={f} type="button" aria-pressed={hide.has(f)} onClick={() => { const y = new Set(hide); if (y.has(f)) y.delete(f); else y.add(f); setHide(y); }}
-            className={cn("rounded-full border px-2 py-0.5", hide.has(f) ? "border-ink-2 bg-ink-2 text-white" : "text-muted-foreground hover:text-foreground")}>{SUPPLIER_FLAG_LABEL[f]}</button>
+            className={cn("cursor-pointer rounded-full border px-2.5 py-1", hide.has(f) ? "border-primary bg-primary-soft font-medium text-primary-ink" : "border-border text-muted-foreground hover:bg-subtle hover:text-foreground")}>{SUPPLIER_FLAG_LABEL[f]}</button>
         ))}
-        <label className="ml-2 flex items-center gap-1 text-muted-foreground"><input type="checkbox" checked={showRejected} onChange={(e) => setShowRejected(e.target.checked)} /> rejected</label>
-        {hiddenCount > 0 && <span className="text-muted-foreground">· {hiddenCount} hidden</span>}
+        <label className="ml-2 flex cursor-pointer items-center gap-2 text-meta text-muted-foreground"><Switch checked={showRejected} onCheckedChange={setShowRejected} /> Show rejected</label>
+        {hiddenCount > 0 && <span className="text-meta text-muted-foreground">· <span className="num">{hiddenCount}</span> hidden</span>}
       </div>
       {data.leads.length ? <AlibabaSupplierTable rows={rows} showCandidate={showCandidate && !cand} onChanged={load} onQuoted={() => { load(); onQuoted?.(); }} />
-        : <p className="text-sm text-muted-foreground">No suppliers yet. Search Alibaba with the extension (0.5.0+) loaded and click <b>Send suppliers to Private label</b> on each results page. See <Link className="text-brand underline" href="/help/howto/pl-finding-suppliers">finding suppliers</Link>.</p>}
+        : <EmptyState icon={<FactoryIcon />} title="No suppliers yet" action={<Button variant="secondary" asChild><Link href="/help/howto/pl-finding-suppliers">Finding suppliers</Link></Button>}>Search Alibaba with the extension (0.5.0+) and click <b>Send suppliers to Private label</b> on each results page.</EmptyState>}
     </div>
   );
 }
@@ -74,11 +78,14 @@ export function SuppliersSection({ candidateId, onQuoted }: { candidateId: strin
   return (
     <section className="panel space-y-3 p-4" id="suppliers">
       <div className="flex flex-wrap items-start gap-3">
-        <div className="mr-auto max-w-3xl">
+        <div className="mr-auto flex items-center gap-1">
           <h2 className="font-heading text-base font-bold">Suppliers</h2>
-          <p className="text-sm text-muted-foreground">Alibaba listings sent from the extension, scored 0–100 against Gate 6&apos;s target price, MOQ and unit: price 35, MOQ 20, trust 25, relevance 20. Message the top three with the RFQ, then <b>Add quote</b> when they answer. Hover a score for its parts.</p>
+          <InfoTip label="About suppliers">
+            <p>Alibaba listings sent from the extension, scored 0–100 against Gate 6&apos;s target price, MOQ and unit: price 35, MOQ 20, trust 25, relevance 20.</p>
+            <p>Message the top three with the RFQ, then <b>Add quote</b> when they answer. Hover a score for its parts.</p>
+          </InfoTip>
         </div>
-        <Button variant="outline" size="sm" onClick={copy} disabled={copying}>{copying ? <LoaderIcon className="animate-spin" /> : <ClipboardCopyIcon />} Copy RFQ</Button>
+        <Button variant="secondary" size="sm" onClick={copy} loading={copying}>{!copying && <ClipboardCopyIcon />} Copy RFQ</Button>
       </div>
       <SuppliersPanel candidateId={candidateId} onQuoted={onQuoted} />
     </section>

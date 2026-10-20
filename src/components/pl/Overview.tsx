@@ -2,9 +2,13 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { SortTh, useSortable } from "@/components/SortableTable";
+import { ReceiptTextIcon, RocketIcon } from "lucide-react";
 import { ErrorState } from "@/components/States";
+import { Button } from "@/components/ui/button";
+import { DataTable, type DataColumn } from "@/components/ui/data-table";
 import { Skeleton } from "@/components/ui/skeleton";
+import { CandidateDecision, StatusChip } from "@/components/ui/status-chip";
+import { Switch } from "@/components/ui/switch";
 import { withAdsDefaults } from "@/lib/pl/adsDefaults";
 import { capitalFor, evaluate } from "@/lib/pl/gatekeeper";
 import type { PlStatus } from "@/lib/pl/launch";
@@ -14,7 +18,7 @@ import { cn } from "@/lib/utils";
 import { CandidateExtras } from "./Extras";
 import { valuesOf, type ListResponse } from "./types";
 
-const MULT_CLS = { pass: "text-pass", warn: "text-warn", fail: "text-fail" } as const;
+const MULT_CLS = { pass: "text-success", warn: "text-warn-ink", fail: "text-danger" } as const;
 const STATUS_RANK: Record<string, number> = { draft: 0, researching: 1, samples: 2, launched: 3, parked: 4, dropped: 5 };
 
 /**
@@ -40,54 +44,48 @@ export function PlOverview({ mode }: { mode: "quotes" | "launch" }) {
     const inLaunch = ev.v.title === "Order samples" || c.status === "samples" || c.status === "launched";
     return { c, ev, sell, landed, m: priceMultiple(sell, landed), quotes: counts[c.id] ?? 0, inLaunch };
   }).filter((r) => (mode === "launch" && !all ? r.inLaunch : all || (r.c.status !== "dropped" && r.c.status !== "parked"))), [list, counts, mode, all]);
-  const s = useSortable(`pl.${mode}`, rows, {
-    name: { value: (r) => r.c.name }, status: { value: (r) => STATUS_RANK[r.c.status] ?? 9, kind: "number" }, verdict: { value: (r) => r.ev.sc.total, kind: "number" },
-    quotes: { value: (r) => r.quotes, kind: "number" }, landed: { value: (r) => r.landed, kind: "number" }, multiple: { value: (r) => r.m?.multiple ?? null, kind: "number" },
-    next: { value: (r) => r.c.launch?.done ? r.c.launch.next : null },
-  });
-
   if (error) return <ErrorState title="Couldn't load the candidates" message={error} />;
-  if (!list) return <Skeleton className="h-64 rounded-lg" />;
-  const sel = rows.find((r) => r.c.id === picked) ?? s.rows[0] ?? null;
+  if (!list) return <Skeleton className="h-64 rounded-xl" />;
+  type Row = (typeof rows)[number];
+  const sel = rows.find((r) => r.c.id === picked) ?? rows[0] ?? null;
+  const columns: DataColumn<Row>[] = [
+    { id: "name", header: "Candidate", mobile: "title", sortValue: (r) => r.c.name, cell: (r) => <span className="font-medium">{r.c.name}</span> },
+    { id: "status", header: "Stage", mobile: 2, sortValue: (r) => STATUS_RANK[r.c.status] ?? 9, cell: (r) => <StatusChip tone="neutral" icon={false}>{r.c.status}</StatusChip> },
+    {
+      id: "verdict", header: "Verdict", mobile: 1, sortValue: (r) => r.ev.sc.total,
+      cell: (r) => <span className="inline-flex flex-wrap items-center gap-1.5"><CandidateDecision cls={r.ev.v.cls === "empty" ? null : r.ev.v.cls} title={r.ev.v.title} /> <span className="num text-meta text-muted-foreground">{r.ev.sc.answered === 10 ? `${r.ev.sc.total}/30` : `${r.ev.sc.answered}/10 scored`}</span></span>,
+    },
+    { id: "quotes", header: "Quotes", numeric: true, sortValue: (r) => r.quotes, cell: (r) => r.quotes || "—" },
+    { id: "landed", header: "Landed / unit", numeric: true, sortValue: (r) => r.landed, cell: (r) => <>{r.landed != null ? `£${r.landed.toFixed(2)}` : "—"}{r.c.chosen_landed != null && <span className="text-xs text-muted-foreground"> quote</span>}</> },
+    { id: "multiple", header: "Multiple", numeric: true, mobile: 3, sortValue: (r) => r.m?.multiple ?? null, cell: (r) => <span className={cn("font-medium", r.m && MULT_CLS[r.m.status])}>{r.m ? `${r.m.multiple.toFixed(2)}×` : "—"}</span> },
+    { id: "next", header: "Next launch step", sortValue: (r) => (r.c.launch?.done ? r.c.launch.next : null), cell: (r) => <span className="text-meta">{r.c.launch?.done ? r.c.launch.next ?? "All done" : r.inLaunch ? "Samples ordered" : "—"}</span> },
+  ];
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
         <span className="text-sm text-muted-foreground">{mode === "launch" ? "Candidates whose verdict is Order samples, or at samples or launched." : "Every candidate not dropped."}</span>
-        <label className="ml-auto flex items-center gap-2 text-sm"><input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} /> Show all candidates{mode === "quotes" ? " (dropped too)" : ""}</label>
+        <label className="ml-auto flex cursor-pointer items-center gap-2 text-sm"><Switch checked={all} onCheckedChange={setAll} /> Show all candidates{mode === "quotes" ? " (dropped too)" : ""}</label>
       </div>
-      {!rows.length ? (
-        <p className="panel p-4 text-sm text-muted-foreground">{mode === "launch" ? "No candidate is ready to launch yet: one gets here when its verdict is Order samples (24+ with every gate clear), or tick Show all candidates." : "No candidates yet."} <Link href="/pl/candidates" className="text-brand hover:underline">Candidates →</Link></p>
-      ) : (
-        <div className="overflow-x-auto rounded-lg border">
-          <table className="w-full text-sm">
-            <thead><tr className="border-b text-left text-xs tracking-wide text-muted-foreground uppercase">
-              <SortTh {...s.th("name")} className="px-2 py-1.5">Candidate</SortTh>
-              <SortTh {...s.th("status")} className="px-2 py-1.5">Status</SortTh>
-              <SortTh {...s.th("verdict")} className="px-2 py-1.5">Verdict</SortTh>
-              <SortTh {...s.th("quotes")} numeric className="px-2 py-1.5 text-right">Quotes</SortTh>
-              <SortTh {...s.th("landed")} numeric className="px-2 py-1.5 text-right">Landed / unit</SortTh>
-              <SortTh {...s.th("multiple")} numeric className="px-2 py-1.5 text-right">Multiple</SortTh>
-              <SortTh {...s.th("next")} className="px-2 py-1.5">Next launch step</SortTh>
-            </tr></thead>
-            <tbody>{s.rows.map((r) => (
-              <tr key={r.c.id} onClick={() => setPicked(r.c.id)} className={cn("cursor-pointer border-b last:border-b-0 hover:bg-surface-2", sel?.c.id === r.c.id && "bg-brand-soft hover:bg-brand-soft")}>
-                <td className="px-2 py-1.5 font-medium">{r.c.name}</td>
-                <td className="px-2 py-1.5"><span className="rounded border px-1 text-xs tracking-wide uppercase">{r.c.status}</span></td>
-                <td className="px-2 py-1.5 text-xs">{r.ev.v.title} <span className="text-muted-foreground">{r.ev.sc.answered === 10 ? `${r.ev.sc.total}/30` : `${r.ev.sc.answered}/10 scored`}</span></td>
-                <td className="num px-2 py-1.5 text-right">{r.quotes || "—"}</td>
-                <td className="num px-2 py-1.5 text-right">{r.landed != null ? `£${r.landed.toFixed(2)}` : "—"}{r.c.chosen_landed != null && <span className="text-xs text-muted-foreground"> quote</span>}</td>
-                <td className={cn("num px-2 py-1.5 text-right font-medium", r.m && MULT_CLS[r.m.status])}>{r.m ? `${r.m.multiple.toFixed(2)}×` : "—"}</td>
-                <td className="px-2 py-1.5 text-xs">{r.c.launch?.done ? r.c.launch.next ?? "All done" : r.inLaunch ? "Samples ordered" : "—"}</td>
-              </tr>
-            ))}</tbody>
-          </table>
-        </div>
-      )}
+      <DataTable
+        rows={rows}
+        columns={columns}
+        getRowId={(r) => r.c.id}
+        storageKey={`pl.${mode}`}
+        caption="Candidates"
+        onRowClick={(r) => setPicked(r.c.id)}
+        rowClassName={(r) => (sel?.c.id === r.c.id ? "bg-primary-soft hover:bg-primary-soft" : undefined)}
+        empty={{
+          icon: mode === "launch" ? <RocketIcon /> : <ReceiptTextIcon />,
+          title: mode === "launch" ? "No candidate is ready to launch yet" : "No candidates yet",
+          description: mode === "launch" ? "One gets here when its verdict is Order samples (24+ with every gate clear), or turn on Show all candidates." : "Add a candidate to collect its supplier quotes here.",
+          action: <Button variant="secondary" asChild><Link href="/pl/candidates">Candidates</Link></Button>,
+        }}
+      />
       {sel && (
         <div className="space-y-3">
-          <div className="flex items-baseline gap-2">
-            <h2 className="font-heading text-lg font-bold">{sel.c.name}</h2>
-            <Link href={`/pl/candidates?c=${sel.c.id}`} className="text-xs text-brand hover:underline">Open the candidate →</Link>
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <h2 className="section-title">{sel.c.name}</h2>
+            <Link href={`/pl/candidates?c=${sel.c.id}`} className="text-meta text-primary hover:underline">Open the candidate →</Link>
           </div>
           <CandidateExtras key={sel.c.id} show={mode}
             c={{ id: sel.c.id, name: sel.c.name, niche_keyword: sel.c.niche_keyword, category: sel.c.category, sell: sel.sell, fields: sel.c.fields }}

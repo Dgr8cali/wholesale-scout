@@ -1,16 +1,20 @@
 "use client";
 
-import { ChevronRightIcon, CrosshairIcon, ExternalLinkIcon, LoaderIcon, PlusIcon, SaveIcon, Trash2Icon } from "lucide-react";
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { CrosshairIcon, ExternalLinkIcon, EyeOffIcon, LoaderIcon, MoreHorizontalIcon, PlusIcon, SaveIcon, Trash2Icon } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useDialogs } from "@/components/Dialogs";
-import { SortTh, useSortable } from "@/components/SortableTable";
 import { ProductThumb } from "@/components/ProductThumb";
 import { EmptyState, ErrorState } from "@/components/States";
 import { Button } from "@/components/ui/button";
+import { DataTable, type DataColumn } from "@/components/ui/data-table";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { InfoTip, SectionTitle } from "@/components/ui/info-tip";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
+import { StatusChip, type Tone } from "@/components/ui/status-chip";
 import { Switch } from "@/components/ui/switch";
 import { money } from "@/lib/pl/gatekeeper";
 import { AVOID_CATEGORY_NAMES, LIMITS, SHAPE_RANK, TOKEN_RESERVE, WEIGHT_FILTER_UNKNOWN, type HuntEstimate, type Niche, type NicheHuntFilters, type Shape } from "@/lib/pl/hunt";
@@ -77,11 +81,11 @@ async function openInPoe(name: string) {
   }
   window.open(OE_URL, "_blank", "noopener");
 }
-const SHAPE: Record<Shape, { label: string; cls: string; title: string }> = {
-  open: { label: "Open", cls: "bg-pass-soft text-pass", title: "No ASIN over 1,000 reviews" },
-  contested: { label: "Contested", cls: "bg-warn-soft text-warn", title: "One ASIN over 1,000 reviews" },
-  dominated: { label: "Dominated", cls: "bg-fail-soft text-fail", title: "Two or more ASINs over 1,000 reviews, or one over 5,000" },
-  unchecked: { label: "Unchecked", cls: "bg-empty-soft text-ink-2", title: "Not checked for incumbents: fewer than 3 qualifying, or the check hasn't run" },
+const SHAPE: Record<Shape, { label: string; tone: Tone; title: string }> = {
+  open: { label: "Open", tone: "good", title: "No ASIN over 1,000 reviews" },
+  contested: { label: "Contested", tone: "warn", title: "One ASIN over 1,000 reviews" },
+  dominated: { label: "Dominated", tone: "bad", title: "Two or more ASINs over 1,000 reviews, or one over 5,000" },
+  unchecked: { label: "Unchecked", tone: "neutral", title: "Not checked for incumbents: fewer than 3 qualifying, or the check hasn't run" },
 };
 
 /** Niche Hunt: Product Finder hunts for products that pass Gates 0 and 1, grouped into niches. */
@@ -164,7 +168,7 @@ export function NicheHunt({ onCandidate }: { onCandidate: (id: string) => void }
     }
   };
   const deletePreset = async (id: string, name: string) => {
-    if (!(await confirm({ title: `Delete the preset “${name}”?`, confirmLabel: "Delete", destructive: true }))) return;
+    if (!(await confirm({ title: `Delete the preset “${name}”?`, description: "Its saved filters go; the filters on screen and past hunts stay.", confirmLabel: "Delete", destructive: true }))) return;
     await api(`/api/pl/hunt/presets?id=${id}`, { method: "DELETE" });
     setStart(await api<Start>("/api/pl/hunt"));
   };
@@ -173,15 +177,17 @@ export function NicheHunt({ onCandidate }: { onCandidate: (id: string) => void }
     <div className="space-y-4">
       <section className="panel space-y-4 p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="space-y-1">
-            <h2 className="section-label">Hunt filters</h2>
-            <p className="max-w-3xl text-sm text-muted-foreground">Defaults from Gate 0 and Gate 1, qualifying on the warn band (£15–40, rating 3.6–4.5); the candidate scorecard judges on the pass band. {f.mode === "direct"
-              ? "Direct: one Keepa query per category with every threshold Keepa can check itself (price, rating, reviews, sales a month, no Amazon, listing age, Amazon brands), best rank drops first; then each product's detail is checked (Amazon in 90 days, weight, parcel size) and grouped by its leaf category."
-              : "Leaf: each leaf category is sized with wide filters, then the most promising leaves are detailed and qualified. Products over the review cap stay in their niche as the incumbents to beat."}</p>
-            <div className="flex gap-1 pt-1" role="radiogroup" aria-label="Hunt mode">
+          <div className="space-y-2">
+            <SectionTitle title="Hunt filters">
+              <p>Defaults from Gate 0 and Gate 1, qualifying on the warn band (£15–40, rating 3.6–4.5); the candidate scorecard judges on the pass band.</p>
+              <p>{f.mode === "direct"
+                ? "Direct: one Keepa query per category with every threshold Keepa can check itself (price, rating, reviews, sales a month, no Amazon, listing age, Amazon brands), best rank drops first; then each product's detail is checked (Amazon in 90 days, weight, parcel size) and grouped by its leaf category."
+                : "Leaf: each leaf category is sized with wide filters, then the most promising leaves are detailed and qualified. Products over the review cap stay in their niche as the incumbents to beat."}</p>
+            </SectionTitle>
+            <div className="flex gap-1" role="radiogroup" aria-label="Hunt mode">
               {(["direct", "leaf"] as const).map((m) => (
                 <button key={m} type="button" role="radio" aria-checked={f.mode === m} onClick={() => set({ mode: m })}
-                  className={cn("rounded-md border px-3 py-1 text-sm", f.mode === m ? "border-brand bg-brand-soft font-medium text-brand" : "text-muted-foreground hover:bg-surface-2")}>
+                  className={cn("cursor-pointer rounded-lg border px-3 py-1.5 text-sm", f.mode === m ? "border-primary bg-primary-soft font-medium text-primary-ink" : "border-border text-muted-foreground hover:bg-subtle")}>
                   {m === "direct" ? "Direct (one query per category)" : "Leaf by leaf"}
                 </button>
               ))}
@@ -194,15 +200,19 @@ export function NicheHunt({ onCandidate }: { onCandidate: (id: string) => void }
                 {start.presets.map((p) => <NativeSelectOption key={p.id} value={p.id}>{p.name}</NativeSelectOption>)}
               </NativeSelect>
             )}
-            {preset && <Button variant="ghost" size="sm" className="text-fail hover:text-fail" onClick={() => { const p = start.presets.find((x) => x.id === preset); if (p) deletePreset(p.id, p.name).then(() => setPreset("")); }}><Trash2Icon /> Delete preset</Button>}
-            <Button variant="outline" size="sm" onClick={savePreset}><SaveIcon /> Save as preset</Button>
+            {preset && <Button variant="danger" size="sm" onClick={() => { const p = start.presets.find((x) => x.id === preset); if (p) deletePreset(p.id, p.name).then(() => setPreset("")); }}><Trash2Icon /> Delete preset</Button>}
+            <Button variant="secondary" size="sm" onClick={savePreset}><SaveIcon /> Save as preset</Button>
             <Button variant="ghost" size="sm" onClick={() => setF(start.defaults)}>Reset to defaults</Button>
           </div>
         </div>
         <div className="grid gap-4 lg:grid-cols-2">
           {f.mode === "direct" ? (
-          <fieldset className="space-y-3 rounded-lg border p-3">
-            <legend className="px-1 text-sm font-semibold">Direct query <span className="font-normal text-muted-foreground">(Keepa applies the qualifying thresholds itself)</span></legend>
+          <fieldset className="space-y-3 rounded-lg border border-border p-3">
+            <legend className="flex items-center gap-1 px-1 text-sm font-semibold">Direct query <span className="font-normal text-muted-foreground">(Keepa applies the thresholds)</span>
+              <InfoTip label="About the direct query">
+                <p>Keepa checks price, rating, reviews (at most the cap), sales a month (Amazon&apos;s &quot;bought in past month&quot;, at least rank drops ÷ 3), package weight up to 700 g, no Amazon offer, listing age and brands. Its weight filter leaves out products whose weight it doesn&apos;t know (about 0.4%).</p>
+                <p>Because reviews are capped in the query, every niche with 3+ qualifying products (up to 30) then gets an <b>incumbent check</b>: its leaf&apos;s 10 best sellers over the review cap, any price, so its shape and max reviews are real. A niche not checked shows &quot;Unchecked&quot;, never &quot;Open&quot;; an incumbent that shares no word with the niche&apos;s products is marked off-niche and left out.</p>
+              </InfoTip></legend>
             <div className="grid gap-3 sm:grid-cols-3">
               <Num label={`Pages a category (1–${LIMITS.pagesPerRoot})`} value={f.pagesPerRoot} onChange={(v) => set({ pagesPerRoot: v })} hint="50 ASINs a page, most rank drops first, 11 tokens" />
               <Num label="Listed at least (months)" value={f.minListedMonths} onChange={(v) => set({ minListedMonths: v })} />
@@ -212,11 +222,11 @@ export function NicheHunt({ onCandidate }: { onCandidate: (id: string) => void }
               <Toggle label="No Amazon offer (now; 90 days when qualifying)" checked={f.noAmazon} onChange={(v) => set({ noAmazon: v })} />
               <Toggle label="Leave out Amazon's own brands" checked={f.excludeAmazonBrands} onChange={(v) => set({ excludeAmazonBrands: v })} />
             </div>
-            <p className="text-xs text-muted-foreground">Keepa checks price, rating, reviews (at most the cap), sales a month (Amazon&apos;s &quot;bought in past month&quot;, at least rank drops ÷ 3), package weight up to 700 g, no Amazon offer, listing age and brands. Its weight filter leaves out products whose weight it doesn&apos;t know (about 0.4%). Because reviews are capped in the query, every niche with 3+ qualifying products (up to 30) then gets an <b>incumbent check</b>: its leaf&apos;s 10 best sellers over the review cap, any price, so its shape and max reviews are real. A niche not checked shows &quot;Unchecked&quot;, never &quot;Open&quot;; an incumbent that shares no word with the niche&apos;s products is marked off-niche and left out.</p>
           </fieldset>
           ) : (
-          <fieldset className="space-y-3 rounded-lg border p-3">
-            <legend className="px-1 text-sm font-semibold">Finder filters <span className="font-normal text-muted-foreground">(wide — what Keepa searches)</span></legend>
+          <fieldset className="space-y-3 rounded-lg border border-border p-3">
+            <legend className="flex items-center gap-1 px-1 text-sm font-semibold">Finder filters <span className="font-normal text-muted-foreground">(wide: what Keepa searches)</span>
+              <InfoTip label="About the finder filters"><p>No weight or size filter here: Keepa often lacks them, and the finder would drop those products. They&apos;re checked when qualifying.</p></InfoTip></legend>
             <div className="grid gap-3 sm:grid-cols-3">
               <Num label="Min price (£)" value={f.finderPriceMin} onChange={(v) => set({ finderPriceMin: v })} step={0.5} />
               <Num label="Max price (£)" value={f.finderPriceMax} onChange={(v) => set({ finderPriceMax: v })} step={0.5} />
@@ -229,11 +239,11 @@ export function NicheHunt({ onCandidate }: { onCandidate: (id: string) => void }
               <Toggle label="No Amazon offer (now; 90 days when qualifying)" checked={f.noAmazon} onChange={(v) => set({ noAmazon: v })} />
               <Toggle label="Leave out Amazon's own brands" checked={f.excludeAmazonBrands} onChange={(v) => set({ excludeAmazonBrands: v })} />
             </div>
-            <p className="text-xs text-muted-foreground">No weight or size filter here: Keepa often lacks them, and the finder would drop those products. They&apos;re checked when qualifying.</p>
           </fieldset>
           )}
-          <fieldset className="space-y-3 rounded-lg border p-3">
-            <legend className="px-1 text-sm font-semibold">Qualifying thresholds <span className="font-normal text-muted-foreground">(strict — what counts as page-one material)</span></legend>
+          <fieldset className="space-y-3 rounded-lg border border-border p-3">
+            <legend className="flex items-center gap-1 px-1 text-sm font-semibold">Qualifying thresholds <span className="font-normal text-muted-foreground">(strict: page-one material)</span>
+              <InfoTip label="About the qualifying thresholds"><p>A <b>near miss</b> fails only the gates&apos; warn band (£15–40, rating 3.6–4.5, 700 g) or is missing its size. Unknown weight isn&apos;t a miss: the product qualifies, marked &quot;weight unknown&quot;.</p></InfoTip></legend>
             <div className="grid gap-3 sm:grid-cols-3">
               <Num label="Min price (£)" value={f.priceMin} onChange={(v) => set({ priceMin: v })} step={0.5} />
               <Num label="Max price (£)" value={f.priceMax} onChange={(v) => set({ priceMax: v })} step={0.5} />
@@ -247,7 +257,6 @@ export function NicheHunt({ onCandidate }: { onCandidate: (id: string) => void }
             <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
               <Toggle label="Small parcel (35 × 25 × 12 cm) when Keepa has the size" checked={f.smallParcel} onChange={(v) => set({ smallParcel: v })} />
             </div>
-            <p className="text-xs text-muted-foreground">A <b>near miss</b> fails only the gates&apos; warn band (£15–40, rating 3.6–4.5, 700 g) or is missing its size. Unknown weight isn&apos;t a miss: the product qualifies, marked &quot;weight unknown&quot;.</p>
           </fieldset>
         </div>
         {f.mode === "leaf" && <div className="grid gap-3 sm:grid-cols-4">
@@ -265,7 +274,7 @@ export function NicheHunt({ onCandidate }: { onCandidate: (id: string) => void }
               return (
                 <button key={c.id} type="button" onClick={() => set({ categories: on ? f.categories.filter((x) => x !== c.id) : [...f.categories, c.id] })}
                   title={avoid ? "A Gate 0 avoid category: off by default" : undefined}
-                  className={cn("rounded-full border px-2.5 py-1 text-xs", on ? "border-brand bg-brand-soft font-medium text-brand" : "text-muted-foreground hover:bg-surface-2", avoid && !on && "border-dashed")}>
+                  className={cn("cursor-pointer rounded-full border px-2.5 py-1 text-xs", on ? "border-primary bg-primary-soft font-medium text-primary-ink" : "border-border text-muted-foreground hover:bg-subtle", avoid && !on && "border-dashed")}>
                   {c.name}{avoid ? " · avoid" : ""}
                 </button>
               );
@@ -273,9 +282,9 @@ export function NicheHunt({ onCandidate }: { onCandidate: (id: string) => void }
             {!start.categories.length && <span className="text-xs text-muted-foreground">No categories yet: the wholesale Hunt page&apos;s “Load categories” fetches them (1 token).</span>}
           </div>
         </div>
-        <div className="flex flex-wrap items-start gap-4 border-t pt-3">
-          <Button onClick={run} disabled={!!busy || busyHunt || !start.keepa || !f.categories.length || !plan?.fits}>
-            {busy === "run" ? <LoaderIcon className="animate-spin" /> : <CrosshairIcon />} Hunt niches
+        <div className="flex flex-wrap items-start gap-4 border-t border-divider pt-3">
+          <Button onClick={run} loading={busy === "run"} disabled={!!busy || busyHunt || !start.keepa || !f.categories.length || !plan?.fits}>
+            {busy !== "run" && <CrosshairIcon />} Hunt niches
           </Button>
           {plan && f.mode === "direct" ? (
             <div className="space-y-0.5 text-sm text-muted-foreground">
@@ -283,8 +292,8 @@ export function NicheHunt({ onCandidate }: { onCandidate: (id: string) => void }
               <div>Detail: up to <span className="num">{(plan.estimate.finderPages ?? 0) * 50}</span> ASINs × ~2 = <span className="num">{plan.estimate.detail}</span> tokens (less any fetched in the last 7 days)</div>
               {(plan.estimate.incumbentNiches ?? 0) > 0 && <div>+ incumbents: every niche with 3+ qualifying, up to <span className="num">{plan.estimate.incumbentNiches}</span> × 31 (a finder page of 11 + 10 details × 2) = <span className="num">{plan.estimate.incumbents}</span> tokens</div>}
               <div className="text-foreground">Total up to <b className="num">{plan.estimate.total}</b>; it stops at <b className="num">{plan.cap}</b> (+10%) · balance <span className="num">{plan.balance?.toLocaleString("en-GB") ?? "—"}</span>, {TOKEN_RESERVE} kept in reserve</div>
-              {plan.waitsForRefill && plan.fits && <div className="text-warn">More than the balance: it waits for Keepa&apos;s refill part-way (about 21 tokens a minute).</div>}
-              {!plan.fits && <div className="text-fail">The finder pages alone are over the balance less the reserve: fewer pages, or wait for the refill.</div>}
+              {plan.waitsForRefill && plan.fits && <div className="text-warn-ink">More than the balance: it waits for Keepa&apos;s refill part-way (about 21 tokens a minute).</div>}
+              {!plan.fits && <div className="text-danger">The finder pages alone are over the balance less the reserve: fewer pages, or wait for the refill.</div>}
             </div>
           ) : plan ? (
             <div className="space-y-0.5 text-sm text-muted-foreground">
@@ -293,9 +302,9 @@ export function NicheHunt({ onCandidate }: { onCandidate: (id: string) => void }
               <div>Stage 2, detail: <span className="num">{Math.min(f.detailLeaves, f.leafIds?.length ?? f.detailLeaves)}</span> leaves × {f.perLeaf} ASINs × ~2 = <span className="num">{plan.estimate.detail}</span> tokens (less any fetched in the last 7 days)</div>
               <div className="text-foreground">Total up to <b className="num">{plan.estimate.total}</b>; it stops at <b className="num">{plan.cap}</b> (+10%) · balance <span className="num">{plan.balance?.toLocaleString("en-GB") ?? "—"}</span>, {TOKEN_RESERVE} kept in reserve</div>
               {!plan.fits && (
-                <div className="flex flex-wrap items-center gap-2 text-fail">
+                <div className="flex flex-wrap items-center gap-2 text-danger">
                   Over the balance less the reserve.
-                  {plan.fittingDetailLeaves ? <Button size="xs" variant="outline" onClick={() => set({ detailLeaves: plan.fittingDetailLeaves! })}>Detail {plan.fittingDetailLeaves} leaves instead</Button>
+                  {plan.fittingDetailLeaves ? <Button size="sm" variant="secondary" onClick={() => set({ detailLeaves: plan.fittingDetailLeaves! })}>Detail {plan.fittingDetailLeaves} leaves instead</Button>
                     : <span>Size fewer leaves, or wait for the refill.</span>}
                 </div>
               )}
@@ -316,7 +325,7 @@ export function NicheHunt({ onCandidate }: { onCandidate: (id: string) => void }
           }
         }}
         onStart={async () => setStart(await api<Start>("/api/pl/hunt"))} /> : (
-        <EmptyState icon={<CrosshairIcon />} title="No hunt yet">Set the filters and click Hunt niches. Niches with enough qualifying products appear here, best-selling first.</EmptyState>
+        <EmptyState icon={<CrosshairIcon />} title="No hunt yet">Set the filters and click Hunt niches: niches with enough qualifying products appear here.</EmptyState>
       )}
     </div>
   );
@@ -343,28 +352,18 @@ function Results({ result, start, onReload, onPick, onCandidate, onStart, onRequ
   const [shape, setShape] = useState<"" | Shape>("");
   const [strict, setStrict] = useState(false);
   const [minCount, setMinCount] = useState(result.hunt.filters.minAsins ?? 3);
-  const [open, setOpen] = useState<Set<string>>(new Set());
+  // The niche whose ASINs are open in the side sheet.
+  const [openKey, setOpenKey] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [showDismissed, setShowDismissed] = useState(false);
   const { prompt } = useDialogs();
   const h = result.hunt;
   const [showLeaves, setShowLeaves] = useState(false);
 
-  const filtered = useMemo(() => result.niches
+  const rows = useMemo(() => result.niches
     .filter((n) => n.count + (strict ? 0 : n.nearCount) >= minCount && (!shape || n.shape === shape)), [result, minCount, shape, strict]);
-  const s = useSortable("pl.niches", filtered, {
-    name: { value: (n) => n.name, kind: "text" },
-    category: { value: (n) => n.rootCategory, kind: "text" },
-    count: { value: (n) => n.count, kind: "number" },
-    price: { value: (n) => n.medianPrice, kind: "number" },
-    reviews: { value: (n) => n.medianReviews, kind: "number" },
-    rating: { value: (n) => n.medianRating, kind: "number" },
-    sales: { value: (n) => n.salesSum, kind: "number" },
-    maxReviews: { value: (n) => n.maxReviews, kind: "number" },
-    shape: { value: (n) => SHAPE_RANK[n.shape], kind: "number" },
-  }, { key: "sales", dir: "desc" });
-  const rows = s.rows;
   const smaller = result.niches.filter((n) => n.count + (strict ? 0 : n.nearCount) < minCount && n.count + n.nearCount > 0).length;
+  const opened = openKey ? result.niches.find((n) => n.key === openKey) ?? null : null;
 
   const create = async (n: Niche) => {
     setBusy(n.key);
@@ -394,24 +393,75 @@ function Results({ result, start, onReload, onPick, onCandidate, onStart, onRequ
     onReload();
     onStart();
   };
-  const toggle = (k: string) => setOpen((s) => { const x = new Set(s); if (x.has(k)) x.delete(k); else x.add(k); return x; });
+
+  const columns: DataColumn<Niche>[] = [
+    {
+      id: "name", header: "Niche", mobile: "title", sortValue: (n) => n.name,
+      cell: (n) => <button type="button" className="min-w-36 cursor-pointer text-left font-medium hover:text-primary hover:underline" onClick={() => setOpenKey(n.key)} title="Show its ASINs">{n.name}</button>,
+    },
+    { id: "category", header: "Category", sortValue: (n) => n.rootCategory, cell: (n) => <span className="text-meta text-muted-foreground">{n.rootCategory ?? "—"}</span> },
+    {
+      id: "count", header: <span title="Qualifying · near misses · incumbents (sorts by qualifying)">Q · near · inc</span>, numeric: true, mobile: 1, sortValue: (n) => n.count,
+      cell: (n) => <span className="whitespace-nowrap"><b>{n.count}</b> · <span className="text-warn-ink">{n.nearCount}</span> · <span className="text-muted-foreground">{n.incumbentCount}</span></span>,
+    },
+    { id: "price", header: <span title="Median price">Price</span>, numeric: true, sortValue: (n) => n.medianPrice, cell: (n) => money(n.medianPrice) },
+    { id: "reviews", header: <span title="Median reviews">Reviews</span>, numeric: true, sortValue: (n) => n.medianReviews, cell: (n) => n0(n.medianReviews) },
+    { id: "rating", header: <span title="Median rating">Rating</span>, numeric: true, sortValue: (n) => n.medianRating, cell: (n) => n.medianRating?.toFixed(1) ?? "—" },
+    {
+      id: "sales", header: "Sales / mo", numeric: true, mobile: 2, sortValue: (n) => n.salesSum,
+      cell: (n) => <span title={n.salesFloorCount ? `${n.salesFloorCount} fast seller${n.salesFloorCount === 1 ? "" : "s"} without Amazon's bought-past-month: rank drops undercount them, so this is a floor` : undefined}>{n.salesFloorCount ? "≥ " : ""}{n0(n.salesSum)}</span>,
+    },
+    { id: "maxReviews", header: <span title="The most reviews on any of its ASINs: the incumbent to beat">Max rev.</span>, numeric: true, sortValue: (n) => n.maxReviews, cell: (n) => n0(n.maxReviews) },
+    { id: "shape", header: <span title="Open → contested → dominated → unchecked">Shape</span>, mobile: 3, sortValue: (n) => SHAPE_RANK[n.shape], cell: (n) => <StatusChip tone={SHAPE[n.shape].tone} title={SHAPE[n.shape].title}>{SHAPE[n.shape].label}</StatusChip> },
+    {
+      id: "actions", header: <span className="sr-only">Actions</span>, headerClassName: "w-px", pinEnd: true,
+      cell: (n) => (
+        <div className="flex items-center justify-end gap-1 whitespace-nowrap">
+          <Button size="sm" variant="secondary" onClick={() => create(n)} disabled={!!busy} loading={busy === n.key}>{busy !== n.key && <PlusIcon />} Create candidate</Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild><Button size="icon-sm" variant="ghost" aria-label={`More for ${n.name}`}><MoreHorizontalIcon /></Button></DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={() => setOpenKey(n.key)}>Show its ASINs</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => openInPoe(n.name)} title="Copies the niche name and opens Opportunity Explorer"><ExternalLinkIcon /> Opportunity Explorer</DropdownMenuItem>
+              <DropdownMenuItem variant="destructive" onSelect={() => dismiss(n)}><EyeOffIcon /> Dismiss niche</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      ),
+    },
+  ];
 
   return (
-    <section className="panel space-y-3 p-4">
+    <section className="space-y-3">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="space-y-1">
-          <h2 className="section-label">Niches</h2>
+        <div className="min-w-0 space-y-1">
+          <div className="flex items-center gap-1">
+            <h2 className="section-label">Niches</h2>
+            <InfoTip label="About this hunt">
+              <p>{h.name} · {ago(h.created_at)} · {h.leaves ? `${h.leaves.length} leaves` : `${h.finder_total?.toLocaleString("en-GB") ?? "?"} found`}, {h.asins.length} ASINs detailed ({h.fetched} fetched, {h.reused} reused) · <b>{h.token_cost} tokens</b>.</p>
+              {result.funnel.start > 0 && (
+                <p>
+                  <b>Why so few?</b> All {result.funnel.start} detailed (dismissed niches included)
+                  {result.funnel.steps.filter((x) => x.removed || x.near).map((x) => ` → ${x.label}: −${x.removed}${x.near ? ` (${x.near} near miss${x.near === 1 ? "" : "es"} let through)` : ""}`).join("")}
+                  {` → over ${h.filters.maxReviews} reviews: ${result.funnel.incumbents} incumbent${result.funnel.incumbents === 1 ? "" : "s"}`}
+                  {` = ${result.funnel.qualifying} qualifying + ${result.funnel.near} near miss${result.funnel.near === 1 ? "" : "es"}.`}
+                  {h.filters.mode === "direct" && !h.leaves && <> Before all that, Keepa&apos;s weight filter (700 g) left out products it has no weight for: about {(WEIGHT_FILTER_UNKNOWN.unknown / WEIGHT_FILTER_UNKNOWN.of * 100).toFixed(1)}% of matches ({WEIGHT_FILTER_UNKNOWN.unknown.toLocaleString("en-GB")} of {WEIGHT_FILTER_UNKNOWN.of.toLocaleString("en-GB")} when measured on Pet Supplies; Keepa doesn&apos;t report the count per query).</>}
+                  {" "}Leaves: {h.leaves ? `${h.leaves.filter((l) => l.matches != null).length} sized, ${h.leaves.reduce((a, l) => a + (l.matches ?? 0), 0).toLocaleString("en-GB")} finder matches, ${h.leaves.filter((l) => l.matches === 0).length} with none` : "—"}.
+                </p>
+              )}
+            </InfoTip>
+          </div>
           <p className="text-sm text-muted-foreground">
-            {h.name} · {ago(h.created_at)} · {h.leaves ? `${h.leaves.length} leaves` : `${h.finder_total?.toLocaleString("en-GB") ?? "?"} found`}, {h.asins.length} ASINs detailed ({h.fetched} fetched, {h.reused} reused) · <b className="text-foreground">{h.token_cost} tokens</b> · {result.qualifying} qualifying, {result.near} near misses, {result.incumbents} incumbents
+            {ago(h.created_at)} · <span className="num">{h.token_cost}</span> tokens · <span className="num">{result.qualifying}</span> qualifying, <span className="num">{result.near}</span> near misses, <span className="num">{result.incumbents}</span> incumbents
           </p>
           {h.leaves && (
-            <p className={cn("flex items-center gap-2 text-sm font-medium", running(h.status) ? "text-brand" : h.status === "error" ? "text-fail" : "text-muted-foreground")}>
+            <p className={cn("flex flex-wrap items-center gap-2 text-sm font-medium", running(h.status) ? "text-primary" : h.status === "error" ? "text-danger" : "text-muted-foreground")}>
               {running(h.status) && <LoaderIcon className="size-4 animate-spin" />}
               {progressLine(h)}{h.status === "done" ? " · done" : h.status === "cancelled" ? " · cancelled" : h.status === "error" ? " · stopped" : ""}
               {h.note && <span className="font-normal text-muted-foreground">({h.note})</span>}
-              {running(h.status) && <Button size="xs" variant="ghost" onClick={async () => { await api(`/api/pl/hunt/${h.id}/cancel`, { method: "POST" }); onReload(); }}>Cancel</Button>}
+              {running(h.status) && <Button size="sm" variant="ghost" onClick={async () => { await api(`/api/pl/hunt/${h.id}/cancel`, { method: "POST" }); onReload(); }}>Cancel</Button>}
               {!running(h.status) && !h.leaves && h.filters.mode === "direct" && (
-                <Button size="xs" variant="outline" title="Each niche with 3+ qualifying: its leaf's 10 best sellers over the review cap, ~31 tokens a niche" onClick={async () => {
+                <Button size="sm" variant="secondary" title="Each niche with 3+ qualifying: its leaf's 10 best sellers over the review cap, ~31 tokens a niche" onClick={async () => {
                   try {
                     const r = await api<{ niches: number; estimate: number }>(`/api/pl/hunt/${h.id}/incumbents`, { method: "POST", json: {} });
                     toast.success(`Checking ${r.niches} niche${r.niches === 1 ? "" : "s"} for incumbents: about ${r.estimate} tokens`);
@@ -423,7 +473,7 @@ function Results({ result, start, onReload, onPick, onCandidate, onStart, onRequ
           )}
         </div>
         {start.hunts.length > 1 && (
-          <NativeSelect className="w-72" value={h.id} onChange={(e) => onPick(e.target.value)}>
+          <NativeSelect className="w-full sm:w-72" value={h.id} onChange={(e) => onPick(e.target.value)} aria-label="Hunt">
             {start.hunts.map((x) => <NativeSelectOption key={x.id} value={x.id}>{new Date(x.created_at).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })} · {x.token_cost} tokens · {x.name.replace(/^Niche Hunt · /, "")}</NativeSelectOption>)}
           </NativeSelect>
         )}
@@ -433,176 +483,104 @@ function Results({ result, start, onReload, onPick, onCandidate, onStart, onRequ
           <NativeSelect value={shape} onChange={(e) => setShape(e.target.value as "" | Shape)}>
             <NativeSelectOption value="">Any</NativeSelectOption><NativeSelectOption value="open">Open</NativeSelectOption><NativeSelectOption value="contested">Contested</NativeSelectOption><NativeSelectOption value="dominated">Dominated</NativeSelectOption><NativeSelectOption value="unchecked">Unchecked</NativeSelectOption>
           </NativeSelect></label>
-        <label className="space-y-1"><span className="field-label">At least … {strict ? "qualifying" : "qualifying + near-miss"} ASINs</span>
+        <label className="flex flex-col gap-1"><span className="field-label">At least … {strict ? "qualifying" : "qualifying + near-miss"} ASINs</span>
           <Input className="num w-28" type="number" min={1} value={minCount} onChange={(e) => setMinCount(Math.max(1, Number(e.target.value) || 1))} /></label>
         <label className="flex items-center gap-2 pb-2 text-sm"><Switch checked={strict} onCheckedChange={setStrict} /> Strict (qualifying only)</label>
-        <Button variant="outline" size="sm" className="mb-0.5" disabled={!!busy || running(h.status)} onClick={async () => { setBusy("requalify"); try { await onRequalify(); } finally { setBusy(null); } }}
+        <Button variant="secondary" size="sm" className="mb-1" disabled={!!busy || running(h.status)} loading={busy === "requalify"} onClick={async () => { setBusy("requalify"); try { await onRequalify(); } finally { setBusy(null); } }}
           title="Qualify this hunt's fetched products again with the thresholds above: 0 tokens">
-          {busy === "requalify" ? <LoaderIcon className="animate-spin" /> : null} Re-qualify this hunt
+          Re-qualify this hunt
         </Button>
       </div>
 
-      {!rows.length ? (
-        <p className="rounded-lg bg-surface-2 px-3 py-2.5 text-sm text-muted-foreground">
-          No niche has {minCount}+ qualifying ASINs{shape ? ` and is ${shape}` : ""}.{smaller ? ` ${smaller} smaller niche${smaller === 1 ? "" : "s"}: lower "At least" to see ${smaller === 1 ? "it" : "them"}.` : ""} A hunt over a whole category spreads across many niches: a larger ASIN cap or fewer categories gives clusters.
-        </p>
-      ) : (
-        <div className="overflow-x-auto rounded-lg border">
-          <table className="w-full text-sm">
-            <thead><tr className="border-b text-left text-xs tracking-wide text-muted-foreground uppercase">
-              <SortTh {...s.th("name")} className="px-2 py-1.5">Niche</SortTh><SortTh {...s.th("category")} className="px-2 py-1.5">Category</SortTh>
-              <SortTh {...s.th("count")} numeric className="px-2 py-1.5 text-right" title="Qualifying · near misses · incumbents (sorts by qualifying)">Q · near · inc</SortTh>
-              <SortTh {...s.th("price")} numeric className="px-2 py-1.5 text-right">Median price</SortTh><SortTh {...s.th("reviews")} numeric className="px-2 py-1.5 text-right">Median reviews</SortTh>
-              <SortTh {...s.th("rating")} numeric className="px-2 py-1.5 text-right">Median rating</SortTh><SortTh {...s.th("sales")} numeric className="px-2 py-1.5 text-right">Sales / mo</SortTh>
-              <SortTh {...s.th("maxReviews")} numeric className="px-2 py-1.5 text-right">Max reviews</SortTh><SortTh {...s.th("shape")} className="px-2 py-1.5" title="Open → contested → dominated → unchecked">Shape</SortTh><th />
-            </tr></thead>
-            <tbody>
-              {rows.map((n) => (
-                <Fragment key={n.key}>
-                  <tr className="border-b align-middle">
-                    <td className="px-2 py-2">
-                      <button type="button" className="flex items-center gap-1.5 text-left font-medium" onClick={() => toggle(n.key)}>
-                        <ChevronRightIcon className={cn("size-4 flex-none text-muted-foreground transition-transform", open.has(n.key) && "rotate-90")} />{n.name}
-                      </button>
-                    </td>
-                    <td className="px-2 py-2 text-xs text-muted-foreground">{n.rootCategory ?? "—"}</td>
-                    <td className="num px-2 py-2 text-right whitespace-nowrap"><b>{n.count}</b> · <span className="text-warn">{n.nearCount}</span> · <span className="text-muted-foreground">{n.incumbentCount}</span></td>
-                    <td className="num px-2 py-2 text-right">{money(n.medianPrice)}</td>
-                    <td className="num px-2 py-2 text-right">{n0(n.medianReviews)}</td>
-                    <td className="num px-2 py-2 text-right">{n.medianRating?.toFixed(1) ?? "—"}</td>
-                    <td className="num px-2 py-2 text-right" title={n.salesFloorCount ? `${n.salesFloorCount} fast seller${n.salesFloorCount === 1 ? "" : "s"} without Amazon's bought-past-month: rank drops undercount them, so this is a floor` : undefined}>
-                      {n.salesFloorCount ? "≥ " : ""}{n0(n.salesSum)}
-                    </td>
-                    <td className="num px-2 py-2 text-right">{n0(n.maxReviews)}</td>
-                    <td className="px-2 py-2"><span title={SHAPE[n.shape].title} className={cn("rounded-full px-2 py-0.5 text-xs font-semibold", SHAPE[n.shape].cls)}>{SHAPE[n.shape].label}</span></td>
-                    <td className="px-2 py-2">
-                      <div className="flex items-center justify-end gap-2 whitespace-nowrap">
-                        <Button size="xs" onClick={() => create(n)} disabled={!!busy}>{busy === n.key ? <LoaderIcon className="animate-spin" /> : <PlusIcon />} Create candidate</Button>
-                        <button type="button" className="inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline" onClick={() => openInPoe(n.name)} title="Copies the niche name and opens Opportunity Explorer">Opportunity Explorer <ExternalLinkIcon className="size-3" /></button>
-                        <button type="button" className="text-xs text-muted-foreground hover:text-fail" onClick={() => dismiss(n)} title="Dismiss niche"><Trash2Icon className="size-3.5" /></button>
-                      </div>
-                    </td>
-                  </tr>
-                  {open.has(n.key) && (
-                    <tr className="border-b bg-surface-2/50"><td colSpan={10} className="px-2 py-2">
-                      <NicheAsins asins={n.asins} />
-                    </td></tr>
-                  )}
-                </Fragment>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <DataTable
+        rows={rows}
+        columns={columns}
+        getRowId={(n) => n.key}
+        storageKey="pl.hunt.niches"
+        caption="Niches found"
+        initialSort={{ id: "sales", desc: true }}
+        empty={{
+          icon: <CrosshairIcon />, title: `No niche has ${minCount}+ qualifying ASINs${shape ? ` and is ${shape}` : ""}`,
+          description: smaller ? `${smaller} smaller niche${smaller === 1 ? "" : "s"}: lower "At least" to see ${smaller === 1 ? "it" : "them"}.` : "A larger ASIN cap or fewer categories gives clusters.",
+          action: (smaller > 0 || shape) ? <Button variant="secondary" onClick={() => { setMinCount(1); setShape(""); }}>Show every niche</Button> : undefined,
+        }}
+      />
 
-      {result.funnel.start > 0 && (
-        <p className="rounded-lg bg-surface-2 px-3 py-2 text-xs text-muted-foreground">
-          <b className="text-foreground">Why so few?</b> All {result.funnel.start} detailed (dismissed niches included)
-          {result.funnel.steps.filter((x) => x.removed || x.near).map((x) => ` → ${x.label}: −${x.removed}${x.near ? ` (${x.near} near miss${x.near === 1 ? "" : "es"} let through)` : ""}`).join("")}
-          {` → over ${h.filters.maxReviews} reviews: ${result.funnel.incumbents} incumbent${result.funnel.incumbents === 1 ? "" : "s"}`}
-          {` = ${result.funnel.qualifying} qualifying + ${result.funnel.near} near miss${result.funnel.near === 1 ? "" : "es"}.`}
-          {h.filters.mode === "direct" && !h.leaves && <> Before all that, Keepa&apos;s weight filter (700 g) left out products it has no weight for: about {(WEIGHT_FILTER_UNKNOWN.unknown / WEIGHT_FILTER_UNKNOWN.of * 100).toFixed(1)}% of matches ({WEIGHT_FILTER_UNKNOWN.unknown.toLocaleString("en-GB")} of {WEIGHT_FILTER_UNKNOWN.of.toLocaleString("en-GB")} when measured on Pet Supplies; Keepa doesn&apos;t report the count per query).</>}
-          {" "}Leaves: {h.leaves ? `${h.leaves.filter((l) => l.matches != null).length} sized, ${h.leaves.reduce((a, l) => a + (l.matches ?? 0), 0).toLocaleString("en-GB")} finder matches, ${h.leaves.filter((l) => l.matches === 0).length} with none` : "—"}.
-        </p>
-      )}
+      <Sheet open={!!opened} onOpenChange={(o) => { if (!o) setOpenKey(null); }}>
+        <SheetContent className="w-full overflow-y-auto data-[side=right]:sm:max-w-3xl">
+          {opened && <>
+            <SheetHeader>
+              <SheetTitle>{opened.name}</SheetTitle>
+              <SheetDescription>{opened.count} qualifying · {opened.nearCount} near misses · {opened.incumbentCount} incumbents{opened.rootCategory ? ` · ${opened.rootCategory}` : ""}</SheetDescription>
+            </SheetHeader>
+            <div className="px-4 pb-4"><NicheAsins asins={opened.asins} /></div>
+          </>}
+        </SheetContent>
+      </Sheet>
 
-      {h.leaves && h.leaves.length > 0 && (
-        <div className="text-sm">
-          <button type="button" className="text-xs font-medium text-brand hover:underline" onClick={() => setShowLeaves((v) => !v)}>{showLeaves ? "Hide" : "Show"} leaves sized ({h.leaves.filter((l) => l.matches != null).length}/{h.leaves.length})</button>
-          {showLeaves && (
-            <div className="mt-2 overflow-x-auto rounded-lg border">
-              <LeavesTable leaves={h.leaves} minLeafMatches={h.filters.minLeafMatches} />
-            </div>
-          )}
-        </div>
-      )}
-
-      {start.dismissals.length > 0 && (
-        <div className="text-sm">
-          <button type="button" className="text-xs font-medium text-brand hover:underline" onClick={() => setShowDismissed((v) => !v)}>{showDismissed ? "Hide" : "Show"} dismissed niches ({start.dismissals.length})</button>
-          {showDismissed && (
-            <ul className="mt-2 space-y-1">{start.dismissals.map((d) => (
-              <li key={d.key} className="flex items-center gap-2 text-xs">
-                <span className="font-medium">{d.name ?? d.key}</span><span className="text-muted-foreground">{d.reason ?? ""} · {ago(d.created_at)}</span>
-                <button type="button" className="font-medium text-brand hover:underline" onClick={() => undismiss(d.key)}>Show again</button>
-              </li>
-            ))}</ul>
-          )}
-        </div>
+      <div className="flex flex-wrap gap-x-4 gap-y-2">
+        {h.leaves && h.leaves.length > 0 && (
+          <Button variant="link" size="sm" onClick={() => setShowLeaves((v) => !v)}>{showLeaves ? "Hide" : "Show"} leaves sized ({h.leaves.filter((l) => l.matches != null).length}/{h.leaves.length})</Button>
+        )}
+        {start.dismissals.length > 0 && (
+          <Button variant="link" size="sm" onClick={() => setShowDismissed((v) => !v)}>{showDismissed ? "Hide" : "Show"} dismissed niches ({start.dismissals.length})</Button>
+        )}
+      </div>
+      {showLeaves && h.leaves && h.leaves.length > 0 && <LeavesTable leaves={h.leaves} minLeafMatches={h.filters.minLeafMatches} />}
+      {showDismissed && start.dismissals.length > 0 && (
+        <ul className="panel divide-y divide-divider">{start.dismissals.map((d) => (
+          <li key={d.key} className="flex flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 text-sm">
+            <span className="font-medium">{d.name ?? d.key}</span><span className="text-meta text-muted-foreground">{d.reason ?? ""} · {ago(d.created_at)}</span>
+            <Button variant="ghost" size="sm" className="ml-auto" onClick={() => undismiss(d.key)}>Show again</Button>
+          </li>
+        ))}</ul>
       )}
     </section>
   );
 }
 
 const ASIN_STATUS_RANK = { qualifies: 0, near: 1, incumbent: 2, offNiche: 3, fails: 4 } as const;
+type NicheAsin = Niche["asins"][number];
 
 /** A niche's ASINs: every column sorts (status in the order qualifies → near miss → incumbent → fails). */
 function NicheAsins({ asins }: { asins: Niche["asins"] }) {
-  const s = useSortable("pl.nicheAsins", asins, {
-    title: { value: (a) => a.snap.title, kind: "text" },
-    price: { value: (a) => priceOf(a.snap), kind: "number" },
-    reviews: { value: (a) => a.snap.review_count, kind: "number" },
-    rating: { value: (a) => a.snap.rating, kind: "number" },
-    rank: { value: (a) => a.snap.avg_rank_90d, kind: "number" },
-    sales: { value: (a) => a.sales, kind: "number" },
-    status: { value: (a) => (a.offNiche ? ASIN_STATUS_RANK.offNiche : ASIN_STATUS_RANK[a.status]), kind: "number" },
-  });
-  return (
-    <table className="w-full text-xs">
-      <thead><tr className="text-left text-xs tracking-wide text-muted-foreground uppercase">
-        <SortTh {...s.th("title")} className="px-2 py-1">Listing</SortTh><SortTh {...s.th("price")} numeric className="px-2 py-1 text-right">Price</SortTh>
-        <SortTh {...s.th("reviews")} numeric className="px-2 py-1 text-right">Reviews</SortTh><SortTh {...s.th("rating")} numeric className="px-2 py-1 text-right">Rating</SortTh>
-        <SortTh {...s.th("rank")} numeric className="px-2 py-1 text-right">Rank</SortTh><SortTh {...s.th("sales")} numeric className="px-2 py-1 text-right">Sales / mo</SortTh>
-        <SortTh {...s.th("status")} className="px-2 py-1" title="Qualifies → near miss → incumbent → off-niche → fails">Status</SortTh>
-      </tr></thead>
-      <tbody>{s.rows.map((a) => (
-        <tr key={a.asin} className={cn("border-t", a.offNiche && "text-muted-foreground opacity-60")}>
-          <td className="px-2 py-1.5">
-            <div className="flex w-[min(30rem,50vw)] items-center gap-2">
-              <ProductThumb url={a.snap.image} asin={a.asin} title={a.snap.title} brand={a.snap.brand} size={32} />
-              <div className="min-w-0"><div className="truncate font-medium" title={a.snap.title ?? ""}>{a.snap.title}</div>
-                <div className="num text-muted-foreground"><a className="hover:underline" href={`https://www.amazon.co.uk/dp/${a.asin}`} target="_blank" rel="noreferrer">{a.asin}</a>{a.snap.brand ? ` · ${a.snap.brand}` : ""}</div></div>
-            </div>
-          </td>
-          <td className="num px-2 py-1.5 text-right">{money(priceOf(a.snap))}</td>
-          <td className="num px-2 py-1.5 text-right">{n0(a.snap.review_count)}</td>
-          <td className="num px-2 py-1.5 text-right">{a.snap.rating?.toFixed(1) ?? "—"}</td>
-          <td className="num px-2 py-1.5 text-right">{n0(a.snap.avg_rank_90d)}</td>
-          <td className="num px-2 py-1.5 text-right">{a.salesFloor ? "≥ " : ""}{n0(a.sales)}</td>
-          <td className="px-2 py-1.5">{a.qualifies ? <span><span className="font-medium text-pass">Qualifies</span>{a.unknown?.length ? <span className="text-muted-foreground"> ({a.unknown.join(", ")})</span> : null}</span>
-            : a.near ? <span><span className="font-medium text-warn">Near miss</span> <span className="text-muted-foreground">({a.reasons.join(", ")})</span></span>
-            : a.offNiche ? <span title="Left out of the niche's shape and max reviews"><span className="font-medium">Off-niche incumbent</span> <span>({a.reasons.join(", ")})</span></span>
-            : a.incumbent ? <span><span className="font-medium text-ink-2">Incumbent</span> <span className="text-muted-foreground">(over the review cap{a.reasons.length ? `; ${a.reasons.join(", ")}` : ""})</span></span>
-            : <span><span className="font-medium text-fail">Fails</span> <span className="text-muted-foreground">({a.reasons.join(", ")})</span></span>}</td>
-        </tr>
-      ))}</tbody>
-    </table>
-  );
+  const columns: DataColumn<NicheAsin>[] = [
+    {
+      id: "title", header: "Listing", mobile: "title", sortValue: (a) => a.snap.title,
+      cell: (a) => (
+        <div className="flex max-w-[28rem] min-w-0 items-center gap-2">
+          <ProductThumb url={a.snap.image} asin={a.asin} title={a.snap.title} brand={a.snap.brand} size={32} />
+          <div className="min-w-0"><div className="truncate font-medium" title={a.snap.title ?? ""}>{a.snap.title}</div>
+            <div className="num text-xs text-muted-foreground"><a className="hover:underline" href={`https://www.amazon.co.uk/dp/${a.asin}`} target="_blank" rel="noreferrer">{a.asin}</a>{a.snap.brand ? ` · ${a.snap.brand}` : ""}</div></div>
+        </div>
+      ),
+    },
+    { id: "price", header: "Price", numeric: true, mobile: 2, sortValue: (a) => priceOf(a.snap), cell: (a) => money(priceOf(a.snap)) },
+    { id: "reviews", header: "Reviews", numeric: true, mobile: 3, sortValue: (a) => a.snap.review_count, cell: (a) => n0(a.snap.review_count) },
+    { id: "rating", header: "Rating", numeric: true, sortValue: (a) => a.snap.rating, cell: (a) => a.snap.rating?.toFixed(1) ?? "—" },
+    { id: "rank", header: "Rank", numeric: true, sortValue: (a) => a.snap.avg_rank_90d, cell: (a) => n0(a.snap.avg_rank_90d) },
+    { id: "sales", header: "Sales / mo", numeric: true, sortValue: (a) => a.sales, cell: (a) => <>{a.salesFloor ? "≥ " : ""}{n0(a.sales)}</> },
+    {
+      id: "status", header: <span title="Qualifies → near miss → incumbent → off-niche → fails">Status</span>, mobile: 1,
+      sortValue: (a) => (a.offNiche ? ASIN_STATUS_RANK.offNiche : ASIN_STATUS_RANK[a.status]),
+      cell: (a) => <span className="text-meta">{a.qualifies ? <><StatusChip tone="good">Qualifies</StatusChip>{a.unknown?.length ? <span className="text-muted-foreground"> ({a.unknown.join(", ")})</span> : null}</>
+        : a.near ? <><StatusChip tone="warn">Near miss</StatusChip> <span className="text-muted-foreground">({a.reasons.join(", ")})</span></>
+        : a.offNiche ? <span title="Left out of the niche's shape and max reviews"><StatusChip tone="neutral">Off-niche incumbent</StatusChip> <span className="text-muted-foreground">({a.reasons.join(", ")})</span></span>
+        : a.incumbent ? <><StatusChip tone="neutral">Incumbent</StatusChip> <span className="text-muted-foreground">(over the review cap{a.reasons.length ? `; ${a.reasons.join(", ")}` : ""})</span></>
+        : <><StatusChip tone="bad">Fails</StatusChip> <span className="text-muted-foreground">({a.reasons.join(", ")})</span></>}</span>,
+    },
+  ];
+  return <DataTable rows={asins} columns={columns} getRowId={(a) => a.asin} storageKey="pl.nicheAsins" caption="The niche's ASINs" rowClassName={(a) => (a.offNiche ? "text-muted-foreground opacity-60" : undefined)} />;
 }
 
 /** The leaves a leaf-mode hunt sized: most matches first until you sort otherwise. */
 function LeavesTable({ leaves, minLeafMatches }: { leaves: HuntLeaf[]; minLeafMatches: number }) {
   const stage = (l: HuntLeaf) => (l.skipped ? "not sized (balance)" : l.detailed ? `detailed: ${l.fetched ?? 0} fetched, ${l.reused ?? 0} reused` : l.detail ? "to detail" : l.matches != null && l.matches < minLeafMatches ? `skipped (under ${minLeafMatches})` : l.matches != null ? "not in the top N" : "");
-  const s = useSortable("pl.leaves", leaves, {
-    name: { value: (l) => l.name, kind: "text" },
-    matches: { value: (l) => l.matches, kind: "number" },
-    cost: { value: (l) => (l.matches == null ? null : l.cached ? 0 : l.finderTokens), kind: "number" },
-    stage: { value: stage, kind: "text" },
-  }, { key: "matches", dir: "desc" });
-  return (
-    <table className="w-full text-xs">
-      <thead><tr className="border-b text-left text-xs tracking-wide text-muted-foreground uppercase">
-        <SortTh {...s.th("name")} className="px-2 py-1.5">Leaf</SortTh><SortTh {...s.th("matches")} numeric className="px-2 py-1.5 text-right">Matches</SortTh>
-        <SortTh {...s.th("cost")} numeric className="px-2 py-1.5 text-right">Finder cost</SortTh><SortTh {...s.th("stage")} className="px-2 py-1.5">Stage 2</SortTh>
-      </tr></thead>
-      <tbody>{s.rows.map((l) => (
-        <tr key={l.id} className="border-b last:border-b-0">
-          <td className="px-2 py-1.5">{l.name} <span className="num text-muted-foreground">{l.id}</span></td>
-          <td className="num px-2 py-1.5 text-right">{l.matches == null ? "…" : l.matches.toLocaleString("en-GB")}</td>
-          <td className="num px-2 py-1.5 text-right">{l.matches == null ? "" : l.cached ? "0 (counted in the last 7 days)" : l.finderTokens}</td>
-          <td className="px-2 py-1.5 text-muted-foreground">{stage(l)}</td>
-        </tr>
-      ))}</tbody>
-    </table>
-  );
+  const columns: DataColumn<HuntLeaf>[] = [
+    { id: "name", header: "Leaf", mobile: "title", sortValue: (l) => l.name, cell: (l) => <>{l.name} <span className="num text-xs text-muted-foreground">{l.id}</span></> },
+    { id: "matches", header: "Matches", numeric: true, mobile: 1, sortValue: (l) => l.matches, cell: (l) => (l.matches == null ? "…" : l.matches.toLocaleString("en-GB")) },
+    { id: "cost", header: "Finder cost", numeric: true, mobile: 2, sortValue: (l) => (l.matches == null ? null : l.cached ? 0 : l.finderTokens), cell: (l) => (l.matches == null ? "" : l.cached ? "0 (counted in the last 7 days)" : l.finderTokens) },
+    { id: "stage", header: "Stage 2", mobile: 3, sortValue: stage, cell: (l) => <span className="text-muted-foreground">{stage(l)}</span> },
+  ];
+  return <DataTable rows={leaves} columns={columns} getRowId={(l) => String(l.id)} storageKey="pl.leaves" caption="Leaves sized" initialSort={{ id: "matches", desc: true }} />;
 }

@@ -5,8 +5,10 @@ import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { useDialogs } from "@/components/Dialogs";
 import { Button } from "@/components/ui/button";
+import { InfoTip } from "@/components/ui/info-tip";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { StatusChip, type Tone } from "@/components/ui/status-chip";
 import { Switch } from "@/components/ui/switch";
 import {
   CURRENCIES, DEFAULT_FX, QUOTE_SOURCES, QUOTE_STATUSES, landedCost, landedInputs, priceMultiple, rfqText,
@@ -17,7 +19,7 @@ import { cn } from "@/lib/utils";
 
 const gbp = (v: number | null | undefined) => (v == null ? "—" : `£${v.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
 const TARIFF_URL = "https://www.trade-tariff.service.gov.uk/find_commodity";
-const MULT_CLS = { pass: "bg-pass-soft text-pass", warn: "bg-warn-soft text-warn", fail: "bg-fail-soft text-fail" } as const;
+const MULT_TONE: Record<"pass" | "warn" | "fail", Tone> = { pass: "good", warn: "warn", fail: "bad" };
 
 export interface QuotesCandidate {
   id: string; name: string; niche_keyword: string | null; category: string;
@@ -48,15 +50,18 @@ export function QuotesSection({ c, quotes, chosenQuote, onChanged, onFieldsChang
   return (
     <section className="panel space-y-3 p-4">
       <div className="flex flex-wrap items-start gap-3">
-        <div className="mr-auto max-w-3xl">
+        <div className="mr-auto flex items-center gap-1">
           <h2 className="font-heading text-base font-bold">Quotes</h2>
-          <p className="text-sm text-muted-foreground">Each supplier&apos;s quote turned into a landed cost per unit and the cash the first order needs. Gatekeeper&apos;s price multiple (sell ÷ landed) passes at 3.5× and warns from 3×. Write the one you trust into Gate 0 and Gate 7; a value you typed yourself stays.</p>
+          <InfoTip label="About quotes">
+            <p>Each supplier&apos;s quote turned into a landed cost per unit and the cash the first order needs. Gatekeeper&apos;s price multiple (sell ÷ landed) passes at 3.5× and warns from 3×.</p>
+            <p>Write the one you trust into Gate 0 and Gate 7; a value you typed yourself stays.</p>
+          </InfoTip>
         </div>
-        <Button variant="outline" size="sm" onClick={() => setRfq((v) => !v)}><FileTextIcon /> RFQ text</Button>
+        <Button variant="secondary" size="sm" onClick={() => setRfq((v) => !v)}><FileTextIcon /> RFQ text</Button>
         <Button size="sm" onClick={add}><PlusIcon /> Add quote</Button>
       </div>
       {rfq && <RfqPanel text={text} hasSix={!!f("sixWordsText")} />}
-      {!quotes.length ? <p className="text-sm text-muted-foreground">No quotes yet. Send the RFQ to three suppliers, then add each quote as it comes in.</p> : (
+      {!quotes.length ? <p className="rounded-lg bg-subtle px-3 py-2.5 text-sm text-muted-foreground">No quotes yet. Send the RFQ to three suppliers, then add each quote as it comes in.</p> : (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {quotes.map((q) => <QuoteCard key={q.id} q={q} sell={c.sell} chosen={chosenQuote === q.id} others={quotes.length - 1} onChanged={onChanged} onFieldsChanged={onFieldsChanged} />)}
         </div>
@@ -70,13 +75,13 @@ function RfqPanel({ text, hasSix }: { text: string; hasSix: boolean }) {
     try { await navigator.clipboard.writeText(text); toast.success("RFQ copied"); } catch { toast.error("Couldn't copy: select the text and copy it"); }
   };
   return (
-    <div className="space-y-2 rounded-lg border bg-surface-2 p-3">
+    <div className="space-y-2 rounded-lg border border-border bg-subtle p-3">
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm font-medium">Supplier enquiry</span>
-        {!hasSix && <span className="text-xs text-warn">Gate 4&apos;s &quot;The six words&quot; is empty: fill it so suppliers quote the differentiated product.</span>}
-        <Button size="xs" variant="outline" className="ml-auto" onClick={copy}><ClipboardCopyIcon /> Copy</Button>
+        {!hasSix && <span className="text-xs text-warn-ink">Gate 4&apos;s &quot;The six words&quot; is empty: fill it so suppliers quote the differentiated product.</span>}
+        <Button size="sm" variant="secondary" className="ml-auto" onClick={copy}><ClipboardCopyIcon /> Copy</Button>
       </div>
-      <textarea readOnly value={text} className="h-72 w-full resize-y rounded-md border bg-background p-2 font-mono text-xs" aria-label="RFQ text" />
+      <textarea readOnly value={text} className="h-72 w-full resize-y rounded-lg border border-border bg-card p-2 font-mono text-xs" aria-label="RFQ text" />
     </div>
   );
 }
@@ -121,7 +126,7 @@ function QuoteCard({ q, sell, chosen, others, onChanged, onFieldsChanged }: { q:
     }
   };
   const remove = async () => {
-    if (!(await confirm({ title: `Delete the quote from ${d.supplier_name}?`, confirmLabel: "Delete", destructive: true }))) return;
+    if (!(await confirm({ title: `Delete the quote from ${d.supplier_name}?`, description: "Its prices and landed cost go; values already written into the gates stay.", confirmLabel: "Delete", destructive: true }))) return;
     await api(`/api/pl/quotes/${q.id}`, { method: "DELETE" });
     onChanged();
   };
@@ -130,16 +135,16 @@ function QuoteCard({ q, sell, chosen, others, onChanged, onFieldsChanged }: { q:
   );
 
   return (
-    <div className={cn("space-y-3 rounded-lg border p-3", chosen && "border-pass ring-1 ring-pass/40", d.status === "rejected" && "opacity-70")}>
+    <div className={cn("space-y-3 rounded-xl border border-border bg-card p-3", chosen && "border-success ring-1 ring-success/40", d.status === "rejected" && "opacity-70")}>
       <div className="flex items-center gap-2">
         <Input className="h-8 font-medium" value={d.supplier_name} onChange={(e) => set({ supplier_name: e.target.value })} aria-label="Supplier" />
-        {chosen && <span className="rounded-full bg-pass-soft px-2 py-0.5 text-xs font-semibold text-pass">Chosen</span>}
-        <button type="button" onClick={remove} aria-label="Delete quote"><Trash2Icon className="size-4 text-muted-foreground hover:text-fail" /></button>
+        {chosen && <StatusChip tone="good">Chosen</StatusChip>}
+        <Button size="sm" variant="danger" onClick={remove} aria-label={`Delete the quote from ${d.supplier_name}`}><Trash2Icon /> Delete</Button>
       </div>
       <div className="grid grid-cols-2 gap-2">
         {field("Source", <NativeSelect className="h-8 w-full" value={d.source} onChange={(e) => set({ source: e.target.value as Quote["source"] })}>{QUOTE_SOURCES.map((s) => <NativeSelectOption key={s} value={s}>{s}</NativeSelectOption>)}</NativeSelect>)}
         {field("Status", <NativeSelect className="h-8 w-full" value={d.status} onChange={(e) => set({ status: e.target.value as Quote["status"] })}>{QUOTE_STATUSES.map((s) => <NativeSelectOption key={s} value={s}>{s}</NativeSelectOption>)}</NativeSelect>)}
-        <div className="col-span-2">{field("Contact (URL or email)", <Input className="h-8" value={d.contact ?? ""} onChange={(e) => set({ contact: e.target.value })} />, d.contact && /^https?:\/\//.test(d.contact) ? <a className="inline-flex items-center gap-1 text-brand hover:underline" href={d.contact} target="_blank" rel="noreferrer">Open <ExternalLinkIcon className="size-3" /></a> : null)}</div>
+        <div className="col-span-2">{field("Contact (URL or email)", <Input className="h-8" value={d.contact ?? ""} onChange={(e) => set({ contact: e.target.value })} />, d.contact && /^https?:\/\//.test(d.contact) ? <a className="inline-flex items-center gap-1 text-primary hover:underline" href={d.contact} target="_blank" rel="noreferrer">Open <ExternalLinkIcon className="size-3" /></a> : null)}</div>
         {field("Unit price (ex-works)", <div className="flex gap-1">{<NumIn value={d.unit_price} onChange={(v) => set({ unit_price: v })} step="0.01" />}
           <NativeSelect className="h-8 w-24 shrink-0" value={d.currency} onChange={(e) => set({ currency: e.target.value as Quote["currency"], calc: { fx: DEFAULT_FX[e.target.value as Quote["currency"]] } })}>{CURRENCIES.map((c) => <NativeSelectOption key={c} value={c}>{c}</NativeSelectOption>)}</NativeSelect></div>)}
         {field("MOQ", <NumIn value={d.moq} onChange={(v) => set({ moq: v })} step="1" />)}
@@ -149,18 +154,21 @@ function QuoteCard({ q, sell, chosen, others, onChanged, onFieldsChanged }: { q:
         <div className="col-span-2">{field("Notes", <Input className="h-8" value={d.notes ?? ""} onChange={(e) => set({ notes: e.target.value })} />)}</div>
       </div>
 
-      <div className="space-y-2 rounded-md bg-surface-2 p-2.5">
-        <div className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Landed cost</div>
+      <div className="space-y-2 rounded-lg bg-subtle p-2.5">
+        <h3 className="section-label">Landed cost</h3>
         <div className="grid grid-cols-2 gap-2">
           {field("Units ordered", <NumIn value={d.calc.units ?? null} onChange={(v) => set({ calc: { units: v ?? undefined } })} step="1" />, `Default: the MOQ (${d.moq ?? "—"})`)}
-          {field(`FX: ${d.currency} per £1`, <NumIn value={d.calc.fx ?? null} onChange={(v) => set({ calc: { fx: v ?? undefined } })} step="0.01" />, <>Default {DEFAULT_FX[d.currency]}: check today&apos;s rate on <a className="text-brand hover:underline" href={`https://www.xe.com/currencyconverter/convert/?Amount=1&From=GBP&To=${d.currency}`} target="_blank" rel="noreferrer">xe.com</a></>)}
+          {field(`FX: ${d.currency} per £1`, <NumIn value={d.calc.fx ?? null} onChange={(v) => set({ calc: { fx: v ?? undefined } })} step="0.01" />, <>Default {DEFAULT_FX[d.currency]}: check today&apos;s rate on <a className="text-primary hover:underline" href={`https://www.xe.com/currencyconverter/convert/?Amount=1&From=GBP&To=${d.currency}`} target="_blank" rel="noreferrer">xe.com</a></>)}
           {field("Freight to the UK (£, total)", <NumIn value={d.calc.freight ?? null} onChange={(v) => set({ calc: { freight: v ?? undefined } })} step="1" />)}
-          {field("Duty (%)", <NumIn value={d.calc.dutyPct ?? null} onChange={(v) => set({ calc: { dutyPct: v ?? undefined } })} step="0.1" />, <>On goods + freight. The rate for the commodity code: <a className="text-brand hover:underline" href={TARIFF_URL} target="_blank" rel="noreferrer">UK Trade Tariff</a></>)}
+          {field("Duty (%)", <NumIn value={d.calc.dutyPct ?? null} onChange={(v) => set({ calc: { dutyPct: v ?? undefined } })} step="0.1" />, <>On goods + freight. The rate for the commodity code: <a className="text-primary hover:underline" href={TARIFF_URL} target="_blank" rel="noreferrer">UK Trade Tariff</a></>)}
           {field("Inspection (£)", <NumIn value={d.calc.inspection ?? null} onChange={(v) => set({ calc: { inspection: v ?? undefined } })} step="1" />)}
           {field("Other (£)", <NumIn value={d.calc.other ?? null} onChange={(v) => set({ calc: { other: v ?? undefined } })} step="1" />)}
         </div>
-        <label className="flex items-start gap-2 text-xs"><Switch checked={i.vat} onCheckedChange={(v) => set({ calc: { vat: v } })} aria-label="Import VAT as a cost" />
-          <span>Import VAT 20% on goods + freight + duty, as a cost. Not VAT-registered: it&apos;s a cost. Registered: you reclaim it, so turn this off (or read &quot;ex VAT&quot; below).</span></label>
+        <div className="flex items-center gap-1 text-meta">
+          <label className="flex items-center gap-2"><Switch checked={i.vat} onCheckedChange={(v) => set({ calc: { vat: v } })} aria-label="Import VAT as a cost" />
+            Import VAT 20% as a cost</label>
+          <InfoTip label="About import VAT"><p>Import VAT 20% on goods + freight + duty, as a cost. Not VAT-registered: it&apos;s a cost. Registered: you reclaim it, so turn this off (or read &quot;ex VAT&quot; below).</p></InfoTip>
+        </div>
         {!l ? <p className="text-xs text-muted-foreground">Enter the unit price and units to see the landed cost.</p> : (
           <div className="space-y-1 text-sm">
             <div className="grid grid-cols-2 gap-x-3 text-xs text-muted-foreground">
@@ -171,25 +179,25 @@ function QuoteCard({ q, sell, chosen, others, onChanged, onFieldsChanged }: { q:
               {l.inspection > 0 && <><span>Inspection</span><span className="num text-right">{gbp(l.inspection)}</span></>}
               {l.other > 0 && <><span>Other</span><span className="num text-right">{gbp(l.other)}</span></>}
             </div>
-            <div className="flex items-baseline justify-between border-t pt-1"><span>Total cash required</span><b className="num">{gbp(l.total)}</b></div>
+            <div className="flex items-baseline justify-between border-t border-divider pt-1"><span>Total cash required</span><b className="num">{gbp(l.total)}</b></div>
             <div className="flex items-baseline justify-between"><span>Landed cost per unit</span><b className="num text-base">{gbp(l.perUnit)}</b></div>
             {l.vat > 0 && <div className="flex justify-between text-xs text-muted-foreground"><span>Per unit ex import VAT (once registered)</span><span className="num">{gbp(l.perUnitExVat)}</span></div>}
             <div className="flex items-center justify-between">
               <span>Price multiple{sell ? ` (sell ${gbp(sell)} ÷ landed)` : ""}</span>
-              {m ? <span className={cn("num rounded-full px-2 py-0.5 text-xs font-semibold", MULT_CLS[m.status])}>{m.multiple.toFixed(2)}×</span> : <span className="text-xs text-muted-foreground">needs Gate 0&apos;s sell price</span>}
+              {m ? <StatusChip tone={MULT_TONE[m.status]} className="num">{m.multiple.toFixed(2)}×</StatusChip> : <span className="text-xs text-muted-foreground">needs Gate 0&apos;s sell price</span>}
             </div>
           </div>
         )}
       </div>
 
       <div className="flex flex-wrap gap-1.5">
-        <Button size="xs" variant="outline" disabled={!l} onClick={() => apply("gate0")} title="Writes the landed cost per unit into Gate 0 (a value you typed stays)">Gate 0 landed cost ← this quote</Button>
-        <Button size="xs" variant="outline" disabled={!l} onClick={() => apply("gate7")} title="Writes the units ordered (and the landed cost) into Gate 7: its stock line becomes this order's total cash">Gate 7 first order ← this quote</Button>
+        <Button size="sm" variant="secondary" disabled={!l} onClick={() => apply("gate0")} title="Writes the landed cost per unit into Gate 0 (a value you typed stays)">Gate 0 landed cost ← this quote</Button>
+        <Button size="sm" variant="secondary" disabled={!l} onClick={() => apply("gate7")} title="Writes the units ordered (and the landed cost) into Gate 7: its stock line becomes this order's total cash">Gate 7 first order ← this quote</Button>
       </div>
       {!chosen && (
-        <div className="flex flex-wrap items-center gap-2 border-t pt-2">
-          <Button size="xs" onClick={choose}><CheckIcon /> Choose this quote</Button>
-          {others > 0 && <label className="flex items-center gap-1.5 text-xs"><input type="checkbox" checked={rejectOthers} onChange={(e) => setRejectOthers(e.target.checked)} /> mark the others rejected</label>}
+        <div className="flex flex-wrap items-center gap-2 border-t border-divider pt-2">
+          <Button size="sm" variant="secondary" onClick={choose}><CheckIcon /> Choose this quote</Button>
+          {others > 0 && <label className="flex items-center gap-1.5 text-meta"><input type="checkbox" checked={rejectOthers} onChange={(e) => setRejectOthers(e.target.checked)} /> mark the others rejected</label>}
         </div>
       )}
     </div>

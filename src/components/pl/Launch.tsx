@@ -6,6 +6,9 @@ import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { DataTable, type DataColumn } from "@/components/ui/data-table";
+import { InfoTip, SectionTitle } from "@/components/ui/info-tip";
+import { StatusChip } from "@/components/ui/status-chip";
 import { LAUNCH_STEPS, budgetTracker, nextStep, type LaunchStep, type PlStatus } from "@/lib/pl/launch";
 import { api } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
@@ -54,78 +57,79 @@ export function LaunchSection({ candidateId, status, steps, listingAsin, ads, pl
     }
   };
   const adsHref = `/ads/launch?candidateId=${candidateId}${listingAsin ? `&asin=${listingAsin}` : ""}`;
+  type Row = { d: (typeof LAUNCH_STEPS)[number]; i: number; s: LaunchStep | undefined };
+  const rows: Row[] = LAUNCH_STEPS.map((d, i) => ({ d, i, s: byKey.get(d.key) }));
+  const columns: DataColumn<Row>[] = [
+    {
+      id: "step", header: "Step", mobile: "title",
+      cell: ({ d, i, s }) => (
+        <label className="flex items-start gap-2">
+          <input type="checkbox" className="mt-1" checked={!!s?.done} onChange={(e) => save(d.key, { done: e.target.checked })} />
+          <span><span className={cn("font-medium", s?.done && "text-success")}>{i + 1}. {d.label}</span>
+            {d.hint && <span className="block text-meta font-normal text-muted-foreground">{d.hint}</span>}
+            {d.key === "listing_written" && <Link href={`/pl/candidates?c=${candidateId}#listing`} className="inline-flex items-center gap-1 text-meta font-medium text-primary hover:underline"><PenLineIcon className="size-3" /> Write it in the candidate&apos;s Listing section</Link>}
+            {d.key === "ads_launched" && <Link href={adsHref} className="inline-flex items-center gap-1 text-meta font-medium text-primary hover:underline"><MegaphoneIcon className="size-3" /> Build the campaigns in Ads → Launch</Link>}
+          </span>
+        </label>
+      ),
+    },
+    { id: "date", header: "Date", mobile: 1, cell: ({ d, s }) => <Input type="date" className="h-8 w-36" value={s?.done_on ?? ""} onChange={(e) => save(d.key, { done_on: e.target.value || null })} aria-label={`${d.label} date`} /> },
+    { id: "note", header: "Note", mobile: 2, cell: ({ d, s }) => <Input className="h-8 min-w-40" value={s?.note ?? ""} onChange={(e) => save(d.key, { note: e.target.value }, 600)} aria-label={`${d.label} note`} /> },
+    { id: "cost", header: "Cost (£)", numeric: true, mobile: 3, cell: ({ d, s }) => <Input type="number" step="0.01" min={0} className="num ml-auto h-8 w-24 text-right" value={s?.spend ?? ""} onChange={(e) => save(d.key, { spend: e.target.value === "" ? null : Number(e.target.value) }, 600)} aria-label={`${d.label} cost`} /> },
+  ];
 
   return (
     <section className="panel space-y-4 p-4">
       <div className="flex flex-wrap items-start gap-3">
-        <div className="mr-auto max-w-3xl">
-          <h2 className="font-heading text-base font-bold">Launch</h2>
-          <p className="text-sm text-muted-foreground">From samples to the first review. Tick each step as it happens, with the date, a note and what it cost: the status follows (samples ordered → Samples, listing live → Launched), and the costs go in the budget below.{next ? <> Next: <b className="text-foreground">{next.label}</b>.</> : " Every step done."}</p>
+        <div className="mr-auto min-w-0 space-y-1">
+          <div className="flex items-center gap-1">
+            <h2 className="font-heading text-base font-bold">Launch</h2>
+            <InfoTip label="About the launch checklist">
+              <p>From samples to the first review. Tick each step as it happens, with the date, a note and what it cost: the status follows (samples ordered → Samples, listing live → Launched), and the costs go in the budget below.</p>
+            </InfoTip>
+          </div>
+          <p className="text-sm text-muted-foreground">{next ? <>Next: <b className="font-medium text-foreground">{next.label}</b></> : "Every step done."}</p>
         </div>
-        <span className="rounded border px-2 py-0.5 text-xs tracking-wide uppercase">{status}</span>
+        <StatusChip tone="neutral" icon={false}>{status}</StatusChip>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border">
-        <table className="w-full text-sm">
-          <thead><tr className="border-b text-left text-xs tracking-wide text-muted-foreground uppercase">
-            <th className="px-2 py-1.5">Step</th><th className="px-2 py-1.5">Date</th><th className="px-2 py-1.5">Note</th><th className="px-2 py-1.5 text-right">Cost (£)</th>
-          </tr></thead>
-          <tbody>{LAUNCH_STEPS.map((d, i) => {
-            const s = byKey.get(d.key);
-            return (
-              <tr key={d.key} className={cn("border-b last:border-b-0", s?.done && "bg-pass-soft/30", next?.key === d.key && "bg-brand-soft/40")}>
-                <td className="px-2 py-1.5">
-                  <label className="flex items-start gap-2">
-                    <input type="checkbox" className="mt-1" checked={!!s?.done} onChange={(e) => save(d.key, { done: e.target.checked })} />
-                    <span><span className={cn("font-medium", s?.done && "text-pass")}>{i + 1}. {d.label}</span>
-                      {d.hint && <span className="block text-xs text-muted-foreground">{d.hint}</span>}
-                      {d.key === "listing_written" && <Link href={`/pl/candidates?c=${candidateId}#listing`} className="inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline"><PenLineIcon className="size-3" /> Write it in the candidate&apos;s Listing section</Link>}
-                      {d.key === "ads_launched" && <Link href={adsHref} className="inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline"><MegaphoneIcon className="size-3" /> Build the campaigns in Ads → Launch</Link>}
-                    </span>
-                  </label>
-                </td>
-                <td className="px-2 py-1.5"><Input type="date" className="h-7 w-36" value={s?.done_on ?? ""} onChange={(e) => save(d.key, { done_on: e.target.value || null })} aria-label={`${d.label} date`} /></td>
-                <td className="px-2 py-1.5"><Input className="h-7 min-w-40" value={s?.note ?? ""} onChange={(e) => save(d.key, { note: e.target.value }, 600)} aria-label={`${d.label} note`} /></td>
-                <td className="px-2 py-1.5 text-right"><Input type="number" step="0.01" min={0} className="num ml-auto h-7 w-24 text-right" value={s?.spend ?? ""} onChange={(e) => save(d.key, { spend: e.target.value === "" ? null : Number(e.target.value) }, 600)} aria-label={`${d.label} cost`} /></td>
-              </tr>
-            );
-          })}</tbody>
-        </table>
-      </div>
+      <DataTable rows={rows} columns={columns} getRowId={(r) => r.d.key} caption="Launch steps"
+        rowClassName={(r) => cn(r.s?.done && "bg-success-soft/40", next?.key === r.d.key && "bg-primary-soft/50")} />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="space-y-2">
-          <h3 className="text-sm font-semibold">Listing ASIN</h3>
-          <p className="text-xs text-muted-foreground">Once your listing exists: it becomes an Ads product with this candidate&apos;s landed cost, so profit after ads shows here and on the Ads dashboard.</p>
+          <SectionTitle title="Listing ASIN">
+            <p>Once your listing exists: it becomes an Ads product with this candidate&apos;s landed cost, so profit after ads shows here and on the Ads dashboard.</p>
+          </SectionTitle>
           <div className="flex gap-2">
             <Input className="num h-8 w-40 uppercase" placeholder="B0…" value={asin} onChange={(e) => setAsin(e.target.value)} aria-label="Listing ASIN" />
-            <Button size="sm" variant="outline" onClick={saveAsin}>Save</Button>
-            {listingAsin && <Link href="/ads/dashboard" className="self-center text-xs text-brand hover:underline">Ads dashboard →</Link>}
+            <Button size="sm" variant="secondary" onClick={saveAsin}>Save</Button>
+            {listingAsin && <Link href="/ads/dashboard" className="self-center text-meta text-primary hover:underline">Ads dashboard →</Link>}
           </div>
           {ads && (
             <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-3">
               <Fig label="Ad spend" value={gbp(ads.spend)} />
               <Fig label="Ad sales" value={gbp(ads.sales)} />
               <Fig label="ACoS" value={pct(ads.acos)} sub={`break-even ${pct(ads.breakEvenAcos)}`} />
-              <Fig label="Profit after ads" value={gbp(ads.profitAfterAds)} cls={ads.profitAfterAds == null ? "" : ads.profitAfterAds >= 0 ? "text-pass" : "text-fail"} />
+              <Fig label="Profit after ads" value={gbp(ads.profitAfterAds)} cls={ads.profitAfterAds == null ? "" : ads.profitAfterAds >= 0 ? "text-success" : "text-danger"} />
               <Fig label="Campaigns" value={String(ads.campaigns)} sub={ads.campaigns ? undefined : "none imported yet"} />
             </div>
           )}
         </div>
         <div className="space-y-2">
-          <h3 className="text-sm font-semibold">Budget</h3>
+          <SectionTitle title="Budget" />
           <div>
             <div className="mb-1 flex justify-between text-xs text-muted-foreground"><span>Spent {gbp(b.spent)} of {gbp(b.budget)}</span><span>Planned {gbp(b.plannedTotal)}</span></div>
-            <div className="relative h-3 overflow-hidden rounded-full bg-surface-2" role="img" aria-label={`Spent ${Math.round(b.spentRatio * 100)}% of the budget; planned ${Math.round(b.plannedRatio * 100)}%`}>
-              <div className={cn("h-full", b.spentRatio > 1 ? "bg-fail" : b.spentRatio > 0.9 ? "bg-highlight" : "bg-brand")} style={{ width: `${Math.min(100, b.spentRatio * 100)}%` }} />
-              <div className="absolute top-0 h-full w-0.5 bg-ink-2" style={{ left: `${Math.min(100, b.plannedRatio * 100)}%` }} title="Planned (Gate 7)" />
+            <div className="relative h-3 overflow-hidden rounded-full bg-subtle" role="img" aria-label={`Spent ${Math.round(b.spentRatio * 100)}% of the budget; planned ${Math.round(b.plannedRatio * 100)}%`}>
+              <div className={cn("h-full", b.spentRatio > 1 ? "bg-danger" : b.spentRatio > 0.9 ? "bg-highlight" : "bg-primary")} style={{ width: `${Math.min(100, b.spentRatio * 100)}%` }} />
+              <div className="absolute top-0 h-full w-0.5 bg-foreground/60" style={{ left: `${Math.min(100, b.plannedRatio * 100)}%` }} title="Planned (Gate 7)" />
             </div>
           </div>
-          <table className="w-full text-xs">
-            <thead><tr className="text-left text-muted-foreground"><th className="py-0.5">Line</th><th className="py-0.5 text-right">Planned (Gate 7)</th><th className="py-0.5 text-right">Spent</th></tr></thead>
+          <table className="w-full text-meta">
+            <thead><tr className="text-left text-xs font-semibold tracking-[0.06em] text-muted-foreground uppercase"><th className="py-1.5">Line</th><th className="py-1.5 text-right">Planned (Gate 7)</th><th className="py-1.5 text-right">Spent</th></tr></thead>
             <tbody>{b.rows.map((r) => (
-              <tr key={r.line} className="border-t"><td className="py-0.5">{r.label}</td><td className="num py-0.5 text-right">{gbp(r.planned)}</td>
-                <td className={cn("num py-0.5 text-right", r.planned != null && r.actual > r.planned && "text-fail")}>{r.actual ? gbp(r.actual) : "—"}</td></tr>
+              <tr key={r.line} className="border-t border-divider"><td className="py-1">{r.label}</td><td className="num py-1 text-right">{gbp(r.planned)}</td>
+                <td className={cn("num py-1 text-right", r.planned != null && r.actual > r.planned && "text-danger")}>{r.actual ? gbp(r.actual) : "—"}</td></tr>
             ))}</tbody>
           </table>
         </div>
@@ -136,8 +140,8 @@ export function LaunchSection({ candidateId, status, steps, listingAsin, ads, pl
 
 function Fig({ label, value, sub, cls }: { label: string; value: string; sub?: string; cls?: string }) {
   return (
-    <div className="rounded-lg bg-surface-2 px-2.5 py-1.5">
-      <div className="text-xs tracking-wide text-muted-foreground uppercase">{label}</div>
+    <div className="rounded-lg bg-subtle px-2.5 py-1.5">
+      <div className="text-xs text-muted-foreground">{label}</div>
       <div className={cn("num font-medium", cls)}>{value}</div>
       {sub && <div className="text-xs text-muted-foreground">{sub}</div>}
     </div>

@@ -1,10 +1,13 @@
 "use client";
 
-import { ExternalLinkIcon, LoaderIcon } from "lucide-react";
+import { ExternalLinkIcon, FactoryIcon, MoreHorizontalIcon } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { useDialogs } from "@/components/Dialogs";
-import { SortTh, useSortable } from "@/components/SortableTable";
+import { Button } from "@/components/ui/button";
+import { DataTable, type DataColumn } from "@/components/ui/data-table";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { StatusChip, type Tone } from "@/components/ui/status-chip";
 import { SUPPLIER_FLAG_LABEL, type SupplierFlag } from "@/lib/pl/supplierScore";
 import type { SupplierLead } from "@/lib/server/plSuppliers";
 import { api } from "@/lib/ui/client";
@@ -13,11 +16,12 @@ import { toast } from "sonner";
 
 export type Lead = SupplierLead & { candidate_name?: string };
 
-const FLAG_CLS: Record<SupplierFlag, string> = {
-  NOT_FACTORY: "bg-warn-soft text-warn", UNIT_UNCLEAR: "bg-empty-soft text-ink-2", MOQ_TOO_HIGH: "bg-warn-soft text-warn", OFF_PRODUCT: "bg-fail-soft text-fail", HIGH_PRICE: "bg-fail-soft text-fail",
+const FLAG_TONE: Record<SupplierFlag, Tone> = {
+  NOT_FACTORY: "warn", UNIT_UNCLEAR: "neutral", MOQ_TOO_HIGH: "warn", OFF_PRODUCT: "bad", HIGH_PRICE: "bad",
 };
-const STATUS_CLS: Record<string, string> = { new: "text-muted-foreground", contacted: "text-brand", quoted: "text-pass", rejected: "text-fail" };
-const scoreTone = (s: number | null) => (s == null ? "" : s >= 60 ? "text-pass" : s >= 40 ? "text-warn" : "text-fail");
+const STATUS_TONE: Record<string, Tone> = { new: "neutral", contacted: "info", quoted: "good", rejected: "bad" };
+const STATUS_RANK = ["new", "contacted", "quoted", "rejected"];
+const scoreTone = (s: number | null) => (s == null ? "" : s >= 60 ? "text-success" : s >= 40 ? "text-warn-ink" : "text-danger");
 const gbp = (v: number | null | undefined) => (v == null ? "—" : `£${v < 1 ? v.toFixed(4).replace(/0+$/, "").replace(/\.$/, "") : v.toFixed(2)}`);
 const sym = (c: string | null) => (c === "GBP" ? "£" : c === "USD" ? "$" : c === "EUR" ? "€" : c ? `${c} ` : "");
 
@@ -28,21 +32,6 @@ const sym = (c: string | null) => (c === "GBP" ? "£" : c === "USD" ? "$" : c ==
 export function AlibabaSupplierTable({ rows, showCandidate, onChanged, onQuoted }: { rows: Lead[]; showCandidate?: boolean; onChanged: () => void; onQuoted: () => void }) {
   const { prompt } = useDialogs();
   const [busy, setBusy] = useState<string | null>(null);
-  const t = useSortable("pl.suppliers", rows, {
-    score: { value: (l) => l.score, kind: "number" },
-    supplier: { value: (l) => l.supplier_name, kind: "text" },
-    candidate: { value: (l) => l.candidate_name ?? "", kind: "text" },
-    ours: { value: (l) => l.score_breakdown?.perUnit ?? null, kind: "number" },
-    listed: { value: (l) => l.price_max ?? l.price_min, kind: "number" },
-    moq: { value: (l) => l.score_breakdown?.moqOurs ?? l.moq, kind: "number" },
-    years: { value: (l) => l.supplier_years, kind: "number" },
-    rating: { value: (l) => l.rating, kind: "number" },
-    reviews: { value: (l) => l.review_count, kind: "number" },
-    badges: { value: (l) => l.badges.length, kind: "number" },
-    sold: { value: (l) => l.sold_count, kind: "number" },
-    flags: { value: (l) => l.flags.length, kind: "number" },
-    status: { value: (l) => ["new", "contacted", "quoted", "rejected"].indexOf(l.status), kind: "number" },
-  }, { key: "score", dir: "desc" });
   const act = async (id: string, f: () => Promise<unknown>, ok?: string) => {
     setBusy(id);
     try { await f(); if (ok) toast.success(ok); onChanged(); } catch (e) { toast.error((e as Error).message); } finally { setBusy(null); }
@@ -57,66 +46,70 @@ export function AlibabaSupplierTable({ rows, showCandidate, onChanged, onQuoted 
     if (text != null) await patch(l, { notes: text }, "Notes saved");
   };
   const quote = (l: Lead) => act(l.id, async () => { await api(`/api/pl/suppliers/${l.id}`, { method: "POST", json: { action: "quote" } }); onQuoted(); }, `Quote started for ${l.supplier_name}: fill it in under Quotes`);
+  const columns: DataColumn<Lead>[] = [
+    {
+      id: "score", header: "Score", numeric: true, mobile: 1, sortValue: (l) => l.score,
+      cell: (l) => {
+        const b = l.score_breakdown;
+        const parts = b ? Object.entries(b.parts).map(([k, p]) => `${k} ${p.points}/${p.max}: ${p.note}`).join("\n") : "";
+        return <span className={cn("font-semibold", scoreTone(l.score))} title={parts}>{l.score ?? "—"}</span>;
+      },
+    },
+    {
+      id: "supplier", header: "Supplier", mobile: "title", sortValue: (l) => l.supplier_name, className: "max-w-72 align-top",
+      cell: (l) => (
+        <div className="min-w-48">
+          <span className="block font-medium">{l.supplier_name ?? "—"}{l.country && <span className="ml-1 font-normal text-muted-foreground">{l.country}</span>}</span>
+          <span className="line-clamp-2 text-meta text-muted-foreground" title={l.title ?? ""}>{l.title}</span>
+          {l.notes && <span className="block text-meta text-muted-foreground italic">{l.notes.slice(0, 120)}</span>}
+          {l.status === "rejected" && l.reject_reason && <span className="block text-meta text-danger">Rejected: {l.reject_reason}</span>}
+        </div>
+      ),
+    },
+    ...(showCandidate ? [{ id: "candidate", header: "Candidate", sortValue: (l: Lead) => l.candidate_name ?? "", cell: (l: Lead) => <Link className="text-primary hover:underline" href={`/pl/candidates?c=${l.candidate_id}#suppliers`}>{l.candidate_name}</Link> }] : []),
+    {
+      id: "ours", header: <span title="The price per unit of our product, at the MOQ (the top of the range)">Per our unit</span>, numeric: true, mobile: 2, sortValue: (l) => l.score_breakdown?.perUnit ?? null,
+      cell: (l) => { const b = l.score_breakdown; return <span title={b?.parts.price.note}>{b?.perUnit != null ? `${gbp(b.perUnit)}/${b.unit}` : <span className="text-muted-foreground">?</span>}</span>; },
+    },
+    { id: "listed", header: "Listed", numeric: true, sortValue: (l) => l.price_max ?? l.price_min, cell: (l) => <span className="whitespace-nowrap">{l.price_min != null ? `${sym(l.currency)}${l.price_min}${l.price_max != null && l.price_max !== l.price_min ? `–${l.price_max}` : ""}` : "—"}{l.price_unit && <span className="text-muted-foreground">/{l.price_unit}</span>}</span> },
+    { id: "moq", header: "MOQ", numeric: true, sortValue: (l) => l.score_breakdown?.moqOurs ?? l.moq, cell: (l) => <span className="whitespace-nowrap" title={l.score_breakdown?.parts.moq.note}>{l.moq?.toLocaleString("en-GB") ?? "—"} <span className="text-muted-foreground">{l.moq_unit ?? ""}</span></span> },
+    { id: "years", header: "Yrs", numeric: true, sortValue: (l) => l.supplier_years, cell: (l) => l.supplier_years ?? "—" },
+    { id: "rating", header: "Rating", numeric: true, sortValue: (l) => l.rating, cell: (l) => l.rating ?? "—" },
+    { id: "reviews", header: "Reviews", numeric: true, sortValue: (l) => l.review_count, cell: (l) => l.review_count ?? "—" },
+    { id: "badges", header: "Badges", sortValue: (l) => l.badges.length, cell: (l) => <span className="flex flex-wrap gap-1">{l.badges.map((x) => <span key={x} className="rounded-md bg-subtle px-1.5 py-px text-xs whitespace-nowrap">{x}</span>)}</span> },
+    { id: "sold", header: "Sold", numeric: true, sortValue: (l) => l.sold_count, cell: (l) => l.sold_count ?? "—" },
+    { id: "flags", header: "Flags", sortValue: (l) => l.flags.length, cell: (l) => <span className="flex flex-wrap gap-1">{l.flags.map((f) => <StatusChip key={f} tone={FLAG_TONE[f]} icon={false}>{SUPPLIER_FLAG_LABEL[f]}</StatusChip>)}</span> },
+    { id: "status", header: "Status", mobile: 3, sortValue: (l) => STATUS_RANK.indexOf(l.status), cell: (l) => <StatusChip tone={STATUS_TONE[l.status] ?? "neutral"} icon={false}>{l.status[0].toUpperCase() + l.status.slice(1)}</StatusChip> },
+    {
+      id: "actions", header: <span className="sr-only">Actions</span>, headerClassName: "w-px", pinEnd: true,
+      cell: (l) => (
+        <div className="flex items-center justify-end gap-1 whitespace-nowrap">
+          <Button size="sm" variant="ghost" asChild><a href={l.listing_url} target="_blank" rel="noreferrer">Listing <ExternalLinkIcon /></a></Button>
+          {l.status !== "quoted" && <Button size="sm" variant="secondary" disabled={!!busy} loading={busy === l.id} onClick={() => quote(l)}>Add quote</Button>}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild><Button size="icon-sm" variant="ghost" aria-label={`More for ${l.supplier_name ?? "this supplier"}`} disabled={!!busy}><MoreHorizontalIcon /></Button></DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {l.store_url && <DropdownMenuItem asChild><a href={l.store_url} target="_blank" rel="noreferrer"><ExternalLinkIcon /> Store</a></DropdownMenuItem>}
+              {l.status === "new" && <DropdownMenuItem onSelect={() => patch(l, { status: "contacted" }, "Marked contacted")}>Mark contacted</DropdownMenuItem>}
+              <DropdownMenuItem onSelect={() => notes(l)}>Notes</DropdownMenuItem>
+              {l.status === "rejected" ? <DropdownMenuItem onSelect={() => patch(l, { status: "new" }, "Back to new")}>Un-reject</DropdownMenuItem>
+                : <DropdownMenuItem variant="destructive" onSelect={() => reject(l)}>Reject</DropdownMenuItem>}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      ),
+    },
+  ];
   return (
-    <div className="overflow-x-auto rounded-lg border">
-      <table className="w-full text-xs">
-        <thead><tr className="border-b text-left text-xs tracking-wide text-muted-foreground uppercase">
-          <SortTh {...t.th("score")} numeric className="px-2 py-1.5 text-right">Score</SortTh>
-          <SortTh {...t.th("supplier")} className="px-2 py-1.5">Supplier</SortTh>
-          {showCandidate && <SortTh {...t.th("candidate")} className="px-2 py-1.5">Candidate</SortTh>}
-          <SortTh {...t.th("ours")} numeric className="px-2 py-1.5 text-right" title="The price per unit of our product, at the MOQ (the top of the range)">Per our unit</SortTh>
-          <SortTh {...t.th("listed")} numeric className="px-2 py-1.5 text-right">Listed</SortTh>
-          <SortTh {...t.th("moq")} numeric className="px-2 py-1.5 text-right">MOQ</SortTh>
-          <SortTh {...t.th("years")} numeric className="px-2 py-1.5 text-right">Yrs</SortTh>
-          <SortTh {...t.th("rating")} numeric className="px-2 py-1.5 text-right">Rating</SortTh>
-          <SortTh {...t.th("reviews")} numeric className="px-2 py-1.5 text-right">Reviews</SortTh>
-          <SortTh {...t.th("badges")} numeric className="px-2 py-1.5">Badges</SortTh>
-          <SortTh {...t.th("sold")} numeric className="px-2 py-1.5 text-right">Sold</SortTh>
-          <SortTh {...t.th("flags")} numeric className="px-2 py-1.5">Flags</SortTh>
-          <SortTh {...t.th("status")} numeric className="px-2 py-1.5">Status</SortTh>
-          <th className="px-2 py-1.5" />
-        </tr></thead>
-        <tbody>{t.rows.map((l) => {
-          const b = l.score_breakdown;
-          const parts = b ? Object.entries(b.parts).map(([k, p]) => `${k} ${p.points}/${p.max}: ${p.note}`).join("\n") : "";
-          return (
-            <tr key={l.id} className={cn("border-b align-top last:border-0", l.status === "rejected" && "opacity-60")}>
-              <td className={cn("num px-2 py-1.5 text-right font-semibold", scoreTone(l.score))} title={parts}>{l.score ?? "—"}</td>
-              <td className="max-w-64 px-2 py-1.5">
-                <span className="block font-medium">{l.supplier_name ?? "—"}{l.country && <span className="ml-1 font-normal text-muted-foreground">{l.country}</span>}</span>
-                <span className="line-clamp-2 text-muted-foreground" title={l.title ?? ""}>{l.title}</span>
-                {l.notes && <span className="block text-muted-foreground italic">{l.notes.slice(0, 120)}</span>}
-                {l.status === "rejected" && l.reject_reason && <span className="block text-fail">Rejected: {l.reject_reason}</span>}
-              </td>
-              {showCandidate && <td className="px-2 py-1.5"><Link className="text-brand hover:underline" href={`/pl/candidates?c=${l.candidate_id}#suppliers`}>{l.candidate_name}</Link></td>}
-              <td className="num px-2 py-1.5 text-right" title={b?.parts.price.note}>{b?.perUnit != null ? `${gbp(b.perUnit)}/${b.unit}` : <span className="text-muted-foreground">?</span>}</td>
-              <td className="num px-2 py-1.5 text-right whitespace-nowrap">{l.price_min != null ? `${sym(l.currency)}${l.price_min}${l.price_max != null && l.price_max !== l.price_min ? `–${l.price_max}` : ""}` : "—"}{l.price_unit && <span className="text-muted-foreground">/{l.price_unit}</span>}</td>
-              <td className="num px-2 py-1.5 text-right whitespace-nowrap" title={b?.parts.moq.note}>{l.moq?.toLocaleString("en-GB") ?? "—"} <span className="text-muted-foreground">{l.moq_unit ?? ""}</span></td>
-              <td className="num px-2 py-1.5 text-right">{l.supplier_years ?? "—"}</td>
-              <td className="num px-2 py-1.5 text-right">{l.rating ?? "—"}</td>
-              <td className="num px-2 py-1.5 text-right">{l.review_count ?? "—"}</td>
-              <td className="px-2 py-1.5"><span className="flex flex-wrap gap-1">{l.badges.map((x) => <span key={x} className="rounded bg-surface-2 px-1 py-px text-xs whitespace-nowrap">{x}</span>)}</span></td>
-              <td className="num px-2 py-1.5 text-right">{l.sold_count ?? "—"}</td>
-              <td className="px-2 py-1.5"><span className="flex flex-wrap gap-1">{l.flags.map((f) => <span key={f} className={cn("rounded-full px-1.5 py-px text-xs font-semibold whitespace-nowrap uppercase", FLAG_CLS[f])}>{SUPPLIER_FLAG_LABEL[f]}</span>)}</span></td>
-              <td className={cn("px-2 py-1.5 capitalize", STATUS_CLS[l.status])}>{l.status}</td>
-              <td className="px-2 py-1.5">
-                <span className="flex flex-wrap gap-x-2 gap-y-0.5 whitespace-nowrap">
-                  {busy === l.id && <LoaderIcon className="size-3.5 animate-spin" />}
-                  <a className="inline-flex items-center gap-0.5 text-brand hover:underline" href={l.listing_url} target="_blank" rel="noreferrer">Listing <ExternalLinkIcon className="size-3" /></a>
-                  {l.store_url && <a className="inline-flex items-center gap-0.5 text-brand hover:underline" href={l.store_url} target="_blank" rel="noreferrer">Store <ExternalLinkIcon className="size-3" /></a>}
-                  {l.status === "new" && <button type="button" disabled={!!busy} className="text-brand hover:underline" onClick={() => patch(l, { status: "contacted" }, "Marked contacted")}>Contacted</button>}
-                  {l.status !== "quoted" && <button type="button" disabled={!!busy} className="text-brand hover:underline" onClick={() => quote(l)}>Add quote</button>}
-                  {l.status === "rejected" ? <button type="button" disabled={!!busy} className="text-brand hover:underline" onClick={() => patch(l, { status: "new" }, "Back to new")}>Un-reject</button>
-                    : <button type="button" disabled={!!busy} className="text-fail hover:underline" onClick={() => reject(l)}>Reject</button>}
-                  <button type="button" disabled={!!busy} className="text-brand hover:underline" onClick={() => notes(l)}>Notes</button>
-                </span>
-              </td>
-            </tr>
-          );
-        })}</tbody>
-      </table>
-      {!rows.length && <p className="p-3 text-sm text-muted-foreground">Every supplier is hidden by the filters.</p>}
-    </div>
+    <DataTable
+      rows={rows}
+      columns={columns}
+      getRowId={(l) => l.id}
+      storageKey="pl.suppliers"
+      caption="Alibaba suppliers"
+      initialSort={{ id: "score", desc: true }}
+      rowClassName={(l) => (l.status === "rejected" ? "opacity-60" : undefined)}
+      empty={{ icon: <FactoryIcon />, title: "Every supplier is hidden by the filters", description: "Turn off a flag under Hide, or show the rejected ones." }}
+    />
   );
 }
-

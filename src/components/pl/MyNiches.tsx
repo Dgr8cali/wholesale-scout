@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronRightIcon, LoaderIcon, SearchIcon } from "lucide-react";
+import { ChevronLeftIcon, ChevronRightIcon, ListIcon, SearchIcon } from "lucide-react";
 import { FileDrop } from "@/components/ui/file-drop";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -8,11 +8,14 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useDialogs } from "@/components/Dialogs";
 import { SortTh, useServerSort } from "@/components/SortableTable";
-import { ErrorState } from "@/components/States";
+import { EmptyState, ErrorState } from "@/components/States";
 import { Button } from "@/components/ui/button";
+import { InfoTip, SectionTitle } from "@/components/ui/info-tip";
 import { Input } from "@/components/ui/input";
+import { Kpi } from "@/components/ui/kpi";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { StatusChip, type Tone } from "@/components/ui/status-chip";
 import { Textarea } from "@/components/ui/textarea";
 import { DEFAULT_HIDDEN_FLAGS, FLAG_LABEL, NICHE_FLAGS, type NicheFlag } from "@/lib/pl/nicheScore";
 import { matchPoeCategory, POE_CATEGORIES } from "@/lib/pl/poeCategories";
@@ -41,19 +44,26 @@ interface Incumbents {
 const pct = (g: number | null | undefined, dp = 1) => (g == null ? "—" : `${g >= 0 ? "+" : ""}${(g * 100).toLocaleString("en-GB", { maximumFractionDigits: dp, minimumFractionDigits: dp })}%`);
 const gbp = (v: number | null | undefined) => (v == null ? "—" : `£${v.toFixed(2)}`);
 const n0 = (v: number | null | undefined) => (v == null ? "—" : Math.round(v).toLocaleString("en-GB"));
-const SHAPE_CLS = { open: "bg-pass-soft text-pass", contested: "bg-warn-soft text-warn", dominated: "bg-fail-soft text-fail" } as const;
-const SIGNAL_CLS: Record<TermSignal, string> = { BUYING: "bg-pass-soft text-pass", BROWSE_ONLY: "bg-fail-soft text-fail" };
-/** The BUYING / BROWSE-ONLY chip from a niche's best search-term conversion. */
-function SignalChip({ s }: { s: TermSignal | null | undefined }) {
-  return s ? <span className={cn("rounded-full px-1.5 py-px text-xs font-semibold whitespace-nowrap uppercase", SIGNAL_CLS[s])}>{TERM_SIGNAL_LABEL[s]}</span> : null;
+const SHAPE_TONE: Record<string, Tone> = { open: "good", contested: "warn", dominated: "bad" };
+/** A niche's incumbent shape (open / contested / dominated) as a chip. */
+function ShapeChip({ shape }: { shape: string }) {
+  return <StatusChip tone={SHAPE_TONE[shape] ?? "neutral"}>{shape[0].toUpperCase() + shape.slice(1)}</StatusChip>;
 }
-const FLAG_CLS: Partial<Record<NicheFlag, string>> = { SPIKE: "bg-fail-soft text-fail", BIG_BRAND: "bg-fail-soft text-fail", REGULATED: "bg-warn-soft text-warn", ELECTRICAL: "bg-warn-soft text-warn", HEAVY_BULKY: "bg-warn-soft text-warn" };
+const SIGNAL_TONE: Record<TermSignal, Tone> = { BUYING: "good", BROWSE_ONLY: "bad" };
+/** The Buying / Browse-only chip from a niche's best search-term conversion. */
+function SignalChip({ s }: { s: TermSignal | null | undefined }) {
+  return s ? <StatusChip tone={SIGNAL_TONE[s]}>{TERM_SIGNAL_LABEL[s]}</StatusChip> : null;
+}
+const FLAG_TONE: Partial<Record<NicheFlag, Tone>> = { SPIKE: "bad", BIG_BRAND: "bad", REGULATED: "warn", ELECTRICAL: "warn", HEAVY_BULKY: "warn" };
 const PRICE_BANDS: [string, string][] = [["", "Any price"], ["core", "£15–40"], ["mid", "£10–60"], ["low", "Under £10"], ["high", "Over £60"]];
 const SORT_KEYS = ["need", "terms", "score", "sv", "g180", "g90", "price", "range", "clicked", "units", "returns", "flags", "shape", "status"];
 const NUMERIC_SORTS = ["score", "sv", "g180", "g90", "price", "range", "clicked", "units", "returns", "flags"];
-const PAGE_SIZES = [50, 100, 200, 500];
+const PAGE_SIZES = [25, 50, 100, 200, 500];
 const OTHER = "__other";
-const scoreTone = (s: number | null) => (s == null ? "" : s >= 60 ? "text-pass font-semibold" : s >= 40 ? "text-warn" : "text-muted-foreground");
+const scoreTone = (s: number | null) => (s == null ? "" : s >= 60 ? "text-success font-semibold" : s >= 40 ? "text-warn-ink" : "text-muted-foreground");
+// The header cell, as the shared DataTable draws it.
+const TH = "sticky top-0 z-10 border-b border-border bg-card px-3 py-2.5 text-left text-xs font-semibold tracking-[0.06em] whitespace-nowrap text-muted-foreground uppercase";
+const TD = "px-3 py-2.5 align-top";
 
 /**
  * Private label → Niches → My niches: Opportunity Explorer category downloads, every niche scored from its own
@@ -65,7 +75,7 @@ export function MyNiches() {
   const [hide, setHide] = useState<Set<NicheFlag>>(new Set(DEFAULT_HIDDEN_FLAGS));
   const sorting = useServerSort("pl.niches", SORT_KEYS, NUMERIC_SORTS, { key: "score", dir: "desc" });
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(100);
+  const [pageSize, setPageSize] = useState(50);
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState<string | null>(null);
   // The query whose page is on screen: while it differs from the one asked for, a page is loading.
@@ -86,7 +96,7 @@ export function MyNiches() {
   // Any change but the page itself goes back to page 1.
   const change = (p: Partial<Filters>) => { setF((x) => ({ ...x, ...p })); setPage(1); };
   if (error && !data) return <ErrorState title="Couldn't load the niches" message={error} onRetry={load} />;
-  if (!data) return <Skeleton className="h-96 rounded-lg" />;
+  if (!data) return <Skeleton className="h-96 rounded-xl" />;
   return (
     <div className="space-y-5">
       <ImportCard imports={data.imports} onImported={load} />
@@ -140,11 +150,15 @@ function ImportCard({ imports, onImported }: { imports: Imp[]; onImported: () =>
   };
   return (
     <section className="panel space-y-3 p-4">
-      <h2 className="text-sm font-semibold">Import a category</h2>
+      <SectionTitle title="Import a category">
+        <p>Download a category from Opportunity Explorer (Seller Central) as CSV and drop it here; Preview shows how its columns map before anything is saved. No Keepa tokens.</p>
+        <p>Importing a category again replaces it; niches keep their status, notes and shape.</p>
+        {imports.length > 0 && <p>Imported: {imports.map((i) => `${i.category} (${i.row_count}, ${new Date(i.imported_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}; fees as ${i.feeCategory})`).join(" · ")}.</p>}
+      </SectionTitle>
       <div className="flex flex-wrap items-end gap-3">
         <FileDrop size="compact" onFiles={(f) => read(f[0])} accept=".csv,text/csv" title={file ? file.name : "Drop the Opportunity Explorer CSV, or choose it"} />
         <label className="space-y-1"><span className="field-label">Opportunity Explorer category</span>
-          <NativeSelect className="w-64" value={pick} onChange={(e) => { setPick(e.target.value); setPreview(null); }}>
+          <NativeSelect className="w-full sm:w-64" value={pick} onChange={(e) => { setPick(e.target.value); setPreview(null); }}>
             <NativeSelectOption value="">Pick the category…</NativeSelectOption>
             {POE_CATEGORIES.map((c) => <NativeSelectOption key={c.name} value={c.name}>{c.name}</NativeSelectOption>)}
             <NativeSelectOption value={OTHER}>Other…</NativeSelectOption>
@@ -155,29 +169,33 @@ function ImportCard({ imports, onImported }: { imports: Imp[]; onImported: () =>
             <datalist id="niche-categories">{recent.filter((r) => !matchPoeCategory(r)).map((c) => <option key={c} value={c} />)}</datalist></label>
         )}
         {(listedFee || (pick === OTHER && preview)) && (
-          <span className="pb-2 text-xs text-muted-foreground" title="The rate card category a candidate created from these niches uses for its referral fee">
-            Fee category: <b className="text-foreground">{listedFee ?? preview?.feeCategory}</b>
+          <span className="pb-2.5 text-meta text-muted-foreground" title="The rate card category a candidate created from these niches uses for its referral fee">
+            Fee category: <b className="font-medium text-foreground">{listedFee ?? preview?.feeCategory}</b>
           </span>
         )}
-        {pick === OTHER && !preview && other.trim() && <span className="pb-2 text-xs text-muted-foreground">Fee category: shown with the preview</span>}
-        <Button variant="outline" disabled={!file || !category.trim() || busy} onClick={() => run("preview")}>{busy && !preview && <LoaderIcon className="animate-spin" />} Preview</Button>
-        {preview && <Button disabled={busy} onClick={() => run("import")}>{busy && <LoaderIcon className="animate-spin" />} Import {preview.niches} niches</Button>}
+        {pick === OTHER && !preview && other.trim() && <span className="pb-2.5 text-meta text-muted-foreground">Fee category: shown with the preview</span>}
+        <Button variant="secondary" disabled={!file || !category.trim() || busy} loading={busy && !preview} onClick={() => run("preview")}>Preview</Button>
+        {preview && <Button disabled={busy} loading={busy} onClick={() => run("import")}>Import {preview.niches} niches</Button>}
       </div>
-      {imports.length > 0 && <p className="text-xs text-muted-foreground">Imported: {imports.map((i) => `${i.category} (${i.row_count}, ${new Date(i.imported_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}; fees as ${i.feeCategory})`).join(" · ")}. Importing a category again replaces it; niches keep their status, notes and shape.</p>}
+      {imports.length > 0 && (
+        <p className="flex flex-wrap items-center gap-1.5 text-meta text-muted-foreground"><span>Imported:</span>
+          {[...new Set(imports.map((i) => i.category))].map((c) => <StatusChip key={c} tone="neutral" icon={false}>{c}</StatusChip>)}
+        </p>
+      )}
       {preview && (
-        <div className="space-y-2 rounded-lg bg-surface-2 p-3 text-sm">
+        <div className="space-y-2 rounded-lg bg-subtle p-3 text-sm">
           <p>Header on line {preview.headerLine}: <b>{preview.rows}</b> rows read, <b>{preview.niches}</b> niches{preview.duplicates ? ` (${preview.duplicates} duplicates merged as aliases)` : ""}.{preview.replaces ? ` Replaces ${preview.replaces} niches already imported for "${category}".` : ""}</p>
-          <details className="text-xs">
+          <details className="text-meta">
             <summary className="cursor-pointer">Columns: {Object.values(preview.mapped).filter(Boolean).length} mapped{preview.unmapped.length ? `, ${preview.unmapped.length} not recognised` : ""}</summary>
-            <ul className="mt-1 grid gap-x-4 sm:grid-cols-2">{Object.entries(preview.mapped).map(([k, v]) => <li key={k}><span className="font-mono">{k}</span> ← {v ?? <span className="text-fail">not found</span>}</li>)}</ul>
+            <ul className="mt-1 grid gap-x-4 sm:grid-cols-2">{Object.entries(preview.mapped).map(([k, v]) => <li key={k}><span className="font-mono">{k}</span> ← {v ?? <span className="text-danger">not found</span>}</li>)}</ul>
           </details>
-          {preview.unmapped.length > 0 && <p className="text-xs text-warn">Not recognised (kept in each row&apos;s raw data): {preview.unmapped.join(", ")}</p>}
-          {preview.warnings.map((w) => <p key={w} className="text-xs text-warn">{w}</p>)}
-          <div className="overflow-x-auto"><table className="w-full text-xs">
-            <thead><tr className="text-left text-muted-foreground"><th className="py-1 pr-2">Customer need</th><th className="pr-2">Search terms</th><th className="pr-2 text-right">Score</th><th className="pr-2 text-right">SV 360d</th><th className="pr-2 text-right">Growth 180d</th><th className="pr-2 text-right">Avg price</th><th className="pr-2 text-right">Units/product</th><th>Flags</th></tr></thead>
+          {preview.unmapped.length > 0 && <p className="text-meta text-warn-ink">Not recognised (kept in each row&apos;s raw data): {preview.unmapped.join(", ")}</p>}
+          {preview.warnings.map((w) => <p key={w} className="text-meta text-warn-ink">{w}</p>)}
+          <div className="overflow-x-auto rounded-lg border border-border bg-card"><table className="w-full text-meta">
+            <thead><tr>{["Customer need", "Search terms", "Score", "SV 360d", "Growth 180d", "Avg price", "Units/product", "Flags"].map((h, i) => <th key={h} className={cn(TH, "static", i >= 2 && i <= 6 && "text-right")}>{h}</th>)}</tr></thead>
             <tbody>{preview.sample.map((n) => (
-              <tr key={n.customer_need} className="border-t"><td className="py-1 pr-2">{n.customer_need}{n.aliases.length ? <span className="text-muted-foreground"> (+{n.aliases.join(", ")})</span> : null}</td><td className="pr-2">{n.search_terms.join(", ")}</td>
-                <td className="num pr-2 text-right">{n.score}</td><td className="num pr-2 text-right">{n0(n.sv_360)}</td><td className="num pr-2 text-right">{pct(n.growth_180)}</td><td className="num pr-2 text-right">{gbp(n.avg_price)}</td><td className="num pr-2 text-right">{n0(n.units_per_product_mid)}</td><td>{n.flags.join(", ")}</td></tr>
+              <tr key={n.customer_need} className="border-b border-divider last:border-b-0"><td className="px-3 py-2">{n.customer_need}{n.aliases.length ? <span className="text-muted-foreground"> (+{n.aliases.join(", ")})</span> : null}</td><td className="px-3 py-2">{n.search_terms.join(", ")}</td>
+                <td className="num px-3 py-2 text-right">{n.score}</td><td className="num px-3 py-2 text-right">{n0(n.sv_360)}</td><td className="num px-3 py-2 text-right">{pct(n.growth_180)}</td><td className="num px-3 py-2 text-right">{gbp(n.avg_price)}</td><td className="num px-3 py-2 text-right">{n0(n.units_per_product_mid)}</td><td className="px-3 py-2">{n.flags.map((x) => FLAG_LABEL[x as NicheFlag] ?? x).join(", ")}</td></tr>
             ))}</tbody>
           </table></div>
         </div>
@@ -210,38 +228,44 @@ function NicheTable({ data, loading, f, change, hide, setHide, sorting, page, se
   const s = sorting;
   const pages = Math.max(1, Math.ceil(data.total / pageSize));
   const first = data.total ? (page - 1) * pageSize + 1 : 0, last = Math.min(data.total, page * pageSize);
+  // The pager under the table, as the shared DataTable draws it (the server pages this table).
   const pager = (
-    <div className="flex flex-wrap items-center gap-2 text-sm">
-      <span className="text-muted-foreground">Showing <b className="num text-foreground">{first.toLocaleString("en-GB")}–{last.toLocaleString("en-GB")}</b> of <b className="num text-foreground">{data.total.toLocaleString("en-GB")}</b>{loading && " …"}</span>
-      <span className="ml-auto flex items-center gap-1.5">
-        <Button size="xs" variant="outline" disabled={page <= 1} onClick={() => setPage(1)}>First</Button>
-        <Button size="xs" variant="outline" disabled={page <= 1} onClick={() => setPage(page - 1)}>Previous</Button>
-        <span className="num text-xs">Page {page} of {pages}</span>
-        <Button size="xs" variant="outline" disabled={page >= pages} onClick={() => setPage(page + 1)}>Next</Button>
-        <Button size="xs" variant="outline" disabled={page >= pages} onClick={() => setPage(pages)}>Last</Button>
-        <NativeSelect className="h-7 text-xs" value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))} aria-label="Rows a page">
-          {PAGE_SIZES.map((n) => <NativeSelectOption key={n} value={n}>{n} a page</NativeSelectOption>)}
-        </NativeSelect>
-      </span>
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-3 py-2 text-meta text-muted-foreground">
+      <span className="num">{first.toLocaleString("en-GB")}–{last.toLocaleString("en-GB")} of {data.total.toLocaleString("en-GB")}{loading && " …"}</span>
+      <div className="flex items-center gap-2">
+        <label className="flex items-center gap-2"><span className="hidden sm:inline">Rows</span>
+          <NativeSelect className="w-20 [&_select]:h-8" value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))} aria-label="Rows a page">
+            {PAGE_SIZES.map((n) => <NativeSelectOption key={n} value={n}>{n}</NativeSelectOption>)}
+          </NativeSelect>
+        </label>
+        <Button variant="ghost" size="sm" className="hidden sm:inline-flex" disabled={page <= 1} onClick={() => setPage(1)}>First</Button>
+        <Button variant="ghost" size="icon-sm" aria-label="Previous page" disabled={page <= 1} onClick={() => setPage(page - 1)}><ChevronLeftIcon /></Button>
+        <span className="num">{page} / {pages}</span>
+        <Button variant="ghost" size="icon-sm" aria-label="Next page" disabled={page >= pages} onClick={() => setPage(page + 1)}><ChevronRightIcon /></Button>
+        <Button variant="ghost" size="sm" className="hidden sm:inline-flex" disabled={page >= pages} onClick={() => setPage(pages)}>Last</Button>
+      </div>
     </div>
+  );
+  const th = (key: string, label: string, opts: { numeric?: boolean; title?: string } = {}) => (
+    <SortTh {...s.th(key)} numeric={opts.numeric} title={opts.title} className={cn(TH, opts.numeric && "text-right")}>{label}</SortTh>
   );
   return (
     <section className="space-y-3">
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-5" title={f.category ? `Over every niche in ${f.category}` : "Over every niche imported"}>
-        {[
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5" title={f.category ? `Over every niche in ${f.category}` : "Over every niche imported"}>
+        {([
           ["Niches imported", data.stats.total],
           ["Scoring 60+", data.stats.scoring60],
           ["Hidden by flags", data.stats.hiddenByFlags],
           ["Shortlisted", data.stats.shortlisted],
           ["Incumbents checked", data.stats.checked],
-        ].map(([l, v]) => <div key={l} className="rounded-lg bg-surface-2 px-3 py-2"><div className="text-xs tracking-wide text-muted-foreground uppercase">{l}</div><div className="num text-lg font-semibold">{Number(v).toLocaleString("en-GB")}</div></div>)}
+        ] as const).map(([l, v]) => <Kpi key={l} label={l} value={Number(v).toLocaleString("en-GB")} />)}
       </div>
       <div className="flex flex-wrap items-end gap-3">
         <label className="space-y-1"><span className="field-label">Category</span>
           <NativeSelect value={f.category} onChange={(e) => change({ category: e.target.value })}>
             <NativeSelectOption value="">All</NativeSelectOption>{cats.map((c) => <NativeSelectOption key={c} value={c}>{c}</NativeSelectOption>)}
           </NativeSelect></label>
-        <label className="space-y-1"><span className="field-label">Min score</span><Input className="num h-9 w-20" type="number" min={0} max={100} value={f.minScore} onChange={(e) => change({ minScore: e.target.value })} /></label>
+        <label className="flex flex-col gap-1"><span className="field-label">Min score</span><Input className="num w-20" type="number" min={0} max={100} value={f.minScore} onChange={(e) => change({ minScore: e.target.value })} /></label>
         <label className="space-y-1"><span className="field-label">Price</span>
           <NativeSelect value={f.price} onChange={(e) => change({ price: e.target.value })}>{PRICE_BANDS.map(([k, l]) => <NativeSelectOption key={k} value={k}>{l}</NativeSelectOption>)}</NativeSelect></label>
         <label className="space-y-1"><span className="field-label">Status</span>
@@ -249,83 +273,88 @@ function NicheTable({ data, loading, f, change, hide, setHide, sorting, page, se
             <NativeSelectOption value="active">Not dismissed</NativeSelectOption><NativeSelectOption value="all">All</NativeSelectOption>
             {["new", "shortlisted", "dismissed", "candidate"].map((x) => <NativeSelectOption key={x} value={x}>{x[0].toUpperCase() + x.slice(1)}</NativeSelectOption>)}
           </NativeSelect></label>
-        <div className="relative"><SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input className="h-9 w-56 pl-8" placeholder="Search needs and terms" value={f.q} onChange={(e) => change({ q: e.target.value })} /></div>
+        <div className="relative w-full sm:w-56"><SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input className="w-full pl-8" placeholder="Search needs and terms" aria-label="Search needs and terms" value={f.q} onChange={(e) => change({ q: e.target.value })} /></div>
       </div>
       <div className="flex flex-wrap items-center gap-1.5 text-xs">
-        <span className="text-muted-foreground">Hide flagged:</span>
+        <span className="text-meta text-muted-foreground">Hide flagged:</span>
         {NICHE_FLAGS.map((x) => (
           <button key={x} type="button" aria-pressed={hide.has(x)} onClick={() => { const y = new Set(hide); if (y.has(x)) y.delete(x); else y.add(x); setHide(y); }}
-            className={cn("rounded-full border px-2 py-0.5", hide.has(x) ? "border-ink-2 bg-ink-2 text-white" : "text-muted-foreground hover:text-foreground")}>{FLAG_LABEL[x]}</button>
+            className={cn("cursor-pointer rounded-full border px-2.5 py-1", hide.has(x) ? "border-primary bg-primary-soft font-medium text-primary-ink" : "border-border text-muted-foreground hover:bg-subtle hover:text-foreground")}>{FLAG_LABEL[x]}</button>
         ))}
-        <button type="button" className="ml-1 text-brand hover:underline" onClick={() => setHide(new Set(DEFAULT_HIDDEN_FLAGS))}>defaults</button>
+        <Button variant="link" size="sm" className="ml-1 text-xs" onClick={() => setHide(new Set(DEFAULT_HIDDEN_FLAGS))}>Defaults</Button>
       </div>
       {sel.size > 0 && (
-        <div className="flex items-center gap-2 text-sm"><span>{sel.size} selected</span>
-          <Button size="sm" onClick={() => bulk("shortlisted")}>Shortlist</Button><Button size="sm" variant="outline" onClick={() => bulk("dismissed")}>Dismiss</Button>
-          <button type="button" className="text-xs text-muted-foreground hover:underline" onClick={() => setSel(new Set())}>Clear</button></div>
+        <div className="flex flex-wrap items-center gap-2 text-sm"><span className="num">{sel.size} selected</span>
+          <Button size="sm" variant="secondary" onClick={() => bulk("shortlisted")}>Shortlist</Button><Button size="sm" variant="secondary" onClick={() => bulk("dismissed")}>Dismiss</Button>
+          <Button size="sm" variant="ghost" onClick={() => setSel(new Set())}>Clear</Button></div>
       )}
-      {pager}
-      <div className={cn("overflow-x-auto rounded-lg border", loading && "opacity-70")}>
-        <table className="w-full text-sm">
-          <thead><tr className="border-b text-left text-xs tracking-wide text-muted-foreground uppercase">
-            <th className="w-8 px-2 py-1.5"><input type="checkbox" aria-label="Select all on this page" checked={allShown} onChange={() => setSel(allShown ? new Set() : new Set(rows.map((n) => n.id)))} /></th>
-            <SortTh {...s.th("need")} className="px-2 py-1.5">Customer need</SortTh>
-            <SortTh {...s.th("terms")} className="px-2 py-1.5">Search terms</SortTh>
-            <SortTh {...s.th("score")} numeric className="px-2 py-1.5 text-right">Score</SortTh>
-            <SortTh {...s.th("sv")} numeric className="px-2 py-1.5 text-right">SV 360d</SortTh>
-            <SortTh {...s.th("g180")} numeric className="px-2 py-1.5 text-right">Growth 180d</SortTh>
-            <SortTh {...s.th("g90")} numeric className="px-2 py-1.5 text-right">Growth 90d</SortTh>
-            <SortTh {...s.th("price")} numeric className="px-2 py-1.5 text-right">Avg price</SortTh>
-            <SortTh {...s.th("range")} numeric className="px-2 py-1.5 text-right">Min–max</SortTh>
-            <SortTh {...s.th("clicked")} numeric className="px-2 py-1.5 text-right" title="Products sharing the clicks: more = less dominated">Top-clicked</SortTh>
-            <SortTh {...s.th("conv")} numeric className="px-2 py-1.5 text-right" title="The best 360-day conversion among its search terms, from an Opportunity Explorer capture (the extension's Send to Private label). Buying: a term at 4%+; browse-only: none at 2.5%+">Best term conv.</SortTh>
-            <SortTh {...s.th("units")} numeric className="px-2 py-1.5 text-right" title="Units a product a year: the midpoint of the average product's range">Units/product/yr</SortTh>
-            <SortTh {...s.th("returns")} numeric className="px-2 py-1.5 text-right">Returns</SortTh>
-            <SortTh {...s.th("flags")} className="px-2 py-1.5">Flags</SortTh>
-            <SortTh {...s.th("shape")} className="px-2 py-1.5" title="Open, then contested, then dominated">Shape</SortTh>
-            <SortTh {...s.th("status")} className="px-2 py-1.5">Status</SortTh>
-          </tr></thead>
-          <tbody>{rows.map((n) => (
-            <Fragment key={n.id}>
-              <tr className={cn("border-b align-top", sel.has(n.id) && "bg-brand-soft/30", n.status === "dismissed" && "opacity-60")}>
-                <td className="px-2 py-1.5"><input type="checkbox" aria-label="Select" checked={sel.has(n.id)} onChange={() => toggle(n.id)} /></td>
-                <td className="px-2 py-1.5">
-                  <button type="button" className="flex items-start gap-1 text-left font-medium hover:text-brand" onClick={() => setOpen(open === n.id ? null : n.id)}>
-                    <ChevronRightIcon className={cn("mt-0.5 size-3.5 flex-none transition-transform", open === n.id && "rotate-90")} />{n.customer_need}
-                  </button>
-                  {(n.categories?.length ?? 0) > 0 && (!f.category || n.categories.length > 1) && (
-                    <span className="flex flex-wrap gap-1 pt-0.5 pl-4" title={n.categories.length > 1 ? "In each of these categories' downloads: one niche" : undefined}>
-                      {n.categories.map((c) => <span key={c} className={cn("rounded-full px-1.5 py-px text-xs", c === f.category ? "bg-brand-soft text-brand" : "bg-surface-2 text-muted-foreground")}>{c}</span>)}
-                    </span>
-                  )}
-                  {(n.extra.aliases?.length ?? 0) > 0 && <span className="block pl-4 text-xs text-muted-foreground">also: {n.extra.aliases!.join(", ")}</span>}
-                  {n.notes && <span className="block pl-4 text-xs text-muted-foreground italic">{n.notes.slice(0, 80)}</span>}
-                </td>
-                <td className="max-w-56 px-2 py-1.5 text-xs text-muted-foreground">{n.search_terms.join(" · ")}</td>
-                <td className={cn("num px-2 py-1.5 text-right", scoreTone(n.score))}>{n.score ?? "—"}</td>
-                <td className="num px-2 py-1.5 text-right">{n0(n.sv_360)}</td>
-                <td className={cn("num px-2 py-1.5 text-right", (n.growth_180 ?? 0) < 0 && "text-fail")}>{pct(n.growth_180)}</td>
-                <td className={cn("num px-2 py-1.5 text-right", (n.growth_90 ?? 0) < 0 && "text-fail")}>{pct(n.growth_90)}</td>
-                <td className="num px-2 py-1.5 text-right">{gbp(n.avg_price)}</td>
-                <td className="num px-2 py-1.5 text-right text-xs text-muted-foreground whitespace-nowrap">{gbp(n.min_price)}–{gbp(n.max_price)}</td>
-                <td className="num px-2 py-1.5 text-right">{n.top_clicked_products ?? "—"}</td>
-                <td className="px-2 py-1.5 text-right">{n.best_term_conversion != null
-                  ? <span className="inline-flex flex-col items-end gap-0.5" title={termSignalText(n.best_term_conversion)}><span className="num">{n.best_term_conversion}%</span><SignalChip s={n.term_signal} /></span>
-                  : <span className="text-xs text-muted-foreground" title="Not sent from Opportunity Explorer yet">—</span>}</td>
-                <td className="num px-2 py-1.5 text-right">{n0(n.units_per_product_mid)}</td>
-                <td className="num px-2 py-1.5 text-right">{pct(n.return_rate, 2).replace("+", "")}</td>
-                <td className="px-2 py-1.5"><span className="flex flex-wrap gap-1">{n.flags.map((x) => <span key={x} className={cn("rounded-full px-1.5 py-px text-xs font-semibold uppercase", FLAG_CLS[x as NicheFlag] ?? "bg-empty-soft text-ink-2")}>{FLAG_LABEL[x as NicheFlag] ?? x}</span>)}</span></td>
-                <td className="px-2 py-1.5">{n.shape ? <span className={cn("rounded-full px-2 py-0.5 text-xs font-semibold", SHAPE_CLS[n.shape])}>{n.shape}</span> : <span className="text-xs text-muted-foreground">—</span>}</td>
-                <td className="px-2 py-1.5 text-xs">{n.status === "candidate" && n.candidate_id ? <Link className="text-brand underline" href={`/pl/candidates?c=${n.candidate_id}`}>candidate</Link> : n.status}</td>
-              </tr>
-              {open === n.id && <tr className="border-b bg-surface-2/50"><td /><td colSpan={15} className="px-2 py-3"><NicheDetail n={n} onChanged={onChanged} /></td></tr>}
-            </Fragment>
-          ))}</tbody>
-        </table>
-        {!rows.length && <p className="p-4 text-sm text-muted-foreground">No niche matches these filters.</p>}
-      </div>
-      {data.total > pageSize && pager}
+      {!rows.length ? (
+        <EmptyState icon={<ListIcon />} title="No niche matches these filters">Lower the min score, pick another category or show the flagged niches.</EmptyState>
+      ) : (
+        <div className={cn("panel overflow-hidden", loading && "opacity-70")}>
+          <div className="max-h-[calc(100dvh-var(--app-header)-7rem)] overflow-auto">
+            <table className="w-full border-collapse text-sm">
+              <caption className="sr-only">My niches</caption>
+              <thead><tr>
+                <th className={cn(TH, "w-8")}><input type="checkbox" aria-label="Select all on this page" checked={allShown} onChange={() => setSel(allShown ? new Set() : new Set(rows.map((n) => n.id)))} /></th>
+                {th("need", "Customer need")}
+                {th("terms", "Search terms")}
+                {th("score", "Score", { numeric: true })}
+                {th("sv", "SV 360d", { numeric: true })}
+                {th("g180", "Growth 180d", { numeric: true })}
+                {th("g90", "Growth 90d", { numeric: true })}
+                {th("price", "Avg price", { numeric: true })}
+                {th("range", "Min–max", { numeric: true })}
+                {th("clicked", "Top-clicked", { numeric: true, title: "Products sharing the clicks: more = less dominated" })}
+                {th("conv", "Best term conv.", { numeric: true, title: "The best 360-day conversion among its search terms, from an Opportunity Explorer capture (the extension's Send to Private label). Buying: a term at 4%+; browse-only: none at 2.5%+" })}
+                {th("units", "Units/product/yr", { numeric: true, title: "Units a product a year: the midpoint of the average product's range" })}
+                {th("returns", "Returns", { numeric: true })}
+                {th("flags", "Flags")}
+                {th("shape", "Shape", { title: "Open, then contested, then dominated" })}
+                {th("status", "Status")}
+              </tr></thead>
+              <tbody>{rows.map((n) => (
+                <Fragment key={n.id}>
+                  <tr className={cn("border-b border-divider hover:bg-subtle/60", sel.has(n.id) && "bg-primary-soft/40", n.status === "dismissed" && "opacity-60")}>
+                    <td className={TD}><input type="checkbox" aria-label={`Select ${n.customer_need}`} checked={sel.has(n.id)} onChange={() => toggle(n.id)} /></td>
+                    <td className={cn(TD, "min-w-48")}>
+                      <button type="button" aria-expanded={open === n.id} className="flex cursor-pointer items-start gap-1 text-left font-medium hover:text-primary" onClick={() => setOpen(open === n.id ? null : n.id)}>
+                        <ChevronRightIcon className={cn("mt-0.5 size-3.5 flex-none text-muted-foreground transition-transform", open === n.id && "rotate-90")} />{n.customer_need}
+                      </button>
+                      {(n.categories?.length ?? 0) > 0 && (!f.category || n.categories.length > 1) && (
+                        <span className="flex flex-wrap gap-1 pt-1 pl-4" title={n.categories.length > 1 ? "In each of these categories' downloads: one niche" : undefined}>
+                          {n.categories.map((c) => <span key={c} className={cn("rounded-full px-2 py-px text-xs", c === f.category ? "bg-primary-soft text-primary-ink" : "bg-subtle text-muted-foreground")}>{c}</span>)}
+                        </span>
+                      )}
+                      {(n.extra.aliases?.length ?? 0) > 0 && <span className="block pl-4 text-xs text-muted-foreground">also: {n.extra.aliases!.join(", ")}</span>}
+                      {n.notes && <span className="block pl-4 text-xs text-muted-foreground italic">{n.notes.slice(0, 80)}</span>}
+                    </td>
+                    <td className={cn(TD, "max-w-56 text-meta text-muted-foreground")}>{n.search_terms.join(" · ")}</td>
+                    <td className={cn(TD, "num text-right", scoreTone(n.score))}>{n.score ?? "—"}</td>
+                    <td className={cn(TD, "num text-right")}>{n0(n.sv_360)}</td>
+                    <td className={cn(TD, "num text-right", (n.growth_180 ?? 0) < 0 && "text-danger")}>{pct(n.growth_180)}</td>
+                    <td className={cn(TD, "num text-right", (n.growth_90 ?? 0) < 0 && "text-danger")}>{pct(n.growth_90)}</td>
+                    <td className={cn(TD, "num text-right")}>{gbp(n.avg_price)}</td>
+                    <td className={cn(TD, "num text-right text-meta whitespace-nowrap text-muted-foreground")}>{gbp(n.min_price)}–{gbp(n.max_price)}</td>
+                    <td className={cn(TD, "num text-right")}>{n.top_clicked_products ?? "—"}</td>
+                    <td className={cn(TD, "text-right")}>{n.best_term_conversion != null
+                      ? <span className="inline-flex flex-col items-end gap-1" title={termSignalText(n.best_term_conversion)}><span className="num">{n.best_term_conversion}%</span><SignalChip s={n.term_signal} /></span>
+                      : <span className="text-muted-foreground" title="Not sent from Opportunity Explorer yet">—</span>}</td>
+                    <td className={cn(TD, "num text-right")}>{n0(n.units_per_product_mid)}</td>
+                    <td className={cn(TD, "num text-right")}>{pct(n.return_rate, 2).replace("+", "")}</td>
+                    <td className={TD}><span className="flex flex-wrap gap-1">{n.flags.map((x) => <StatusChip key={x} tone={FLAG_TONE[x as NicheFlag] ?? "neutral"} icon={false}>{FLAG_LABEL[x as NicheFlag] ?? x}</StatusChip>)}</span></td>
+                    <td className={TD}>{n.shape ? <ShapeChip shape={n.shape} /> : <span className="text-muted-foreground">—</span>}</td>
+                    <td className={cn(TD, "text-meta")}>{n.status === "candidate" && n.candidate_id ? <Link className="text-primary underline" href={`/pl/candidates?c=${n.candidate_id}`}>Candidate</Link> : n.status[0].toUpperCase() + n.status.slice(1)}</td>
+                  </tr>
+                  {open === n.id && <tr className="border-b border-divider bg-subtle/50"><td /><td colSpan={15} className="px-3 py-4"><NicheDetail n={n} onChanged={onChanged} /></td></tr>}
+                </Fragment>
+              ))}</tbody>
+            </table>
+          </div>
+          {pager}
+        </div>
+      )}
     </section>
   );
 }
@@ -370,61 +399,73 @@ function NicheDetail({ n, onChanged }: { n: NicheRow; onChanged: () => void }) {
     router.push(`/pl/candidates?c=${r.candidateId}`);
   });
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,22rem)_1fr]">
-      <div className="space-y-2">
-        <p className="text-xs font-semibold">Score {n.score} of 100</p>
-        {bd && <table className="w-full text-xs"><tbody>{Object.entries(bd).map(([k, c]) => (
-          <tr key={k} title={c.note}><td className="py-0.5 pr-2 capitalize">{k}</td><td className="num pr-2 text-right">{c.points} / {c.max}</td><td className="text-muted-foreground">{c.note}</td></tr>
-        ))}
-          <tr title="From an Opportunity Explorer capture; not part of the 0–100 score" className="border-t">
-            <td className="py-0.5 pr-2">Term conversion</td>
-            <td className="pr-2 text-right"><SignalChip s={n.term_signal} />{n.best_term_conversion != null && !n.term_signal && <span className="num">{n.best_term_conversion}%</span>}</td>
-            <td className="text-muted-foreground">{n.best_term_conversion != null ? termSignalText(n.best_term_conversion, bestTerm(n)) : "Send the niche from Opportunity Explorer (the extension) to read its search terms' conversion"}</td>
-          </tr>
-        </tbody></table>}
-        {n.extra.poe && <details className="text-xs"><summary className="cursor-pointer text-muted-foreground">Search terms from Opportunity Explorer ({n.extra.poe.terms.length}, {new Date(n.extra.poe.capturedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })})</summary>
-          <table className="mt-1"><tbody>{[...n.extra.poe.terms].sort((a, b) => (b.conversion ?? -1) - (a.conversion ?? -1)).map((t) => (
-            <tr key={t.term}><td className="pr-2">{t.term}</td><td className="num pr-2 text-right">{t.conversion != null ? `${t.conversion}%` : "—"}</td><td className="num text-right text-muted-foreground">{t.volume != null ? `${t.volume.toLocaleString("en-GB")}/mo` : ""}</td></tr>
-          ))}</tbody></table></details>}
-        <div className="flex flex-wrap gap-1.5 pt-1">
-          {n.status !== "shortlisted" && n.status !== "candidate" && <Button size="xs" disabled={!!busy} onClick={() => status("shortlisted")}>Shortlist</Button>}
-          {n.status !== "dismissed" && n.status !== "candidate" && <Button size="xs" variant="outline" disabled={!!busy} onClick={() => status("dismissed")}>Dismiss</Button>}
-          {(n.status === "shortlisted" || n.status === "dismissed") && <Button size="xs" variant="ghost" disabled={!!busy} onClick={() => status("new")}>Reset</Button>}
-          {inc?.candidates?.length ? <Button size="xs" variant="outline" disabled={!!busy} onClick={() => check(true)} title="Reuses the last check's products and the 7-day snapshots">{busy === "rerun" && <LoaderIcon className="animate-spin" />} Rerun check</Button>
-            : <Button size="xs" variant="outline" disabled={!!busy} onClick={() => check(false)}>{busy === "check" && <LoaderIcon className="animate-spin" />} Check incumbents (Keepa)</Button>}
-          {n.candidate_id ? <Button size="xs" variant="outline" asChild><Link href={`/pl/candidates?c=${n.candidate_id}`}>Open candidate</Link></Button>
-            : <Button size="xs" variant="outline" disabled={!!busy} onClick={candidate}>{busy === "candidate" && <LoaderIcon className="animate-spin" />} Create candidate</Button>}
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,24rem)_1fr]">
+      <div className="space-y-3">
+        <div className="flex flex-wrap gap-2">
+          {n.status !== "shortlisted" && n.status !== "candidate" && <Button size="sm" variant="secondary" disabled={!!busy} loading={busy === "shortlisted"} onClick={() => status("shortlisted")}>Shortlist</Button>}
+          {n.status !== "dismissed" && n.status !== "candidate" && <Button size="sm" variant="secondary" disabled={!!busy} loading={busy === "dismissed"} onClick={() => status("dismissed")}>Dismiss</Button>}
+          {(n.status === "shortlisted" || n.status === "dismissed") && <Button size="sm" variant="ghost" disabled={!!busy} onClick={() => status("new")}>Reset</Button>}
+          {inc?.candidates?.length ? <Button size="sm" variant="secondary" disabled={!!busy} loading={busy === "rerun"} onClick={() => check(true)} title="Reuses the last check's products and the 7-day snapshots">Rerun check</Button>
+            : <Button size="sm" variant="secondary" disabled={!!busy} loading={busy === "check"} onClick={() => check(false)}>Check incumbents (Keepa)</Button>}
+          {n.candidate_id ? <Button size="sm" variant="secondary" asChild><Link href={`/pl/candidates?c=${n.candidate_id}`}>Open candidate</Link></Button>
+            : <Button size="sm" variant="secondary" disabled={!!busy} loading={busy === "candidate"} onClick={candidate}>Create candidate</Button>}
         </div>
+        <div className="space-y-1.5">
+          <h3 className="section-label">Score <span className="num">{n.score}</span> of 100</h3>
+          {bd && <dl className="divide-y divide-divider rounded-lg border border-border bg-card text-meta">{Object.entries(bd).map(([k, c]) => (
+            <div key={k} title={c.note} className="grid grid-cols-[6.5rem_3.5rem_minmax(0,1fr)] gap-2 px-3 py-1.5"><dt className="capitalize">{k}</dt><dd className="num text-right">{c.points} / {c.max}</dd><dd className="text-muted-foreground">{c.note}</dd></div>
+          ))}
+            <div title="From an Opportunity Explorer capture; not part of the 0–100 score" className="grid grid-cols-[6.5rem_3.5rem_minmax(0,1fr)] gap-2 px-3 py-1.5">
+              <dt>Term conversion</dt>
+              <dd className="text-right"><SignalChip s={n.term_signal} />{n.best_term_conversion != null && !n.term_signal && <span className="num">{n.best_term_conversion}%</span>}</dd>
+              <dd className="text-muted-foreground">{n.best_term_conversion != null ? termSignalText(n.best_term_conversion, bestTerm(n)) : "Send the niche from Opportunity Explorer (the extension) to read its search terms' conversion"}</dd>
+            </div>
+          </dl>}
+        </div>
+        {n.extra.poe && <details className="text-meta"><summary className="cursor-pointer text-muted-foreground">Search terms from Opportunity Explorer ({n.extra.poe.terms.length}, {new Date(n.extra.poe.capturedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })})</summary>
+          <table className="mt-1"><tbody>{[...n.extra.poe.terms].sort((a, b) => (b.conversion ?? -1) - (a.conversion ?? -1)).map((t) => (
+            <tr key={t.term}><td className="py-0.5 pr-3">{t.term}</td><td className="num pr-3 text-right">{t.conversion != null ? `${t.conversion}%` : "—"}</td><td className="num text-right text-muted-foreground">{t.volume != null ? `${t.volume.toLocaleString("en-GB")}/mo` : ""}</td></tr>
+          ))}</tbody></table></details>}
       </div>
-      <div className="space-y-2">
+      <div className="min-w-0 space-y-3">
         <label className="block space-y-1"><span className="field-label">Notes</span>
           <Textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} onBlur={() => notes !== (n.notes ?? "") && act("notes", () => api(`/api/pl/niches/${n.id}`, { method: "PATCH", json: { notes } }))} /></label>
         {inc ? (
-          <div className="text-xs">
-            <p><b>Incumbents for {(inc.terms ?? [inc.term]).map((t) => `“${t}”`).join(", ")}</b>{inc.rootCategories?.length ? ` in ${inc.rootCategories.join(", ")}` : ""}: {inc.shape ? <span className={cn("rounded-full px-1.5 py-px font-semibold", SHAPE_CLS[inc.shape as keyof typeof SHAPE_CLS])}>{inc.shape}</span> : <span className="text-muted-foreground">no on-niche sellers</span>} · {inc.found.toLocaleString("en-GB")} products match{inc.onNiche != null ? `, ${inc.onNiche} on-niche of ${inc.candidates?.length ?? "?"} detailed` : ""} · {inc.tokensUsed} tokens{inc.reused ? `, ${inc.reused} reused` : ""}{inc.reusedFinder ? " (rerun)" : ""} · {new Date(inc.checkedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</p>
-            {inc.outside && <p className="mt-0.5"><span className="rounded-full bg-warn-soft px-1.5 py-px text-xs font-semibold text-warn uppercase" title="Fewer than 5 products in the niche's categories: the same search ran on all of Amazon, with the same off-niche rules">found outside {inc.rootCategories?.length ? inc.rootCategories.join(", ") : "its category"}</span></p>}
-            {(inc.onNicheCategories?.length ?? 0) > 0 && <p className="mt-1 flex flex-wrap items-center gap-1"><span className="text-muted-foreground">On-niche products filed under:</span>
-              {inc.onNicheCategories!.map((c) => <span key={c.name} className={cn("rounded-full px-1.5 py-px text-xs", inc.rootCategories?.includes(c.name) ? "bg-brand-soft text-brand" : "bg-surface-2 text-ink-2")}>{c.name} · {c.count}</span>)}</p>}
-            {inc.onNiche == null && <p className="text-amber-700 dark:text-amber-400">An old check (any word, all of Amazon): rerun it.</p>}
-            <table className="mt-1 text-xs"><tbody>{inc.incumbents.map((x) => (
-              <tr key={x.asin} className="align-top">
-                <td className="pr-2"><a className="num text-brand hover:underline" href={`https://www.amazon.co.uk/dp/${x.asin}`} target="_blank" rel="noreferrer">{x.asin}</a></td>
-                <td className="num pr-2 text-right">{x.reviews?.toLocaleString("en-GB") ?? "?"} reviews</td>
-                <td className="num pr-2 text-right">{x.monthlySold != null ? `${x.monthlySold.toLocaleString("en-GB")}+/mo` : x.rank != null ? `#${x.rank.toLocaleString("en-GB")}` : "—"}</td>
-                <td className="num pr-2 text-right">{gbp(x.price)}</td>
-                <td className="pr-2 text-muted-foreground">{x.category ?? ""}</td>
-                <td className="whitespace-nowrap pr-2">{x.poe ? <span className="rounded-full bg-brand-soft px-1.5 py-px font-semibold text-brand" title={`Opportunity Explorer's #${x.poe.rank} clicked product for “${x.poe.term}”: counted on-niche whatever its title says`}>POE top clicked #{x.poe.rank}</span>
-                  : x.matchedTerm && <span className={cn("rounded-full px-1.5 py-px", x.matchedHow === "words" ? "border border-dashed" : "bg-muted")} title={x.matchedHow === "words" ? "Its title has every word of this search term within 4 words, in another order" : "Its title has this search term as a phrase"}>{x.matchedTerm}{x.matchedHow === "words" ? " (any order)" : ""}</span>}</td>
-                <td className="pr-2 text-muted-foreground">{(x.title ?? "").slice(0, 80)}</td>
-                <td className="whitespace-nowrap"><button type="button" disabled={!!busy} className="text-xs text-muted-foreground hover:text-fail hover:underline disabled:opacity-50" title="Leave this product out of the shape, now and on every rerun" onClick={() => markOut(x.asin, true)}>Not on-niche</button></td>
-              </tr>
-            ))}</tbody></table>
-            {!!inc.excludedCount && <details className="mt-1"><summary className="cursor-pointer text-muted-foreground">{inc.excludedCount} off-niche left out{(() => { const m = inc.excluded?.filter((x) => x.why === "marked not on-niche by you").length ?? 0; return m ? ` (${m} marked by you)` : ""; })()}</summary>
-              <ul className="mt-0.5 space-y-0.5">{inc.excluded?.map((x) => <li key={x.asin}><span className="num">{x.asin}</span> · <i>{x.why}</i> · <span className="text-muted-foreground">{(x.title ?? "").slice(0, 70)}</span>
-                {x.why === "marked not on-niche by you" && <> · <button type="button" disabled={!!busy} className="text-brand hover:underline disabled:opacity-50" onClick={() => markOut(x.asin, false)}>Undo</button></>}</li>)}</ul></details>}
-            <p className="mt-1 text-muted-foreground">Open: nobody over 1,000 reviews. Contested: one. Dominated: two or more, or one over 5,000.</p>
+          <div className="space-y-2 text-meta">
+            <div className="flex items-center gap-1">
+              <h3 className="section-label">Incumbents</h3>
+              <InfoTip label="About the shape"><p>Open: nobody over 1,000 reviews. Contested: one. Dominated: two or more, or one over 5,000.</p></InfoTip>
+            </div>
+            <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1"><span>For {(inc.terms ?? [inc.term]).map((t) => `“${t}”`).join(", ")}{inc.rootCategories?.length ? ` in ${inc.rootCategories.join(", ")}` : ""}:</span> {inc.shape ? <ShapeChip shape={inc.shape} /> : <span className="text-muted-foreground">no on-niche sellers</span>}
+              <span className="text-muted-foreground">{inc.found.toLocaleString("en-GB")} products match{inc.onNiche != null ? `, ${inc.onNiche} on-niche of ${inc.candidates?.length ?? "?"} detailed` : ""} · {inc.tokensUsed} tokens{inc.reused ? `, ${inc.reused} reused` : ""}{inc.reusedFinder ? " (rerun)" : ""} · {new Date(inc.checkedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span></p>
+            {inc.outside && <p><StatusChip tone="warn" title="Fewer than 5 products in the niche's categories: the same search ran on all of Amazon, with the same off-niche rules">Found outside {inc.rootCategories?.length ? inc.rootCategories.join(", ") : "its category"}</StatusChip></p>}
+            {(inc.onNicheCategories?.length ?? 0) > 0 && <p className="flex flex-wrap items-center gap-1"><span className="text-muted-foreground">On-niche products filed under:</span>
+              {inc.onNicheCategories!.map((c) => <span key={c.name} className={cn("rounded-full px-2 py-px text-xs", inc.rootCategories?.includes(c.name) ? "bg-primary-soft text-primary-ink" : "bg-subtle text-muted-foreground")}>{c.name} · {c.count}</span>)}</p>}
+            {inc.onNiche == null && <p className="text-warn-ink">An old check (any word, all of Amazon): rerun it.</p>}
+            <div className="overflow-x-auto rounded-lg border border-border bg-card">
+              <table className="w-full text-meta"><tbody className="divide-y divide-divider">{inc.incumbents.map((x) => (
+                <tr key={x.asin} className="align-top">
+                  <td className="py-1.5 pr-3 pl-3"><a className="num text-primary hover:underline" href={`https://www.amazon.co.uk/dp/${x.asin}`} target="_blank" rel="noreferrer">{x.asin}</a></td>
+                  <td className="num py-1.5 pr-3 text-right whitespace-nowrap">{x.reviews?.toLocaleString("en-GB") ?? "?"} reviews</td>
+                  <td className="num py-1.5 pr-3 text-right whitespace-nowrap">{x.monthlySold != null ? `${x.monthlySold.toLocaleString("en-GB")}+/mo` : x.rank != null ? `#${x.rank.toLocaleString("en-GB")}` : "—"}</td>
+                  <td className="num py-1.5 pr-3 text-right">{gbp(x.price)}</td>
+                  <td className="py-1.5 pr-3 text-muted-foreground">{x.category ?? ""}</td>
+                  <td className="py-1.5 pr-3 whitespace-nowrap">{x.poe ? <span className="rounded-full bg-primary-soft px-2 py-px text-xs font-medium text-primary-ink" title={`Opportunity Explorer's #${x.poe.rank} clicked product for “${x.poe.term}”: counted on-niche whatever its title says`}>POE top clicked #{x.poe.rank}</span>
+                    : x.matchedTerm && <span className={cn("rounded-full px-2 py-px text-xs", x.matchedHow === "words" ? "border border-dashed border-border-strong" : "bg-subtle")} title={x.matchedHow === "words" ? "Its title has every word of this search term within 4 words, in another order" : "Its title has this search term as a phrase"}>{x.matchedTerm}{x.matchedHow === "words" ? " (any order)" : ""}</span>}</td>
+                  <td className="min-w-48 py-1.5 pr-3 text-muted-foreground">{(x.title ?? "").slice(0, 80)}</td>
+                  <td className="py-1 pr-2 text-right whitespace-nowrap"><Button size="xs" variant="ghost" disabled={!!busy} title="Leave this product out of the shape, now and on every rerun" onClick={() => markOut(x.asin, true)}>Not on-niche</Button></td>
+                </tr>
+              ))}</tbody></table>
+            </div>
+            {!!inc.excludedCount && <details><summary className="cursor-pointer text-muted-foreground">{inc.excludedCount} off-niche left out{(() => { const m = inc.excluded?.filter((x) => x.why === "marked not on-niche by you").length ?? 0; return m ? ` (${m} marked by you)` : ""; })()}</summary>
+              <ul className="mt-1 space-y-1">{inc.excluded?.map((x) => <li key={x.asin}><span className="num">{x.asin}</span> · <i>{x.why}</i> · <span className="text-muted-foreground">{(x.title ?? "").slice(0, 70)}</span>
+                {x.why === "marked not on-niche by you" && <> · <Button variant="link" size="sm" className="text-meta" disabled={!!busy} onClick={() => markOut(x.asin, false)}>Undo</Button></>}</li>)}</ul></details>}
           </div>
-        ) : <p className="text-xs text-muted-foreground">No incumbent check yet: it looks at the best sellers for {(n.search_terms.length ? n.search_terms : [n.customer_need]).map((t) => `“${t}”`).join(", ")} in the niche&rsquo;s category, titles matching any of them and on-niche only, and their review counts (Keepa, up to ~83 tokens).</p>}
+        ) : (
+          <p className="flex items-center gap-1 text-meta text-muted-foreground">No incumbent check yet (Keepa, up to ~83 tokens).
+            <InfoTip label="About the incumbent check"><p>It looks at the best sellers for {(n.search_terms.length ? n.search_terms : [n.customer_need]).map((t) => `“${t}”`).join(", ")} in the niche&rsquo;s category, titles matching any of them and on-niche only, and their review counts.</p><p>Open: nobody over 1,000 reviews. Contested: one. Dominated: two or more, or one over 5,000.</p></InfoTip>
+          </p>
+        )}
       </div>
     </div>
   );

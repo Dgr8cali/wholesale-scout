@@ -29,6 +29,8 @@ export interface DataColumn<T extends RowData> {
   mobile?: "title" | 1 | 2 | 3
   /** Hide from the phone card entirely (e.g. a checkbox or an action column shown elsewhere). */
   mobileHidden?: boolean
+  /** Keep this (last) column in view at the right edge while a wide table scrolls sideways: row actions. */
+  pinEnd?: boolean
   className?: string
   headerClassName?: string
 }
@@ -42,6 +44,8 @@ const features = tableFeatures({
 })
 
 const PAGE_SIZES = [25, 50, 100, 200]
+/** A pinned last column: opaque, with a soft edge where the scrolled columns pass under it. */
+const PIN_END = "sticky right-0 bg-card shadow-[inset_1px_0_0_var(--border),-8px_0_8px_-8px_rgb(0_0_0/0.12)]"
 
 const readSize = (key: string | undefined, fallback: number) => {
   if (!key) return fallback
@@ -128,7 +132,7 @@ export function DataTable<T extends RowData>({
                 const dir = h.column.getIsSorted()
                 return (
                   <th key={h.id} scope="col" aria-sort={dir === "asc" ? "ascending" : dir === "desc" ? "descending" : undefined}
-                    className={cn("sticky top-0 z-10 border-b border-border bg-card px-3 py-2.5 text-left text-xs font-semibold tracking-[0.06em] whitespace-nowrap text-muted-foreground uppercase", c.numeric && "text-right", c.headerClassName)}>
+                    className={cn("sticky top-0 z-10 border-b border-border bg-card px-3 py-2.5 text-left text-xs font-semibold tracking-[0.06em] whitespace-nowrap text-muted-foreground uppercase", c.numeric && "text-right", c.pinEnd && PIN_END, c.pinEnd && "z-20", c.headerClassName)}>
                     {h.column.getCanSort() ? (
                       <button type="button" onClick={h.column.getToggleSortingHandler()} className={cn("inline-flex cursor-pointer items-center gap-1 uppercase hover:text-foreground", c.numeric && "flex-row-reverse")}>
                         {c.header}
@@ -144,7 +148,7 @@ export function DataTable<T extends RowData>({
             {shown.map((r) => (
               <tr key={r.id} {...(rowAttrs?.(r.original) ?? {})} onClick={onRowClick ? () => onRowClick(r.original) : undefined}
                 className={cn("border-b border-divider last:border-b-0 hover:bg-subtle/60", onRowClick && "cursor-pointer", rowClassName?.(r.original))}>
-                {columns.map((c) => <td key={c.id} className={cn("px-3 py-2.5 align-middle", c.numeric && "num text-right", c.className)}>{c.cell(r.original)}</td>)}
+                {columns.map((c) => <td key={c.id} className={cn("px-3 py-2.5 align-middle", c.numeric && "num text-right", c.pinEnd && PIN_END, c.className)}>{c.cell(r.original)}</td>)}
               </tr>
             ))}
           </tbody>
