@@ -10,6 +10,7 @@
 - When the commit includes a migration (`supabase/migrations/`), run `make migrate` before pushing (applies it to the server's database over an SSH tunnel; `npm run migrate` alone will not reach it).
 - Never push with failing tests or a failing build (`npm test`, `npm run build`).
 - Never commit `.env.local` (or any other env file holding secrets).
+- Never print credentials in command output: no `curl -v`, `-i`, `-D -` or `-L` output on requests that carry Basic auth or a bearer token, and no echoing of `.env` values. Check with `curl -s -o /dev/null -w '%{http_code} %{redirect_url}'` and strip any userinfo from the URL before it's shown (`| sed -E 's#//[^/@]*@#//#'`): curl puts the `-u` user and password into `%{redirect_url}`.
 
 ## Hosting
 
