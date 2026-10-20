@@ -51,7 +51,7 @@ On the [run's page](/help/pages/runs) you filter the table (say, **Buy** and **C
 
 ### 4. Keep what's interesting
 
-- **Star** a row to make it a favourite. [Favourites](/help/pages/favourites) lists them with their latest result from any run, and flags any not screened for over 7 days.
+- **Add to Shortlist** (in a row's **⋯** menu) to keep a product. [Shortlist](/help/pages/favourites) lists them with their latest result from any run, and flags any not screened for over 7 days.
 - **Watch** a row that nearly made it: pick what would make it a buy (a Buy Box price, a number of sellers, and so on). The [Watchlist](/help/pages/watchlist) re-checks them every Sunday and tells you what now passes.
 - Add a **note** to any product; adding one stars it.
 

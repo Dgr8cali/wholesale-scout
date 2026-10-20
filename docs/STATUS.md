@@ -184,6 +184,8 @@ filters live in the address (`filtersFromQuery` / `filtersToQuery` in `src/lib/f
 waiver and cost-override calls the pages share. The bulk bar says Add to Shortlist / Remove from Shortlist / Export selected (xlsx).
 Run detail (`src/app/runs/[id]/page.tsx`) is on it: virtual scrolling over every row, EAN groups with their other ASINs, the filters
 in the address instead of remembered per run in the browser, the drawer, the full bulk bar (waive, cost, re-screen, export, remove).
+Shortlist → Products (`src/components/shortlist/FavouritesTab.tsx`) is on it: 50 a page, its filters in the address beside
+`?tab=products`, Remove from Shortlist in the row menu and bulk bar. The old results table and `FilterBar` are gone.
 To do: phase 4c's other pages, then phase 5 (the remaining polish, including the extension's PASS/WARN/FAIL badges in the new verdict
 words).
 

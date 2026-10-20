@@ -11,14 +11,14 @@ Favourites collects every product you've starred in one table. Each row shows th
 
 ## Adding and removing favourites
 
-- **Star** a row on any run's results, or select rows and use **Star** in the bulk bar. See [Runs](/help/pages/runs).
+- **Add to Shortlist** in a row's **⋯** menu on any results table (a run, Products, a brand's page), or select rows and use **Add to Shortlist** in the bulk bar. See [Runs](/help/pages/runs).
 - Typing a **Favourite note** in a result's details stars the product as well.
 - The **☆ Star** button on the [Chrome extension](/help/pages/extension) panel stars the product you're looking at on Amazon.
 - Choosing **Watch** in a result's details also stars it, because every item on the watchlist is a favourite.
 
 A favourite is saved against the product's EAN and ASIN, not against a run, so it stays starred in every run.
 
-To remove one, click its filled star on this page. If it has a note you'll be asked first ("Un-star this product?"), because the note is deleted with it. To remove several, select them and use **Unstar** in the bulk bar.
+To remove one, use **Remove from Shortlist** in its **⋯** menu on this page. If it has a note you'll be asked first, because the note is deleted with it. To remove several, select them and use **Remove from Shortlist** in the bulk bar.
 
 ## The header
 
@@ -32,7 +32,7 @@ The line under the title counts your favourites and how many are **outdated**, m
 
 ## The table
 
-This is the same results table as on a run. Its columns, resizing, sorting, row density, sparklines and details are explained in [Runs](/help/pages/runs). What's different here:
+This is the same results table as on a run, 50 to a page (20 on a phone). Its columns, the column picker (remembered for this page), sorting, row density, sparklines and the **⋯** menu are explained in [Runs](/help/pages/runs#the-results-table). What's different here:
 
 - Every row is the product's **latest** result from **any** run, not from one run. Under the title you'll see "Screened <when> · <run name>" (the run name links to the run), an **outdated** badge if it's over 7 days old, and your note in italics.
 - A favourite that has never been screened to the end shows as pending, with "Not screened yet: re-screen it."
@@ -40,11 +40,11 @@ This is the same results table as on a run. Its columns, resizing, sorting, row 
 
 ### Filters
 
-The filter bar works as on a run: verdict, band, **Failed gate**, **Brand**, supplier, **Amazon on listing**, approval status, **Waived**, **Ranges**, search, and **Saved filters**. **Favourites only** isn't offered, since everything here is a favourite. Your filters on this page are remembered in this browser.
+The filter bar is the one on a run (see [Filters](/help/pages/runs#filters)). **On Shortlist** isn't offered, since everything here is on it. The filters are kept in the page's address beside `?tab=products`, so a filtered view can be bookmarked.
 
 ### Details
 
-Click a row to open its details in a side drawer. Use Up and Down (or K and J) to step through rows, and Escape to close it. Click the arrow at the start of a row to expand its details in place. The details are the same as on a run. The parts you'll use most here:
+Click a row (on a phone, **Details**) to open its details in a side drawer. Use Up and Down (or K and J) to step through rows, and Escape to close it. The details are the same as on a run. The parts you'll use most here:
 
 - **Favourite note**: saves a moment after you stop typing, and when you click away. It can be up to 500 characters.
 - **Watchlist**: set a flip condition and choose **Watch**, or **Save** to change it. See [Watchlist](/help/pages/watchlist).
@@ -57,11 +57,11 @@ Tick rows (or the header checkbox to select every row shown) and a bar appears:
 
 | Control | What it does |
 |---|---|
-| **Unstar** | Removes the selected favourites. If any have notes, you're asked first. |
+| **Remove from Shortlist** | Removes the selected favourites. If any have notes, you're asked first. |
 | Gate selector, **Reason for all (optional)**, **Waive**, **Un-waive** | Waives or un-waives the chosen gate for every selected product. See [Waive a gate](/help/howto/waive-a-gate). |
 | **Set cost…**, **Clear cost** | Sets (or clears) a cost override for every selected product, re-scoring their results now. See [Override a cost](/help/howto/override-a-cost). |
 | **Re-screen selected** | Like **Re-screen favourites**, but only for the selected rows. |
-| **Export selected** | Downloads just the selected rows as xlsx. |
+| **Export selected (xlsx)** | Downloads just the selected rows as xlsx. |
 | **Clear selection** | Unticks everything. |
 
 The order columns (first order, months to sell) use your default profile's line cap and months limit, the same as on a run.

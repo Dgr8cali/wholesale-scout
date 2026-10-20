@@ -7,11 +7,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { BulkBar } from "@/components/BulkBar";
 import { useDialogs } from "@/components/Dialogs";
-import { FilterBar, type FilterOptions } from "@/components/FilterBar";
+import { ResultsFilterBar, type FilterOptions } from "@/components/results/ResultsFilterBar";
 import { Detail } from "@/components/results/Detail";
 import { DetailDrawer } from "@/components/results/DetailDrawer";
 import { downloadXlsx, exportRows } from "@/components/results/exportXlsx";
-import { ResultsTable, type DisplayRow } from "@/components/results/LegacyResultsTable";
+import { ResultsTable, type ResultRow } from "@/components/results/ResultsTable";
 import { compareResults, loadResultSort, nextResultSort, saveResultSort } from "@/components/results/sort";
 import type { Fav, Result, SortKey } from "@/components/results/types";
 import { useSparks } from "@/components/results/useSparks";
@@ -20,10 +20,11 @@ import { Button } from "@/components/ui/button";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatusChip } from "@/components/ui/status-chip";
-import { EMPTY_FILTERS, matches, normalizeFilters, type FilterSet } from "@/lib/filters";
+import { matches, type FilterSet } from "@/lib/filters";
 import { GATE_LABELS, withDefaults, type GateId, type ProfileConfig } from "@/lib/screening/config";
 import { api, when } from "@/lib/ui/client";
 import { brandOf, dormantOf, toFilterRow } from "@/lib/ui/resultRows";
+import { useUrlFilters } from "@/lib/ui/useUrlFilters";
 import type { WatchCondition } from "@/lib/watch";
 import type { CostInput } from "@/lib/costOverride";
 
@@ -34,8 +35,6 @@ interface Item {
 }
 interface Profile { id: string; name: string; is_default: boolean; config: ProfileConfig }
 
-const STORAGE_KEY = "ws.filters.favourites";
-
 /** A favourite never screened to completion, as a row the table can show. */
 function stub(f: Item["favourite"]): Result {
   return {
@@ -45,7 +44,6 @@ function stub(f: Item["favourite"]): Result {
   } as unknown as Result;
 }
 
-/** Favourites on the results table: columns, resizing, sparklines, the drawer and the bulk bar. */
 /** Shortlist → Products: every starred product with its latest result, to re-screen or export. */
 export function FavouritesTab() {
   const router = useRouter();
@@ -56,7 +54,6 @@ export function FavouritesTab() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [profileId, setProfileId] = useState("");
   const [busy, setBusy] = useState(false);
-  const [open, setOpen] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [activeId, setActiveId] = useState<string | null>(null);
   const [sort, setSortState] = useState<{ key: SortKey; dir: 1 | -1 }>(() => loadResultSort("favourites"));
@@ -64,23 +61,11 @@ export function FavouritesTab() {
   const { sparks, observe: observeSparks } = useSparks();
   // The sparklines only reorder rows when sorting by them (they load as rows scroll into view).
   const sortSparks = sort.key === "rank90" || sort.key === "bb90" ? sparks : undefined;
-  const [filters, setFiltersState] = useState<FilterSet>(() => {
-    if (typeof window === "undefined") return EMPTY_FILTERS;
-    try {
-      const saved = window.localStorage.getItem(STORAGE_KEY);
-      return saved ? normalizeFilters(JSON.parse(saved)) : EMPTY_FILTERS;
-    } catch {
-      return EMPTY_FILTERS;
-    }
-  });
+  // Filters live in the address, beside ?tab=products.
+  const [filters, setUrlFilters] = useUrlFilters();
   const setFilters = (f: FilterSet) => {
-    setFiltersState(f);
+    setUrlFilters(f);
     setSelected(new Set());
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(f));
-    } catch {
-      // Not remembered in this browser; the filters still apply.
-    }
   };
 
   const load = useCallback(() => {
@@ -105,7 +90,7 @@ export function FavouritesTab() {
     const order = compareResults(sort.key, sort.dir, lineBudget, sortSparks);
     return all.filter((x) => matches(toFilterRow(x.r, starred), filters)).sort((a, b) => order(a.r, b.r));
   }, [all, starred, filters, sort, lineBudget, sortSparks]);
-  const displayRows = useMemo<DisplayRow[]>(() => shown.map((x) => ({ r: x.r, alt: false, groupKey: x.r.id, others: 0 })), [shown]);
+  const displayRows = useMemo<ResultRow[]>(() => shown.map((x) => ({ r: x.r })), [shown]);
   const visibleIds = useMemo(() => shown.map((x) => x.r.id), [shown]);
 
   const activeIndex = activeId ? displayRows.findIndex((d) => d.r.id === activeId) : -1;
@@ -246,15 +231,15 @@ export function FavouritesTab() {
             onWaive={(gate, reason) => bulkWaive(gate, "waive", reason)} onUnwaive={(gate) => bulkWaive(gate, "unwaive")}
             onSetCost={(c) => cost([...selected], c)} onClearCost={() => cost([...selected], null)}
             onRescreen={() => rescreen(itemsOf(selected).map((i) => i.favourite.id))} onExport={() => exportXlsx(selected)} />
-          <FilterBar value={filters} onChange={setFilters} options={options} favouritesAvailable={false}
+          <ResultsFilterBar value={filters} onChange={setFilters} options={options}
             matching={shown.length} total={all.length} unit="favourites" gateLabels={GATE_LABELS} />
-          <ResultsTable rows={displayRows} storageKey="ws.table.favourites.v1"
-            selected={selected} onToggleSelect={(id) => setSelected((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; })}
-            visibleIds={visibleIds} onSelectAll={setSelected}
-            expandedGroups={new Set()} onToggleGroup={() => {}}
-            open={open} onToggleOpen={(id) => setOpen((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; })}
-            activeId={active?.id ?? null} onActivate={(id) => setActiveId((cur) => (cur === id ? null : id))}
-            favourites={starred} onStar={unstarRow}
+          <ResultsTable rows={displayRows} page="shortlist" paging={{ kind: "client" }}
+            selected={selected} onSelect={setSelected} visibleIds={visibleIds}
+            activeId={active?.id ?? null} onOpen={(id) => setActiveId((cur) => (cur === id ? null : id))}
+            actions={{
+              starred: () => true, onStar: unstarRow,
+              onRescreen: (r) => { const f = favOf(r); if (f) void rescreen([f.id]); },
+            }}
             sort={sort} onSort={(key) => setSort(nextResultSort(sort, key))}
             sparks={sparks} observeSparks={observeSparks}
             rowNote={(r) => {
@@ -268,7 +253,6 @@ export function FavouritesTab() {
                 </div>
               );
             }}
-            renderDetail={(r) => <Detail r={r} fav={favOf(r)} onNote={saveNote} onWaive={waive} onWatch={watch} onCost={(r, c) => cost([r.id], c)} budgetGbp={lineBudget} />}
             empty="Nothing matches these filters."
             lineCapGbp={lineBudget} maxMonths={cfg.gates.demand.maxMonthsToSell} />
           {active && (
