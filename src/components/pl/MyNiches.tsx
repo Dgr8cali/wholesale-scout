@@ -293,7 +293,39 @@ function NicheTable({ data, loading, f, change, hide, setHide, sorting, page, se
         <EmptyState icon={<ListIcon />} title="No niche matches these filters">Lower the min score, pick another category or show the flagged niches.</EmptyState>
       ) : (
         <div className={cn("panel overflow-hidden", loading && "opacity-70")}>
-          <div className="max-h-[calc(100dvh-var(--app-header)-7rem)] overflow-auto">
+          {/* On a phone each niche is a card (as the shared DataTable does); the table from 640px. */}
+          <ul className="divide-y divide-divider sm:hidden" aria-label="My niches">
+            {rows.map((n) => (
+              <li key={n.id} className={cn("space-y-2 px-3 py-3", sel.has(n.id) && "bg-primary-soft/40", n.status === "dismissed" && "opacity-60")}>
+                <div className="flex items-start gap-2">
+                  <label className="-m-2 flex size-11 flex-none items-center justify-center">
+                    <input type="checkbox" className="size-4" aria-label={`Select ${n.customer_need}`} checked={sel.has(n.id)} onChange={() => toggle(n.id)} />
+                  </label>
+                  <button type="button" aria-expanded={open === n.id} className="min-h-11 min-w-0 flex-1 cursor-pointer text-left font-medium hover:text-primary" onClick={() => setOpen(open === n.id ? null : n.id)}>
+                    {n.customer_need}
+                    <span className="block truncate text-meta font-normal text-muted-foreground">{n.search_terms.join(" · ")}</span>
+                  </button>
+                  <span className={cn("num flex-none text-lg", scoreTone(n.score))} title="Score">{n.score ?? "—"}</span>
+                </div>
+                <dl className="grid grid-cols-3 gap-x-3 gap-y-1 pl-9 text-meta">
+                  <div><dt className="text-muted-foreground">SV 360d</dt><dd className="num">{n0(n.sv_360)}</dd></div>
+                  <div><dt className="text-muted-foreground">Growth 180d</dt><dd className={cn("num", (n.growth_180 ?? 0) < 0 && "text-danger")}>{pct(n.growth_180)}</dd></div>
+                  <div><dt className="text-muted-foreground">Avg price</dt><dd className="num">{gbp(n.avg_price)}</dd></div>
+                </dl>
+                {(n.flags.length > 0 || n.shape || n.status !== "new") && (
+                  <div className="flex flex-wrap items-center gap-1 pl-9">
+                    {n.flags.map((x) => <StatusChip key={x} tone={FLAG_TONE[x as NicheFlag] ?? "neutral"} icon={false}>{FLAG_LABEL[x as NicheFlag] ?? x}</StatusChip>)}
+                    {n.shape && <ShapeChip shape={n.shape} />}
+                    {n.status === "candidate" && n.candidate_id
+                      ? <Link className="text-meta text-primary underline" href={`/pl/candidates/${n.candidate_id}`}>Candidate</Link>
+                      : n.status !== "new" && <span className="text-meta text-muted-foreground">{n.status[0].toUpperCase() + n.status.slice(1)}</span>}
+                  </div>
+                )}
+                {open === n.id && <div className="pt-2"><NicheDetail n={n} onChanged={onChanged} /></div>}
+              </li>
+            ))}
+          </ul>
+          <div className="hidden max-h-[calc(100dvh-var(--app-header)-7rem)] overflow-auto sm:block">
             <table className="w-full border-collapse text-sm">
               <caption className="sr-only">My niches</caption>
               <thead><tr>

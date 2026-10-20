@@ -213,6 +213,7 @@ A combined filter (profit, ROI, sales, BSR, not gated) went from ~4.1 s to ~0.3 
 **Runs remember their filters again**: `useUrlFilters({ remember })` saves a run's last filters (`ws.filters.run.<id>`, the old key) and puts them back when the run opens with none in the address; filters in the address win, Clear all forgets them.
 **Brand detail's drawer** pushes the page aside on wide screens (`xl:mr-[27rem]`, as on Run detail and Products) instead of covering the table's right edge.
 **Results on a phone: 10 cards a page** (was 20; Run detail, Brand detail, Shortlist, and Products' server pages, `?size=10`), the pager under them worded Previous / Next (44px) with a page picker ("Page [n] of N"), and a new page scrolls back to its first card.
+**My niches on a phone**: each niche is a card (need, its terms, score; SV 360d, growth 180d, average price; flags, shape, status; tap to open its detail), the table from 640px; no sideways scroll at 390px.
 **Extension 0.8.0**: the product panel and search results show the app's words, colours and icons (Buy / Check / Skip / Not scored as round chips; the panel lists each gate as Pass / Check / Fail), and candidate links open `/pl/candidates/<id>` (Suppliers & quotes, Reviews or Gate 3 tab) instead of the old `?c=` redirect.
 
 ## Workspaces
