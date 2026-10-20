@@ -59,6 +59,7 @@ export function ReviewsTab({ s }: { s: CandidateState }) {
 export function SuppliersTab({ id, s, onChanged }: { id: string; s: CandidateState; onChanged: () => void }) {
   const { data, fields, reload } = s;
   const e = useExtras(id);
+  const asked = useSearchParams().get("quotes");
   if (s.error && !data) return <ErrorState title="Couldn't load the candidate" message={s.error} onRetry={s.load} />;
   if (!data || !e.x) return wait;
   const c = data.candidate;
@@ -67,7 +68,8 @@ export function SuppliersTab({ id, s, onChanged }: { id: string; s: CandidateSta
     <div className="space-y-4">
       <SuppliersSection candidateId={c.id} onQuoted={refresh} />
       <QuotesSection c={{ id: c.id, name: c.name, niche_keyword: c.niche_keyword, category: c.category, sell: fields.sell?.value ? Number(fields.sell.value) : null, fields }}
-        quotes={e.x.quotes} chosenQuote={e.x.chosenQuote} onChanged={refresh} onFieldsChanged={() => { void reload(); refresh(); }} />
+        quotes={e.x.quotes} chosenQuote={e.x.chosenQuote} compare={{ settings: data.settings, card: data.card, category: c.category }}
+        view={asked === "compare" || asked === "list" ? asked : null} onChanged={refresh} onFieldsChanged={() => { void reload(); refresh(); }} />
     </div>
   );
 }

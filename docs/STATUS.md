@@ -265,6 +265,26 @@ phase, old → new addresses, the verdict words and where things are now: [`docs
 **UI redesign complete** (20 Oct 2026).
 **Extension 0.8.0**: the product panel and search results show the app's words, colours and icons (Buy / Check / Skip / Not scored as round chips; the panel lists each gate as Pass / Check / Fail), and candidate links open `/pl/candidates/<id>` (Suppliers & quotes, Reviews or Gate 3 tab) instead of the old `?c=` redirect.
 
+**Supplier comparison** (20 Oct 2026, migration 20261020000500, additive): a candidate's Suppliers & quotes tab has a **List /
+Compare** switch (remembered per browser, `ws.quotes.view`). Compare (`src/components/pl/QuoteCompare.tsx`) sets every quote as a
+column: supplier, status, ★ chosen; unit price (currency + £), MOQ, next tier; extras (plate/setup, cards, shrink wrap, other) and
+the EXW total; freight mode, DDP, freight £; landed per unit (ex import VAT when registered, as Gate 0 takes it), total cash, price
+multiple, profit per unit after fees (`econ()` with the quote's landed cost and no ads); production + transit days and the FBA
+arrival date if ordered today; samples (status, cost, received); six sample scores (1–5, editable there) with their average and a
+note; spec notes. Each row's best value is tinted with a trophy icon and "best" for screen readers (`bestOf`, nothing marked with
+one value or a tie of all). A phone shows one supplier at a time (a switch, or swipe the card). **Make this the chosen supplier**
+confirms in a dialog listing Gate 0 landed / Gate 7 units old → new; the previous choice goes back to "received"; your own
+(manual) values stay unless you tick "replace" (`/apply` takes `overwrite: ["landed","units"]`). New `pl_quotes` columns:
+`freight_mode`, `ddp`, `transit_days`, `next_tier_qty`/`next_tier_price`, `extras` (jsonb, quote currency, now part of the landed
+cost and duty base), `sample_status`, `sample_received_on`, `sample_scores`, `spec`; all in the quote form too. The quote form now
+saves every change made within its 500 ms debounce (it used to send only the last one). Lens cleaning wipes' two quotes were
+filled from their notes: both sea DDP; Tina cards $10, plate $0 (waived), 3-year shelf life, 200 sachets a box, samples ordered;
+Sophia $90 plate + $55 cards + $15 shrink wrap ($1,610 EXW), production 25 and transit 45 days (the upper ends of 20–25 and
+40–45), $2.85 at 1,000, samples received, spec; her currency corrected GBP → USD (the FX of 1.27 already treated it as dollars,
+so her landed cost is unchanged). The extras moved out of each quote's calc "other", so both landed costs are unchanged
+(£2.73, £3.67).
+- Rough edge: the sample score criteria and spec labels are the lens wipes' (moisture, sachet, wipe size…) for every candidate.
+
 ## Workspaces
 
 **Wholesale: resell existing listings.** Supplier price lists (CSV/XLSX upload, column mappings

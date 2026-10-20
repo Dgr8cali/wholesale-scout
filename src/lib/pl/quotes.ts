@@ -7,9 +7,43 @@
 export const QUOTE_SOURCES = ["Alibaba", "1688", "UK wholesaler", "Other"] as const;
 export const QUOTE_STATUSES = ["requested", "received", "samples ordered", "samples received", "chosen", "rejected"] as const;
 export const CURRENCIES = ["USD", "GBP", "CNY", "EUR"] as const;
+export const FREIGHT_MODES = ["sea", "rail", "air", "express"] as const;
+export const SAMPLE_STATUSES = ["not ordered", "ordered", "received"] as const;
 export type QuoteSource = (typeof QUOTE_SOURCES)[number];
 export type QuoteStatus = (typeof QUOTE_STATUSES)[number];
 export type Currency = (typeof CURRENCIES)[number];
+export type FreightMode = (typeof FREIGHT_MODES)[number];
+export type SampleStatus = (typeof SAMPLE_STATUSES)[number];
+
+/** One-off charges on the ex-works invoice, in the quote's currency. */
+export const EXTRAS = [
+  { k: "plate", label: "Plate / setup" },
+  { k: "cards", label: "Cards" },
+  { k: "shrink", label: "Shrink wrap" },
+  { k: "other", label: "Other" },
+] as const;
+export type ExtraKey = (typeof EXTRAS)[number]["k"];
+
+/** What a sample is scored on, 1 (poor) to 5 (excellent). */
+export const SAMPLE_CRITERIA = [
+  { k: "moisture", label: "Moisture / stays wet" },
+  { k: "cleaning", label: "Cleaning / no streaks" },
+  { k: "smell", label: "Smell" },
+  { k: "sachet", label: "Sachet opens easily" },
+  { k: "size", label: "Wipe size / feel" },
+  { k: "box", label: "Box quality" },
+] as const;
+export type SampleCriterion = (typeof SAMPLE_CRITERIA)[number]["k"];
+export type SampleScores = Partial<Record<SampleCriterion, number>> & { note?: string };
+
+/** Spec notes, free text. */
+export const SPEC_FIELDS = [
+  { k: "wipe", label: "Wipe size" },
+  { k: "sachet", label: "Sachet size / material" },
+  { k: "box", label: "Box size / weight" },
+  { k: "shelfLife", label: "Shelf life" },
+] as const;
+export type SpecKey = (typeof SPEC_FIELDS)[number]["k"];
 
 /** Units of the quote currency per £1, to start from: check today's rate (xe.com). */
 export const DEFAULT_FX: Record<Currency, number> = { GBP: 1, USD: 1.27, EUR: 1.17, CNY: 9.2 };
@@ -19,10 +53,24 @@ export const IMPORT_VAT = 0.2;
 export interface Quote {
   id: string; candidate_id: string; supplier_name: string; source: QuoteSource; contact: string | null;
   /** Ex-works, per unit, in `currency`. */
-  unit_price: number | null; currency: Currency; moq: number | null; lead_time_days: number | null;
+  unit_price: number | null; currency: Currency; moq: number | null;
+  /** Production days after the deposit (the longest quoted). */
+  lead_time_days: number | null;
   sample_cost: number | null; sample_lead_days: number | null; notes: string | null; status: QuoteStatus;
   /** The landed-cost calculator's inputs (blank ones take the defaults). */
   calc: Partial<LandedInputs> | null;
+  freight_mode?: FreightMode | null;
+  /** Delivered duty paid: the freight price includes duty and import VAT. */
+  ddp?: boolean | null;
+  /** Factory to the FBA warehouse, days (the longest quoted). */
+  transit_days?: number | null;
+  /** A larger order's unit price, in `currency`. */
+  next_tier_qty?: number | null; next_tier_price?: number | null;
+  /** One-off charges on the ex-works invoice, in `currency`. */
+  extras?: Partial<Record<ExtraKey, number>> | null;
+  sample_status?: SampleStatus | null; sample_received_on?: string | null;
+  sample_scores?: SampleScores | null;
+  spec?: Partial<Record<SpecKey, string>> | null;
   created_at: string; updated_at: string;
 }
 
@@ -56,7 +104,10 @@ export function landedInputs(q: Pick<Quote, "moq" | "currency" | "calc">): Lande
 export interface Landed {
   units: number;
   /** Goods in £ (unit price × units ÷ FX). */
-  goods: number; freight: number; duty: number; vat: number; inspection: number; other: number;
+  goods: number;
+  /** The ex-works invoice's one-off charges (plate, cards, shrink wrap, other) in £. */
+  extras: number;
+  freight: number; duty: number; vat: number; inspection: number; other: number;
   /** Everything the order costs in cash, £. */
   total: number;
   /** total ÷ units. */
@@ -67,16 +118,31 @@ export interface Landed {
 
 const r2 = (v: number) => Math.round(v * 100) / 100;
 
-/** A quote's landed cost: goods + freight + duty (on goods + freight) + import VAT (on all three) + inspection + other. */
-export function landedCost(q: Pick<Quote, "unit_price" | "moq" | "currency" | "calc">, override?: Partial<LandedInputs>): Landed | null {
+/** The extras' sum in the quote's currency. */
+export function extrasTotal(q: Pick<Quote, "extras">): number {
+  return EXTRAS.reduce((a, { k }) => a + (Number(q.extras?.[k]) || 0), 0);
+}
+
+/** The ex-works invoice in the quote's currency: unit price × units + the extras. */
+export function exwTotal(q: Pick<Quote, "unit_price" | "moq" | "currency" | "calc" | "extras">): number | null {
+  const i = landedInputs(q);
+  return q.unit_price == null || !(i.units > 0) ? null : q.unit_price * i.units + extrasTotal(q);
+}
+
+/**
+ * A quote's landed cost: goods + the invoice's extras + freight + duty (on goods, extras and freight)
+ * + import VAT (on all of those) + inspection + other.
+ */
+export function landedCost(q: Pick<Quote, "unit_price" | "moq" | "currency" | "calc"> & Partial<Pick<Quote, "extras">>, override?: Partial<LandedInputs>): Landed | null {
   const i = { ...landedInputs(q), ...(override ?? {}) };
   if (q.unit_price == null || !(i.units > 0) || !(i.fx > 0)) return null;
   const goods = (q.unit_price * i.units) / i.fx;
-  const duty = ((goods + i.freight) * i.dutyPct) / 100;
-  const vat = i.vat ? (goods + i.freight + duty) * IMPORT_VAT : 0;
-  const total = goods + i.freight + duty + vat + i.inspection + i.other;
+  const extras = extrasTotal(q) / i.fx;
+  const duty = ((goods + extras + i.freight) * i.dutyPct) / 100;
+  const vat = i.vat ? (goods + extras + i.freight + duty) * IMPORT_VAT : 0;
+  const total = goods + extras + i.freight + duty + vat + i.inspection + i.other;
   return {
-    units: i.units, goods: r2(goods), freight: r2(i.freight), duty: r2(duty), vat: r2(vat), inspection: r2(i.inspection), other: r2(i.other),
+    units: i.units, goods: r2(goods), extras: r2(extras), freight: r2(i.freight), duty: r2(duty), vat: r2(vat), inspection: r2(i.inspection), other: r2(i.other),
     total: r2(total), perUnit: r2(total / i.units), perUnitExVat: r2((total - vat) / i.units),
   };
 }
@@ -86,6 +152,40 @@ export function priceMultiple(sell: number | null, landed: number | null): { mul
   if (sell == null || landed == null || !(landed > 0) || !(sell > 0)) return null;
   const multiple = sell / landed;
   return { multiple, status: multiple >= 3.5 ? "pass" : multiple >= 3 ? "warn" : "fail" };
+}
+
+/** The sample scores' average (1–5), over the criteria scored; null with none. */
+export function sampleAverage(s: SampleScores | null | undefined): number | null {
+  const v = SAMPLE_CRITERIA.map(({ k }) => s?.[k]).filter((x): x is number => typeof x === "number" && x >= 1 && x <= 5);
+  return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
+}
+
+/** The samples' state: the quote's own, else read from its status. */
+export function sampleStatusOf(q: Partial<Pick<Quote, "sample_status" | "sample_received_on">> & Pick<Quote, "status">): SampleStatus {
+  if (q.sample_status) return q.sample_status;
+  if (q.sample_received_on || q.status === "samples received") return "received";
+  return q.status === "samples ordered" ? "ordered" : "not ordered";
+}
+
+/** Production + transit, and the day it would reach FBA if ordered on `from`; null without both. */
+export function arrival(q: Pick<Quote, "lead_time_days" | "transit_days">, from: Date = new Date()): { days: number; date: Date } | null {
+  if (q.lead_time_days == null || q.transit_days == null) return null;
+  const days = q.lead_time_days + q.transit_days;
+  const date = new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate() + days));
+  return { days, date };
+}
+
+/**
+ * The best of a row: the indexes holding the lowest (or highest) value, when at least two values
+ * are known and they aren't all the same.
+ */
+export function bestOf(values: (number | null | undefined)[], better: "low" | "high"): Set<number> {
+  const known = values.map((v, i) => [v, i] as const).filter((x): x is readonly [number, number] => typeof x[0] === "number" && Number.isFinite(x[0]));
+  if (known.length < 2) return new Set();
+  const nums = known.map(([v]) => v);
+  const top = better === "low" ? Math.min(...nums) : Math.max(...nums);
+  if (nums.every((v) => v === top)) return new Set();
+  return new Set(known.filter(([v]) => v === top).map(([, i]) => i));
 }
 
 /** Certifications and test reports to ask for, by the candidate's referral category. */

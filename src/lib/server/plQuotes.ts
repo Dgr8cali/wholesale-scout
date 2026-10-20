@@ -1,7 +1,7 @@
 import "server-only";
 import { LAUNCH_STEPS, STEP_KEYS, statusFromSteps, type LaunchStep, type PlStatus } from "../pl/launch";
 import type { Fill } from "../pl/fill";
-import { CURRENCIES, QUOTE_SOURCES, QUOTE_STATUSES, landedCost, type LandedInputs, type Quote } from "../pl/quotes";
+import { CURRENCIES, EXTRAS, FREIGHT_MODES, QUOTE_SOURCES, QUOTE_STATUSES, SAMPLE_CRITERIA, SAMPLE_STATUSES, SPEC_FIELDS, landedCost, type LandedInputs, type Quote } from "../pl/quotes";
 import { adsDashboard, saveAdsProduct } from "./ads";
 import { ensureStockItemForAsin } from "./stock";
 import { businessSettings } from "./business";
@@ -14,11 +14,13 @@ const numOrNull = (v: unknown) => (v === "" || v == null ? null : Number.isFinit
 
 /* ===================== quotes ===================== */
 
-const QUOTE_COLS = "id, candidate_id, supplier_name, source, contact, unit_price, currency, moq, lead_time_days, sample_cost, sample_lead_days, notes, status, calc, created_at, updated_at";
+const QUOTE_COLS = "id, candidate_id, supplier_name, source, contact, unit_price, currency, moq, lead_time_days, sample_cost, sample_lead_days, notes, status, calc, freight_mode, ddp, transit_days, next_tier_qty, next_tier_price, extras, sample_status, sample_received_on, sample_scores, spec, created_at, updated_at";
 const toQuote = (r: Record<string, unknown>): Quote => ({
   ...(r as unknown as Quote),
   unit_price: numOrNull(r.unit_price), moq: numOrNull(r.moq), lead_time_days: numOrNull(r.lead_time_days),
   sample_cost: numOrNull(r.sample_cost), sample_lead_days: numOrNull(r.sample_lead_days), calc: (r.calc as Quote["calc"]) ?? {},
+  transit_days: numOrNull(r.transit_days), next_tier_qty: numOrNull(r.next_tier_qty), next_tier_price: numOrNull(r.next_tier_price),
+  extras: (r.extras as Quote["extras"]) ?? {}, sample_scores: (r.sample_scores as Quote["sample_scores"]) ?? {}, spec: (r.spec as Quote["spec"]) ?? {},
 });
 
 export async function listQuotes(candidateId?: string): Promise<Quote[]> {
@@ -37,6 +39,32 @@ function quotePatch(x: Record<string, unknown>): Record<string, unknown> {
   for (const k of ["contact", "notes"] as const) if (x[k] !== undefined) out[k] = String(x[k] ?? "").trim().slice(0, 2000) || null;
   for (const k of ["unit_price", "sample_cost"] as const) if (x[k] !== undefined) { const v = numOrNull(x[k]); if (v != null && v < 0) throw new Error(`${k} can't be negative`); out[k] = v; }
   for (const k of ["moq", "lead_time_days", "sample_lead_days"] as const) if (x[k] !== undefined) { const v = numOrNull(x[k]); out[k] = v == null ? null : Math.max(0, Math.round(v)); }
+  if (x.freight_mode !== undefined) { if (x.freight_mode != null && x.freight_mode !== "" && !FREIGHT_MODES.includes(x.freight_mode as never)) throw new Error(`Freight: ${FREIGHT_MODES.join(", ")}`); out.freight_mode = x.freight_mode || null; }
+  if (x.sample_status !== undefined) { if (x.sample_status != null && x.sample_status !== "" && !SAMPLE_STATUSES.includes(x.sample_status as never)) throw new Error(`Samples: ${SAMPLE_STATUSES.join(", ")}`); out.sample_status = x.sample_status || null; }
+  if (x.ddp !== undefined) out.ddp = x.ddp == null ? null : !!x.ddp;
+  if (x.next_tier_price !== undefined) { const v = numOrNull(x.next_tier_price); if (v != null && v < 0) throw new Error("The next tier's price can't be negative"); out.next_tier_price = v; }
+  for (const k of ["transit_days", "next_tier_qty"] as const) if (x[k] !== undefined) { const v = numOrNull(x[k]); out[k] = v == null ? null : Math.max(k === "next_tier_qty" ? 1 : 0, Math.round(v)); }
+  if (x.sample_received_on !== undefined) out.sample_received_on = typeof x.sample_received_on === "string" && /^\d{4}-\d{2}-\d{2}$/.test(x.sample_received_on) ? x.sample_received_on : null;
+  if (x.extras !== undefined) {
+    const e = (x.extras ?? {}) as Record<string, unknown>;
+    const extras: Record<string, number> = {};
+    for (const { k } of EXTRAS) { const v = numOrNull(e[k]); if (v != null && v >= 0) extras[k] = v; }
+    out.extras = extras;
+  }
+  if (x.sample_scores !== undefined) {
+    const e = (x.sample_scores ?? {}) as Record<string, unknown>;
+    const scores: Record<string, number | string> = {};
+    for (const { k } of SAMPLE_CRITERIA) { const v = numOrNull(e[k]); if (v != null && v >= 1 && v <= 5) scores[k] = Math.round(v); }
+    const note = String(e.note ?? "").trim().slice(0, 2000);
+    if (note) scores.note = note;
+    out.sample_scores = scores;
+  }
+  if (x.spec !== undefined) {
+    const e = (x.spec ?? {}) as Record<string, unknown>;
+    const spec: Record<string, string> = {};
+    for (const { k } of SPEC_FIELDS) { const v = String(e[k] ?? "").trim().slice(0, 300); if (v) spec[k] = v; }
+    out.spec = spec;
+  }
   if (x.calc !== undefined) {
     const c = (x.calc ?? {}) as Record<string, unknown>;
     const calc: Partial<LandedInputs> = {};
@@ -73,7 +101,7 @@ const fmt = (v: number) => v.toFixed(2);
  * first order (units, with the landed cost, so its stock line is the quote's total cash). Written
  * with source "quote"; a value you typed yourself stays.
  */
-export async function applyQuote(id: string, to: "gate0" | "gate7"): Promise<{ written: string[]; kept: string[]; perUnit: number; total: number; units: number }> {
+export async function applyQuote(id: string, to: "gate0" | "gate7", overwrite: string[] = []): Promise<{ written: string[]; kept: string[]; perUnit: number; total: number; units: number }> {
   const q = await quoteOrThrow(id);
   const l = landedCost(q);
   if (!l) throw new Error("The quote needs a unit price, units and an FX rate");
@@ -84,6 +112,9 @@ export async function applyQuote(id: string, to: "gate0" | "gate7"): Promise<{ w
   const fill: Fill = to === "gate0"
     ? { landed: { value: fmt(perUnit), why } }
     : { units: { value: String(l.units), why: `${q.supplier_name}'s first order` }, landed: { value: fmt(perUnit), why } };
+  // Asked first: your own values named in `overwrite` are replaced too (they become the quote's).
+  const replace = Object.keys(fill).filter((k) => overwrite.includes(k));
+  if (replace.length) must(await db().from("pl_candidate_fields").delete().eq("candidate_id", q.candidate_id).eq("source", "manual").in("key", replace), "replace your values");
   const written = await applyAuto(q.candidate_id, fill, "quote");
   return { written, kept: Object.keys(fill).filter((k) => !written.includes(k)), perUnit, total: l.total, units: l.units };
 }

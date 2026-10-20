@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckIcon, ClipboardCopyIcon, ExternalLinkIcon, FileTextIcon, PlusIcon, Trash2Icon } from "lucide-react";
+import { CheckIcon, ClipboardCopyIcon, ColumnsIcon, ExternalLinkIcon, FileTextIcon, LayoutGridIcon, PlusIcon, Trash2Icon } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { useDialogs } from "@/components/Dialogs";
@@ -10,12 +10,15 @@ import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { StatusChip, type Tone } from "@/components/ui/status-chip";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
-  CURRENCIES, DEFAULT_FX, QUOTE_SOURCES, QUOTE_STATUSES, landedCost, landedInputs, priceMultiple, rfqText,
-  type LandedInputs, type Quote,
+  CURRENCIES, DEFAULT_FX, EXTRAS, FREIGHT_MODES, QUOTE_SOURCES, QUOTE_STATUSES, SAMPLE_CRITERIA, SAMPLE_STATUSES, SPEC_FIELDS,
+  exwTotal, landedCost, landedInputs, priceMultiple, rfqText, sampleStatusOf, type LandedInputs, type Quote,
 } from "@/lib/pl/quotes";
 import { api } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
+import { QuoteCompare, type CompareContext } from "./QuoteCompare";
 
 const gbp = (v: number | null | undefined) => (v == null ? "—" : `£${v.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
 const TARIFF_URL = "https://www.trade-tariff.service.gov.uk/find_commodity";
@@ -27,15 +30,27 @@ export interface QuotesCandidate {
   sell: number | null; fields: Record<string, { value: string } | undefined>;
 }
 
-/** A candidate's supplier quotes side by side, each with its landed cost, and the RFQ to send. */
-export function QuotesSection({ c, quotes, chosenQuote, onChanged, onFieldsChanged }: {
+const VIEW_KEY = "ws.quotes.view";
+
+/**
+ * A candidate's supplier quotes, each with its landed cost, and the RFQ to send. With `compare`
+ * (the candidate's fees and settings), a Compare view sets every quote side by side.
+ */
+export function QuotesSection({ c, quotes, chosenQuote, compare, view: asked, onChanged, onFieldsChanged }: {
   c: QuotesCandidate; quotes: Quote[]; chosenQuote: string | null;
+  compare?: Omit<CompareContext, "sell" | "fields">;
+  /** The view the address asks for (`?quotes=compare`); it wins over the remembered one. */
+  view?: "list" | "compare" | null;
   /** Reload the quotes (and the chosen landed cost). */
   onChanged: () => void;
   /** A quote wrote into the gates: reload the candidate's fields. */
   onFieldsChanged: () => void;
 }) {
   const [rfq, setRfq] = useState(false);
+  // The view you last used, per browser (the section only renders in the browser, once the quotes load).
+  const [view, setView] = useState<"list" | "compare">(() => { if (asked) return asked; try { return localStorage.getItem(VIEW_KEY) === "compare" ? "compare" : "list"; } catch { return "list"; } });
+  const pick = (v: "list" | "compare") => { setView(v); try { localStorage.setItem(VIEW_KEY, v); } catch { /* private window */ } };
+  const comparing = !!compare && view === "compare" && quotes.length > 0;
   const add = async () => {
     try {
       await api(`/api/pl/candidates/${c.id}/quotes`, { method: "POST", json: { supplier_name: `Supplier ${quotes.length + 1}`, status: "requested" } });
@@ -57,11 +72,19 @@ export function QuotesSection({ c, quotes, chosenQuote, onChanged, onFieldsChang
             <p>Write the one you trust into Gate 0 and Gate 7; a value you typed yourself stays.</p>
           </InfoTip>
         </div>
+        {compare && quotes.length > 0 && (
+          <ToggleGroup type="single" variant="outline" size="sm" spacing={0} value={view} onValueChange={(v) => v && pick(v as "list" | "compare")} aria-label="Show quotes as">
+            <ToggleGroupItem value="list"><LayoutGridIcon /> List</ToggleGroupItem>
+            <ToggleGroupItem value="compare"><ColumnsIcon /> Compare</ToggleGroupItem>
+          </ToggleGroup>
+        )}
         <Button variant="secondary" size="sm" onClick={() => setRfq((v) => !v)}><FileTextIcon /> RFQ text</Button>
         <Button size="sm" onClick={add}><PlusIcon /> Add quote</Button>
       </div>
       {rfq && <RfqPanel text={text} hasSix={!!f("sixWordsText")} />}
-      {!quotes.length ? <p className="rounded-lg bg-subtle px-3 py-2.5 text-sm text-muted-foreground">No quotes yet. Send the RFQ to three suppliers, then add each quote as it comes in.</p> : (
+      {!quotes.length ? <p className="rounded-lg bg-subtle px-3 py-2.5 text-sm text-muted-foreground">No quotes yet. Send the RFQ to three suppliers, then add each quote as it comes in.</p> : comparing ? (
+        <QuoteCompare quotes={quotes} chosenQuote={chosenQuote} ctx={{ ...compare!, sell: c.sell, fields: c.fields as CompareContext["fields"] }} onChanged={onChanged} onFieldsChanged={onFieldsChanged} />
+      ) : (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {quotes.map((q) => <QuoteCard key={q.id} q={q} sell={c.sell} chosen={chosenQuote === q.id} others={quotes.length - 1} onChanged={onChanged} onFieldsChanged={onFieldsChanged} />)}
         </div>
@@ -92,14 +115,20 @@ function QuoteCard({ q, sell, chosen, others, onChanged, onFieldsChanged }: { q:
   const [d, setD] = useState<Draft>({ ...q, calc: q.calc ?? {} });
   const [rejectOthers, setRejectOthers] = useState(true);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Every change since the last save (two quick edits both go).
+  const pending = useRef<Record<string, unknown>>({});
   const { confirm } = useDialogs();
   /** Shown at once, saved shortly after you stop typing. */
   const set = (patch: Partial<Draft>) => {
     const next = { ...d, ...patch, calc: { ...d.calc, ...(patch.calc ?? {}) } };
     setD(next);
     if (timer.current) clearTimeout(timer.current);
-    const body = patch.calc ? { calc: next.calc } : patch;
-    timer.current = setTimeout(() => { api(`/api/pl/quotes/${q.id}`, { method: "PATCH", json: body }).catch((e) => toast.error(`Not saved: ${(e as Error).message}`)); }, 500);
+    pending.current = { ...pending.current, ...patch, ...(patch.calc ? { calc: next.calc } : {}) };
+    timer.current = setTimeout(() => {
+      const body = pending.current;
+      pending.current = {};
+      api(`/api/pl/quotes/${q.id}`, { method: "PATCH", json: body }).catch((e) => toast.error(`Not saved: ${(e as Error).message}`));
+    }, 500);
   };
   const i = landedInputs(d);
   const l = landedCost(d);
@@ -148,15 +177,51 @@ function QuoteCard({ q, sell, chosen, others, onChanged, onFieldsChanged }: { q:
         {field("Unit price (ex-works)", <div className="flex gap-1">{<NumIn value={d.unit_price} onChange={(v) => set({ unit_price: v })} step="0.01" />}
           <NativeSelect className="h-8 w-24 shrink-0" value={d.currency} onChange={(e) => set({ currency: e.target.value as Quote["currency"], calc: { fx: DEFAULT_FX[e.target.value as Quote["currency"]] } })}>{CURRENCIES.map((c) => <NativeSelectOption key={c} value={c}>{c}</NativeSelectOption>)}</NativeSelect></div>)}
         {field("MOQ", <NumIn value={d.moq} onChange={(v) => set({ moq: v })} step="1" />)}
-        {field("Lead time (days)", <NumIn value={d.lead_time_days} onChange={(v) => set({ lead_time_days: v })} step="1" />)}
-        {field(`Sample cost (${d.currency})`, <NumIn value={d.sample_cost} onChange={(v) => set({ sample_cost: v })} step="0.01" />)}
-        {field("Sample lead (days)", <NumIn value={d.sample_lead_days} onChange={(v) => set({ sample_lead_days: v })} step="1" />)}
+        {field(`Next tier price (${d.currency})`, <NumIn value={d.next_tier_price} onChange={(v) => set({ next_tier_price: v })} step="0.01" />)}
+        {field("Next tier quantity", <NumIn value={d.next_tier_qty} onChange={(v) => set({ next_tier_qty: v })} step="1" />, d.next_tier_price != null && !d.next_tier_qty ? <span className="text-danger">Enter the quantity this price is for</span> : null)}
+        {field("Production (days)", <NumIn value={d.lead_time_days} onChange={(v) => set({ lead_time_days: v })} step="1" />, "The longest quoted")}
+        {field("Transit to FBA (days)", <NumIn value={d.transit_days} onChange={(v) => set({ transit_days: v })} step="1" />, "The longest quoted")}
         <div className="col-span-2">{field("Notes", <Input className="h-8" value={d.notes ?? ""} onChange={(e) => set({ notes: e.target.value })} />)}</div>
+      </div>
+
+      <div className="space-y-2">
+        <h3 className="section-label">Extras on the invoice ({d.currency})</h3>
+        <div className="grid grid-cols-2 gap-2">
+          {EXTRAS.map(({ k, label }) => <div key={k}>{field(label, <NumIn value={d.extras?.[k]} onChange={(v) => set({ extras: { ...d.extras, [k]: v ?? undefined } })} step="0.01" />)}</div>)}
+        </div>
+        {exwTotal(d) != null && <p className="flex justify-between text-sm"><span>EXW total</span><b className="num">{exwTotal(d)!.toLocaleString("en-GB", { style: "currency", currency: d.currency })}</b></p>}
+      </div>
+
+      <div className="space-y-2">
+        <h3 className="section-label">Samples</h3>
+        <div className="grid grid-cols-2 gap-2">
+          {field("Samples", <NativeSelect className="h-8 w-full" value={sampleStatusOf(d)} onChange={(e) => set({ sample_status: e.target.value as Quote["sample_status"] })}>{SAMPLE_STATUSES.map((s) => <NativeSelectOption key={s} value={s}>{s}</NativeSelectOption>)}</NativeSelect>)}
+          {field("Received on", <Input className="h-8" type="date" value={d.sample_received_on ?? ""} onChange={(e) => set({ sample_received_on: e.target.value || null, ...(e.target.value ? { sample_status: "received" as const } : {}) })} />)}
+          {field(`Sample cost (${d.currency})`, <NumIn value={d.sample_cost} onChange={(v) => set({ sample_cost: v })} step="0.01" />)}
+          {field("Sample lead (days)", <NumIn value={d.sample_lead_days} onChange={(v) => set({ sample_lead_days: v })} step="1" />)}
+          {SAMPLE_CRITERIA.map(({ k, label }) => <div key={k}>{field(`${label} (1–5)`, (
+            <NativeSelect className="h-8 w-full" value={d.sample_scores?.[k] ?? ""} onChange={(e) => set({ sample_scores: { ...d.sample_scores, [k]: e.target.value === "" ? undefined : Number(e.target.value) } })}>
+              <NativeSelectOption value="">Not scored</NativeSelectOption>
+              {[1, 2, 3, 4, 5].map((n) => <NativeSelectOption key={n} value={n}>{n}</NativeSelectOption>)}
+            </NativeSelect>
+          ))}</div>)}
+          <div className="col-span-2">{field("Sample note", <Textarea className="min-h-16 text-sm" value={d.sample_scores?.note ?? ""} onChange={(e) => set({ sample_scores: { ...d.sample_scores, note: e.target.value } })} />)}</div>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <h3 className="section-label">Spec</h3>
+        <div className="grid grid-cols-2 gap-2">
+          {SPEC_FIELDS.map(({ k, label }) => <div key={k}>{field(label, <Input className="h-8" value={d.spec?.[k] ?? ""} onChange={(e) => set({ spec: { ...d.spec, [k]: e.target.value } })} />)}</div>)}
+        </div>
       </div>
 
       <div className="space-y-2 rounded-lg bg-subtle p-2.5">
         <h3 className="section-label">Landed cost</h3>
         <div className="grid grid-cols-2 gap-2">
+          {field("Freight", <NativeSelect className="h-8 w-full" value={d.freight_mode ?? ""} onChange={(e) => set({ freight_mode: (e.target.value || null) as Quote["freight_mode"] })}>
+            <NativeSelectOption value="">Not set</NativeSelectOption>{FREIGHT_MODES.map((m) => <NativeSelectOption key={m} value={m}>{m}</NativeSelectOption>)}</NativeSelect>)}
+          <div className="flex items-end pb-1.5"><label className="flex items-center gap-2 text-meta"><Switch checked={!!d.ddp} onCheckedChange={(v) => set({ ddp: v, ...(v ? { calc: { vat: false, dutyPct: 0 } } : {}) })} aria-label="DDP: duty and import VAT paid by the supplier" /> DDP (duty and VAT paid)</label></div>
           {field("Units ordered", <NumIn value={d.calc.units ?? null} onChange={(v) => set({ calc: { units: v ?? undefined } })} step="1" />, `Default: the MOQ (${d.moq ?? "—"})`)}
           {field(`FX: ${d.currency} per £1`, <NumIn value={d.calc.fx ?? null} onChange={(v) => set({ calc: { fx: v ?? undefined } })} step="0.01" />, <>Default {DEFAULT_FX[d.currency]}: check today&apos;s rate on <a className="link" href={`https://www.xe.com/currencyconverter/convert/?Amount=1&From=GBP&To=${d.currency}`} target="_blank" rel="noreferrer">xe.com</a></>)}
           {field("Freight to the UK (£, total)", <NumIn value={d.calc.freight ?? null} onChange={(v) => set({ calc: { freight: v ?? undefined } })} step="1" />)}

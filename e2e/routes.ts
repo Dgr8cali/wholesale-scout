@@ -61,5 +61,9 @@ export async function allRoutes(request: APIRequestContext): Promise<Route[]> {
   const cands = await json<{ candidates?: { id: string }[] } | { id: string }[]>(request, "/api/pl/candidates");
   const cand = Array.isArray(cands) ? cands[0] : cands?.candidates?.[0];
   if (cand) for (const t of ["overview", "gates", "reviews", "suppliers", "listing", "launch"]) out.push({ name: `Candidate · ${t}`, path: `/pl/candidates/${cand.id}?tab=${t}` });
+  // The supplier comparison, on the candidate with the most quotes.
+  const ov = await json<{ candidates: { id: string; quotes: number }[] }>(request, "/api/pl/overview");
+  const quoted = ov?.candidates.filter((c) => c.quotes > 0).sort((a, b) => b.quotes - a.quotes)[0];
+  if (quoted) out.push({ name: "Candidate · compare quotes", path: `/pl/candidates/${quoted.id}?tab=suppliers&quotes=compare` });
   return out;
 }
