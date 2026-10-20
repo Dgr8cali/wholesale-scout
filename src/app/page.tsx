@@ -4,7 +4,7 @@ import { UploadIcon } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { ErrorState } from "@/components/States";
-import { AskScoutButton, AskScoutPanel } from "@/components/today/AskScout";
+import { ACTED, AskScoutButton, AskScoutPanel } from "@/components/today/AskScout";
 import { KeyNumbers } from "@/components/today/KeyNumbers";
 import { NextSteps } from "@/components/today/NextSteps";
 import { Button } from "@/components/ui/button";
@@ -25,7 +25,9 @@ export default function TodayPage() {
     load();
     // Fresh when you come back to the tab.
     window.addEventListener("focus", load);
-    return () => window.removeEventListener("focus", load);
+    // An action confirmed in Ask Scout (a step snoozed or done) shows at once.
+    window.addEventListener(ACTED, load);
+    return () => { window.removeEventListener("focus", load); window.removeEventListener(ACTED, load); };
   }, [load]);
 
   return (
@@ -37,7 +39,7 @@ export default function TodayPage() {
         info={<>
           <p>The most useful jobs to do now, from your own data: imports due, proposals to review, launch milestones, costs to add, stock to reorder, candidates&apos; next actions, suppliers and brands to chase. Problems with the nightly cron, Keepa or SP-API come first.</p>
           <p>Later hides a step for 24 hours. Done hides it until something behind it changes.</p>
-          <p>Ask Scout answers questions from your own data with read-only lookups (it can&apos;t change anything), shows the numbers it used and what each answer cost. Also on ⌘K.</p>
+          <p>Ask Scout answers questions from your own data with read-only lookups, shows the numbers it used and what each answer cost. It can suggest a small action that happens only when you press Confirm (with Undo for 10 seconds). Also on ⌘K.</p>
         </>}
         actions={<>
           <AskScoutButton className="xl:hidden" />

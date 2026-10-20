@@ -41,6 +41,8 @@ export interface PlCandidate {
   park_reason?: string | null; parked_at?: string | null; parked_from?: string | null;
   /** The pipeline board's column when you moved it there (null: follow the data; src/lib/pl/pipeline.ts). */
   pipeline_stage?: string | null;
+  /** Your note on what to do next (typed on the candidate, or confirmed from Ask Scout). */
+  next_action_note?: string | null;
 }
 export interface PlField { value: string; source: FieldSource; updated_at: string }
 export interface PoeSnapshot extends Omit<PoeExtract, "niche_id" | "niche_title"> { id: string; candidate_id: string | null; niche_id: string | null; niche_title: string | null; captured_at: string }
@@ -215,7 +217,7 @@ export async function createCandidate(input: { name: string; niche_keyword?: str
  * Name, niche keyword, category, status, notes, park reason. Parking needs a reason and remembers
  * the status it left; any other status clears the parking ("unpark" goes back to that status).
  */
-export async function updateCandidate(id: string, patch: Partial<Pick<PlCandidate, "name" | "niche_keyword" | "category" | "status" | "notes" | "park_reason">> & { unpark?: boolean }) {
+export async function updateCandidate(id: string, patch: Partial<Pick<PlCandidate, "name" | "niche_keyword" | "category" | "status" | "notes" | "park_reason" | "next_action_note">> & { unpark?: boolean }) {
   const upd: Record<string, unknown> = { updated_at: now() };
   if (patch.name != null) upd.name = String(patch.name).trim().slice(0, 120) || "Untitled";
   if (patch.niche_keyword !== undefined) upd.niche_keyword = patch.niche_keyword?.trim() || null;
@@ -242,6 +244,11 @@ export async function updateCandidate(id: string, patch: Partial<Pick<PlCandidat
     upd.park_reason = patch.park_reason.trim().slice(0, 500);
   }
   if (patch.notes !== undefined) upd.notes = patch.notes || null;
+  if (patch.next_action_note !== undefined) {
+    const n = String(patch.next_action_note ?? "").trim();
+    if (n.length > 300) throw new Error("Keep the next-action note under 300 characters");
+    upd.next_action_note = n || null;
+  }
   must(await db().from("pl_candidates").update(upd).eq("id", id), "update candidate");
 }
 

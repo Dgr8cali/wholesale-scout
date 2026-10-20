@@ -1,7 +1,7 @@
 ---
 title: Today
 summary: Your next steps across every workspace, the key numbers, and Ask Scout for questions about your own data.
-synonyms: [home, dashboard, overview, start page, next steps, to do, keepa balance, ask scout]
+synonyms: [home, dashboard, overview, start page, next steps, to do, keepa balance, ask scout, suggested actions, confirm, undo, action log]
 route: /
 order: 1
 ---
@@ -42,4 +42,24 @@ One row under the steps: **Ad spend, 7 days** (with ACoS), **Proposals**, **Cand
 
 ## Ask Scout
 
-Questions about your own data ("Which suppliers haven't replied?"), answered from the app's records with the figures and links behind the answer. It's the right-hand panel on a wide screen; narrower, the header's **Ask Scout** opens it, and ⌘K → **Ask Scout…** works from any page. Under each answer: the tokens used, the cost, how many lookups and how long it took. It only reads; it never changes anything.
+Questions about your own data ("Which suppliers haven't replied?"), answered from the app's records with the figures and links behind the answer. It's the right-hand panel on a wide screen; narrower, the header's **Ask Scout** opens it, and ⌘K → **Ask Scout…** works from any page. Under each answer: the tokens used, the cost, how many lookups and how long it took. Its lookups only read.
+
+### Suggested actions
+
+Scout can suggest a small action as a card under its answer. Each card says what will change and on which record (linked), with **Confirm** and **No thanks**. Nothing happens until you press Confirm on that card, and Confirm runs it once (pressing it again changes nothing). A toast then offers **Undo** for 10 seconds; Undo works for two minutes and puts the record back as it was. Only these actions can be suggested:
+
+| Action | What Confirm does |
+|---|---|
+| Snooze a Today step | Later: hidden for 24 hours |
+| Dismiss a Today step | Done: hidden until something behind it changes |
+| Dismiss an Ads proposal | Skipped for 30 days, as on Proposals. Nothing goes to Amazon |
+| Add a product to Shortlist | A screened wholesale product joins Shortlist → Products |
+| Mark a supplier lead contacted | A new Alibaba lead becomes "contacted" |
+| Set a candidate's next-action note | The note on the candidate's Overview (you can also type it there) |
+| Open a page, pre-filtered | Opens it (nothing to undo) |
+
+Each action is checked again when you confirm: it must still be on the list, and the record must still be as described (a step still showing, a proposal still open, a lead still new). If not, it isn't run and the reason shows.
+
+Scout never suggests or does these, even if asked: approving or exporting Ads changes, anything that changes Amazon, deleting anything, uploads, purchases or orders, editing prices or costs, changing settings. Ask for one and it says it can't, with a link to the page where you can do it yourself.
+
+**Action log** (under the conversation) lists what was confirmed, declined or undone, by whom (the name you signed in with) and when. Each one is also kept on the server with the record's state before it changed.

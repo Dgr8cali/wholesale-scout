@@ -53,6 +53,7 @@ describe("Ask Scout tools are read-only", () => {
     candidates: { query: "lens" },
     suppliers: { status: "contacted" },
     proposals: {},
+    today_steps: {},
   };
 
   it("every tool has a test input", () => {
@@ -93,7 +94,8 @@ describe("Ask Scout tools are read-only", () => {
     expect(src).not.toMatch(/\bfetch\(|spapi|keepa\/client|getKeepa|adsOps|bulk|upload|scheduleCall/i);
     // Only these modules: types, pure helpers and the read helpers.
     const imports = [...src.matchAll(/from "([^"]+)"/g)].map((m) => m[1]).sort();
-    expect(imports).toEqual(["../ads/rules", "../pl/adsDefaults", "../pl/gatekeeper", "../pl/launch", "./ads", "./db", "./pl", "./stock", "@anthropic-ai/sdk"].sort());
+    expect(imports).toEqual(["../ads/rules", "../pl/adsDefaults", "../pl/gatekeeper", "../pl/launch", "./ads", "./db", "./nextSteps", "./pl", "./stock", "@anthropic-ai/sdk"].sort());
+    expect(src).toMatch(/import \{ todaySteps \} from "\.\/nextSteps"/);
     expect(src).toMatch(/import \{ adsDashboard \} from "\.\/ads"/);
     expect(src).toMatch(/import \{ db, must, selectAll \} from "\.\/db"/);
     expect(src).toMatch(/import \{ listCandidates \} from "\.\/pl"/);

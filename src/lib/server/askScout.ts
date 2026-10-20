@@ -3,6 +3,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { createHash } from "node:crypto";
 import { costOf, leanThinking, type Usage } from "../ads/ai";
 import { aiClient, aiSettings, strictSchema } from "./adsAi";
+import { ALLOWED, MAX_PROPOSALS, PROPOSE_TOOL, appHref, neverAllowed, resolveAction, type ActionLog, type ProposedAction } from "./askScoutActions";
 import { TOOLS, runTool } from "./askScoutTools";
 import { db, must } from "./db";
 
@@ -26,6 +27,8 @@ export interface AskAnswer {
   links: { label: string; href: string }[];
   /** What it needed and couldn't find. */
   missing: string[];
+  /** Asked for something Scout may not do: what, and the page where you can. */
+  cannot: { request: string; href: string; page: string }[];
 }
 
 export interface AskRun {
@@ -33,10 +36,16 @@ export interface AskRun {
   answer: AskAnswer | null; error: string | null;
   tools: { name: string; input: Record<string, unknown> }[];
   model: string; input_tokens: number; output_tokens: number; cost_gbp: number;
+  /** Actions proposed with the answer, each waiting for your Confirm. */
+  actions: ProposedAction[];
+  /** Per action id: what happened to it (confirmed, declined, undone…). */
+  actionState?: Record<string, Pick<ActionLog, "id" | "status" | "done_at" | "error">>;
 }
 
 const SYSTEM = `You are Scout, the assistant inside Wholesale Scout: a single UK Amazon seller's workbench (wholesale resale, private label, Sponsored Products ads, stock).
-Answer the seller's question from their own data only, using the tools. The tools only read; you can't change anything. If asked to change something, say which page to do it on.
+Answer the seller's question from their own data only, using the tools. The lookup tools only read.
+- You can't change anything yourself. You may PROPOSE an action with propose_action, and the seller confirms each with a tap; nothing happens until they do. Only these: ${Object.entries(ALLOWED).map(([k, v]) => `${k} (${v})`).join("; ")}. Propose one when the seller asks for it or it's the obvious next step from the answer, never more than ${MAX_PROPOSALS}. Say in the answer what you've proposed ("I've suggested snoozing it: confirm below"), never that it's done.
+- Never allowed, even if asked: approving or exporting Ads changes, anything that changes Amazon, deleting anything, uploads, purchases or orders, editing prices or costs, changing settings. When asked for one, say plainly you can't do that, and put it in "cannot" with the app page where the seller can do it themselves (an href from the tools, or one of the app's sections).
 - Never guess or use outside knowledge for a figure. If the data needed isn't there, say plainly what's missing (for example "no ad data after 2 Oct", "no landed cost set") and put it in "missing".
 - Look a product up with find_products when the question names it in words, then use its ASIN.
 - Be short and plain: two to five sentences, British English, £, dates like 19 Oct. Lead with the answer ("Yes, …" / "No, …" / "Reorder by …"), then the numbers behind it.
@@ -51,19 +60,34 @@ const ANSWER_SCHEMA = {
     figures: { type: "array", items: { type: "object", properties: { label: { type: "string" }, value: { type: "string" }, href: { type: "string", description: "The app page it comes from, e.g. /ads/dashboard?asin=…" } } } },
     links: { type: "array", items: { type: "object", properties: { label: { type: "string" }, href: { type: "string" } } } },
     missing: { type: "array", items: { type: "string" }, description: "Data that was needed and isn't there; empty when nothing was missing" },
+    cannot: { type: "array", description: "Things asked for that Scout may not do or propose; empty otherwise", items: { type: "object", properties: { request: { type: "string", description: "What was asked, e.g. approve the bid changes" }, href: { type: "string", description: "The app page where the seller can do it" }, page: { type: "string", description: "That page's name, e.g. Ads → Proposals" } } } },
   },
 } as const;
 
 /** Only the app's own pages: a link the tools gave, or one of the app's sections. */
 const APP_PATH = /^\/(ads|stock|pl|products|suppliers|brands|runs|shortlist|new-run|plan|settings|help)(\/|\?|$)/;
+/** The model sometimes writes "\u00a3" for £ inside its JSON strings: show the character. */
+export const unescape = (t: string) => t.replace(/\\u([0-9a-fA-F]{4})/g, (_, h: string) => String.fromCharCode(parseInt(h, 16)));
+
 export function cleanAnswer(raw: Partial<AskAnswer> | null, seen: Set<string>): AskAnswer {
   const ok = (h: unknown): h is string => typeof h === "string" && h.startsWith("/") && !h.startsWith("//") && (seen.has(h) || APP_PATH.test(h));
   return {
-    answer: String(raw?.answer ?? "").trim() || "I couldn't put an answer together from your data.",
-    figures: (raw?.figures ?? []).filter((f) => f && f.label && f.value).slice(0, 12).map((f) => ({ label: String(f.label), value: String(f.value), href: ok(f.href) ? f.href : "" })),
+    answer: unescape(String(raw?.answer ?? "").trim()) || "I couldn't put an answer together from your data.",
+    figures: (raw?.figures ?? []).filter((f) => f && f.label && f.value).slice(0, 12).map((f) => ({ label: unescape(String(f.label)), value: unescape(String(f.value)), href: ok(f.href) ? f.href : "" })),
     links: (raw?.links ?? []).filter((l) => l && l.label && ok(l.href)).slice(0, 6).map((l) => ({ label: String(l.label), href: l.href })),
     missing: (raw?.missing ?? []).map(String).filter(Boolean).slice(0, 6),
+    cannot: (raw?.cannot ?? []).filter((c) => c && c.request && ok(c.href)).slice(0, 4).map((c) => ({ request: String(c.request), href: c.href, page: String(c.page || c.href) })),
   };
+}
+
+/**
+ * A question asking for something never allowed always gets a "can't" with the page to do it on,
+ * even if the model didn't add one.
+ */
+export function withRefusal(a: AskAnswer, question: string): AskAnswer {
+  const never = neverAllowed(question);
+  if (!never || a.cannot.length) return a;
+  return { ...a, cannot: [{ request: never.what, href: never.href, page: never.page }] };
 }
 
 const round6 = (n: number) => Math.round(n * 1e6) / 1e6;
@@ -88,6 +112,7 @@ export async function askScout(question: string, now = new Date()): Promise<AskR
   const lean = leanThinking(s.model);
   const messages: Anthropic.MessageParam[] = [{ role: "user", content: `Today is ${now.toISOString().slice(0, 10)}.\n\nQuestion: ${q}` }];
   const tools: AskRun["tools"] = [];
+  const proposed: ProposedAction[] = [];
   const seen = new Set<string>();
   const spent = { input: 0, output: 0, usd: 0, gbp: 0 };
   let answer: AskAnswer | null = null;
@@ -100,7 +125,7 @@ export async function askScout(question: string, now = new Date()): Promise<AskR
       const capped = tools.length >= MAX_TOOL_CALLS;
       const msg = await aiClient().messages.create({
         model: s.model, max_tokens: MAX_OUTPUT_TOKENS, system: SYSTEM, messages,
-        tools: TOOLS, tool_choice: capped ? { type: "none" } : { type: "auto" },
+        tools: [...TOOLS, PROPOSE_TOOL], tool_choice: capped ? { type: "none" } : { type: "auto" },
         ...(lean.thinking ? { thinking: lean.thinking } : {}),
         output_config: { format: { type: "json_schema", schema: strictSchema(ANSWER_SCHEMA) }, ...(lean.effort ? { effort: lean.effort } : {}) },
       } as Anthropic.MessageCreateParamsNonStreaming);
@@ -114,6 +139,18 @@ export async function askScout(question: string, now = new Date()): Promise<AskR
         messages.push({ role: "assistant", content: msg.content });
         const results: Anthropic.ToolResultBlockParam[] = [];
         for (const call of calls) {
+          // A proposal reads the record and makes a card; it doesn't count as a lookup and changes nothing.
+          if (call.name === PROPOSE_TOOL.name) {
+            const input = (call.input ?? {}) as Record<string, unknown>;
+            if (proposed.length >= MAX_PROPOSALS) { results.push({ type: "tool_result", tool_use_id: call.id, is_error: true, content: `At most ${MAX_PROPOSALS} proposals an answer.` }); continue; }
+            const r = await resolveAction(input, now);
+            if ("ok" in r && !proposed.some((p) => p.type === r.ok.type && JSON.stringify(p.params) === JSON.stringify(r.ok.params))) proposed.push(r.ok);
+            if ("ok" in r && r.ok.target.href) seen.add(r.ok.target.href);
+            results.push("ok" in r
+              ? { type: "tool_result", tool_use_id: call.id, content: JSON.stringify({ proposed: r.ok.summary, note: "Shown to the seller as a card with Confirm / No thanks. Nothing has happened yet." }) }
+              : { type: "tool_result", tool_use_id: call.id, is_error: true, content: JSON.stringify({ error: r.error, ...(r.never ? { canDoItOn: r.never } : {}) }) });
+            continue;
+          }
           if (tools.length >= MAX_TOOL_CALLS) {
             results.push({ type: "tool_result", tool_use_id: call.id, is_error: true, content: `Limit of ${MAX_TOOL_CALLS} lookups reached: answer with what you have.` });
             continue;
@@ -139,7 +176,7 @@ export async function askScout(question: string, now = new Date()): Promise<AskR
         messages.push({ role: "assistant", content: msg.content }, { role: "user", content: "Answer the question now, from what the lookups returned (or say what's missing)." });
         continue;
       }
-      answer = cleanAnswer(raw, seen);
+      answer = withRefusal(cleanAnswer(raw, seen), q);
       break;
     }
     if (!answer && !error) error = "No answer after the lookups.";
@@ -152,17 +189,27 @@ export async function askScout(question: string, now = new Date()): Promise<AskR
   const hash = createHash("sha256").update(`${q}|${now.toISOString()}`).digest("hex").slice(0, 32);
   // One row a question in the AI call log (tokens and £ add up every round).
   must(await d.from("ads_ai_calls").insert({ feature: "ask_scout", subject: q.slice(0, 200), data_hash: hash, model: s.model, trigger: "user", thinking_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0, ...cost, result: answer, error }), "log call");
-  const saved = must(await d.from("ask_scout_history").insert({ question: q, answer, error, tools, model: s.model, ...cost, created_at: now.toISOString() }).select("*").single(), "save question") as AskRun;
+  // A failed answer proposes nothing.
+  const actions = answer ? proposed.filter((a) => a.type !== "open_page" || appHref(a.params.href)) : [];
+  const saved = must(await d.from("ask_scout_history").insert({ question: q, answer, error, tools, actions, model: s.model, ...cost, created_at: now.toISOString() }).select("*").single(), "save question") as AskRun;
   await trimHistory();
-  return normalise(saved);
+  return (await askHistory()).find((x) => x.id === saved.id) ?? normalise(saved);
 }
 
-const normalise = (r: AskRun): AskRun => ({ ...r, input_tokens: Number(r.input_tokens), output_tokens: Number(r.output_tokens), cost_gbp: Number(r.cost_gbp), tools: r.tools ?? [] });
+const normalise = (r: AskRun): AskRun => ({
+  ...r, input_tokens: Number(r.input_tokens), output_tokens: Number(r.output_tokens), cost_gbp: Number(r.cost_gbp), tools: r.tools ?? [], actions: r.actions ?? [],
+  // Older answers had no "cannot".
+  answer: r.answer ? { ...r.answer, answer: unescape(r.answer.answer), cannot: r.answer.cannot ?? [] } : null,
+});
 
-/** The last 20 questions, newest first. */
+/** The last 20 questions, newest first, each action with what happened to it. */
 export async function askHistory(): Promise<AskRun[]> {
   const r = await db().from("ask_scout_history").select("*").order("created_at", { ascending: false }).limit(HISTORY);
-  return r.error ? [] : (r.data as AskRun[]).map(normalise);
+  if (r.error) return [];
+  const runs = (r.data as AskRun[]).map(normalise);
+  const ids = runs.filter((x) => x.actions.length).map((x) => x.id);
+  const logs = ids.length ? ((await db().from("ask_scout_actions").select("id, run_id, action_id, status, done_at, error").in("run_id", ids)).data ?? []) as (ActionLog & { run_id: string })[] : [];
+  return runs.map((x) => ({ ...x, actionState: Object.fromEntries(logs.filter((l) => l.run_id === x.id).map((l) => [l.action_id, { id: l.id, status: l.status, done_at: l.done_at, error: l.error }])) }));
 }
 
 /** Keep the newest 20. */

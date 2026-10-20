@@ -109,6 +109,7 @@ export function OverviewTab({ s, next, action, onDeleted }: { s: CandidateState;
               {action}
             </section>
           )}
+          <NextNote key={data.candidate.next_action_note ?? ""} saved={data.candidate.next_action_note ?? ""} onSave={(v) => s.patch({ next_action_note: v }, v ? "Next-action note saved" : "Next-action note cleared")} />
         </div>
       </div>
       <Details s={s} onDeleted={onDeleted} onRefreshed={reload} />
@@ -189,6 +190,23 @@ function Details({ s, onDeleted, onRefreshed }: { s: CandidateState; onDeleted: 
         <Link href="/pl" className="link inline-flex items-center gap-1 text-sm">Pipeline <ArrowRightIcon className="size-3.5" /></Link>
         <Button variant="danger" size="sm" className="ml-auto" onClick={remove}><Trash2Icon /> Delete candidate</Button>
       </div>
+    </section>
+  );
+}
+
+/** Your own note on what to do next (Ask Scout can propose one, for you to confirm). */
+function NextNote({ saved, onSave }: { saved: string; onSave: (v: string) => Promise<boolean> }) {
+  const [v, setV] = useState(saved);
+  const [busy, setBusy] = useState(false);
+  const long = v.trim().length > 300;
+  return (
+    <section className="panel space-y-2 p-4">
+      <label className="block space-y-1.5">
+        <span className="field-label">Your next-action note</span>
+        <Input value={v} onChange={(e) => setV(e.target.value)} placeholder="e.g. Chase Tina for production and transit days" aria-invalid={long} />
+      </label>
+      {long && <p className="text-xs text-danger">Keep it under 300 characters</p>}
+      <Button size="sm" variant="secondary" disabled={v.trim() === saved.trim() || long} loading={busy} onClick={async () => { setBusy(true); await onSave(v.trim()); setBusy(false); }}>Save note</Button>
     </section>
   );
 }

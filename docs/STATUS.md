@@ -126,6 +126,25 @@ database that records writes (none allowed) and checks the module's source and i
 20261020000200). Under each answer: tokens in / out, £, lookups, time. On Today it's the right-hand panel at 1280 px and wider; narrower,
 the header's Ask Scout button opens it in a sheet; ⌘K "Ask Scout…" from anywhere (a question typed there is asked straight away).
 Checked on real data, 20 Oct: three questions at £0.025–£0.033 each. Screenshots: `docs/ui-audit/after/4a/` (gitignored).
+**Ask Scout actions** (20 Oct 2026, migration 20261020000800, additive: `ask_scout_history.actions`, `ask_scout_actions`,
+`pl_candidates.next_action_note`). Scout stays read-only: it can only PROPOSE, through the `propose_action` tool
+(`src/lib/server/askScoutActions.ts`), which reads the record and makes a card; it isn't a lookup and is capped at 3 an answer. The
+allowlist (`ALLOWED`, checked when proposed and again on Confirm): step_snooze, step_dismiss (Today's Later / Done),
+proposal_dismiss (`decide(…, "skip")`, 30 days; nothing to Amazon), shortlist_add (a screened product's EAN + ASIN), lead_contacted
+(a "new" Alibaba lead), candidate_note (≤ 300 characters, shown and editable on the candidate's Overview), open_page (an app page).
+Never (`NEVER_RULES`, `neverAllowed`): approving or exporting Ads changes, Amazon writes, deletes, uploads, purchases, prices or
+costs, settings; such a request gets a "can't" with the page (`cannot` in the answer, the model's or, when it gave none, the
+server's). Confirm (`POST /api/ask/actions`, decision confirm / decline) re-resolves the action, claims the (run, action) row
+(unique) so it runs once, runs it, and logs status, before / after, actor (the Basic-auth user name, never the password; "app
+password" for a bearer token), IP, browser and times; a repeat Confirm returns the first run. Undo (`POST /api/ask/actions/undo`)
+within 2 minutes restores the "before" (the toast shows it for 10 s); open_page has none. `GET /api/ask/actions` is the log, shown
+under Ask Scout ("Action log"). Cards render under the answer in the Today panel, the sheet (phones, narrower screens) and ⌘K's
+Ask Scout…; a confirmed action fires `ask-scout:acted` and Today reloads. The tools now return ids (proposals, leads,
+candidates with their note), a `today_steps` lookup (loose matching: a plural matches), and screened wholesale products in
+find_products (EAN, on Shortlist or not). Answers decode a literal `\u00a3` the model sometimes writes. Tests:
+`askScoutActions.test.ts` (one per rule: proposing writes nothing; the allowlist, re-checked on Confirm, a tampered stored action
+refused; the never list; what and which record; once only, logged, undone; the "can't" with its page; the module's imports),
+`who.test.ts`. Tried on real data, 20 Oct: four questions at £0.007–£0.044; a Today snooze confirmed and undone twice from the panel.
 Phase 4b, Private label pipeline (20 Oct 2026). **Pipeline board** (`/pl`, Private label's home and first menu item "Pipeline";
 `src/components/pl/PipelineBoard.tsx`, `GET /api/pl/pipeline`, `src/lib/server/plPipeline.ts`): columns Research (Gates 0–3) →
 Validate (Gates 4–7) → Sourcing (quotes, samples, artwork, PO) → Launch (inbound, listing, first ads) → Live (selling). The column

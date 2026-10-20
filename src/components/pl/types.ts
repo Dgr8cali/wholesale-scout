@@ -13,6 +13,8 @@ export interface CandidateRow {
   park_reason?: string | null; parked_at?: string | null; parked_from?: string | null;
   /** You picked Gate 2's reference listing. */
   reference_pinned?: boolean;
+  /** Your note on what to do next (typed here, or confirmed from Ask Scout). */
+  next_action_note?: string | null;
   token_cost: number; refreshed_at: string | null; created_at: string; updated_at: string; fields: FieldMap; waivers: Waiver[];
   /** The chosen quote's landed cost per unit, the listing once live, and the next launch step. */
   chosen_landed?: number | null; listing_asin?: string | null; launch?: { next: string | null; done: number };

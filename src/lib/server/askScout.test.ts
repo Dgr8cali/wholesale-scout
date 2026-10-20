@@ -33,7 +33,7 @@ describe("Ask Scout (FakeDb, API mocked)", () => {
       final({ answer: "No data after 2 Oct.", figures: [{ label: "Ad spend", value: "£30.00", href: "/ads/dashboard?asin=B0HM8FBX3T" }], links: [{ label: "Dashboard", href: "/ads/dashboard?asin=B0HM8FBX3T" }, { label: "Evil", href: "https://example.com" }], missing: ["ad data after 2 Oct"] }),
     ]);
     const r = await askScout("is the seat belt making money after ads?", NOW);
-    expect(r.answer).toEqual({ answer: "No data after 2 Oct.", figures: [{ label: "Ad spend", value: "£30.00", href: "/ads/dashboard?asin=B0HM8FBX3T" }], links: [{ label: "Dashboard", href: "/ads/dashboard?asin=B0HM8FBX3T" }], missing: ["ad data after 2 Oct"] });
+    expect(r.answer).toEqual({ answer: "No data after 2 Oct.", figures: [{ label: "Ad spend", value: "£30.00", href: "/ads/dashboard?asin=B0HM8FBX3T" }], links: [{ label: "Dashboard", href: "/ads/dashboard?asin=B0HM8FBX3T" }], missing: ["ad data after 2 Oct"], cannot: [] });
     expect(r.tools).toEqual([{ name: "find_products", input: { query: "seat belt" } }]);
     expect(r).toMatchObject({ input_tokens: 4000, output_tokens: 300, error: null });
     expect(r.cost_gbp).toBeGreaterThan(0);
@@ -99,6 +99,9 @@ describe("Ask Scout (FakeDb, API mocked)", () => {
 });
 
 describe("cleanAnswer", () => {
+  it("shows a literal \\u00a3 as £", () => {
+    expect(cleanAnswer({ answer: "\\u00a32.52\\u20132.68 a unit", figures: [{ label: "Price", value: "\\u00a31", href: "" }] }, new Set())).toMatchObject({ answer: "£2.52–2.68 a unit", figures: [{ value: "£1" }] });
+  });
   it("keeps only the app's own pages as links", () => {
     const a = cleanAnswer({ answer: "x", figures: [{ label: "a", value: "1", href: "//evil.com" }], links: [{ label: "ok", href: "/stock/reorder" }, { label: "no", href: "javascript:alert(1)" }, { label: "seen", href: "/odd/page" }], missing: [] }, new Set(["/odd/page"]));
     expect(a.figures[0].href).toBe("");

@@ -6,6 +6,7 @@ import { evaluate } from "../pl/gatekeeper";
 import { LAUNCH_STEPS } from "../pl/launch";
 import { adsDashboard } from "./ads";
 import { db, must, selectAll } from "./db";
+import { todaySteps } from "./nextSteps";
 import { listCandidates } from "./pl";
 import { stockLevels } from "./stock";
 
@@ -36,7 +37,7 @@ const obj = (properties: Record<string, unknown>, required: string[] = []): Anth
   ({ type: "object", properties, required, additionalProperties: false }) as Anthropic.Tool.InputSchema;
 
 export const TOOLS: Anthropic.Tool[] = [
-  { name: "find_products", description: "Find your products by name, ASIN or SKU across Ads, Stock, purchases and Private label candidates. Use it first when the question names a product in words (\"the seat belt\").",
+  { name: "find_products", description: "Find your products by name, ASIN or SKU across Ads, Stock, purchases, Private label candidates and screened wholesale products (with their EAN and whether they're on Shortlist). Use it first when the question names a product in words (\"the seat belt\").",
     input_schema: obj({ query: text("Words from the product's name, or an ASIN / SKU") }, ["query"]) },
   { name: "product_metrics", description: "One ASIN's ad figures (spend, sales, orders, ACoS, break-even ACoS, profit after ads, price, landed cost, Amazon fees) over all imported ad data, plus Amazon orders and revenue per channel between two dates.",
     input_schema: obj({ asin: text("The ASIN"), from: text("First day, YYYY-MM-DD (optional; default 30 days ago)"), to: text("Last day, YYYY-MM-DD (optional; default today)") }, ["asin"]) },
@@ -46,8 +47,10 @@ export const TOOLS: Anthropic.Tool[] = [
     input_schema: obj({ query: text("Words from the candidate's name; empty for all") }) },
   { name: "suppliers", description: "Suppliers: wholesale suppliers (terms, MOV, delivery days, rating), Alibaba leads for candidates (score, status new / contacted / quoted / rejected, when last changed) and quotes (price, MOQ, status).",
     input_schema: obj({ query: text("Words from the supplier's or the candidate's name; empty for all"), status: text("Only leads with this status: new, contacted, quoted or rejected (optional)") }) },
-  { name: "proposals", description: "Open Ads proposals waiting for review: the rule, the product, current and proposed value, the reason and confidence.",
+  { name: "proposals", description: "Open Ads proposals waiting for review: id, the rule, the product, current and proposed value, the reason and confidence.",
     input_schema: obj({ asin: text("Only this ASIN (optional)") }) },
+  { name: "today_steps", description: "The next steps showing on Today now: id, workspace, title, why and the page that does it (ranked, most useful first).",
+    input_schema: obj({ query: text("Words from the step's title or workspace; empty for all") }) },
 ];
 
 /* ===================== the lookups ===================== */
@@ -74,6 +77,14 @@ async function findProducts(input: { query?: string }): Promise<ToolResult> {
   }
   if (asin) for (const p of must(purchases, "purchases") as { asin: string; supplier_name: string | null; status: string }[]) {
     if (p.asin === asin && !out.some((o) => o.where.startsWith("Purchase"))) out.push({ asin, name: asin, where: `Purchase from ${p.supplier_name ?? "a supplier"} (${p.status})`, href: "/stock/purchases" });
+  }
+  // Screened wholesale products: by ASIN, or the query's longest word in the title (then every word).
+  const longest = words(q).sort((a, b) => b.length - a.length)[0];
+  if (asin || longest) {
+    const prods = must(await (asin ? d.from("products").select("ean, asin, title").eq("asin", asin) : d.from("products").select("ean, asin, title").ilike("title", `%${longest}%`)).limit(60), "products") as { ean: string; asin: string | null; title: string | null }[];
+    const hit = prods.filter((p) => p.asin && (asin || matches(q, p.title, p.asin))).filter((p, i, a) => a.findIndex((x) => x.asin === p.asin) === i).slice(0, 8);
+    const favs = hit.length ? must(await d.from("favourites").select("ean, asin").in("ean", hit.map((h) => h.ean)), "shortlist") as { ean: string; asin: string | null }[] : [];
+    for (const p of hit) out.push({ asin: p.asin, name: p.title ?? p.asin!, where: `Wholesale product (EAN ${p.ean}${favs.some((f) => f.ean === p.ean && f.asin === p.asin) ? ", on Shortlist" : ", not on Shortlist"})`, href: `/products/${p.asin}` });
   }
   return { data: { query: q, found: out.slice(0, 15), note: out.length ? undefined : "Nothing of yours matches." }, links: out.slice(0, 5).map((o) => ({ label: o.name, href: o.href })) };
 }
@@ -154,7 +165,7 @@ async function candidatesLookup(input: { query?: string }): Promise<ToolResult> 
         const e = evaluate(withAdsDefaults(Object.fromEntries(Object.entries(c.fields).map(([k, v]) => [k, v.value])), adsCpc), c.category, settings, card, new Date(), c.waivers);
         const done = steps.filter((s) => s.candidate_id === c.id && s.done);
         return {
-          name: c.name, status: c.status, parkReason: c.park_reason ?? null, verdict: e.v.title, verdictClass: e.v.cls, score: e.sc.total, scoreLinesIn: e.sc.answered,
+          id: c.id, name: c.name, status: c.status, nextActionNote: (c as { next_action_note?: string | null }).next_action_note ?? null, parkReason: c.park_reason ?? null, verdict: e.v.title, verdictClass: e.v.cls, score: e.sc.total, scoreLinesIn: e.sc.answered,
           gates: e.gates.map((g) => `Gate ${g.g.n} ${g.g.title}: ${g.status}`), chosenLanded: r2(c.chosen_landed),
           launch: { done: done.map((s) => `${LAUNCH_STEPS.find((l) => l.key === s.step)?.label ?? s.step}${s.done_on ? ` (${s.done_on})` : ""}`), next: c.launch.next },
           href: `/pl/candidates/${c.id}`,
@@ -176,8 +187,8 @@ async function suppliersLookup(input: { query?: string; status?: string }): Prom
     d.from("pl_quotes").select("candidate_id, supplier_name, unit_price, currency, moq, lead_time_days, status, updated_at"),
   ]);
   const candName = new Map((must(cands, "candidates") as { id: string; name: string }[]).map((c) => [c.id, c.name]));
-  const leads = await selectAll<{ candidate_id: string; supplier_name: string | null; title: string | null; score: number | null; status: string; price_min: number | null; price_max: number | null; currency: string | null; moq: number | null; updated_at: string; listing_url: string }>(
-    "pl_supplier_leads", "candidate_id, supplier_name, title, score, status, price_min, price_max, currency, moq, updated_at, listing_url", ["id"]);
+  const leads = await selectAll<{ id: string; candidate_id: string; supplier_name: string | null; title: string | null; score: number | null; status: string; price_min: number | null; price_max: number | null; currency: string | null; moq: number | null; updated_at: string; listing_url: string }>(
+    "pl_supplier_leads", "id, candidate_id, supplier_name, title, score, status, price_min, price_max, currency, moq, updated_at, listing_url", ["id"]);
   const wholesale = (must(sup, "suppliers") as { id: string; name: string; kind: string | null; mov: number | null; currency: string; delivery_days: number | null; rating: number | null }[])
     .filter((s) => matches(q, s.name)).slice(0, 15);
   const lead = leads.filter((l) => (!status || l.status === status) && matches(q, l.supplier_name, l.title, candName.get(l.candidate_id)))
@@ -188,7 +199,7 @@ async function suppliersLookup(input: { query?: string; status?: string }): Prom
     data: {
       query: q, statusFilter: status,
       wholesaleSuppliers: status ? `Not listed: the status filter is for Alibaba leads (${wholesale.length} wholesale suppliers match the query)` : wholesale.map((s) => ({ name: s.name, kind: s.kind, mov: r2(s.mov), currency: s.currency, deliveryDays: s.delivery_days, rating: s.rating, href: `/suppliers/${s.id}` })),
-      alibabaLeads: lead.map((l) => ({ supplier: l.supplier_name, candidate: candName.get(l.candidate_id) ?? null, score: r2(l.score), status: l.status, lastChanged: l.updated_at.slice(0, 10), price: l.price_min == null ? null : `${r2(l.price_min)}–${r2(l.price_max ?? l.price_min)} ${l.currency ?? "(currency not captured)"}`, moq: l.moq })),
+      alibabaLeads: lead.map((l) => ({ id: l.id, supplier: l.supplier_name, candidate: candName.get(l.candidate_id) ?? null, score: r2(l.score), status: l.status, lastChanged: l.updated_at.slice(0, 10), price: l.price_min == null ? null : `${r2(l.price_min)}–${r2(l.price_max ?? l.price_min)} ${l.currency ?? "(currency not captured)"}`, moq: l.moq })),
       leadCounts: { total: leads.length, ...Object.fromEntries(["new", "contacted", "quoted", "rejected"].map((s) => [s, leads.filter((l) => l.status === s).length])) },
       quotes: qs.map((x) => ({ supplier: x.supplier_name, candidate: candName.get(x.candidate_id) ?? null, unitPrice: r2(x.unit_price), currency: x.currency, moq: x.moq, leadTimeDays: x.lead_time_days, status: x.status, lastChanged: x.updated_at.slice(0, 10) })),
       note: "A lead's status is set by you on Suppliers & quotes: 'contacted' means messaged with no quote recorded yet.",
@@ -199,15 +210,28 @@ async function suppliersLookup(input: { query?: string; status?: string }): Prom
 
 async function proposalsLookup(input: { asin?: string }): Promise<ToolResult> {
   const asin = str(input.asin).toUpperCase();
-  let q = db().from("ads_proposals").select("asin, rule, campaign_name, entity, current_value, proposed_value, reason, confidence, clicks, orders, created_at").eq("status", "open").order("created_at");
+  let q = db().from("ads_proposals").select("id, asin, rule, campaign_name, entity, current_value, proposed_value, reason, confidence, clicks, orders, created_at").eq("status", "open").order("created_at");
   if (asin) q = q.eq("asin", asin);
-  const rows = must(await q.limit(50), "proposals") as { asin: string | null; rule: string; campaign_name: string | null; entity: { label?: string } | null; current_value: string | null; proposed_value: string | null; reason: string; confidence: string; clicks: number; orders: number; created_at: string }[];
+  const rows = must(await q.limit(50), "proposals") as { id: string; asin: string | null; rule: string; campaign_name: string | null; entity: { label?: string } | null; current_value: string | null; proposed_value: string | null; reason: string; confidence: string; clicks: number; orders: number; created_at: string }[];
   return {
     data: {
       open: rows.length,
-      proposals: rows.map((p) => ({ rule: RULE_LABEL[p.rule as RuleId] ?? p.rule, asin: p.asin, campaign: p.campaign_name, target: p.entity?.label ?? null, current: p.current_value, proposed: p.proposed_value, reason: p.reason, confidence: p.confidence, clicks: p.clicks, orders: p.orders, raised: p.created_at.slice(0, 10) })),
+      proposals: rows.map((p) => ({ id: p.id, rule: RULE_LABEL[p.rule as RuleId] ?? p.rule, asin: p.asin, campaign: p.campaign_name, target: p.entity?.label ?? null, current: p.current_value, proposed: p.proposed_value, reason: p.reason, confidence: p.confidence, clicks: p.clicks, orders: p.orders, raised: p.created_at.slice(0, 10) })),
     },
     links: [{ label: "Proposals", href: "/ads/proposals?tab=review" }],
+  };
+}
+
+async function todayLookup(input: { query?: string }, now: Date): Promise<ToolResult> {
+  const q = str(input.query);
+  const v = await todaySteps(now);
+  // Words match loosely (a plural matches its singular); nothing matching: every step, to pick from.
+  const loose = (t: string) => words(t).map((w) => w.replace(/(?:es|s)$/, "")).join(" ");
+  const hit = v.steps.filter((s) => matches(loose(q), loose(`${s.title} ${s.workspace} ${s.why}`)));
+  const steps = (hit.length ? hit : v.steps).slice(0, 15);
+  return {
+    data: { showing: v.steps.length, hidden: v.hidden, ...(q && !hit.length ? { note: `No step matches "${q}": these are every step showing.` } : {}), steps: steps.map((s) => ({ id: s.id, workspace: s.workspace, title: s.title, why: s.why, page: s.cta.href })) },
+    links: [{ label: "Today", href: "/" }, ...steps.slice(0, 3).map((s) => ({ label: s.cta.label, href: s.cta.href }))],
   };
 }
 
@@ -221,6 +245,7 @@ export async function runTool(name: string, input: Record<string, unknown>, now 
       case "candidates": return await candidatesLookup(input);
       case "suppliers": return await suppliersLookup(input);
       case "proposals": return await proposalsLookup(input);
+      case "today_steps": return await todayLookup(input, now);
       default: return { data: { error: `No tool called ${name}` }, links: [] };
     }
   } catch (e) {
