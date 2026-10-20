@@ -54,8 +54,9 @@ export default function RunPage() {
   const setSort = (next: { key: SortKey; dir: 1 | -1 }) => { setSortState(next); saveResultSort("results", next); };
   // The sparklines only reorder rows when sorting by them (they load as rows scroll into view).
   const sortSparks = sort.key === "rank90" || sort.key === "bb90" ? sparks : undefined;
-  // Filters live in the address (bookmarkable; Today and ⌘K link to filtered views).
-  const [filters, setUrlFilters] = useUrlFilters();
+  // Filters live in the address (bookmarkable; Today and ⌘K link to filtered views), and the last
+  // ones are remembered per run: reopening the run without filters in the address puts them back.
+  const [filters, setUrlFilters] = useUrlFilters({ remember: `ws.filters.run.${id}` });
   // Selected result ids. Kept while scrolling; cleared when the filters change, with "Reselect".
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [stash, setStash] = useState<Set<string> | null>(null);
