@@ -156,7 +156,7 @@ Shared by every profile. It holds Amazon's size tiers, FBA fees, storage and ref
 
 ## Filter sets tab
 
-Filter sets are saved from a run's filter bar with **Save current filters…** and applied from **Saved filters** on any run or on [Favourites](/help/pages/favourites). This tab lists them with their filters as chips; the bin icon deletes one for every run.
+Filter sets are saved from the results filter bar with **More filters → Save current filters…** and applied from **Saved filters** there, on any run, [Shortlist](/help/pages/favourites), a brand's page or [Products](/help/pages/products). This tab lists them with their filters as chips; the bin icon deletes one for every run.
 
 ## Private label tab
 

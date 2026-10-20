@@ -103,6 +103,7 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
             <CommandItem value="import ads bulk file" keywords={["import", "ads", "bulk", "report", "upload"]} onSelect={() => go("/ads/dashboard?import=1")}><FileUpIcon /> Import ads bulk file</CommandItem>
             <CommandItem value="new candidate" keywords={["new", "candidate", "private label", "add"]} onSelect={() => go("/pl/candidates?new=1")}><PlusIcon /> New candidate</CommandItem>
             <CommandItem value="new run" keywords={["new", "run", "upload", "price list", "screen"]} onSelect={() => go("/new-run")}><UploadIcon /> New run</CommandItem>
+            <CommandItem value="buy products" keywords={["buy", "products", "wholesale", "pass", "filter"]} onSelect={() => go("/products?verdict=buy")}><PackageIcon /> Buy products</CommandItem>
           </CommandGroup>
           <CommandGroup heading="Pages">
             {PAGES.map((p) => {

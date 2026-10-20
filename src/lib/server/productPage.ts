@@ -5,6 +5,8 @@ import { judge, type JudgeInput, type Judgement } from "../product";
 import { GATE_LABELS, type GateId } from "../screening/config";
 import { isDormant } from "../screening/dormant";
 import type { SeriesPoint } from "../sparkline";
+import { isEmpty, matches, type FilterSet, type Verdict } from "../filters";
+import { toFilterRow, type ResultLike } from "../ui/resultRows";
 import { activeRateCard, chunks, db, loadProfile, must } from "./db";
 import { listDocuments } from "./documents";
 import type { DocumentRow } from "../documents";
@@ -173,44 +175,105 @@ export interface ProductListItem {
   asin: string; ean: string; title: string | null; brand: string | null; image_url: string | null;
   verdict: string | null; priced: boolean; sell_price: number | null; max_landed: number | null; fba_sellers: number | null;
   share_month: number | null; screened_at: string | null; bought: boolean;
+  /** The latest result the verdict is from (in `results`), to show its figures and open it in the drawer. */
+  result_id: string | null;
 }
+
+/** The brand map's columns a product row needs. */
+const LIST_COLS = "asin, ean, title, brand, image_url, verdict, priced, sell_price, max_landed, fba_sellers, share_month, result_updated_at, result_id";
+/** What the filters read of a result (lean: no fees, sellers or Qogita offers). */
+const LEAN_RESULT = "id, status, verdict, band, failed_gate, sell_price, profit, roi, margin, why, error, gate_outcomes, market:inputs->market, restriction:inputs->restriction, product:products(ean, asin, title, brand), offer:offers(title, supplier:suppliers(name))";
 
 /**
  * Every product the app has screened, one per ASIN, newest screening first (from the brand map:
- * each product's latest result on the default profile). Filters: text (ASIN, EAN, title or
- * brand), verdict, bought. 50 a page.
+ * each product's latest result on the default profile), `size` a page (50, 20 on a phone), with the
+ * results behind them (shaped like a run's rows) for the results table. The filters are the results
+ * table's (lib/filters): search, verdict, brand and supplier run in the query; the rest (profit, ROI,
+ * sales, BSR, gated…) are read from each product's latest result, so a page of those reads further
+ * down the list until it fills. The verdict is the brand map's: Buy / Check / Skip when priced, else
+ * Not scored.
  */
-export async function listProducts(q: { text?: string | null; verdict?: string | null; bought?: boolean; page?: number }): Promise<{ items: ProductListItem[]; more: boolean }> {
+export async function listProducts(q: { filters: FilterSet; bought?: boolean; page?: number; size?: number }): Promise<{ items: ProductListItem[]; results: Record<string, Row>; more: boolean; suppliers: string[] }> {
   const d = db();
-  const PAGE = 50;
+  const size = q.size === 20 ? 20 : 50;
   const page = Math.max(0, q.page ?? 0);
+  const plan = planProductQuery(q.filters);
   const boughtAsins = (must(await d.from("purchases").select("asin"), "purchases") as { asin: string }[]).map((p) => p.asin);
-  let query = d.from("brand_products")
-    .select("asin, ean, title, brand, image_url, verdict, priced, sell_price, max_landed, fba_sellers, share_month, result_updated_at")
-    .not("asin", "is", null);
-  const text = q.text?.trim().replace(/[%_,()]/g, " ").trim();
-  if (text) {
-    if (/^[A-Z0-9]{10}$/i.test(text) && /[A-Z]/i.test(text)) query = query.eq("asin", text.toUpperCase());
-    else if (/^\d{8,14}$/.test(text)) query = query.eq("ean", text);
-    else query = query.or(`title.ilike.%${text}%,brand.ilike.%${text}%`);
-  }
-  if (q.verdict && ["pass", "warn", "fail"].includes(q.verdict)) query = query.eq("verdict", q.verdict);
-  if (q.bought) query = query.in("asin", boughtAsins.length ? boughtAsins : ["-"]);
-  // A little extra per page: several EANs can share an ASIN, and only one is shown.
-  const rows = must(await query.order("result_updated_at", { ascending: false, nullsFirst: false }).range(page * PAGE, page * PAGE + PAGE + 20), "products") as Record<string, unknown>[];
-  const seen = new Set<string>();
   const bought = new Set(boughtAsins);
-  const items: ProductListItem[] = [];
-  for (const r of rows) {
-    const asin = r.asin as string;
-    if (seen.has(asin)) continue;
-    seen.add(asin);
-    items.push({
-      asin, ean: r.ean as string, title: (r.title as string) ?? null, brand: (r.brand as string) ?? null, image_url: (r.image_url as string) ?? null,
-      verdict: (r.verdict as string) ?? null, priced: !!r.priced, sell_price: num(r.sell_price), max_landed: num(r.max_landed), fba_sellers: num(r.fba_sellers),
-      share_month: num(r.share_month), screened_at: (r.result_updated_at as string) ?? null, bought: bought.has(asin),
-    });
-    if (items.length === PAGE) break;
+  const base = () => {
+    let query = d.from("brand_products").select(LIST_COLS).not("asin", "is", null);
+    const text = plan.text?.replace(/[%_,()]/g, " ").trim();
+    let textOr: string | null = null;
+    if (text) {
+      if (/^[A-Z0-9]{10}$/i.test(text) && /[A-Z]/i.test(text)) query = query.eq("asin", text.toUpperCase());
+      else if (/^\d{8,14}$/.test(text)) query = query.eq("ean", text);
+      else textOr = `title.ilike.%${text}%,brand.ilike.%${text}%`;
+    }
+    // Both: one expression, (title or brand) and (one of the verdicts).
+    if (textOr && plan.verdictOr) query = query.or(`and(or(${textOr}),or(${plan.verdictOr}))`);
+    else if (textOr || plan.verdictOr) query = query.or((textOr ?? plan.verdictOr)!);
+    if (plan.brands.length) query = query.in("brand", plan.brands);
+    if (plan.supplier) query = query.contains("suppliers", [plan.supplier]);
+    if (q.bought) query = query.in("asin", boughtAsins.length ? boughtAsins : ["-"]);
+    return query.order("result_updated_at", { ascending: false, nullsFirst: false }).order("product_id");
+  };
+  const toItem = (r: Row): ProductListItem => ({
+    asin: r.asin as string, ean: r.ean as string, title: (r.title as string) ?? null, brand: (r.brand as string) ?? null, image_url: (r.image_url as string) ?? null,
+    verdict: (r.verdict as string) ?? null, priced: !!r.priced, sell_price: num(r.sell_price), max_landed: num(r.max_landed), fba_sellers: num(r.fba_sellers),
+    share_month: num(r.share_month), screened_at: (r.result_updated_at as string) ?? null, bought: bought.has(r.asin as string), result_id: (r.result_id as string) ?? null,
+  });
+
+  // One per ASIN (several EANs can share one); the first, newest, wins.
+  const seen = new Set<string>();
+  const matched: ProductListItem[] = [];
+  const want = (page + 1) * size + 1;
+  const favourites = plan.rest.favouritesOnly ? new Set((must(await d.from("favourites").select("ean, asin"), "favourites") as { ean: string; asin: string | null }[]).map((f) => `${f.ean}/${f.asin ?? ""}`)) : new Set<string>();
+  const CHUNK = plan.scan ? 500 : (page + 1) * size + 40;
+  for (let from = 0; matched.length < want; from += CHUNK) {
+    const rows = must(await base().range(from, from + CHUNK - 1), "products") as Row[];
+    const fresh = rows.filter((r) => !seen.has(r.asin as string) && seen.add(r.asin as string));
+    if (plan.scan) {
+      const lean = new Map<string, Row>();
+      for (const c of chunks(fresh.map((r) => r.result_id as string).filter(Boolean), 200)) {
+        for (const x of must(await d.from("results").select(LEAN_RESULT).in("id", c), "results") as Row[]) lean.set(x.id as string, x);
+      }
+      for (const r of fresh) {
+        const res = lean.get(r.result_id as string);
+        if (!res) continue;
+        const fr = toFilterRow({ ...(res as never as ResultLike), inputs: { market: res.market as never, restriction: res.restriction as never } }, favourites);
+        if (matches({ ...fr, verdict: (r.priced ? (r.verdict as Verdict | null) : null) ?? null }, plan.rest)) matched.push(toItem(r));
+      }
+    } else {
+      matched.push(...fresh.map(toItem));
+    }
+    if (rows.length < CHUNK) break;
   }
-  return { items, more: rows.length > PAGE };
+  const items = matched.slice(page * size, page * size + size);
+  const results: Record<string, Row> = {};
+  for (const c of chunks(items.map((i) => i.result_id).filter((x): x is string => !!x), 200)) {
+    for (const r of must(await d.from("results").select(RESULT_SELECT).in("id", c), "results") as Row[]) results[r.id as string] = r;
+  }
+  const suppliers = (must(await d.from("suppliers").select("name").order("name"), "suppliers") as { name: string }[]).map((s) => s.name);
+  return { items, results, more: matched.length > (page + 1) * size, suppliers };
+}
+
+/**
+ * How Products answers a set of filters: the search, the plain verdicts (Buy / Check / Skip / Not
+ * scored, on the brand map's priced verdict), brands and supplier go to the database; anything
+ * else is matched against each product's latest result (`scan`).
+ */
+export function planProductQuery(f: FilterSet): { text: string | null; verdictOr: string | null; brands: string[]; supplier: string | null; rest: FilterSet; scan: boolean } {
+  const plain = f.verdicts.length > 0 && f.verdicts.every((v) => v === "pass" || v === "warn" || v === "fail" || v === "unscored");
+  let verdictOr: string | null = null;
+  if (plain) {
+    const judged = f.verdicts.filter((v) => v !== "unscored");
+    const parts = [
+      ...(judged.length ? [`and(priced.eq.true,verdict.in.(${judged.join(",")}))`] : []),
+      ...(f.verdicts.includes("unscored") ? ["priced.eq.false", "verdict.is.null"] : []),
+    ];
+    verdictOr = parts.join(",");
+  }
+  // The supplier is any supplier carrying the product (the brand map's list), not only the offer scored.
+  const rest: FilterSet = { ...f, q: "", brands: [], supplier: null, verdicts: plain ? [] : f.verdicts };
+  return { text: f.q.trim() || null, verdictOr, brands: f.brands, supplier: f.supplier, rest, scan: !isEmpty(rest) };
 }

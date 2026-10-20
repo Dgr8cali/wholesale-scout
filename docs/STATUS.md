@@ -190,7 +190,14 @@ Brand detail (`src/app/brands/[key]/page.tsx`) is on it: `GET /api/brands/[key]`
 run's row shape); the verdict is the brand map's (default profile; Not scored when never priced); the best offer per EAN and the
 latest run sit under the title; Re-screen goes through the new `POST /api/results/rescreen` (`runFromResults()`: results from any
 runs as one new run, each on its own offer, default profile). Today's "Apply to sell" step opens the brand at `?verdict=buy,check`.
-To do: phase 4c's other pages, then phase 5 (the remaining polish, including the extension's PASS/WARN/FAIL badges in the new verdict
+Products (`src/app/products/page.tsx`) is on it, still paged by the server (`listProducts()` in `src/lib/server/productPage.ts`): 50
+a page, 20 on a phone (`?size=`), `?page=` in the address; it returns each product's latest result for the table and drawer. Search,
+the plain verdicts (the brand map's priced verdict), brand and supplier (any supplier carrying it) go to the query; the other filters
+are matched against each product's latest result, reading down the list in chunks of 500 until the page fills
+(`planProductQuery()`, tested), so a combined filter takes up to ~4 s. Bought is the page's own toggle. Row and bulk actions: Add to
+Shortlist, Re-screen (via `/api/results/rescreen`), Export selected (xlsx, the run export's format), the selection kept across
+pages. ⌘K has "Buy products" (`/products?verdict=buy`).
+To do: phase 4c's comparison tables, then phase 5 (the remaining polish, including the extension's PASS/WARN/FAIL badges in the new verdict
 words).
 
 ## Workspaces
