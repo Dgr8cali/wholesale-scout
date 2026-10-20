@@ -6,6 +6,7 @@ import { applyLinks } from "../spapi/parse";
 import { ipIndex } from "../ipRisk";
 import { chunks, db, loadIpRisk, loadProfile, must, selectAll } from "./db";
 import { evaluateStored } from "./process";
+import { RESULT_SELECT } from "./productPage";
 
 /** Products re-gated per batch; a refresh call stops starting batches near its budget. */
 const BATCH = 400;
@@ -213,14 +214,18 @@ export async function brandDetail(key: string) {
     const cost = Number(o.unit_cost_gbp);
     if (!cur || cost < cur.unitCostGbp) best.set(ean, { supplier: supplierNames.get(o.supplier_id) ?? "?", unitCostGbp: cost, moq: o.moq, seenAt: o.seen_at });
   }
-  // The run each product's latest result is in, to open it there.
+  // Each product's latest result (shaped like a run's rows, for the results table), and the run it's in.
   const runOf = new Map<string, string>();
+  const results: Record<string, Record<string, unknown>> = {};
   for (const c of chunks(rows.map((r) => r.result_id).filter((x): x is string => !!x), 200)) {
-    for (const x of must(await d.from("results").select("id, run_id").in("id", c), "results") as { id: string; run_id: string }[]) runOf.set(x.id, x.run_id);
+    for (const x of must(await d.from("results").select(RESULT_SELECT).in("id", c), "results") as Record<string, unknown>[]) {
+      runOf.set(x.id as string, x.run_id as string);
+      results[x.id as string] = x;
+    }
   }
   const verdictRank = { pass: 0, warn: 1, fail: 2 } as const;
   const products = rows
     .map((r) => ({ ...r, bestOffer: best.get(r.ean) ?? null, runId: r.result_id ? runOf.get(r.result_id) ?? null : null }))
     .sort((a, b) => Number(b.priced) - Number(a.priced) || verdictRank[a.verdict ?? "fail"] - verdictRank[b.verdict ?? "fail"] || (b.buy_box ?? 0) - (a.buy_box ?? 0));
-  return { summary, products };
+  return { summary, products, results };
 }

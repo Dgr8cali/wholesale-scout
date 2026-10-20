@@ -11,7 +11,7 @@ import type { DocumentRow } from "../documents";
 
 /** What the run page reads of a product and an offer (the same shape, so the row details work). */
 const PRODUCT = "id, ean, asin, title, brand, category, referral_category, image_url, competitor_stock, sc_dg, dg_lookup, amazon_dg, dims_cm, weight_g, sales_rank, parent_asin, variation_count";
-const RESULT = `*, product:products(${PRODUCT}), offer:offers(id, unit_cost, currency, unit_cost_gbp, cost_known, moq, pack_units, stock, title, source_ref, supplier:suppliers(id, name)), run:runs(id, name, source, started_at, profile:profiles(name))`;
+export const RESULT_SELECT = `*, product:products(${PRODUCT}), offer:offers(id, unit_cost, currency, unit_cost_gbp, cost_known, moq, pack_units, stock, title, source_ref, supplier:suppliers(id, name)), run:runs(id, name, source, started_at, profile:profiles(name))`;
 
 type Row = Record<string, unknown>;
 
@@ -55,7 +55,7 @@ export async function productView(asin: string): Promise<ProductView | null> {
 
   const results: Row[] = [];
   for (const c of chunks(ids)) {
-    results.push(...(must(await d.from("results").select(RESULT).in("product_id", c).eq("status", "done").order("updated_at", { ascending: false }).limit(200), "results") as Row[]));
+    results.push(...(must(await d.from("results").select(RESULT_SELECT).in("product_id", c).eq("status", "done").order("updated_at", { ascending: false }).limit(200), "results") as Row[]));
   }
   results.sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at)));
   const latest = results[0] ?? null;

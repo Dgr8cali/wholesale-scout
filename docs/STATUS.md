@@ -186,6 +186,10 @@ Run detail (`src/app/runs/[id]/page.tsx`) is on it: virtual scrolling over every
 in the address instead of remembered per run in the browser, the drawer, the full bulk bar (waive, cost, re-screen, export, remove).
 Shortlist → Products (`src/components/shortlist/FavouritesTab.tsx`) is on it: 50 a page, its filters in the address beside
 `?tab=products`, Remove from Shortlist in the row menu and bulk bar. The old results table and `FilterBar` are gone.
+Brand detail (`src/app/brands/[key]/page.tsx`) is on it: `GET /api/brands/[key]` also returns each product's latest result (the
+run's row shape); the verdict is the brand map's (default profile; Not scored when never priced); the best offer per EAN and the
+latest run sit under the title; Re-screen goes through the new `POST /api/results/rescreen` (`runFromResults()`: results from any
+runs as one new run, each on its own offer, default profile). Today's "Apply to sell" step opens the brand at `?verdict=buy,check`.
 To do: phase 4c's other pages, then phase 5 (the remaining polish, including the extension's PASS/WARN/FAIL badges in the new verdict
 words).
 

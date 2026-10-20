@@ -341,7 +341,8 @@ export function buildSteps(f: TodayFacts, now: Date): NextStep[] {
     out.push({
       id: `wholesale:apply:${b.key}`, workspace: "Wholesale", title: `Apply to sell ${b.brand}`, minutes: 10, priority: 3, since: nowIso, group: "wholesale:apply",
       why: `${plural(b.pass, "Buy product")} and ${plural(b.warn, "Check product")} are held back by brand gating${b.avgSellers != null ? `, with ${b.avgSellers} FBA sellers on average` : ""}.`,
-      cta: { label: "Open the brand", href: `/brands/${encodeURIComponent(b.key)}` }, help: { label: "Show me how", href: "/help/howto/apply-for-brand-approval" },
+      // The brand's products filtered to those Buy and Check ones.
+      cta: { label: "Open the brand", href: `/brands/${encodeURIComponent(b.key)}?verdict=buy,check` }, help: { label: "Show me how", href: "/help/howto/apply-for-brand-approval" },
       fingerprint: `${b.pass}:${b.warn}`,
     });
   }

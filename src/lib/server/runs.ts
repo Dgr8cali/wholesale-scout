@@ -39,6 +39,23 @@ export async function runFromSelection(runId: string, resultIds: string[], profi
   return { runId: id, count: picks.length };
 }
 
+/**
+ * Re-screen results from any runs (Products, Brand detail) as one new run, each product on the
+ * offer its result used, with the default profile unless one is given.
+ */
+export async function runFromResults(resultIds: string[], profileId?: string | null, label = "Re-screen"): Promise<{ runId: string; count: number }> {
+  const d = db();
+  const rows: { product_id: string; offer_id: string | null }[] = [];
+  for (const c of chunks(resultIds)) {
+    rows.push(...(must(await d.from("results").select("product_id, offer_id").in("id", c), "results") as { product_id: string; offer_id: string | null }[]));
+  }
+  const picks = rows.filter((r) => r.offer_id).map((r) => ({ productId: r.product_id, offerId: r.offer_id! }));
+  const n = new Set(picks.map((p) => p.productId)).size;
+  const day = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  const id = await createRunFrom(picks, { name: `${label} · ${n} product${n === 1 ? "" : "s"} · ${day}`.slice(0, 120), source: label.slice(0, 300), profileId });
+  return { runId: id, count: n };
+}
+
 /** Take rows out of a run (their products and offers stay). */
 export async function removeFromRun(runId: string, resultIds: string[]): Promise<number> {
   const d = db();

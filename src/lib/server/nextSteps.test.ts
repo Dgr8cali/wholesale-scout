@@ -187,6 +187,8 @@ describe("Wholesale rules", () => {
     ] } });
     const all = buildSteps(f, NOW);
     expect(all.find((s) => s.id === "wholesale:apply:maybelline")!.why).toBe("12 Buy products and 4 Check products are held back by brand gating, with 6.5 FBA sellers on average.");
+    // Straight to those products: the brand's results filtered to Buy and Check.
+    expect(all.find((s) => s.id === "wholesale:apply:maybelline")!.cta.href).toBe("/brands/maybelline?verdict=buy,check");
     expect(ids(rankSteps(all, [], NOW))).toEqual(["wholesale:apply:maybelline"]);
     const dismissed = [{ step_id: "wholesale:apply:maybelline", fingerprint: "12:4", snoozed_until: null, dismissed_at: NOW.toISOString() }];
     expect(ids(rankSteps(all, dismissed, NOW))).toEqual(["wholesale:apply:loreal"]);

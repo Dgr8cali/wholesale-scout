@@ -2,33 +2,40 @@
 
 import { CheckIcon, ExternalLinkIcon, PackageSearchIcon, ScanSearchIcon, StoreIcon } from "lucide-react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { ProductThumb } from "@/components/ProductThumb";
-import { ErrorState } from "@/components/States";
+import { BulkBar } from "@/components/BulkBar";
+import { Detail } from "@/components/results/Detail";
+import { DetailDrawer } from "@/components/results/DetailDrawer";
+import { downloadXlsx, exportRows } from "@/components/results/exportXlsx";
+import { ResultsFilterBar } from "@/components/results/ResultsFilterBar";
+import { ResultsTable, type ResultRow } from "@/components/results/ResultsTable";
+import { compareRows, loadResultSort, nextResultSort, saveResultSort } from "@/components/results/sort";
+import type { Result, SortKey } from "@/components/results/types";
+import { useResultActions } from "@/components/results/useResultActions";
+import { useSparks } from "@/components/results/useSparks";
+import { EmptyState, ErrorState } from "@/components/States";
 import { Button } from "@/components/ui/button";
-import { DataTable } from "@/components/ui/data-table";
 import { SectionTitle } from "@/components/ui/info-tip";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { PageHeader } from "@/components/ui/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ProductDecision, StatusChip, type Tone } from "@/components/ui/status-chip";
+import { StatusChip, type Tone } from "@/components/ui/status-chip";
 import { GATING_LABELS, GATING_VARIANT, type BrandProduct, type BrandSummary } from "@/lib/brandMap";
 import { APPROVAL_STATUSES, STATUS_LABELS, type ApprovalStatus } from "@/lib/brands";
+import { matches } from "@/lib/filters";
+import { GATE_LABELS, GATE_ORDER, withDefaults, type GateId, type ProfileConfig } from "@/lib/screening/config";
 import { api, gbp, when } from "@/lib/ui/client";
+import { toFilterRow } from "@/lib/ui/resultRows";
+import { useUrlFilters } from "@/lib/ui/useUrlFilters";
 import { cn } from "@/lib/utils";
 import { ApplyKit } from "@/components/documents/ApplyKit";
 import { DocumentUploader } from "@/components/documents/Documents";
 
 type Product = BrandProduct & { bestOffer: { supplier: string; unitCostGbp: number; moq: number | null; seenAt: string } | null; runId: string | null };
 
-const RESTRICTION: Record<string, { label: string; tone: Tone }> = {
-  open: { label: "Open", tone: "good" },
-  approval_required: { label: "Approval", tone: "warn" },
-  blocked: { label: "Blocked", tone: "bad" },
-};
 /** The brand map's gating colours (lib/brandMap's badge variants) as chip tones. */
 const GATING_TONE: Record<(typeof GATING_VARIANT)[keyof typeof GATING_VARIANT], Tone> = { pass: "good", warn: "warn", fail: "bad", muted: "neutral", brand: "info" };
 const cap = (x: string) => x[0].toUpperCase() + x.slice(1);
@@ -42,13 +49,19 @@ function Stat({ label, value, hint }: { label: string; value: React.ReactNode; h
   );
 }
 
+type BrandData = { summary: BrandSummary; products: Product[]; results: Record<string, Result> };
+
 export default function BrandPage() {
+  return <Suspense fallback={<Skeleton className="h-64" />}><Brand /></Suspense>;
+}
+
+function Brand() {
   const { key } = useParams<{ key: string }>();
-  const [data, setData] = useState<{ summary: BrandSummary; products: Product[] } | null>(null);
+  const [data, setData] = useState<BrandData | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(() => {
-    api<{ summary: BrandSummary; products: Product[] }>(`/api/brands/${encodeURIComponent(key)}`).then(setData).catch((e) => setError(e.message));
+    return api<BrandData>(`/api/brands/${encodeURIComponent(key)}`).then(setData).catch((e) => setError(e.message));
   }, [key]);
   useEffect(() => { load(); }, [load]);
 
@@ -124,7 +137,7 @@ export default function BrandPage() {
           : "—"} hint={b.ipRisk ? [b.ipRisk.note, b.ipRisk.source && `Source: ${b.ipRisk.source}`].filter(Boolean).join(" · ") : "Not on your IP-risk list"} />
       </section>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <section className="panel space-y-3 p-4" aria-label="Approval">
           <SectionTitle title="Your approval">Marking a brand approved re-scores its rows in every current run.</SectionTitle>
           <div className="grid gap-3 sm:grid-cols-[10rem_1fr_10rem]">
@@ -159,65 +172,105 @@ export default function BrandPage() {
       <DocumentUploader brand={{ name: b.brand }} />
 
       <section className="space-y-2">
-        <SectionTitle title={<>Products across all runs <span>· best offer per EAN</span></>} />
-        <DataTable
-          rows={data.products}
-          getRowId={(p) => p.product_id}
-          caption={`${b.brand} products`}
-          storageKey="wholesale.brandProducts"
-          rowAttrs={(p) => ({ "data-verdict": p.priced && p.verdict ? p.verdict : "empty" })}
-          empty={{ icon: <PackageSearchIcon />, title: "No products yet", description: "Products of this brand appear once a run screens them." }}
-          columns={[
-            {
-              id: "product", header: "Product", mobile: "title", className: "max-w-96 min-w-[16rem]", sortValue: (p) => p.title ?? p.ean,
-              cell: (p) => (
-                <div className="flex gap-2.5">
-                  <ProductThumb url={p.image_url} asin={p.asin} title={p.title ?? p.ean} brand={b.brand} size={36} />
-                  <div className="min-w-0">
-                    <p className="line-clamp-2 text-sm">{p.asin ? <Link className="hover:text-primary hover:underline" href={`/products/${p.asin}`}>{p.title ?? p.ean}</Link> : p.title ?? p.ean}</p>
-                    <p className="num text-xs font-normal text-muted-foreground">
-                      {p.ean !== p.asin ? p.ean : ""}
-                      {p.asin && <> · <a className="text-primary hover:underline" href={`https://www.amazon.co.uk/dp/${p.asin}`} target="_blank" rel="noreferrer">{p.asin}</a></>}
-                      {p.runId && <> · <Link className="text-primary hover:underline" href={`/runs/${p.runId}`}>latest run</Link></>}
-                    </p>
-                  </div>
-                </div>
-              ),
-            },
-            {
-              // Buy, Check, Skip; never priced last.
-              id: "verdict", header: "Verdict", mobile: 1, sortValue: (p) => (p.priced && p.verdict ? { pass: 1, warn: 2, fail: 3 }[p.verdict] : null),
-              cell: (p) => (p.priced && p.verdict ? <ProductDecision verdict={p.verdict} /> : <span className="text-xs text-muted-foreground" title="Never priced: not judged">—</span>),
-            },
-            { id: "buyBox", header: "Buy Box", numeric: true, mobile: 2, sortValue: (p) => p.buy_box, cell: (p) => gbp(p.buy_box) },
-            { id: "sellers", header: "Sellers", numeric: true, sortValue: (p) => p.fba_sellers, cell: (p) => p.fba_sellers ?? "—" },
-            { id: "amazon", header: "Amazon", sortValue: (p) => (p.amazon == null ? null : p.amazon ? "sells / sold" : "no"), cell: (p) => <span className={cn("text-meta", p.amazon && "text-danger")}>{p.amazon == null ? "—" : p.amazon ? "sells / sold" : "no"}</span> },
-            { id: "maxLanded", header: <span title="The most a unit can cost landed and clear the floors">Max landed</span>, numeric: true, mobile: 3, sortValue: (p) => p.max_landed, cell: (p) => gbp(p.max_landed) },
-            {
-              id: "offer", header: <span title="Sorts by the best unit cost">Best offer</span>, sortValue: (p) => p.bestOffer?.unitCostGbp ?? null,
-              cell: (p) => (p.bestOffer ? (
-                <span className="text-meta" title={`Seen ${when(p.bestOffer.seenAt)}`}>
-                  <span className="num font-medium">{gbp(p.bestOffer.unitCostGbp)}</span> ex-VAT · {p.bestOffer.supplier}{p.bestOffer.moq ? ` · MOQ ${p.bestOffer.moq}` : ""}
-                </span>
-              ) : <span className="text-meta text-muted-foreground">no costed offer</span>),
-            },
-            {
-              id: "gating", header: "Gating", sortValue: (p) => (p.restriction ? RESTRICTION[p.restriction]?.label ?? p.restriction : null),
-              cell: (p) => {
-                const r = p.restriction ? RESTRICTION[p.restriction] : undefined;
-                return (
-                  <span className="inline-flex items-center gap-1">
-                    {r ? <StatusChip tone={r.tone}>{r.label}</StatusChip> : <span className="text-muted-foreground">—</span>}
-                    {p.apply_url && p.restriction === "approval_required" && (
-                      <a className="text-primary" href={p.apply_url} target="_blank" rel="noreferrer" aria-label="Apply on Amazon"><ExternalLinkIcon className="inline size-3" /></a>
-                    )}
-                  </span>
-                );
-              },
-            },
-          ]}
-        />
+        <SectionTitle title={<>Products across all runs <span>· latest result each, verdict on your default profile</span></>} />
+        <BrandProducts data={data} reload={load} />
       </section>
+    </div>
+  );
+}
+
+/**
+ * The brand's products on the results table: the latest result of each (verdict from the brand
+ * map, on your default profile; Not scored when never priced), its best offer under the title.
+ */
+function BrandProducts({ data, reload }: { data: BrandData; reload: () => Promise<unknown> }) {
+  const router = useRouter();
+  const [filters, setFilters] = useUrlFilters();
+  const [profiles, setProfiles] = useState<{ id: string; is_default: boolean; config: ProfileConfig }[]>([]);
+  useEffect(() => { api<{ profiles: typeof profiles }>("/api/profiles").then((r) => setProfiles(r.profiles)).catch(() => {}); }, []);
+  const cfg = useMemo(() => withDefaults(profiles.find((p) => p.is_default)?.config ?? null), [profiles]);
+  const lineBudget = (cfg.budget * cfg.gates.budgetFit.maxLineSharePct) / 100;
+  const acts = useResultActions({ onChanged: async () => { await reload(); } });
+  const { sparks, observe: observeSparks } = useSparks();
+  const [sort, setSortState] = useState<{ key: SortKey; dir: 1 | -1 }>(() => loadResultSort("brand"));
+  const setSort = (next: { key: SortKey; dir: 1 | -1 }) => { setSortState(next); saveResultSort("brand", next); };
+
+  // Products with a result to show (one the brand map read but whose run has gone is left out).
+  const all = useMemo(() => data.products.flatMap((p) => {
+    const r = p.result_id ? data.results[p.result_id] : undefined;
+    return r ? [{ p, d: { r, x: { decision: p.priced ? p.verdict : null, maxLanded: p.max_landed } } as ResultRow }] : [];
+  }), [data]);
+  const byResult = useMemo(() => new Map(all.map((x) => [x.d.r.id, x.p])), [all]);
+  const rows = useMemo(() => {
+    const order = compareRows(sort.key, sort.dir, lineBudget, sort.key === "rank90" || sort.key === "bb90" ? sparks : undefined);
+    return all.filter((x) => matches({ ...toFilterRow(x.d.r, acts.favourites), verdict: x.d.x?.decision ?? null }, filters)).map((x) => x.d).sort(order);
+  }, [all, filters, sort, lineBudget, sparks, acts.favourites]);
+  const ids = useMemo(() => rows.map((d) => d.r.id), [rows]);
+  const options = useMemo(() => {
+    const uniq = (xs: (string | null | undefined)[]) => [...new Set(xs.filter((x): x is string => !!x))].sort((a, b) => a.localeCompare(b));
+    const gates = new Map<string, number>();
+    for (const { d } of all) if (d.r.failed_gate) gates.set(d.r.failed_gate, (gates.get(d.r.failed_gate) ?? 0) + 1);
+    const n = (v: Result["verdict"]) => all.filter((x) => (x.d.x?.decision ?? null) === v).length;
+    return {
+      brands: [],
+      suppliers: uniq(all.map((x) => x.d.r.offer?.supplier?.name)),
+      gates: GATE_ORDER.filter((g) => gates.has(g)).map((g) => ({ id: g, label: GATE_LABELS[g as GateId], count: gates.get(g)! })),
+      verdictCounts: { pass: n("pass"), warn: n("warn"), fail: n("fail"), unscored: n(null) },
+    };
+  }, [all]);
+
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const chosen = () => all.map((x) => x.d.r).filter((r) => selected.has(r.id));
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const activeIndex = activeId ? rows.findIndex((d) => d.r.id === activeId) : -1;
+  const active = activeIndex >= 0 ? rows[activeIndex].r : null;
+  const step = useCallback((by: -1 | 1) => {
+    const i = activeIndex + by;
+    if (i >= 0 && i < rows.length) setActiveId(rows[i].r.id);
+  }, [activeIndex, rows]);
+  async function rescreen(rs: Result[]) {
+    try {
+      const r = await api<{ runId: string }>("/api/results/rescreen", { method: "POST", json: { resultIds: rs.map((x) => x.id), label: `${data.summary.brand} re-screen` } });
+      router.push(`/runs/${r.runId}`);
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+
+  if (!data.products.length) return <EmptyState icon={<PackageSearchIcon />} title="No products yet">Products of this brand appear once a run screens them.</EmptyState>;
+  return (
+    <div className="space-y-3">
+      <BulkBar count={selected.size} stashed={0} onReselect={() => {}} onClear={() => setSelected(new Set())}
+        onStar={() => acts.bulkStar(chosen(), "star")} onUnstar={() => acts.bulkStar(chosen(), "unstar")}
+        onRescreen={() => rescreen(chosen())}
+        onExport={() => downloadXlsx(exportRows(chosen().map((r) => ({ r, listing: "product" })), lineBudget), data.summary.brand)} />
+      <ResultsFilterBar value={filters} onChange={(f) => { setFilters(f); setSelected(new Set()); }} options={options} gateLabels={GATE_LABELS}
+        matching={rows.length} total={all.length} favouritesAvailable={acts.favourites.size > 0} />
+      <ResultsTable rows={rows} page="brand" paging={{ kind: "client" }}
+        selected={selected} onSelect={setSelected} visibleIds={ids}
+        activeId={active?.id ?? null} onOpen={(id) => setActiveId((cur) => (cur === id ? null : id))}
+        actions={{ starred: acts.starred, onStar: acts.toggleStar, onRescreen: (r) => rescreen([r]) }}
+        sort={sort} onSort={(k) => setSort(nextResultSort(sort, k))}
+        sparks={sparks} observeSparks={observeSparks}
+        rowNote={(r) => {
+          const p = byResult.get(r.id);
+          if (!p) return null;
+          return (
+            <p className="text-xs text-muted-foreground">
+              {p.bestOffer ? <span title={`Seen ${when(p.bestOffer.seenAt)}`}>Best offer <span className="num font-medium text-foreground">{gbp(p.bestOffer.unitCostGbp)}</span> ex-VAT · {p.bestOffer.supplier}{p.bestOffer.moq ? ` · MOQ ${p.bestOffer.moq}` : ""}</span> : "No costed offer"}
+              {p.runId && <> · <Link className="text-primary hover:underline" href={`/runs/${p.runId}`} onClick={(e) => e.stopPropagation()}>latest run</Link></>}
+            </p>
+          );
+        }}
+        empty="Nothing matches these filters."
+        lineCapGbp={lineBudget} maxMonths={cfg.gates.demand.maxMonthsToSell} />
+      {active && (
+        <DetailDrawer r={active} index={activeIndex} count={rows.length} sparks={active.product?.asin ? sparks[active.product.asin] : null}
+          onStep={step} onClose={() => setActiveId(null)}>
+          <Detail r={active} fav={acts.favOf(active)} onNote={acts.saveNote} onWaive={async (r, g, a, reason) => { await acts.waiveOne(r, g, a, reason); }}
+            onWatch={acts.watch} onCost={(r, c) => acts.cost([r.id], c)} stacked budgetGbp={lineBudget} />
+        </DetailDrawer>
+      )}
     </div>
   );
 }
