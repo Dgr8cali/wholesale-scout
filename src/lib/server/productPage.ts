@@ -186,7 +186,7 @@ const FACT_COLS = "band, failed_gate, amazon, approval, waived, dormant, sales, 
 
 /**
  * Every product the app has screened, one per ASIN, newest screening first (from the brand map:
- * each product's latest result on the default profile), `size` a page (50, 20 on a phone), with the
+ * each product's latest result on the default profile), `size` a page (50, 10 on a phone), with the
  * results behind them (shaped like a run's rows) for the results table. The filters are the results
  * table's (lib/filters): search, verdict, brand and supplier run in the query; the rest (profit, ROI,
  * sales, BSR, gated…) on the facts kept of each product's latest result (productFacts), one query. The verdict is the brand map's: Buy / Check / Skip when priced, else
@@ -194,7 +194,7 @@ const FACT_COLS = "band, failed_gate, amazon, approval, waived, dormant, sales, 
  */
 export async function listProducts(q: { filters: FilterSet; bought?: boolean; page?: number; size?: number }): Promise<{ items: ProductListItem[]; results: Record<string, Row>; more: boolean; suppliers: string[] }> {
   const d = db();
-  const size = q.size === 20 ? 20 : 50;
+  const size = q.size === 10 || q.size === 20 ? q.size : 50;
   const page = Math.max(0, q.page ?? 0);
   const plan = planProductQuery(q.filters);
   const boughtAsins = (must(await d.from("purchases").select("asin"), "purchases") as { asin: string }[]).map((p) => p.asin);

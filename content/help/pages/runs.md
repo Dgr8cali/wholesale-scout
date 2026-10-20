@@ -119,7 +119,7 @@ The filters live in the page's address (for example `?verdict=buy,check&profit=3
 | **Any supplier** | Rows from one supplier. |
 | **More filters** | **Error** (only when rows errored) and **Dormant** ([dormant](/help/reference/glossary#dormant) listings, whatever their verdict); the **green**, **amber** and **grey** score bands (see [Score](/help/concepts/score)); **On Shortlist** (starred products; shown once you have some); **Waived**; **Amazon on listing** per the [Amazon presence](/help/gates/amazonPresence) gate; **Open**, **Approval needed**, **Blocked**; **Failed gate** with counts; **Brand** (searchable); minimum and maximum **Ranges** for Offers, Margin, Sell price, Profit, ROI, Sales / mo and BSR; and **Saved filters**: **Save current filters…** saves what's on now by name, for every results page, and the bin deletes a set. |
 
-Under the bar: "Showing N of M products (L listings shown)", a chip for each active filter (click one to remove it), and **Clear all**. On a phone everything but the search and the verdict chips folds behind **Filters**.
+Under the bar: "Showing N of M products (L listings shown)", a chip for each active filter (click one to remove it), and **Clear all**. On a phone everything but the search and the verdict chips folds behind **Filters**. The filters are in the address, and each run remembers its last ones in your browser: open the run again without filters in the address and they're put back (a link with filters wins; **Clear all** forgets them).
 
 ### The results table
 
@@ -146,7 +146,7 @@ More in **Columns**: **Score** (0–100 in its band colour), **Landed** (your la
 
 Above the table, "Profit, ROI and margin" names the VAT basis they're on (**mixed** when rows differ: Settings → Business → Recalculate all). **Columns**, on the right, is remembered for each results page in your browser: tick to show or hide a column, arrows to move it, **Comfortable** / **Compact** for row height, **Reset** for the default set. Drag a header to move a column; drag its right edge to resize it (double-click the edge to reset its width).
 
-On a phone each row is a card: image, title, verdict, profit, ROI and sales a month, its **⋯** menu and **Details**, 20 to a page.
+On a phone each row is a card: image, title, verdict, profit, ROI and sales a month, its **⋯** menu and **Details**, 10 to a page, with **Previous**, **Next** and a page picker under them.
 
 ### A row's details
 

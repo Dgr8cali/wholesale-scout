@@ -175,7 +175,7 @@ and the rest in a column picker (show, hide, reorder, density, reset; saved per 
 `tablePrefs.ts`, tested). Figures mono and right-aligned; sticky header, checkbox and product column; a pinned "⋯" row menu (Add to /
 Remove from Shortlist, Re-screen, Product page, Open on Amazon, Copy ASIN); a row click opens the page's drawer (the inline chevron
 details are gone). Paging: `virtual` (a run, scrolled in its card), `client` (50 a page) or `server`; on a phone (<640px) every row is
-a card (image, title, verdict, profit, ROI, sales / mo, ⋯, Details) 20 a page. The VAT basis of the profit figures is one tag above
+a card (image, title, verdict, profit, ROI, sales / mo, ⋯, Details) 10 a page (phase 5). The VAT basis of the profit figures is one tag above
 the table. **ResultsFilterBar** (`src/components/results/ResultsFilterBar.tsx`): search (ASIN, EAN, title, brand), verdict chips Buy /
 Check / Skip / Not scored (multi), Profit ≥, ROI ≥, Sales/mo ≥, BSR ≤, Gated any/yes/no, supplier, and More filters (Error, Dormant,
 bands, On Shortlist, Waived, Amazon on listing, approval, failed gate, brand, every range's min and max, saved filter sets). The
@@ -191,7 +191,7 @@ run's row shape); the verdict is the brand map's (default profile; Not scored wh
 latest run sit under the title; Re-screen goes through the new `POST /api/results/rescreen` (`runFromResults()`: results from any
 runs as one new run, each on its own offer, default profile). Today's "Apply to sell" step opens the brand at `?verdict=buy,check`.
 Products (`src/app/products/page.tsx`) is on it, still paged by the server (`listProducts()` in `src/lib/server/productPage.ts`): 50
-a page, 20 on a phone (`?size=`), `?page=` in the address; it returns each product's latest result for the table and drawer. Search,
+a page, 10 on a phone (`?size=`), `?page=` in the address; it returns each product's latest result for the table and drawer. Search,
 the plain verdicts (the brand map's priced verdict), brand and supplier (any supplier carrying it) go to the query; the other filters
 (profit, ROI, sales, BSR, gated…) are answered by the `product_list` view (phase 5, below). Bought is the page's own toggle. Row and bulk actions: Add to
 Shortlist, Re-screen (via `/api/results/rescreen`), Export selected (xlsx, the run export's format), the selection kept across
@@ -212,6 +212,7 @@ map's refresh also refreshes them when it finishes), narrows in the database, th
 A combined filter (profit, ROI, sales, BSR, not gated) went from ~4.1 s to ~0.3 s.
 **Runs remember their filters again**: `useUrlFilters({ remember })` saves a run's last filters (`ws.filters.run.<id>`, the old key) and puts them back when the run opens with none in the address; filters in the address win, Clear all forgets them.
 **Brand detail's drawer** pushes the page aside on wide screens (`xl:mr-[27rem]`, as on Run detail and Products) instead of covering the table's right edge.
+**Results on a phone: 10 cards a page** (was 20; Run detail, Brand detail, Shortlist, and Products' server pages, `?size=10`), the pager under them worded Previous / Next (44px) with a page picker ("Page [n] of N"), and a new page scrolls back to its first card.
 **Extension 0.8.0**: the product panel and search results show the app's words, colours and icons (Buy / Check / Skip / Not scored as round chips; the panel lists each gate as Pass / Check / Fail), and candidate links open `/pl/candidates/<id>` (Suppliers & quotes, Reviews or Gate 3 tab) instead of the old `?c=` redirect.
 
 ## Workspaces

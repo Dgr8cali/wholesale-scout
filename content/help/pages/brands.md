@@ -96,7 +96,7 @@ These are the three sellers seen most often on its listings, either as a top Buy
 
 The brand's products on the same results table as a run (see [Runs](/help/pages/runs#the-results-table)), one row per product: the figures are from its latest result, and the **Verdict** is **Buy**, **Check** or **Skip** on your default profile, or **Not scored** for a product that was never priced. Under each title: the **Best offer** (the cheapest costed offer for the EAN: ex-VAT price, supplier and MOQ; hover for when it was seen, or "No costed offer") and a link to its **latest run**. **Gated** is Open, Approval or Blocked as Amazon said for the listing; **Max landed** is in **Columns**.
 
-The filter bar is the one on a run (see [Filters](/help/pages/runs#filters)); its filters are kept in the address, so Today's "Apply to sell" step opens the brand with only its Buy and Check products shown. 50 to a page (20 on a phone). Click a row for its details beside the list. Tick rows for **Add to Shortlist**, **Re-screen selected** (a new run of their latest offers on your default profile) and **Export selected (xlsx)**.
+The filter bar is the one on a run (see [Filters](/help/pages/runs#filters)); its filters are kept in the address, so Today's "Apply to sell" step opens the brand with only its Buy and Check products shown. 50 to a page (10 on a phone, with **Next** and a page picker). Click a row for its details beside the list. Tick rows for **Add to Shortlist**, **Re-screen selected** (a new run of their latest offers on your default profile) and **Export selected (xlsx)**.
 
 ## Documents
 

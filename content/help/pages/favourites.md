@@ -32,7 +32,7 @@ The line under the title counts your favourites and how many are **outdated**, m
 
 ## The table
 
-This is the same results table as on a run, 50 to a page (20 on a phone). Its columns, the column picker (remembered for this page), sorting, row density, sparklines and the **⋯** menu are explained in [Runs](/help/pages/runs#the-results-table). What's different here:
+This is the same results table as on a run, 50 to a page (10 on a phone, with **Next** and a page picker). Its columns, the column picker (remembered for this page), sorting, row density, sparklines and the **⋯** menu are explained in [Runs](/help/pages/runs#the-results-table). What's different here:
 
 - Every row is the product's **latest** result from **any** run, not from one run. Under the title you'll see "Screened <when> · <run name>" (the run name links to the run), an **outdated** badge if it's over 7 days old, and your note in italics.
 - A favourite that has never been screened to the end shows as pending, with "Not screened yet: re-screen it."

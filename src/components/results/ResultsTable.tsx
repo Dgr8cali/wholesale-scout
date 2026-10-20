@@ -18,6 +18,7 @@ import { ProductThumb } from "@/components/ProductThumb";
 import { VerdictBadge } from "@/components/VerdictBadge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { NativeSelect } from "@/components/ui/native-select";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -53,9 +54,9 @@ export type Paging =
   | { kind: "client" }
   | { kind: "server"; page: number; more: boolean; onPage: (page: number) => void };
 
-/** Rows a page: 50, or 20 on a phone (each row is a card there). */
+/** Rows a page: 50, or 10 on a phone (each row is a card there). */
 export const PAGE_SIZE = 50;
-export const PHONE_PAGE_SIZE = 20;
+export const PHONE_PAGE_SIZE = 10;
 
 const PHONE = "(max-width: 639px)";
 const subscribe = (f: () => void) => { const m = window.matchMedia(PHONE); m.addEventListener("change", f); return () => m.removeEventListener("change", f); };
@@ -192,7 +193,7 @@ export function ResultsTable(props: ResultsTableProps) {
   const [prefs, setPrefs] = useState<TablePrefs>(() => loadPrefs(prefsKey(page), IDS, BOUNDS));
   useEffect(() => savePrefs(prefsKey(page), prefs), [page, prefs]);
 
-  // Client paging (and every list on a phone except a server's pages): 50 a page, 20 on a phone.
+  // Client paging (and every list on a phone except a server's pages): 50 a page, 10 on a phone.
   const size = phone ? PHONE_PAGE_SIZE : PAGE_SIZE;
   const clientPaged = paging.kind === "client" || (paging.kind === "virtual" && phone);
   const [pageIndex, setPageIndex] = useState(0);
@@ -211,9 +212,15 @@ export function ResultsTable(props: ResultsTableProps) {
     if (i >= 0 && Math.floor(i / size) !== at) setPageIndex(Math.floor(i / size));
   }
 
+  // A new page on a phone starts at its first card.
+  const listTop = useRef<HTMLDivElement>(null);
+  const turn = (f: (n: number) => void) => (n: number) => {
+    f(n);
+    if (phone) listTop.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+  };
   const pager = clientPaged
-    ? rows.length > size && <Pager from={at * size + 1} to={Math.min(rows.length, (at + 1) * size)} total={rows.length} page={at} pages={pageCount} onPage={setPageIndex} />
-    : paging.kind === "server" && (paging.page > 0 || paging.more) && <Pager page={paging.page} more={paging.more} onPage={paging.onPage} />;
+    ? rows.length > size && <Pager phone={phone} from={at * size + 1} to={Math.min(rows.length, (at + 1) * size)} total={rows.length} page={at} pages={pageCount} onPage={turn(setPageIndex)} />
+    : paging.kind === "server" && (paging.page > 0 || paging.more) && <Pager phone={phone} page={paging.page} more={paging.more} onPage={turn(paging.onPage)} />;
 
   // The VAT basis of the profit, ROI and margin figures: one tag when every row is on the same one.
   const bases = new Set(rows.map((d) => vatBasisOf(d.r.fees)).filter((b): b is boolean => b != null));
@@ -232,7 +239,7 @@ export function ResultsTable(props: ResultsTableProps) {
 
   if (phone) {
     return (
-      <div className="space-y-2">
+      <div className="scroll-mt-20 space-y-2" ref={listTop}>
         {toolbar}
         <div className="panel overflow-hidden">
           {!shown.length ? <div className="px-4 py-10 text-center text-sm text-muted-foreground">{props.empty}</div> : (
@@ -708,12 +715,38 @@ function SelectAll({ visible, selected, onChange }: { visible: string[]; selecte
   );
 }
 
-/** Previous / next, with "1–50 of 230" for a list held here, or the page number for a server's pages. */
-function Pager({ page, pages, from, to, total, more, onPage }: { page: number; pages?: number; from?: number; to?: number; total?: number; more?: boolean; onPage: (n: number) => void }) {
+/**
+ * Previous / next, with "1–50 of 230" for a list held here, or the page number for a server's pages.
+ * On a phone: worded Previous and Next buttons (44px) and, when the pages are known, a page picker.
+ */
+function Pager({ page, pages, from, to, total, more, onPage, phone }: { page: number; pages?: number; from?: number; to?: number; total?: number; more?: boolean; onPage: (n: number) => void; phone?: boolean }) {
   const last = pages != null ? page >= pages - 1 : !more;
+  const range = total != null ? `${from!.toLocaleString("en-GB")}–${to!.toLocaleString("en-GB")} of ${total.toLocaleString("en-GB")}` : `Page ${page + 1}`;
+  if (phone) {
+    return (
+      <nav aria-label="Pages" className="space-y-2 border-t border-border px-3 py-3">
+        <div className="flex items-center justify-between gap-2 text-meta text-muted-foreground">
+          <span className="num">{range}</span>
+          {pages != null && pages > 1 && (
+            <label className="flex items-center gap-1.5">
+              Page
+              <NativeSelect value={String(page)} onChange={(e) => onPage(Number(e.target.value))} aria-label="Go to page" className="w-20 [&_select]:h-11">
+                {Array.from({ length: pages }, (_, i) => <option key={i} value={i}>{i + 1}</option>)}
+              </NativeSelect>
+              of {pages}
+            </label>
+          )}
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <Button variant="secondary" className="h-11" disabled={page === 0} onClick={() => onPage(page - 1)}><ChevronLeftIcon /> Previous</Button>
+          <Button variant="secondary" className="h-11" disabled={last} onClick={() => onPage(page + 1)}>Next <ChevronRightIcon /></Button>
+        </div>
+      </nav>
+    );
+  }
   return (
     <div className="flex items-center justify-between gap-3 border-t border-border px-3 py-2 text-meta text-muted-foreground">
-      <span className="num">{total != null ? `${from!.toLocaleString("en-GB")}–${to!.toLocaleString("en-GB")} of ${total.toLocaleString("en-GB")}` : `Page ${page + 1}`}</span>
+      <span className="num">{range}</span>
       <div className="flex items-center gap-1">
         <Button variant="ghost" size="icon-sm" aria-label="Previous page" disabled={page === 0} onClick={() => onPage(page - 1)}><ChevronLeftIcon /></Button>
         {pages != null && <span className="num">{page + 1} / {pages}</span>}
