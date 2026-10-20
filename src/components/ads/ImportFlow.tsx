@@ -10,7 +10,7 @@ import { DataTable, type DataColumn } from "@/components/ui/data-table";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatusChip } from "@/components/ui/status-chip";
-import { parseBulk, type ParsedBulk } from "@/lib/ads/bulk";
+import type { ParsedBulk } from "@/lib/ads/bulk";
 import { parseReport, REPORT_LABEL, type ParsedReport, type ReportType } from "@/lib/ads/parse";
 import { api } from "@/lib/ui/client";
 
@@ -37,10 +37,12 @@ export function ImportFlow({ onImported }: { onImported: () => void }) {
     const list = [...files];
     const xlsx = list.filter((f) => /\.xlsx$/i.test(f.name));
     const csv = list.filter((f) => /\.(csv|txt)$/i.test(f.name) || f.type.includes("csv"));
+    // The bulk reader brings SheetJS: loaded only when a bulk export is dropped.
+    const { parseBulk } = xlsx.length ? await import("@/lib/ads/bulk") : { parseBulk: null };
     const readBulk = await Promise.all(xlsx.map(async (f): Promise<PickedBulk> => {
       const data = new Uint8Array(await f.arrayBuffer());
       try {
-        const parsed = parseBulk(data, { fileName: f.name });
+        const parsed = parseBulk!(data, { fileName: f.name });
         return { name: f.name, data, parsed, error: null, from: parsed.dateFrom ?? "", to: parsed.dateTo ?? "" };
       } catch (e) {
         return { name: f.name, data, parsed: null, error: (e as Error).message, from: "", to: "" };

@@ -5,7 +5,12 @@ import { FileDrop } from "@/components/ui/file-drop";
 import { useRouter } from "next/navigation";
 import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
-import * as XLSX from "xlsx";
+import type { WorkBook } from "xlsx";
+import { sheetjs } from "@/lib/ui/sheetjs";
+
+// SheetJS, loaded with the first file picked (every use below comes after one has been read).
+let loaded: typeof import("xlsx") | null = null;
+const XL = () => loaded!;
 import {
   applyMapping,
   currencyFromHeader,
@@ -62,7 +67,7 @@ interface FileState {
   fileName: string;
   sheetNames: string[];
   sheet: string;
-  workbook: XLSX.WorkBook;
+  workbook: WorkBook;
   rows: Cell[][];
   mapping: ColumnMapping;
   remembered: string | null;
@@ -87,11 +92,11 @@ interface QogitaFile {
  * read again with formulas, for the product links (HYPERLINK cells hold no value), keyed by GTIN.
  */
 function qogitaFile(buf: ArrayBuffer, sheet: string, expected: "UK" | "EU" | null): QogitaFile {
-  const wb = XLSX.read(buf, { type: "array", cellFormula: true, sheetStubs: true });
+  const wb = XL().read(buf, { type: "array", cellFormula: true, sheetStubs: true });
   const ws = wb.Sheets[sheet];
-  const rows = XLSX.utils.sheet_to_json<Cell[]>(ws, { header: 1, raw: true, defval: null, blankrows: true });
+  const rows = XL().utils.sheet_to_json<Cell[]>(ws, { header: 1, raw: true, defval: null, blankrows: true });
   const formulas: Record<number, string> = {};
-  for (const [addr, cell] of Object.entries(ws)) if (!addr.startsWith("!") && (cell as { f?: string }).f) formulas[XLSX.utils.decode_cell(addr).r] = (cell as { f: string }).f;
+  for (const [addr, cell] of Object.entries(ws)) if (!addr.startsWith("!") && (cell as { f?: string }).f) formulas[XL().utils.decode_cell(addr).r] = (cell as { f: string }).f;
   const cat = parseQogitaCatalog(rows, formulas);
   const region = cat.currency === "GBP" ? "UK" : cat.currency === "EUR" ? "EU" : null;
   return {
@@ -103,8 +108,8 @@ function qogitaFile(buf: ArrayBuffer, sheet: string, expected: "UK" | "EU" | nul
 
 const today = () => new Date().toISOString().slice(0, 10);
 
-function sheetRows(wb: XLSX.WorkBook, name: string): Cell[][] {
-  return XLSX.utils.sheet_to_json<Cell[]>(wb.Sheets[name], { header: 1, raw: true, defval: null, blankrows: false });
+function sheetRows(wb: WorkBook, name: string): Cell[][] {
+  return XL().utils.sheet_to_json<Cell[]>(wb.Sheets[name], { header: 1, raw: true, defval: null, blankrows: false });
 }
 
 async function fetchFx(currency: string) {
@@ -212,8 +217,9 @@ export function UploadSource() {
       }
       try {
         const buf = await file.arrayBuffer();
+        loaded ??= await sheetjs();
         const isText = /\.(csv|tsv|txt)$/i.test(file.name);
-        const wb = XLSX.read(buf, { type: "array", raw: isText, dense: true });
+        const wb = XL().read(buf, { type: "array", raw: isText, dense: true });
         const sheet = wb.SheetNames[0];
         const base: FileState = {
           key: `${file.name}-${file.size}-${file.lastModified}`,

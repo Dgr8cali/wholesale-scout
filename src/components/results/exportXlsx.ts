@@ -1,5 +1,5 @@
-import * as XLSX from "xlsx";
 import { GATE_LABELS } from "@/lib/screening/config";
+import { sheetjs } from "@/lib/ui/sheetjs";
 import { groupRows } from "@/lib/ui/group";
 import { firstOrderFigures } from "@/lib/ui/metrics";
 import { eanOf, figure, listingMoq, titleOf, type Result } from "./types";
@@ -55,7 +55,8 @@ export function allListings(results: Result[]) {
   return groupRows(done, eanOf, order).flatMap((g) => [{ r: g.lead, listing: g.others.length ? "best" : "only" }, ...g.others.map((r) => ({ r, listing: "alternative" }))]);
 }
 
-export function downloadXlsx(data: object[], name: string) {
+export async function downloadXlsx(data: object[], name: string) {
+  const XLSX = await sheetjs();
   const ws = XLSX.utils.json_to_sheet(data);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Shortlist");

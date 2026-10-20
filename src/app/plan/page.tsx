@@ -6,7 +6,6 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useDialogs } from "@/components/Dialogs";
-import * as XLSX from "xlsx";
 import { useQogitaCart } from "@/components/QogitaCart";
 import { EmptyState, ErrorState } from "@/components/States";
 import { Button } from "@/components/ui/button";
@@ -26,6 +25,7 @@ import type { CostInput } from "@/lib/costOverride";
 import { api, gbp, when } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
 import { KpiSkeleton, TableSkeleton } from "@/components/ui/skeletons";
+import { sheetjs } from "@/lib/ui/sheetjs";
 
 interface Data { limits: PlanLimits; profile: string; candidates: PlanCandidate[]; noOffer?: NoOffer[]; updatedAt: string | null; updating?: boolean; vatRegistered?: boolean; vatRate?: number }
 
@@ -108,7 +108,8 @@ export default function PlanPage() {
     toast.success(`${ok} of ${qogitaLines.length} Qogita lines added`);
   }
 
-  function exportXlsx() {
+  async function exportXlsx() {
+    const XLSX = await sheetjs();
     if (!plan || !data) return;
     const rows = plan.groups.flatMap((g) => g.lines.map((x) => ({
       Supplier: g.name, Product: x.c.title ?? "", Brand: x.c.brand, EAN: x.c.ean, ASIN: x.c.asin ?? "", Qty: x.qty,

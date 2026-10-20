@@ -6,7 +6,6 @@ import { useParams, useRouter } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { BulkBar } from "@/components/BulkBar";
-import { Detail } from "@/components/results/Detail";
 import { DetailDrawer } from "@/components/results/DetailDrawer";
 import { downloadXlsx, exportRows } from "@/components/results/exportXlsx";
 import { ResultsFilterBar } from "@/components/results/ResultsFilterBar";
@@ -33,7 +32,11 @@ import { useUrlFilters } from "@/lib/ui/useUrlFilters";
 import { cn } from "@/lib/utils";
 import { ApplyKit } from "@/components/documents/ApplyKit";
 import { DocumentUploader } from "@/components/documents/Documents";
-import { KpiSkeleton, TableSkeleton } from "@/components/ui/skeletons";
+import { KpiSkeleton, PanelSkeleton, TableSkeleton } from "@/components/ui/skeletons";
+import dynamic from "next/dynamic";
+
+// The row details load with the first row opened, not with the page.
+const Detail = dynamic(() => import("@/components/results/Detail").then((m) => m.Detail), { loading: () => <PanelSkeleton lines={8} className="border-0" /> });
 
 type Product = BrandProduct & { bestOffer: { supplier: string; unitCostGbp: number; moq: number | null; seenAt: string } | null; runId: string | null };
 

@@ -7,7 +7,6 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { toast } from "sonner";
 import { BulkBar } from "@/components/BulkBar";
 import { RecordPurchaseDialog } from "@/components/product/RecordPurchaseDialog";
-import { Detail } from "@/components/results/Detail";
 import { DetailDrawer } from "@/components/results/DetailDrawer";
 import { downloadXlsx, exportRows } from "@/components/results/exportXlsx";
 import { ResultsFilterBar } from "@/components/results/ResultsFilterBar";
@@ -26,7 +25,11 @@ import { GATE_LABELS, withDefaults, type ProfileConfig } from "@/lib/screening/c
 import type { ProductListItem } from "@/lib/server/productPage";
 import { api } from "@/lib/ui/client";
 import { useUrlFilters } from "@/lib/ui/useUrlFilters";
-import { TableSkeleton } from "@/components/ui/skeletons";
+import { PanelSkeleton, TableSkeleton } from "@/components/ui/skeletons";
+import dynamic from "next/dynamic";
+
+// The row details load with the first row opened, not with the page.
+const Detail = dynamic(() => import("@/components/results/Detail").then((m) => m.Detail), { loading: () => <PanelSkeleton lines={8} className="border-0" /> });
 
 type Page = { items: ProductListItem[]; results: Record<string, Result>; more: boolean; suppliers: string[] };
 

@@ -11,7 +11,6 @@ import { BulkBar } from "@/components/BulkBar";
 import { useDialogs } from "@/components/Dialogs";
 import { EditableName } from "@/components/EditableName";
 import { ResultsFilterBar, type FilterOptions } from "@/components/results/ResultsFilterBar";
-import { Detail } from "@/components/results/Detail";
 import { DetailDrawer } from "@/components/results/DetailDrawer";
 import { ResultsTable, type ResultRow } from "@/components/results/ResultsTable";
 import { eanOf, type Progress, type Result, type Run, type SortKey } from "@/components/results/types";
@@ -35,6 +34,11 @@ import { groupRows } from "@/lib/ui/group";
 import { brandOf, dormantOf, toFilterRow } from "@/lib/ui/resultRows";
 import { cn } from "@/lib/utils";
 import { TextButton } from "@/components/ui/text-button";
+import dynamic from "next/dynamic";
+import { PanelSkeleton } from "@/components/ui/skeletons";
+
+// The row details load with the first row opened, not with the page.
+const Detail = dynamic(() => import("@/components/results/Detail").then((m) => m.Detail), { loading: () => <PanelSkeleton lines={8} className="border-0" /> });
 
 export default function RunPage() {
   const { id } = useParams<{ id: string }>();

@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { ImportFlow, ImportsHistory } from "@/components/ads/ImportFlow";
 import { EmptyState, ErrorState } from "@/components/States";
 import { Button } from "@/components/ui/button";
 import { DataTable, type DataColumn } from "@/components/ui/data-table";
@@ -21,7 +20,6 @@ import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Sparkline } from "@/components/results/Sparkline";
 import { ProductPicker, useAdsProduct } from "@/components/ads/ProductPicker";
 import { ProductThumb } from "@/components/ProductThumb";
-import { ExplainPanel, TargetsPanel } from "@/components/ads/AiPanels";
 import type { Ratios, TermStatus, Totals } from "@/lib/ads/metrics";
 import { api } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
@@ -30,6 +28,13 @@ import { TextButton } from "@/components/ui/text-button";
 import { ChipToggle } from "@/components/ui/chip-toggle";
 import { ListButton } from "@/components/ui/list-button";
 import { KpiSkeleton, PanelSkeleton, TableSkeleton } from "@/components/ui/skeletons";
+import dynamic from "next/dynamic";
+import { ExplainPanel, TargetsPanel } from "@/components/ads/AiPanels";
+
+// The Import sheet and the imports history load when they're opened (the AI panels are on the
+// first screen, so they load with the page: lazily, their request would wait for their code).
+const ImportFlow = dynamic(() => import("@/components/ads/ImportFlow").then((m) => m.ImportFlow));
+const ImportsHistory = dynamic(() => import("@/components/ads/ImportFlow").then((m) => m.ImportsHistory), { loading: () => <TableSkeleton rows={6} columns={5} /> });
 
 interface Economics {
   price: number; fees: number | null; landed: number | null; priceSource: "manual" | "keepa" | "ads" | null; referralCategory: string;

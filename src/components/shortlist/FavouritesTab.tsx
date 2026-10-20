@@ -8,7 +8,6 @@ import { toast } from "sonner";
 import { BulkBar } from "@/components/BulkBar";
 import { useDialogs } from "@/components/Dialogs";
 import { ResultsFilterBar, type FilterOptions } from "@/components/results/ResultsFilterBar";
-import { Detail } from "@/components/results/Detail";
 import { DetailDrawer } from "@/components/results/DetailDrawer";
 import { downloadXlsx, exportRows } from "@/components/results/exportXlsx";
 import { ResultsTable, type ResultRow } from "@/components/results/ResultsTable";
@@ -27,6 +26,10 @@ import { useUrlFilters } from "@/lib/ui/useUrlFilters";
 import type { WatchCondition } from "@/lib/watch";
 import type { CostInput } from "@/lib/costOverride";
 import { PanelSkeleton, TableSkeleton } from "@/components/ui/skeletons";
+import dynamic from "next/dynamic";
+
+// The row details load with the first row opened, not with the page.
+const Detail = dynamic(() => import("@/components/results/Detail").then((m) => m.Detail), { loading: () => <PanelSkeleton lines={8} className="border-0" /> });
 
 interface Item {
   favourite: Fav & { created_at: string };

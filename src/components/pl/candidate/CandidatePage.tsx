@@ -16,10 +16,17 @@ import type { PipelineCard } from "@/lib/server/plPipeline";
 import { api } from "@/lib/ui/client";
 import { useTab } from "@/lib/ui/useTab";
 import { GateBar } from "../PipelineBoard";
-import { GatesTab } from "./GatesTab";
-import { LaunchTab, ListingTab, ReviewsTab, SuppliersTab } from "./tabs";
 import { OverviewTab } from "./OverviewTab";
 import { useCandidate } from "./useCandidate";
+import dynamic from "next/dynamic";
+
+// Each tab but Overview loads when it's first opened (the Listing Writer and the launch builder are large).
+const tabWait = () => <div className="space-y-3"><Skeleton className="h-40 rounded-[14px]" /><Skeleton className="h-64 rounded-[14px]" /></div>;
+const GatesTab = dynamic(() => import("./GatesTab").then((m) => m.GatesTab), { loading: tabWait });
+const ReviewsTab = dynamic(() => import("./tabs").then((m) => m.ReviewsTab), { loading: tabWait });
+const SuppliersTab = dynamic(() => import("./tabs").then((m) => m.SuppliersTab), { loading: tabWait });
+const ListingTab = dynamic(() => import("./tabs").then((m) => m.ListingTab), { loading: tabWait });
+const LaunchTab = dynamic(() => import("./tabs").then((m) => m.LaunchTab), { loading: tabWait });
 
 const TABS = ["overview", "gates", "reviews", "suppliers", "listing", "launch"] as const satisfies readonly CandidateTab[];
 /** Old in-page anchors (the extension links to #suppliers) open their tab. */

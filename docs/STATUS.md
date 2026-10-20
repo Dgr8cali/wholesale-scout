@@ -244,6 +244,16 @@ Every page has a breadcrumb (Today, Settings and Help start at Home) and the bro
 Wholesale · Wholesale Scout"; Today is "Today · Wholesale Scout").
 **Phones**: `viewport-fit=cover` with the content clear of the home bar (`env(safe-area-inset-bottom)`), and the menu drawer
 closes on any move to another page (a menu item, the logo, ⌘K).
+**Speed** (local production build against the server's database, the same run and candidate both sides; ready = data
+loaded, median of 5): Today 436 → 202 ms (its facts cached 60 s in `todaySteps()`, dropped by any successful API write in
+`handle()`; Later and Done read fresh); Products 388 → 379 ms, and with profit / ROI / sales / BSR / not gated 3,987 → 484 ms;
+Run detail (226 products) 469 → 486 ms; Pipeline 258 → 292 ms; Candidate 597 → 574 ms; Ads Dashboard 764 → 747 ms. JavaScript
+each page loads (uncompressed): Products 1,504 → 991 KB, Run detail 1,522 → 1,021 KB, Candidate 1,070 → 944 KB, Ads Dashboard
+1,377 → 889 KB, Today 739 → 766 KB, Pipeline 809 → 824 KB. How: SheetJS (about 500 KB) loads only when a file is picked or an
+export clicked (`src/lib/ui/sheetjs.ts`; the run, product and plan exports, Upload, the DG report, the Ads bulk reader); the
+results drawer's details, the candidate page's tabs other than Overview, and the Ads Import sheet and history load when opened
+(`next/dynamic`). The Ads AI panels stay in the page (they're on the first screen: lazily, their request waited for their code,
++300 ms). All the app's client JS together: 3,294 → 3,784 KB raw (1,062 → 1,218 KB gzip), more files that load later.
 **Extension 0.8.0**: the product panel and search results show the app's words, colours and icons (Buy / Check / Skip / Not scored as round chips; the panel lists each gate as Pass / Check / Fail), and candidate links open `/pl/candidates/<id>` (Suppliers & quotes, Reviews or Gate 3 tab) instead of the old `?c=` redirect.
 
 ## Workspaces

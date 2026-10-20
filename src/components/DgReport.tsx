@@ -2,7 +2,8 @@
 
 import { useRef, type ReactNode } from "react";
 import { toast } from "sonner";
-import * as XLSX from "xlsx";
+import type { WorkBook } from "xlsx";
+import { sheetjs } from "@/lib/ui/sheetjs";
 import { DG_STATUS_LABEL, type DgLookupStatus } from "@/lib/dg/report";
 import type { Cell } from "@/lib/ingest/mapping";
 import { api } from "@/lib/ui/client";
@@ -15,7 +16,7 @@ interface Imported {
 }
 
 /** The sheet with an ASIN header (the lookup file may carry a notes sheet first). */
-function lookupRows(wb: XLSX.WorkBook): Cell[][] {
+function lookupRows(XLSX: typeof import("xlsx"), wb: WorkBook): Cell[][] {
   const sheets = wb.SheetNames.map((n) => XLSX.utils.sheet_to_json<Cell[]>(wb.Sheets[n], { header: 1, raw: false, defval: null, blankrows: false }));
   return sheets.find((rows) => rows.slice(0, 20).some((r) => r.some((c) => /^\s*(child |product )?asin\s*$/i.test(String(c ?? ""))))) ?? sheets[0] ?? [];
 }
@@ -32,7 +33,8 @@ export function useDgImport(after?: () => Promise<void> | void): { pick: () => v
     try {
       const buf = await file.arrayBuffer();
       const isText = /\.(csv|txt|tsv)$/i.test(file.name);
-      const rows = lookupRows(XLSX.read(buf, { type: "array", raw: isText, dense: true }));
+      const XLSX = await sheetjs();
+      const rows = lookupRows(XLSX, XLSX.read(buf, { type: "array", raw: isText, dense: true }));
       const r = await api<Imported>("/api/dg-report", { method: "POST", json: { file: file.name, rows } });
       const counts = (Object.entries(r.byStatus) as [DgLookupStatus, number][]).map(([s, n]) => `${n} ${DG_STATUS_LABEL[s]}`).join(", ");
       const odd = r.unrecognised.length ? ` Wording not recognised (saved as shown, no effect on the gate): ${r.unrecognised.slice(0, 3).map((u) => `“${u.text}” (${u.rows})`).join(", ")}.` : "";

@@ -11,6 +11,7 @@ import { favouritesWithLatest } from "./favourites";
 import { memo } from "./memo";
 import { listCandidates } from "./pl";
 import { stockLevels } from "./stock";
+import { TODAY_CACHE } from "./http";
 
 /**
  * Today's "Next steps": rule-based (no AI) jobs worth doing now. gatherFacts() reads the data;
@@ -564,8 +565,12 @@ export interface TodayView {
   next: { date: string; title: string } | null;
 }
 
+/**
+ * Today's view. The facts (a dozen queries across every workspace) are cached for 60 s and dropped by
+ * any write through the API (http.ts); Later / Done are read fresh, so they show at once.
+ */
 export async function todaySteps(now = new Date()): Promise<TodayView> {
-  const [{ facts, numbers }, states] = await Promise.all([gatherFacts(now), stepStates()]);
+  const [{ facts, numbers }, states] = await Promise.all([memo(`${TODAY_CACHE}facts`, 60_000, () => gatherFacts(now)), stepStates()]);
   const all = buildSteps(facts, now);
   const byId = new Map(states.map((s) => [s.step_id, s]));
   return {
