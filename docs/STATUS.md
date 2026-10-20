@@ -1,7 +1,7 @@
 # Wholesale Scout: status
 
 Read this first in a new session. Keep it current: every commit that changes a feature updates
-it (what's built, the backlog, the rough edges). Last updated: 20 Oct 2026 (UI redesign phase 3b: every page restyled, one verdict vocabulary).
+it (what's built, the backlog, the rough edges). Last updated: 20 Oct 2026 (UI redesign phase 4a: Today is Next steps, plus Ask Scout).
 
 Wholesale Scout is a single-user Amazon UK seller's workbench: Next.js 16 (App Router, `proxy.ts`
 password gate), self-hosted Supabase (Postgres, RLS on, service-role access from the server only),
@@ -97,7 +97,7 @@ Brand detail 19,938 → 1,570; Candidates 14,741 → 8,649 (the candidate detail
 1,487; Find niches 9,398 → 2,013; Brands 8,244 → 1,063; Settings (Gates) 7,752 → 2,820; Suppliers & quotes 7,213 → 1,151;
 Products 3,464 → 1,063; Help article 6,312 and Help 4,038 unchanged (article length). No page is wider than 390px.
 Screenshots: `docs/ui-audit/after/3b/` (gitignored).
-Phase 4a, Today becomes Next steps (in progress, 20 Oct 2026). The engine: `src/lib/server/nextSteps.ts` (rule-based, no AI;
+Phase 4a, Today becomes Next steps, done (20 Oct 2026). The engine: `src/lib/server/nextSteps.ts` (rule-based, no AI;
 `buildSteps()` is pure and unit-tested per rule, `gatherFacts()` reads the data, `todaySteps()` ranks by priority then age and drops
 what you snoozed or dismissed), served by `GET /api/today`; `POST /api/today/steps` saves Later (24 h) or Done in `today_step_state`
 (migration 20261020000100). A dismissed step comes back only when its condition's fingerprint changes. Rules: System first (failed or
@@ -114,8 +114,21 @@ numbers (ad spend over 7 days with ACoS, open proposals, candidates in progress,
 a Buy product), each its own icon, wrapping instead of truncating. Open orders missing costs are one step. The old tiles, Recent runs,
 Qogita overnight, Favourites and Brands to chase cards are gone (Runs, New run → Qogita, Shortlist and Brands show them). App-wide:
 the top bar leaves the page name out when the page has a PageHeader (`usePageHeaderMounted` in `Crumbs.tsx`).
-To do: phase 4 (Today's layout, the candidate detail page, a pipeline board, Private label Launch + Ads Launch, one results table
-for Run detail / Brand detail / Products) and phase 5 (polish).
+Ask Scout (`src/lib/server/askScout.ts`, tools in `askScoutTools.ts`, UI `src/components/today/AskScout.tsx`, `GET/POST /api/ask`):
+questions about your own data, answered by the Listing Writer's client, model and prices (Ads → Rules → Ad settings) with thinking off
+(`leanThinking`: `between_tools` on Sonnet 5.5), 1,500 output tokens a request, `tool_choice` auto and at most 5 lookups a question
+(then `none`: it must answer), the answer in a fixed JSON format (answer, figures with their page, links, what's missing), links kept
+to the app's own pages. One empty answer gets one nudge. Six READ-ONLY tools: find_products, product_metrics (an ASIN's ad figures,
+unit economics, Amazon orders by channel between dates), stock (levels, demand, cover, reorder, purchases), candidates (verdict, gates,
+launch steps), suppliers (wholesale suppliers, Alibaba leads by status, quotes), proposals. `askScoutTools.test.ts` runs every tool on a
+database that records writes (none allowed) and checks the module's source and imports. Each question is one row in the AI call log
+(`ads_ai_calls`, feature `ask_scout`, tokens and £ over every round) and one in `ask_scout_history` (the newest 20 kept; migration
+20261020000200). Under each answer: tokens in / out, £, lookups, time. On Today it's the right-hand panel at 1280 px and wider; narrower,
+the header's Ask Scout button opens it in a sheet; ⌘K "Ask Scout…" from anywhere (a question typed there is asked straight away).
+Checked on real data, 20 Oct: three questions at £0.025–£0.033 each. Screenshots: `docs/ui-audit/after/4a/` (gitignored).
+To do: phase 4b (the candidate detail page as tabs, a pipeline board, the Private label Launch flow into Ads Launch), phase 4c (one
+shared results table for Run detail / Brand detail / Products) and phase 5 (the remaining polish, including the extension's
+PASS/WARN/FAIL badges in the new verdict words and the Products page's length on phones).
 
 ## Workspaces
 
@@ -344,6 +357,13 @@ StockPilot data is imported (3 items). Ads days of cover and the stock guard cou
 6. **General: data backup workflow** (only the schema is backed up today, to `supabase/schema.sql`; data relies on Supabase's own backups).
 
 ## Known rough edges
+
+- Next steps: "Add costs" opens Stock → Purchases, not the purchase itself (the page has no per-purchase link yet). Keepa's low-token step
+  comes back each day it's still low (its condition has no change to wait for). Ad spend in the key numbers reads daily campaign
+  rows only; with range reports alone it shows the date the data stops.
+- Ask Scout's £ uses the AI price table's Sonnet 5.5 row ($3 / $15 per million tokens); Anthropic now lists Sonnet 5.5 at $2 / $10, so the
+  costs shown are about a third high until the prices in Ads → Rules → Ad settings are updated. A lead's "contacted" status is the only
+  sign of no reply: the app doesn't read messages.
 
 - **Extension 0.5.6** fixes what it could put in chrome://extensions → Errors (an uncaught "Amazon took over 30 s to load" when a rank-check tab was closed, uncaught background errors, unchecked `lastError` in the popup, the reviews parser's warning on product pages, whose new `reviewTitle`/`reviewText` markup it couldn't read). Checked in a scratch Chromium with the shipped and fixed copies; old entries stay listed until **Clear all**.
 - **Ads bulk sheets: the first launch upload accepted after two fixes**: the first real upload attempt (the B0HM8FBX3T launch sheet, 18 Oct 2026) was rejected as a whole because the file carried the export's "Sheet3" version sheet ("the first three column headers must be Product, Entity then Operation"); the other 50 rows were only "not processed" because of it. The second attempt was rejected for "campaign name has invalid characters": the names used an en dash ("B0HM8FBX3T Auto – 2026-10-19"), and the bidding strategy was the export's "Dynamic bids – down only". Both were fixed the same day: every upload (launch and proposals) is the "Sponsored Products Campaigns" sheet alone; launch names use a plain hyphen; strategies are written as the upload takes them ("Dynamic bids - down only", mapped from the export's en-dash spelling) and placements in the upload's casing ("Placement Top"); and a guard refuses to write a batch with any non-ASCII character in a name, temporary ID or fixed-value column (keyword text is exempt). Tests check each workbook's sheets, their first three headers, and the guard. **Accepted**: a copy of batch "2026-10-18 #1" with exactly those fixes, applied by hand, was uploaded on 18 Oct 2026 at 01:58: Success, 50/50 rows processed, 0 errors. The batch is marked uploaded. Its campaigns are B0HM8FBX3T Auto - 2026-10-19 (A00416231CTWH2NB1JO6R), Broad - 2026-10-19 (A004190334LW4B2GMPN3J) and Exact - 2026-10-19 (A00417791L0MY51SPNGKF); its launch batch and plan carry the same hyphenated names, so the next bulk export's import matches them. Confirmed accepted by Amazon: "Placement Top" and "Dynamic bids - down only". Not yet through an upload: "Placement Rest Of Search", "Product Page" and "Amazon Business" (Amazon's documented casing), "Dynamic bids - up and down", and Update rows (a proposals batch). Amazon's error report is kept in `docs/samples/ads/bulk-error-report.xlsx` (format in the `.md` beside it). Batch "2026-10-02 #1" (7 proposals) waits to be uploaded or discarded.

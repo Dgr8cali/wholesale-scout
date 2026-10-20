@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { createContext, Fragment, useContext, useEffect, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import { CommandPaletteButton, CommandPaletteProvider } from "@/components/CommandPalette";
 import { Logo } from "@/components/Logo";
+import { AskScoutProvider } from "@/components/today/AskScout";
 import { NAV_ICON } from "@/components/navIcons";
 import { SHARED_NAV, WORKSPACES, type NavItem, type Workspace } from "@/lib/workspaces";
 import { CrumbsProvider, useCrumbs, useHasPageHeader } from "@/components/Crumbs";
@@ -203,6 +204,7 @@ export function AppShell({ defaultOpen, qogita, children }: { defaultOpen: boole
     <QogitaCartProvider enabled={qogita}>
     <CrumbsProvider>
     <HelpProvider>
+    <AskScoutProvider>
     <CommandPaletteProvider>
       <SidebarProvider defaultOpen={defaultOpen} style={{ "--sidebar-width": "15rem", "--sidebar-width-icon": "4rem" } as CSSProperties}>
         <AppSidebar />
@@ -224,6 +226,7 @@ export function AppShell({ defaultOpen, qogita, children }: { defaultOpen: boole
         </SidebarInset>
       </SidebarProvider>
     </CommandPaletteProvider>
+    </AskScoutProvider>
     </HelpProvider>
     </CrumbsProvider>
     </QogitaCartProvider>

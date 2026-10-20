@@ -1,9 +1,10 @@
 "use client";
 
-import { FactoryIcon, FileUpIcon, FlaskConicalIcon, PackageIcon, PlusIcon, ScanSearchIcon, SearchIcon, TruckIcon, UploadIcon } from "lucide-react";
+import { FactoryIcon, FileUpIcon, FlaskConicalIcon, MessageCircleQuestionIcon, PackageIcon, PlusIcon, ScanSearchIcon, SearchIcon, TruckIcon, UploadIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { NAV_ICON } from "@/components/navIcons";
+import { useAskScout } from "@/components/today/AskScout";
 import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandShortcut } from "@/components/ui/command";
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar";
 import { asinFromUrl } from "@/lib/check/parse";
@@ -44,6 +45,7 @@ const asinIn = (q: string) => {
  */
 export function CommandPaletteProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
+  const askScout = useAskScout();
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const [found, setFound] = useState<{ q: string; data: Found } | null>(null);
@@ -90,6 +92,10 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
         <CommandList>
           <CommandEmpty>{s.length >= 2 && !data ? "Searching…" : "Nothing found."}</CommandEmpty>
           <CommandGroup heading="Quick actions">
+            {/* Always listed (its value carries the query): a question typed here is asked straight away. */}
+            <CommandItem value={`ask scout ${s}`} keywords={["ask", "scout", "question", "ai"]} onSelect={() => { setOpen(false); setQ(""); setFound(null); askScout.open(s.length > 3 && !asin ? s : undefined); }}>
+              <MessageCircleQuestionIcon /> {s.length > 3 && !asin ? <>Ask Scout: <span className="truncate">{s}</span></> : "Ask Scout…"}
+            </CommandItem>
             {asin && <CommandItem value={`open product ${asin}`} onSelect={() => go(`/products/${asin}`)}><PackageIcon /> Open product <span className="num">{asin}</span></CommandItem>}
             <CommandItem value={`check an asin ${asin ?? ""}`} keywords={["check", "asin", "screen"]} onSelect={() => go(asin ? `/new-run?tab=check&asins=${asin}` : "/new-run?tab=check")}>
               <ScanSearchIcon /> Check an ASIN{asin && <span className="num text-muted-foreground">{asin}</span>}

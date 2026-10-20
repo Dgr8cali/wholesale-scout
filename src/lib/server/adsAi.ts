@@ -50,6 +50,8 @@ type MessagesClient = { messages: { create: (body: Anthropic.MessageCreateParams
 let testClient: MessagesClient | null = null;
 /** Tests swap the API for a fake. */
 export function __setAnthropicForTests(c: MessagesClient | null) { testClient = c; }
+/** The Anthropic client every AI feature uses (Ask Scout runs its own tool loop on it). */
+export function aiClient(): MessagesClient { return client(); }
 function client(): MessagesClient {
   if (testClient) return testClient;
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -58,7 +60,7 @@ function client(): MessagesClient {
 }
 
 /** What a call was for: the Ads features, and Private label's review summary. */
-export type AiFeature = "explain" | "review" | "targets" | "pl_reviews" | "pl_listing";
+export type AiFeature = "explain" | "review" | "targets" | "pl_reviews" | "pl_listing" | "ask_scout";
 
 export interface AiRun<T> {
   result: T; cached: boolean; model: string; at: string; costGbp: number; costUsd: number;
