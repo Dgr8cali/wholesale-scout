@@ -1,5 +1,6 @@
 "use client";
 
+import { DataTable } from "@/components/ui/data-table";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useDialogs } from "@/components/Dialogs";
@@ -40,19 +41,12 @@ export function CalibrationPanel({ nonce = 0 }: { nonce?: number }) {
         </span>
       </div>
       {c.eligible > 0 && (
-        <table className="w-full max-w-2xl text-sm">
-          <thead className="text-xs text-muted-foreground"><tr><th className="text-left font-normal">Figure</th><th className="text-right font-normal">Median off</th><th className="text-right font-normal">Middle half</th><th className="text-right font-normal">Purchases</th></tr></thead>
-          <tbody>
-            {rows.map(([label, m]) => (
-              <tr key={label} className="border-t border-divider">
-                <td className="py-1">{label}</td>
-                <td className="num text-right">{off(m)}</td>
-                <td className="num text-right text-xs text-muted-foreground">{range(m)}</td>
-                <td className="num text-right">{m.n}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <DataTable dense className="max-w-2xl" caption="Actual against predicted" rows={rows.map(([label, m]) => ({ label, m }))} getRowId={(r) => r.label} columns={[
+          { id: "figure", header: "Figure", cell: (r) => r.label },
+          { id: "off", header: "Median off", numeric: true, cell: (r) => off(r.m) },
+          { id: "middle", header: "Middle half", numeric: true, cell: (r) => <span className="text-xs text-muted-foreground">{range(r.m)}</span> },
+          { id: "n", header: "Purchases", numeric: true, cell: (r) => r.m.n },
+        ]} />
       )}
       <ul className="list-disc space-y-0.5 pl-5 text-sm">{c.notes.map((n, i) => <li key={i}>{n}</li>)}</ul>
       <div className="flex flex-wrap items-center gap-2">

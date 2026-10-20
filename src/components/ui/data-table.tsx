@@ -63,7 +63,7 @@ const readSize = (key: string | undefined, fallback: number) => {
  * no rows, and on a phone each row as a card with its 3–4 key fields and "Details" for the rest.
  */
 export function DataTable<T extends RowData>({
-  rows, columns, getRowId, pageSize = 50, paged = true, storageKey, initialSort, empty, onRowClick, rowClassName, rowAttrs, caption, className,
+  rows, columns, getRowId, pageSize = 50, paged = true, storageKey, initialSort, empty, onRowClick, rowClassName, rowAttrs, caption, className, dense = false,
 }: {
   rows: T[]
   columns: DataColumn<T>[]
@@ -81,9 +81,15 @@ export function DataTable<T extends RowData>({
   /** For screen readers: what the table lists. */
   caption?: string
   className?: string
+  /**
+   * A small comparison table (a drawer's fee sources, a purchase's predicted vs actual): tighter
+   * cells, a table at every width (it scrolls sideways on a phone instead of becoming cards), no
+   * pager and no height limit.
+   */
+  dense?: boolean
 }) {
   const [sorting, setSorting] = useState<SortingState>(initialSort ? [{ id: initialSort.id, desc: !!initialSort.desc }] : [])
-  const [pagination, setPagination] = useState<PaginationState>(() => ({ pageIndex: 0, pageSize: paged ? readSize(storageKey, pageSize) : Number.MAX_SAFE_INTEGER }))
+  const [pagination, setPagination] = useState<PaginationState>(() => ({ pageIndex: 0, pageSize: paged && !dense ? readSize(storageKey, pageSize) : Number.MAX_SAFE_INTEGER }))
   const helper = useMemo(() => createColumnHelper<typeof features, T>(), [])
   const defs = useMemo(() => helper.columns(columns.map((c) => helper.accessor((r: T) => (c.sortValue ? c.sortValue(r) ?? undefined : null), {
     id: c.id,
@@ -126,7 +132,7 @@ export function DataTable<T extends RowData>({
   return (
     <div data-slot="data-table" className={cn("panel overflow-hidden", className)}>
       {/* Desktop and tablet: the table, scrolling inside the card with its header in view. */}
-      <div className="hidden max-h-[calc(100dvh-var(--app-header)-7rem)] overflow-auto sm:block">
+      <div className={dense ? "overflow-x-auto" : "hidden max-h-[calc(100dvh-var(--app-header)-7rem)] overflow-auto sm:block"}>
         <table className="w-full border-collapse text-sm">
           {caption && <caption className="sr-only">{caption}</caption>}
           <thead>
@@ -136,7 +142,7 @@ export function DataTable<T extends RowData>({
                 const dir = h.column.getIsSorted()
                 return (
                   <th key={h.id} scope="col" aria-sort={dir === "asc" ? "ascending" : dir === "desc" ? "descending" : undefined}
-                    className={cn("sticky top-0 z-10 border-b border-border bg-card px-3 py-2.5 text-left text-xs font-semibold tracking-[0.06em] whitespace-nowrap text-muted-foreground uppercase", c.numeric && "text-right", c.pinEnd && PIN_END, c.pinEnd && "z-20", c.headerClassName)}>
+                    className={cn("sticky top-0 z-10 border-b border-border bg-card text-left", dense ? "px-2 py-1.5" : "px-3 py-2.5", "text-xs font-semibold tracking-[0.06em] whitespace-nowrap text-muted-foreground uppercase", c.numeric && "text-right", c.pinEnd && PIN_END, c.pinEnd && "z-20", c.headerClassName)}>
                     {h.column.getCanSort() ? (
                       <button type="button" onClick={h.column.getToggleSortingHandler()} className={cn("inline-flex cursor-pointer items-center gap-1 uppercase hover:text-foreground", c.numeric && "flex-row-reverse")}>
                         {c.header}
@@ -152,7 +158,7 @@ export function DataTable<T extends RowData>({
             {shown.map((r) => (
               <tr key={r.id} {...(rowAttrs?.(r.original) ?? {})} onClick={onRowClick ? () => onRowClick(r.original) : undefined}
                 className={cn("border-b border-divider last:border-b-0 hover:bg-subtle/60", onRowClick && "cursor-pointer", rowClassName?.(r.original))}>
-                {columns.map((c) => <td key={c.id} className={cn("px-3 py-2.5 align-middle", c.numeric && "num text-right", c.pinEnd && PIN_END, c.className)}>{c.cell(r.original)}</td>)}
+                {columns.map((c) => <td key={c.id} className={cn(dense ? "px-2 py-1.5" : "px-3 py-2.5", "align-middle", c.numeric && "num text-right", c.pinEnd && PIN_END, c.className)}>{c.cell(r.original)}</td>)}
               </tr>
             ))}
           </tbody>
@@ -160,11 +166,11 @@ export function DataTable<T extends RowData>({
       </div>
 
       {/* Phone: one card per row, its key fields, and the rest under Details. */}
-      <ul className="divide-y divide-divider sm:hidden" aria-label={caption}>
+      {!dense && <ul className="divide-y divide-divider sm:hidden" aria-label={caption}>
         {shown.map((r) => <MobileRow key={r.id} row={r.original} title={titleCol} keys={keyCols} details={detailCols} onClick={onRowClick} attrs={rowAttrs?.(r.original)} />)}
-      </ul>
+      </ul>}
 
-      {paged && total > PAGE_SIZES[0] && (
+      {paged && !dense && total > PAGE_SIZES[0] && (
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-3 py-2 text-meta text-muted-foreground">
           <span className="num">{from.toLocaleString("en-GB")}–{to.toLocaleString("en-GB")} of {total.toLocaleString("en-GB")}</span>
           <div className="flex items-center gap-2">

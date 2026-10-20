@@ -1,5 +1,6 @@
 "use client";
 
+import { DataTable } from "@/components/ui/data-table";
 import type { Actuals } from "@/lib/actuals";
 import type { Purchase } from "@/lib/server/purchases";
 import { decisionLabel, PRODUCT_DECISION } from "@/components/ui/status-chip";
@@ -25,23 +26,18 @@ export function PurchaseOutcome({ p, actuals }: { p: Purchase; actuals: Actuals 
     { label: "Months to sell", predicted: f.monthsToSell != null ? String(f.monthsToSell) : "—", actual: actuals?.sellOutDays != null ? String(Math.round(((actuals.daysLive + actuals.sellOutDays) / 30) * 10) / 10) : actuals ? "—" : undefined },
   ];
   return (
-    <div className="mt-2 overflow-x-auto">
-      <table className="w-full text-xs">
-        <thead className="text-muted-foreground">
-          <tr><th className="py-1 text-left font-normal">
-            Predicted {new Date(f.capturedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })} · {f.decision ? decisionLabel(PRODUCT_DECISION, f.decision) : "—"} · {f.confidence ?? "?"} confidence{f.profile ? ` · ${f.profile}` : ""}
-          </th><th className="text-right font-normal">Predicted</th>{actuals && <><th className="pl-3 text-right font-normal">Actual</th><th className="pl-2 text-right font-normal" /></>}</tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.label} className="border-t border-divider">
-              <td className="py-1">{r.label}</td>
-              <td className="num text-right">{r.predicted}</td>
-              {actuals && <><td className="num pl-3 text-right">{r.actual}</td><td className="pl-2 text-right">{r.diff}</td></>}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="mt-2 space-y-1.5">
+      <p className="text-xs text-muted-foreground">
+        Predicted {new Date(f.capturedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })} · {f.decision ? decisionLabel(PRODUCT_DECISION, f.decision) : "—"} · {f.confidence ?? "?"} confidence{f.profile ? ` · ${f.profile}` : ""}
+      </p>
+      <DataTable dense caption="Predicted against actual" rows={rows} getRowId={(r) => r.label} columns={[
+        { id: "figure", header: "Figure", cell: (r) => r.label },
+        { id: "predicted", header: "Predicted", numeric: true, cell: (r) => r.predicted },
+        ...(actuals ? [
+          { id: "actual", header: "Actual", numeric: true, cell: (r: (typeof rows)[number]) => r.actual },
+          { id: "diff", header: <span className="sr-only">Difference</span>, numeric: true, cell: (r: (typeof rows)[number]) => r.diff },
+        ] : []),
+      ]} />
       {actuals ? (
         <p className="mt-1 text-xs text-muted-foreground">
           {actuals.unitsSold} sold in {actuals.daysLive} days · {gbp(actuals.revenue)} revenue · profit to date {gbp(actuals.profitToDate)}

@@ -197,8 +197,14 @@ are matched against each product's latest result, reading down the list in chunk
 (`planProductQuery()`, tested), so a combined filter takes up to ~4 s. Bought is the page's own toggle. Row and bulk actions: Add to
 Shortlist, Re-screen (via `/api/results/rescreen`), Export selected (xlsx, the run export's format), the selection kept across
 pages. ⌘K has "Buy products" (`/products?verdict=buy`).
-To do: phase 4c's comparison tables, then phase 5 (the remaining polish, including the extension's PASS/WARN/FAIL badges in the new verdict
-words).
+The small comparison tables have the DataTable look: `DataTable dense` (tighter cells, a table at every width that scrolls sideways
+instead of becoming cards, no pager or height limit) for the drawer's and product page's Fees by source and Qogita offers (sortable,
+cheapest first; the sort is no longer remembered), a purchase's predicted vs actual and Stock → Purchases' accuracy table.
+Heights at 1440 / 390, before → after: Run detail 1,296 → 1,296 / 1,464 → 3,383 (on a phone the rows are 20 cards a page instead of
+a table scrolled in its own box); Shortlist → Products 1,004 → 1,009 / 1,028 → 1,196; Brand detail (Beter, 90 products) 1,570 → 1,838
+/ 6,172 → 4,463 (no longer 1px wider than the screen); Products 1,063 → 1,271 / 9,464 → 2,718. Screenshots: `docs/ui-audit/after/4c/`
+(gitignored).
+Phase 4c done. Next: phase 5 (the remaining polish, including the extension's PASS/WARN/FAIL badges in the new verdict words).
 
 ## Workspaces
 

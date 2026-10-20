@@ -10,7 +10,7 @@ import { approvalRequestUrl, RestrictionLink } from "@/lib/ui/RestrictionLink";
 import { applyLinks } from "@/lib/spapi/parse";
 import { ApplyKit } from "@/components/documents/ApplyKit";
 import { gbp } from "@/lib/ui/client";
-import { SortTableHead, useSortable } from "@/components/SortableTable";
+import { DataTable, type DataColumn } from "@/components/ui/data-table";
 import { cn } from "@/lib/utils";
 import { lastSeenLabel } from "@/lib/screening/dormant";
 import { dormantOf } from "@/lib/ui/resultRows";
@@ -41,26 +41,20 @@ const GateChip = ({ status }: { status: string }) => (status === "pass" || statu
 
 /** Referral and FBA fee from each source, ex-VAT and ex-DSF, at the scoring price. */
 function FeeCompare({ c, dimsSource }: { c: NonNullable<NonNullable<Result["fees"]>["compare"]>; dimsSource?: string | null }) {
-  const rows: [string, { referral: number | null; fba: number | null } | null][] = [
-    ["Amazon (SP-API)", c.amazon],
-    ["Keepa", c.keepa],
-    [`Rate card${c.rateCard.tier ? ` (${c.rateCard.tier})` : ""}`, c.rateCard],
+  const rows: { source: string; v: { referral: number | null; fba: number | null } | null }[] = [
+    { source: "Amazon (SP-API)", v: c.amazon },
+    { source: "Keepa", v: c.keepa },
+    { source: `Rate card${c.rateCard.tier ? ` (${c.rateCard.tier})` : ""}`, v: c.rateCard },
   ];
+  const fee = (n: number | null | undefined) => (n != null ? gbp(n) : <span className="text-muted-foreground">—</span>);
   return (
     <div className="mt-3">
       <p className="mb-1 eyebrow">Fees by source (ex-VAT)</p>
-      <table className="num w-full text-xs">
-        <thead className="text-muted-foreground"><tr><th className="text-left font-normal">Source</th><th className="pl-3 text-right font-normal">Referral</th><th className="pl-3 text-right font-normal">FBA</th></tr></thead>
-        <tbody>
-          {rows.map(([label, v]) => (
-            <tr key={label}>
-              <td className="pr-2">{label}</td>
-              <td className="pl-3 text-right">{v?.referral != null ? gbp(v.referral) : <span className="text-muted-foreground">—</span>}</td>
-              <td className="pl-3 text-right">{v?.fba != null ? gbp(v.fba) : <span className="text-muted-foreground">—</span>}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <DataTable dense rows={rows} getRowId={(r) => r.source} caption="Fees by source" columns={[
+        { id: "source", header: "Source", cell: (r) => r.source },
+        { id: "referral", header: "Referral", numeric: true, cell: (r) => fee(r.v?.referral) },
+        { id: "fba", header: "FBA", numeric: true, cell: (r) => fee(r.v?.fba) },
+      ]} />
       {dimsSource === "keepa" && <p className="mt-1 text-xs text-muted-foreground">Size from Keepa (no catalog dimensions).</p>}
     </div>
   );
@@ -327,19 +321,27 @@ function SellerGap({ r }: { r: Result }) {
 function QogitaOfferList({ q, stacked }: { q: QogitaOffers; stacked: boolean }) {
   const cur = currencySymbol(q.currency);
   const m = (n: number) => `${cur}${n.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  // Cheapest first until a column is clicked.
-  const sorting = useSortable("wholesale.qogitaOffers", q.offers, {
-    supplier: { value: (o) => o.seller, kind: "text" },
-    price: { value: (o) => o.basePrice, kind: "number" },
-    gbp: { value: (o) => o.basePrice * q.fxRate, kind: "number" },
-    mov: { value: (o) => o.baseMov, kind: "number" },
-    tiers: { value: (o) => o.tiers.length, kind: "number" },
-    case: { value: (o) => o.unit, kind: "number" },
-    stock: { value: (o) => o.inventory, kind: "number" },
-    delivery: { value: (o) => o.deliveryWeeks, kind: "number" },
-  }, { key: "price", dir: "asc" });
-  const sorted = sorting.rows;
-  const th = (key: string, label: string, numeric = true) => <SortTableHead {...sorting.th(key)} numeric={numeric} className="h-auto py-1.5 text-xs">{label}</SortTableHead>;
+  type Offer = QogitaOffers["offers"][number];
+  const columns: DataColumn<Offer>[] = [
+    {
+      id: "supplier", header: "Supplier", sortValue: (o) => o.seller, cell: (o) => (
+        <span className="whitespace-nowrap">
+          <span className={cn(o.qid === q.chosen && "font-semibold")}>{o.seller}</span>
+          {o.qid === q.chosen && <StatusChip tone="good" icon={false} className="ml-1.5 h-5 px-2">fits the budget</StatusChip>}
+        </span>
+      ),
+    },
+    { id: "price", header: "Price / piece", numeric: true, sortValue: (o) => o.basePrice, cell: (o) => m(o.basePrice) },
+    { id: "gbp", header: "≈ GBP", numeric: true, sortValue: (o) => o.basePrice * q.fxRate, cell: (o) => <span className="text-muted-foreground">{gbp(o.basePrice * q.fxRate)}</span> },
+    { id: "mov", header: "MOV", numeric: true, sortValue: (o) => o.baseMov, cell: (o) => m(o.baseMov) },
+    ...(stacked ? [] : [{
+      id: "tiers", header: "Tiers", numeric: true, sortValue: (o: Offer) => o.tiers.length,
+      cell: (o: Offer) => <span className="text-muted-foreground" title={o.tiers.map((t) => `${m(t.price)} from ${m(t.mov)}`).join("\n")}>{o.tiers.length > 1 ? `${o.tiers.length} (to ${m(Math.min(...o.tiers.map((t) => t.price)))})` : "—"}</span>,
+    }]),
+    { id: "case", header: "Case", numeric: true, sortValue: (o) => o.unit, cell: (o) => o.unit },
+    { id: "stock", header: "In stock", numeric: true, sortValue: (o) => o.inventory, cell: (o) => o.inventory.toLocaleString("en-GB") },
+    { id: "delivery", header: "Delivery", numeric: true, sortValue: (o) => o.deliveryWeeks, cell: (o) => (o.deliveryWeeks != null ? `${o.deliveryWeeks} wk` : "—") },
+  ];
   return (
     <div className="space-y-1.5">
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -348,43 +350,10 @@ function QogitaOfferList({ q, stacked }: { q: QogitaOffers; stacked: boolean }) 
           {q.reason}{q.excluded ? ` · ${q.excluded} left out by the ${q.movLimit != null ? `${m(q.movLimit)} MOV` : "MOV or delivery"} limit` : ""} · checked {new Date(q.fetchedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
         </p>
       </div>
-      {!sorted.length ? <p className="text-xs text-muted-foreground">No supplier offers within the limits.</p> : (
-        <div className="overflow-x-auto rounded-md border bg-card">
-          <table className="num w-full text-xs">
-            <thead className="text-left text-muted-foreground">
-              <tr className="border-b">
-                {th("supplier", "Supplier", false)}
-                {th("price", "Price / piece")}
-                {th("gbp", "≈ GBP")}
-                {th("mov", "MOV")}
-                {!stacked && th("tiers", "Tiers")}
-                {th("case", "Case")}
-                {th("stock", "In stock")}
-                {th("delivery", "Delivery")}
-              </tr>
-            </thead>
-            <tbody>
-              {sorted.map((o) => {
-                const chosen = o.qid === q.chosen;
-                return (
-                  <tr key={o.qid} className={cn("border-b last:border-0", chosen && "bg-success-soft")}>
-                    <td className="px-2 py-1.5 font-sans">
-                      <span className={cn(chosen && "font-semibold")}>{o.seller}</span>
-                      {chosen && <span className="ml-1.5 rounded bg-success px-1 py-px text-xs font-semibold text-white">fits the budget</span>}
-                    </td>
-                    <td className="px-2 py-1.5 text-right">{m(o.basePrice)}</td>
-                    <td className="px-2 py-1.5 text-right text-muted-foreground">{gbp(o.basePrice * q.fxRate)}</td>
-                    <td className="px-2 py-1.5 text-right">{m(o.baseMov)}</td>
-                    {!stacked && <td className="px-2 py-1.5 text-right text-muted-foreground" title={o.tiers.map((t) => `${m(t.price)} from ${m(t.mov)}`).join("\n")}>{o.tiers.length > 1 ? `${o.tiers.length} (to ${m(Math.min(...o.tiers.map((t) => t.price)))})` : "—"}</td>}
-                    <td className="px-2 py-1.5 text-right">{o.unit}</td>
-                    <td className="px-2 py-1.5 text-right">{o.inventory.toLocaleString("en-GB")}</td>
-                    <td className="px-2 py-1.5 text-right">{o.deliveryWeeks != null ? `${o.deliveryWeeks} wk` : "—"}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+      {!q.offers.length ? <p className="text-xs text-muted-foreground">No supplier offers within the limits.</p> : (
+        // Cheapest first until a column is clicked.
+        <DataTable dense rows={q.offers} getRowId={(o) => o.qid} caption="Qogita offers" columns={columns} initialSort={{ id: "price" }}
+          rowClassName={(o) => (o.qid === q.chosen ? "bg-success-soft hover:bg-success-soft" : undefined)} />
       )}
     </div>
   );
