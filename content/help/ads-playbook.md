@@ -50,7 +50,7 @@ The four campaigns (three for the 2-pack):
 
 ## 3. The weekly loop
 
-**Import.** In Amazon Ads, download the **bulk export** for the last 60 days (with search term data) and, if you can, the **daily Campaign report** for the last 30; drop both on [Imports](/ads/imports). See [Ads: importing reports](/help/howto/ads-importing-reports).
+**Import.** In Amazon Ads, download the **bulk export** for the last 60 days (with search term data) and, if you can, the **daily Campaign report** for the last 30; drop both on **Import** on the [Ads Dashboard](/ads/dashboard?import=1). See [Ads: importing reports](/help/howto/ads-importing-reports).
 
 **Read three things on the [Dashboard](/ads/dashboard)**, in this order:
 

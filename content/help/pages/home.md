@@ -1,54 +1,45 @@
 ---
-title: Home
-summary: Recent runs, what needs your attention, and how many Keepa tokens you have and have spent today.
-synonyms: [dashboard, overview, start page, keepa balance, token spend]
+title: Today
+summary: Your next steps across every workspace, the key numbers, and Ask Scout for questions about your own data.
+synonyms: [home, dashboard, overview, start page, next steps, to do, keepa balance, ask scout]
 route: /
 order: 1
 ---
-Home is the first page you see, in every workspace: a row of tiles for each workspace (Wholesale, Private label, Ads), your latest runs, Keepa's balance and today's spend, and short lists of things that need attention. It changes nothing by itself; every card links to the page where you act.
+*Where: **Home → Today**, the first item in the sidebar (and the logo).*
 
-## Top of the page
+Today is the first page you see. It lists what to do next, in order, across Wholesale, Private label, Ads and Stock, with the button that does each one. It changes nothing by itself.
 
-**Upload price list** takes you to [Upload](/help/pages/upload) to screen a new supplier sheet.
+## The header
 
-## Wholesale: the five tiles
+The date, and **New run** (the [New run](/help/pages/new-run) page). On a narrower screen **Ask Scout** sits here too.
 
-| Tile | What it shows | Click to |
-| --- | --- | --- |
-| **Keepa tokens available** | Keepa's current balance, with "refills N/min" underneath. Shows "Keepa not configured" when there's no Keepa key, or "Keepa didn't answer" when the balance couldn't be read. Refreshes every minute. | (not a link) |
-| **Keepa tokens spent today** | Tokens your runs spent today (UK day), with a rough "≈ N products at 3 tokens each" and a bar for each of the last 7 days, today highlighted. Hover a bar for that day's figure. | (not a link) |
-| **Watching: now a buy** | Watched products that passed, met their condition or found a supplier in the last 14 days. "nothing new in the last 14 days" when there are none. | [Watchlist](/help/pages/watchlist) |
-| **Favourites needing refresh** | How many favourites were last screened over 7 days ago, "of N favourites". | [Favourites](/help/pages/favourites) |
-| **Brands awaiting approval** | Brands you're not yet approved for that have products passing, and how many passing products they hold back. | [Brands](/help/pages/brands) |
+## Next steps
 
-A tile that couldn't load shows "Couldn't load:" and the reason; the rest of the page still works. See [Keepa tokens](/help/concepts/keepa-tokens) for how tokens are spent.
+Numbered cards, the most important first (then the oldest). Each card shows its workspace and roughly how long it takes ("ADS · 5 min"), what to do, why (with the numbers behind it), and:
 
-## Private label
+| Control | What it does |
+| --- | --- |
+| The main button | Opens the page that does it, on the right tab: for example **Add costs** opens the purchase's edit on [Stock → Purchases](/help/pages/tracker), **Review proposals** opens Ads → Proposals. |
+| **Show me how** | The Help article for that job, when there is one. |
+| **Later** | Hides the step for 24 hours. |
+| **Done** | Hides it until its condition changes (a new import, a new proposal, another order missing a cost). A toast offers **Undo**. |
 
-- **Candidates by verdict**: how many candidates you have, split into **Order samples**, **Check**, **Drop** and **Not scored**. Opens [Candidates](/help/pages/private-label).
-- **Last Niche Hunt**: when it ran, whether it's done, and what it cost. Opens [Niche Hunt](/help/concepts/niche-hunt).
-- **Private label Keepa tokens this month**: what candidates' Keepa refreshes and Niche Hunts have spent this calendar month (UK days).
+The top five show; **Show all (n)** lists the rest. When nothing's left it says **You're all caught up**, with the next dated thing (a launch milestone) if there is one.
 
-## Ads
+What makes a step:
 
-One tile, "No ad data yet — import a report", until the [Ads](/help/pages/ads) workspace has data.
+- **System**: the nightly cron failed or didn't run, Keepa under 100 tokens, SP-API not set up, failing or not synced for 48 hours.
+- **Ads**: no bulk file imported since a launch started (or the last one is over 7 days old); open proposals; a launch's week-1 review (day 7), bid changes (day 14), lower target (day 28) and steady (day 49).
+- **Stock**: open orders with no supplier price or landed cost (one step for all of them, oldest first: its button opens the oldest one's edit); items due or soon due a reorder.
+- **Private label**: each active candidate's next action (the next launch step, order samples on a pass, fix or drop a failed gate, or the first gate with no answers); Alibaba leads scoring 60+ not yet messaged; messaged suppliers with no quote after 7 days.
+- **Wholesale**: brand approvals applied for over 7 days ago; the best brand to apply for with a Buy product; Shortlist items not screened for over a week.
 
-## Recent runs
+The steps are worked out from your data at most once a minute; anything you change in the app shows straight away.
 
-Your six most recent runs, newest first. Each shows its name (click to open the run), when it started, and a bar split into **Buy**, **Check** and **Skip** (plus errors and rows still "to screen" when there are any). A run still screening shows "Screening ·" with its time left, such as "about 12 min left" or "waiting for Keepa tokens, resumes at 14:32". While any run is screening, the list refreshes every 15 seconds.
+## Key numbers
 
-**All runs** opens [Runs](/help/pages/runs). With no runs yet it says "No runs yet. Upload a price list to screen it against Amazon UK."
+One row under the steps: **Ad spend, 7 days** (with ACoS), **Proposals**, **Candidates** in progress, **To reorder**, **Keepa tokens** and **Brands to approve** (with a Buy product). Each opens its page.
 
-## Qogita overnight
+## Ask Scout
 
-Only shown when a saved Qogita pull was re-pulled overnight (within the last 36 hours). Each saved pull shows what the night's pull found, for example "4 new, 2 re-priced, 310 unchanged", or "Nothing new or re-priced (316 unchanged)", or the error if the pull failed. Only new or re-priced products are screened overnight. The badge on the right ("3 new passes") opens that night's run. **Pulls** opens [Qogita](/help/pages/qogita).
-
-## Favourites needing refresh
-
-Up to five favourites last screened over a week ago, with when each was last screened ("never screened" if it has no result), then "and N more". "All favourites are up to date." when none are old. **Favourites** opens [Favourites](/help/pages/favourites), where you can re-screen them.
-
-## Brands to chase
-
-The five most wholesale-friendly brands you aren't approved for yet (and that aren't blocked) with at least one product that passes or warns on your default profile. Each line shows the brand (click for its page), how many ASINs pass and warn, average sellers and Amazon's share of the Buy Box where known, its approval status (**Open**, **Approval needed**, **Applied**, **Unknown**) and its wholesale-friendly score. **Brands** opens [Brands](/help/pages/brands); see [Apply for brand approval](/help/howto/apply-for-brand-approval).
-
-While the brand map is first being built this card says "Building the brand map…".
+Questions about your own data ("Which suppliers haven't replied?"), answered from the app's records with the figures and links behind the answer. It's the right-hand panel on a wide screen; narrower, the header's **Ask Scout** opens it, and ⌘K → **Ask Scout…** works from any page. Under each answer: the tokens used, the cost, how many lookups and how long it took. It only reads; it never changes anything.

@@ -9,7 +9,7 @@ When you can buy a product cheaper than the sheet says (a cash-and-carry price, 
 
 ## Set a cost for one row
 
-1. Open a row's details on a run, on [Favourites](/help/pages/favourites) or on the [product page](/help/pages/products).
+1. Open a row's details (click the row; on a phone, **Details**) on a run, on Shortlist → [Products](/help/pages/favourites) or on the [product page](/help/pages/products).
 2. Under the per-unit money, click **Set your cost**.
 3. Choose what you're entering:
    - **Landed cost per unit**: everything to get one unit to Amazon (goods, VAT you can't reclaim, duty, prep and inbound).
@@ -18,7 +18,7 @@ When you can buy a product cheaper than the sheet says (a cash-and-carry price, 
 
 ## Set or clear it for many rows
 
-Tick rows on a run or on Favourites. In the bulk bar, **Set cost…** opens the same form and applies one cost to every selected product. **Clear cost** removes the override from every selected product.
+Tick rows on a run or on Shortlist → Products. In the bulk bar, **Set cost…** opens the same form and applies one cost to every selected product. **Clear cost** removes the override from every selected product.
 
 ## What happens
 

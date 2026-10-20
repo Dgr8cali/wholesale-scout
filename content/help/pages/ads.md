@@ -22,4 +22,4 @@ order: 20
 
 **Ads → Rules → Ad settings** holds the default target ACoS, 30%. Each product can have its own, for launch and steady state, on the dashboard. **Break-even ACoS** is a product's margin before ads ÷ its price: spend more than that per ad sale and each ad sale loses money. Keep the target below it.
 
-On Home, the Ads row shows the spend, the overall ACoS, and how many search terms are wasting spend.
+On [Today](/help/pages/home), **Ad spend, 7 days** shows the spend with its ACoS, and **Proposals** how many wait for review; Ads steps say when a bulk file is due or a launch milestone comes up.

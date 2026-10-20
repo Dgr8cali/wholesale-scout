@@ -65,7 +65,7 @@ Every pull is listed on the right by name, with its filters in short ("Skin care
 
 ### Nightly re-pulls
 
-With **Re-pull nightly** on, the pull runs again every night (the job starts at 03:00 UTC and works through each pull not pulled in the last 20 hours). A nightly pull screens only products that are new or whose price moved since the last pull; the rest are left alone. The run is named with "(nightly)". [Home](/help/pages/home) shows the night's results under **Qogita overnight**: how many were new, re-priced and unchanged, and how many new passes, with a link to the run.
+With **Re-pull nightly** on, the pull runs again every night (the job starts at 03:00 UTC and works through each pull not pulled in the last 20 hours). A nightly pull screens only products that are new or whose price moved since the last pull; the rest are left alone. The run is named with "(nightly)". Each night's pull is a run on [Runs](/help/pages/runs); if the nightly job fails or doesn't run, [Today](/help/pages/home) says so at the top.
 
 ## Supplier offers
 

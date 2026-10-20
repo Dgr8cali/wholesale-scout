@@ -5,7 +5,7 @@ synonyms: [chrome, browser extension, plugin, add-on, amazon panel, competitor s
 order: 13
 workspace: general
 ---
-The Chrome extension shows Wholesale Scout's verdict while you browse Amazon UK. A panel on each product page gives the verdict card. Search results get a small badge on each product. The panel can also read competitors' stock (only when you click) and look up the dangerous-goods classification in Seller Central. Everything it checks becomes a normal run in the app.
+The Chrome extension shows Wholesale Scout's verdict while you browse Amazon UK. A panel on each product page gives the verdict card. Search results get a small verdict chip on each product. The panel can also read competitors' stock (only when you click) and look up the dangerous-goods classification in Seller Central. Everything it checks becomes a normal run in the app.
 
 To install it, see [Set up the Chrome extension](/help/howto/set-up-the-extension).
 
@@ -36,11 +36,11 @@ With **Check product pages automatically** on, the panel checks the ASIN when th
 
 A check works like [Check ASINs](/help/pages/check): it creates a run in the app, which you can find on [Runs](/help/pages/runs). Your default profile is used. It can spend a few [Keepa tokens](/help/concepts/keepa-tokens). A check of the same ASIN and cost within the last **12 hours** is reused rather than screened again.
 
-While Keepa and gating are still running, the badge says **screening** with "pending: Keepa and gating still coming". The panel checks back every 5 seconds, for up to about 3 minutes, and fills in by itself.
+While Keepa and gating are still running, the chip says **Screening…** with "pending: Keepa and gating still coming". The panel checks back every 5 seconds, for up to about 3 minutes, and fills in by itself.
 
 ### The verdict card
 
-- **Verdict badge** (pass, warn or fail, in colour) and **Score**. See [Score](/help/concepts/score).
+- **Verdict** (**Buy**, **Check**, **Skip** or **Not scored**, a round chip in the app's colours with its icon, since extension 0.8.0) and **Score**. See [Score](/help/concepts/score).
 - The product title, then "checked 2 h ago · **Re-check**". Hover over the time for the exact date and time. **Re-check** screens it again now instead of reusing the check.
 
 | Field | What it shows |
@@ -54,7 +54,7 @@ While Keepa and gating are still running, the badge says **screening** with "pen
 | **Hurdle (sell at)** / **Max landed** | With a cost: the [hurdle price](/help/reference/glossary#hurdle-price), which is the sell price that clears your floors. Without a cost: the [max landed](/help/reference/glossary#max-landed) cost, which is the most it can cost landed. |
 | **Profit at £X** / **Profit** | The profit at your landed cost, or "needs a cost". |
 
-Under the grid is the why-line, the same one the app shows for the row.
+Under the grid is the why-line, the same one the app shows for the row, then **Gates (n/N pass)**: each gate with **Pass**, **Check**, **Fail** or **Not scored** (open by itself when one failed; hover a gate for its detail).
 
 ### Not fetched, and Fetch anyway
 
@@ -65,25 +65,25 @@ Some products fail a gate before any paid call is made, for example at [complian
 | Control | What it does |
 |---|---|
 | **Your landed cost, £ (optional)** | Type your landed cost per unit. Shortly after you stop typing, the card is checked again with that cost, so profit and the hurdle price fill in. A value that isn't a positive number shows "That isn't a cost." |
-| **☆ Star** | Stars the product in the app ("Starred"). See [Favourites](/help/pages/favourites). |
-| **Watch** | Puts it on the [Watchlist](/help/pages/watchlist) with the condition suggested from what blocked it ("On the watchlist"). |
-| **Open in app** | Opens the check's run in the app in a new tab. |
+| **☆ Star** | Stars the product in the app ("Starred"): it goes on your Shortlist. See [Shortlist](/help/pages/favourites). |
+| **Watch** | Puts it on Shortlist → [Watching](/help/pages/watchlist) with the condition suggested from what blocked it ("On the watchlist"). |
+| **Open in app** | Opens the product's page in the app in a new tab: every run, supplier and reading. |
 | **Re-check** | Shown while there's no finished check yet, or while it's pending. It screens again now. |
 
 **Star** and **Watch** need the product to have been checked first. Otherwise you'll see "Check this ASIN first".
 
-## Search result badges
+## Search result chips
 
-On Amazon search pages, each product gets a round badge at the top left of its image:
+On Amazon search pages, each product gets a round chip at the top left of its image:
 
-| Badge | Meaning | Click it to |
+| Chip | Meaning | Click it to |
 |---|---|---|
-| Green, amber or red, e.g. "PASS 78" | The latest verdict and score the app already has, from any run | Open that run in the app |
+| **Buy · 78**, **Check · 61**, **Skip** or **Not scored** (green, amber, red or grey, with an icon) | The latest verdict and score the app already has, from any run | Open that run in the app |
 | "…" | Still screening | Open the run |
-| Grey "?" | Not checked by Wholesale Scout | Check it now. This is a check run and spends a few Keepa tokens. The badge then updates. |
+| Grey "?" | Not checked by Wholesale Scout | Check it now. This is a check run and spends a few Keepa tokens. The chip then updates. |
 | "!" | The check failed | Hover over it to see why |
 
-The badges only show what the app already knows. Nothing is screened until you click a "?". They're fetched 20 at a time, and results that load later (more pages, new filters) get badges too.
+The chips only show what the app already knows. Nothing is screened until you click a "?". They're fetched 20 at a time, and results that load later (more pages, new filters) get chips too.
 
 ## Competitors' stock
 
@@ -145,7 +145,7 @@ On an amazon.co.uk reviews page (where **See all reviews** goes) or a product pa
 
 ## Alibaba suppliers (0.5.0)
 
-On an alibaba.com search results page, a panel counts the supplier listings; **Send suppliers to Private label** saves them as a candidate's supplier leads, scored against its targets. Send each results page you want: they add up. It reads only the page you're on. See [Private label: finding suppliers](/help/howto/pl-finding-suppliers).
+On an alibaba.com search results page, a panel counts the supplier listings; **Send suppliers to Private label** saves them as a candidate's supplier leads, scored against its targets. Send each results page you want: they add up. It reads only the page you're on. See [Private label: finding suppliers](/help/howto/pl-finding-suppliers). In each of these panels, **Open in the app** opens the candidate's page on the tab that holds what you sent: Gates (Gate 3) for a niche, Reviews, or Suppliers & quotes.
 
 ## Updating the extension
 

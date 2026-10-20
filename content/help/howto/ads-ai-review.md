@@ -24,7 +24,7 @@ Under a product's **Price, costs and target**, **Recommend** proposes a launch a
 
 ## The monthly review
 
-**Ads → Review** (also a tile on Home) reviews a month: pick it (last month by default) and click **Run review**. You get:
+**Ads → Review** (under More in the Ads group) reviews a month: pick it (last month by default) and click **Run review**. You get:
 
 - **Recommendations**: three, ranked by expected profit impact, each with an estimate of £ a month when the data supports one, and the rule that would make the change (a link to Ads → Rules) or "Manual action".
 - **Did last month's changes work?**: each bulk sheet batch you uploaded between the start of the previous month and the end of this one, comparing the 14 days before its upload with the 14 days after. A verdict needs the daily Campaign report with at least 10 days on each side; otherwise it says "too early" or "not measurable" and why.

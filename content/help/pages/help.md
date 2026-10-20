@@ -28,4 +28,4 @@ The **?** in the top bar opens the current page's article in a panel on the righ
 
 ## Gate names in a row's details
 
-In an expanded row (or the details drawer), each gate's name under **Gates** is a link: click it to open that gate's article in the panel. The article explains what the gate checks and how to read the line next to it.
+In a row's details (the panel a row click opens), each gate's name under **Gates** is a link: click it to open that gate's article in the panel. The article explains what the gate checks and how to read the line next to it.

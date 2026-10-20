@@ -135,7 +135,7 @@ The thresholds and cost assumptions (budget, VAT, digital services fee, inbound,
 
 ## What it costs
 
-Saving a candidate or clicking **Refresh from Keepa** fetches every ASIN without a snapshot under 7 days old. A snapshot taken for any candidate counts. Fetching costs about 3 tokens for the reference listing, which includes its Buy Box history, and 1 for each other ASIN, plus up to 1 each for the rating and review count. Ten ASINs come to roughly 20 tokens. The tokens are counted on the candidate and in Home's Keepa spend. See [Keepa tokens](/help/concepts/keepa-tokens). The snapshots also go into the wholesale history, so a later run can reuse them.
+Saving a candidate or clicking **Refresh from Keepa** fetches every ASIN without a snapshot under 7 days old. A snapshot taken for any candidate counts. Fetching costs about 3 tokens for the reference listing, which includes its Buy Box history, and 1 for each other ASIN, plus up to 1 each for the rating and review count. Ten ASINs come to roughly 20 tokens. The tokens are counted on the candidate and logged with the app's Keepa spend. See [Keepa tokens](/help/concepts/keepa-tokens). The snapshots also go into the wholesale history, so a later run can reuse them.
 
 ## Capturing Opportunity Explorer
 

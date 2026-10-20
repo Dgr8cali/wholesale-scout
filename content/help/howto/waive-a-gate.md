@@ -14,13 +14,13 @@ Use it when you know better than the gate, for example you already hold the pape
 
 ## Waive one product
 
-1. Open a run on the [Runs](/help/pages/runs) page (or [Favourites](/help/pages/favourites)) and open a row's details.
+1. Open a run on the [Runs](/help/pages/runs) page (or Shortlist → [Products](/help/pages/favourites)) and click a row to open its details beside the table.
 2. In the gates list, a failed or warning gate has a **Waive** link next to its why-line.
 3. Click **Waive**. A box appears: type a reason if you like (**Reason (optional)**, up to 300 characters), then press Enter or click **Waive**. **Cancel** backs out.
 
 On a run, that product's rows in the run are re-screened straight away. If the later gates need data that was never fetched (the row stopped early, before Keepa or Amazon were asked), the app fetches it in the background and says "… waived; fetching the data later gates need for this product." That can spend [Keepa tokens](/help/concepts/keepa-tokens).
 
-Wherever you waive it from (a run, Favourites or the product page), the product's rows in every other current run are re-scored straight away from stored data ("… waived; re-scored in every current run"). Brands, Suppliers and the order planner catch up a moment later.
+Wherever you waive it from (a run, the Shortlist or the product page), the product's rows in every other current run are re-scored straight away from stored data ("… waived; re-scored in every current run"). Brands, Suppliers and the order planner catch up a moment later.
 
 ## Waive many at once
 

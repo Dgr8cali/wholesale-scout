@@ -78,7 +78,7 @@ The status dots in the top bar show **Supabase**, **SP-API**, **Gating** and **K
 
 | Variable | What it's for |
 |---|---|
-| `RESEND_API_KEY` | Your Resend API key. With `ALERT_EMAIL_TO`, [watchlist](/help/pages/watchlist) alerts are emailed; without both, alerts stay on the Watchlist page. |
+| `RESEND_API_KEY` | Your Resend API key. With `ALERT_EMAIL_TO`, [watchlist](/help/pages/watchlist) alerts are emailed; without both, alerts stay on Shortlist → Watching. |
 | `ALERT_EMAIL_TO` | Where alerts go. Several addresses can be separated by commas. |
 | `ALERT_EMAIL_FROM` | Optional. The sender. Defaults to `Wholesale Scout <onboarding@resend.dev>`, which only delivers to your own Resend account's address until you verify a domain. |
 | `APP_URL` | Optional. The app's address used in email links. Falls back to `https://ws.dgr8cali.co.uk`. |

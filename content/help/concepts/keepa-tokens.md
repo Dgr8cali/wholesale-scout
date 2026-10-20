@@ -71,12 +71,12 @@ On the [Runs](/help/pages/runs) page, a run whose newest Keepa data is more than
 
 ### Top bar
 
-When Keepa is set up, the top bar shows **Keepa N tokens**: your live balance. It refreshes every minute and whenever you come back to the tab. Hover it for the refill rate and what a product costs, e.g. "Refills 20/min; a product costs 1 token for its history, 3 more for Buy Box data if it gets that far". A dash means Keepa didn't report a balance.
+The status chip in the top bar ("All systems OK", or "n issues") opens a list of the app's connections; **Keepa tokens** there shows your balance and refill rate ("1,240 left · refills 20/min"), or why there isn't one ("No KEEPA_API_KEY", "Keepa didn't report a balance").
 
-### Home page
+### Today
 
-- **Keepa tokens available**: the balance, with "refills N/min".
-- **Keepa tokens spent today**: across all runs, with a rough "≈ N products at 3 tokens each" and bars for the last 7 days.
+- **Keepa tokens**, in the key numbers: the balance now.
+- Under 100 tokens, a **System** step says so at the top of the next steps.
 
 ### Run header
 

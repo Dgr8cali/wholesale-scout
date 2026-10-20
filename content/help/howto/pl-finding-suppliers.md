@@ -49,4 +49,4 @@ Open the top listings (**Listing**, **Store**), send the RFQ through Alibaba's c
 
 When a supplier answers, **Add quote** starts a quote in the candidate's **Quotes**, filled with the supplier, the price per unit of your product and the MOQ (links in its notes). Finish it there: the landed cost follows. **Reject** asks why and keeps the reason; **Notes** keeps anything else.
 
-**Private label → Suppliers & quotes → Suppliers** lists every candidate's suppliers together, with a candidate filter. Home's **Suppliers** tile counts the ones to contact: new, scoring 60 or more, and on the product.
+**Private label → Suppliers & quotes → Suppliers** lists every candidate's suppliers together, with a candidate filter. On [Today](/help/pages/home), a Private label step lists the ones to contact: leads scoring 60 or more not yet messaged, and messaged suppliers with no quote after 7 days.

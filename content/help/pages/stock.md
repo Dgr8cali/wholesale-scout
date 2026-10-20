@@ -27,7 +27,7 @@ Amazon's own sales come from the orders sync, so they're never typed in either. 
 | **Reorder** | When each item needs ordering again and how many: the reorder point, the suggested quantity, and **due** / **soon** / **ok**. **Create purchase** opens the order form ready filled |
 | **Import** | From StockPilot (its raw table export) or a CSV of items, previewed before anything is written: [Stock: importing from StockPilot](/help/howto/stock-importing-from-stockpilot) |
 
-**Settings → Stock** holds the low-stock default (10 units), the days of cover a reorder buys (30) and the reorder lead-time buffer (7 days). Home has a Stock row: value at cost, units by bucket, items low or out, and reorders due.
+**Settings → Stock** holds the low-stock default (10 units), the days of cover a reorder buys (30) and the reorder lead-time buffer (7 days). On [Today](/help/pages/home), **To reorder** counts the items due, and each item due or soon due is a step.
 
 ## Purchases: from ordered to received
 

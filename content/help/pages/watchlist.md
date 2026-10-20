@@ -13,7 +13,7 @@ Every favourite is on the watchlist. A starred product with no condition is simp
 
 ## Putting a product on the watchlist
 
-Open a row's details on a run (or on Favourites) and find the **Watchlist** section:
+Open a row's details on a run (or on Shortlist → Products) and find the **Watchlist** section:
 
 | Control | What it does |
 |---|---|
