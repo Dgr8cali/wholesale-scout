@@ -283,7 +283,13 @@ Sophia $90 plate + $55 cards + $15 shrink wrap ($1,610 EXW), production 25 and t
 40–45), $2.85 at 1,000, samples received, spec; her currency corrected GBP → USD (the FX of 1.27 already treated it as dollars,
 so her landed cost is unchanged). The extras moved out of each quote's calc "other", so both landed costs are unchanged
 (£2.73, £3.67).
-- Rough edge: the sample score criteria and spec labels are the lens wipes' (moisture, sachet, wipe size…) for every candidate.
+**Per-candidate score labels** (migration 20261020000600, additive: `pl_candidates.sample_criteria`, `spec_fields`, each
+[{ k, label }]): the six sample-score criteria and four spec labels are the candidate's own, edited from **Score labels** in the
+Quotes header (a dialog: labels above inputs, "Give it a name" inline, Save waits for a change, Reset to the generic set). Null is
+the generic set (build quality / finish, works as described, materials / feel, size / fit, packaging, durability; product size,
+materials, box size / weight, shelf life / warranty). Lens cleaning wipes was given the lens-wipe set. A label keeps its key when
+renamed, so the scores and notes given under it stay (`checkLabels`, `labelsOf` in `quotes.ts`; `PUT
+/api/pl/candidates/[id]/quote-labels`; `/extras` returns `labels`).
 
 ## Workspaces
 

@@ -12,7 +12,7 @@ import { StatusChip, StockLevel } from "@/components/ui/status-chip";
 import { capitalFor } from "@/lib/pl/gatekeeper";
 import { LAUNCH_STEPS, type LaunchStep, type PlStatus } from "@/lib/pl/launch";
 import { BUCKET_LABEL, BUCKETS } from "@/lib/stock/levels";
-import type { Quote } from "@/lib/pl/quotes";
+import type { Quote, QuoteLabels } from "@/lib/pl/quotes";
 import { api } from "@/lib/ui/client";
 import { LaunchSection, type AdsSummary } from "../Launch";
 import { ListingSection } from "../ListingSection";
@@ -24,7 +24,7 @@ import { CriticalReviewsTable } from "./parts";
 import type { CandidateState } from "./useCandidate";
 import { StepButton } from "@/components/ui/step-button";
 
-export interface Extras { quotes: Quote[]; steps: LaunchStep[]; listingAsin: string | null; chosenQuote: string | null; chosenLanded: number | null; ads: AdsSummary | null }
+export interface Extras { quotes: Quote[]; labels: QuoteLabels; steps: LaunchStep[]; listingAsin: string | null; chosenQuote: string | null; chosenLanded: number | null; ads: AdsSummary | null }
 
 /** The candidate's quotes, launch checklist, listing ASIN and ads figures (`/extras`), for the tabs that show them. */
 export function useExtras(id: string) {
@@ -68,7 +68,7 @@ export function SuppliersTab({ id, s, onChanged }: { id: string; s: CandidateSta
     <div className="space-y-4">
       <SuppliersSection candidateId={c.id} onQuoted={refresh} />
       <QuotesSection c={{ id: c.id, name: c.name, niche_keyword: c.niche_keyword, category: c.category, sell: fields.sell?.value ? Number(fields.sell.value) : null, fields }}
-        quotes={e.x.quotes} chosenQuote={e.x.chosenQuote} compare={{ settings: data.settings, card: data.card, category: c.category }}
+        quotes={e.x.quotes} chosenQuote={e.x.chosenQuote} labels={e.x.labels} compare={{ settings: data.settings, card: data.card, category: c.category }}
         view={asked === "compare" || asked === "list" ? asked : null} onChanged={refresh} onFieldsChanged={() => { void reload(); refresh(); }} />
     </div>
   );

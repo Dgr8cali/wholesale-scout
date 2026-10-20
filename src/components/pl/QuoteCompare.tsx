@@ -13,8 +13,8 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { RateCard } from "@/lib/fees/rateCard";
 import { econ, type Settings } from "@/lib/pl/gatekeeper";
 import {
-  EXTRAS, SAMPLE_CRITERIA, SPEC_FIELDS, arrival, bestOf, exwTotal, landedCost, landedInputs, priceMultiple, sampleAverage, sampleStatusOf,
-  type Quote, type SampleScores,
+  EXTRAS, arrival, bestOf, exwTotal, landedCost, landedInputs, priceMultiple, sampleAverage, sampleStatusOf,
+  type Quote, type QuoteLabels, type SampleScores,
 } from "@/lib/pl/quotes";
 import { api } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
@@ -31,6 +31,8 @@ const shortName = (s: string) => s.split(/\s[-–—]\s|\s\(/)[0].slice(0, 24);
 
 export interface CompareContext {
   sell: number | null; fields: FieldMap; settings: Settings; card: RateCard; category: string;
+  /** The candidate's sample-score criteria and spec labels. */
+  labels: QuoteLabels;
 }
 
 interface Row {
@@ -80,7 +82,7 @@ export function QuoteCompare({ quotes, chosenQuote, ctx, onChanged, onFieldsChan
     const m = priceMultiple(ctx.sell, unit);
     const e = unit == null ? null : econ({ ...vals, landed: unit.toFixed(2), adsSteady: "0" }, ctx.settings, ctx.category || "Everything else", ctx.card);
     const exw = exwTotal(q);
-    return { q, l, fx, unit, m, profit: e?.pS ?? null, exw, arrive: arrival(q, today), avg: sampleAverage(scoresOf(q)) };
+    return { q, l, fx, unit, m, profit: e?.pS ?? null, exw, arrive: arrival(q, today), avg: sampleAverage(scoresOf(q), ctx.labels.criteria) };
   });
   const row = (label: string, cells: ReactNode[], values?: (number | null | undefined)[], better?: "low" | "high", bestWord?: string): Row =>
     ({ label, cells, best: values && better ? bestOf(values, better) : undefined, bestWord });
@@ -136,13 +138,13 @@ export function QuoteCompare({ quotes, chosenQuote, ctx, onChanged, onFieldsChan
     },
     {
       title: "Sample scores (1–5)", rows: [
-        ...SAMPLE_CRITERIA.map(({ k, label }) => row(label, per.map((p) => (
-          <NativeSelect key={k} className="h-8 w-20" aria-label={`${label}: ${p.q.supplier_name}`} value={scoresOf(p.q)[k] ?? ""}
+        ...ctx.labels.criteria.map(({ k, label }) => row(label, per.map((p) => (
+          <NativeSelect key={k} className="h-8 w-20" aria-label={`${label}: ${p.q.supplier_name}`} value={(scoresOf(p.q)[k] as number | undefined) ?? ""}
             onChange={(e) => setScore(p.q, { [k]: e.target.value === "" ? undefined : Number(e.target.value) })}>
             <NativeSelectOption value="">—</NativeSelectOption>
             {[1, 2, 3, 4, 5].map((n) => <NativeSelectOption key={n} value={n}>{n}</NativeSelectOption>)}
           </NativeSelect>
-        )), per.map((p) => scoresOf(p.q)[k]), "high", "highest")),
+        )), per.map((p) => scoresOf(p.q)[k] as number | undefined), "high", "highest")),
         row("Average", per.map((p) => <b key="a">{p.avg == null ? "—" : p.avg.toFixed(1)}</b>), per.map((p) => p.avg), "high", "highest"),
         row("Note", per.map((p) => (
           <Textarea key="n" className="min-h-16 text-sm" aria-label={`Sample note: ${p.q.supplier_name}`} value={scoresOf(p.q).note ?? ""}
@@ -150,7 +152,7 @@ export function QuoteCompare({ quotes, chosenQuote, ctx, onChanged, onFieldsChan
         ))),
       ],
     },
-    { title: "Spec", rows: SPEC_FIELDS.map(({ k, label }) => row(label, per.map((p) => p.q.spec?.[k] || "—"))) },
+    { title: "Spec", rows: ctx.labels.spec.map(({ k, label }) => row(label, per.map((p) => p.q.spec?.[k] || "—"))) },
   ];
 
   const header = (p: (typeof per)[number]) => {

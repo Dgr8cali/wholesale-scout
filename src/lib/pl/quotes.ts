@@ -24,26 +24,76 @@ export const EXTRAS = [
 ] as const;
 export type ExtraKey = (typeof EXTRAS)[number]["k"];
 
-/** What a sample is scored on, 1 (poor) to 5 (excellent). */
-export const SAMPLE_CRITERIA = [
+/** A label with a stable key: renaming the label keeps the scores or notes given under the key. */
+export interface Label { k: string; label: string }
+export const LABEL_KEY = /^[a-zA-Z][a-zA-Z0-9]{0,23}$/;
+/** How many criteria a sample is scored on, and how many spec notes. */
+export const CRITERIA_COUNT = 6;
+export const SPEC_COUNT = 4;
+
+/** What a sample is scored on, 1 (poor) to 5 (excellent): the generic set, for any product. */
+export const GENERIC_CRITERIA: Label[] = [
+  { k: "quality", label: "Build quality / finish" },
+  { k: "works", label: "Works as described" },
+  { k: "feel", label: "Materials / feel" },
+  { k: "size", label: "Size / fit" },
+  { k: "packaging", label: "Packaging" },
+  { k: "durability", label: "Durability" },
+];
+/** Lens cleaning wipes' criteria (the first comparison's). */
+export const LENS_CRITERIA: Label[] = [
   { k: "moisture", label: "Moisture / stays wet" },
   { k: "cleaning", label: "Cleaning / no streaks" },
   { k: "smell", label: "Smell" },
   { k: "sachet", label: "Sachet opens easily" },
   { k: "size", label: "Wipe size / feel" },
   { k: "box", label: "Box quality" },
-] as const;
-export type SampleCriterion = (typeof SAMPLE_CRITERIA)[number]["k"];
-export type SampleScores = Partial<Record<SampleCriterion, number>> & { note?: string };
-
-/** Spec notes, free text. */
-export const SPEC_FIELDS = [
+];
+/** Spec notes, free text: the generic set. */
+export const GENERIC_SPEC: Label[] = [
+  { k: "size", label: "Product size" },
+  { k: "materials", label: "Materials" },
+  { k: "box", label: "Box size / weight" },
+  { k: "shelfLife", label: "Shelf life / warranty" },
+];
+export const LENS_SPEC: Label[] = [
   { k: "wipe", label: "Wipe size" },
   { k: "sachet", label: "Sachet size / material" },
   { k: "box", label: "Box size / weight" },
   { k: "shelfLife", label: "Shelf life" },
-] as const;
-export type SpecKey = (typeof SPEC_FIELDS)[number]["k"];
+];
+export type SampleScores = { note?: string } & Record<string, number | string | undefined>;
+export interface QuoteLabels { criteria: Label[]; spec: Label[] }
+
+/** A candidate's labels: its own when set (and well formed), else the generic set. */
+export function labelsOf(c: { sample_criteria?: unknown; spec_fields?: unknown }): QuoteLabels {
+  const ok = (x: unknown, n: number): x is Label[] => Array.isArray(x) && x.length === n && x.every((l) => l && LABEL_KEY.test(String(l.k)) && String(l.label ?? "").trim());
+  return { criteria: ok(c.sample_criteria, CRITERIA_COUNT) ? c.sample_criteria : GENERIC_CRITERIA, spec: ok(c.spec_fields, SPEC_COUNT) ? c.spec_fields : GENERIC_SPEC };
+}
+
+/**
+ * New labels, checked: exactly six criteria and four spec labels, each 1–40 characters, keys unique.
+ * A slot without a key keeps the current one's (so its scores stay); a new key is made from the label.
+ */
+export function checkLabels(input: { criteria?: unknown; spec?: unknown }, cur: QuoteLabels): QuoteLabels {
+  const one = (x: unknown, was: Label[], n: number, what: string): Label[] => {
+    if (!Array.isArray(x) || x.length !== n) throw new Error(`${what}: exactly ${n}`);
+    const out = x.map((l, i) => {
+      const label = String((l as Label)?.label ?? "").trim();
+      if (!label) throw new Error(`${what} ${i + 1}: give it a name`);
+      if (label.length > 40) throw new Error(`${what} ${i + 1}: 40 characters at most`);
+      const given = String((l as Label)?.k ?? "");
+      const k = LABEL_KEY.test(given) ? given : was[i]?.k ?? (label.replace(/[^a-zA-Z0-9]/g, "").slice(0, 20) || `c${i + 1}`);
+      return { k, label };
+    });
+    if (new Set(out.map((l) => l.k)).size !== out.length) throw new Error(`${what}: two slots share a key`);
+    return out;
+  };
+  return {
+    criteria: input.criteria === undefined ? cur.criteria : one(input.criteria, cur.criteria, CRITERIA_COUNT, "Criterion"),
+    spec: input.spec === undefined ? cur.spec : one(input.spec, cur.spec, SPEC_COUNT, "Spec label"),
+  };
+}
 
 /** Units of the quote currency per £1, to start from: check today's rate (xe.com). */
 export const DEFAULT_FX: Record<Currency, number> = { GBP: 1, USD: 1.27, EUR: 1.17, CNY: 9.2 };
@@ -69,8 +119,10 @@ export interface Quote {
   /** One-off charges on the ex-works invoice, in `currency`. */
   extras?: Partial<Record<ExtraKey, number>> | null;
   sample_status?: SampleStatus | null; sample_received_on?: string | null;
+  /** 1–5 under each of the candidate's criteria' keys, and a note. */
   sample_scores?: SampleScores | null;
-  spec?: Partial<Record<SpecKey, string>> | null;
+  /** Free text under each of the candidate's spec labels' keys. */
+  spec?: Record<string, string> | null;
   created_at: string; updated_at: string;
 }
 
@@ -154,9 +206,9 @@ export function priceMultiple(sell: number | null, landed: number | null): { mul
   return { multiple, status: multiple >= 3.5 ? "pass" : multiple >= 3 ? "warn" : "fail" };
 }
 
-/** The sample scores' average (1–5), over the criteria scored; null with none. */
-export function sampleAverage(s: SampleScores | null | undefined): number | null {
-  const v = SAMPLE_CRITERIA.map(({ k }) => s?.[k]).filter((x): x is number => typeof x === "number" && x >= 1 && x <= 5);
+/** The sample scores' average (1–5), over the candidate's criteria scored; null with none. */
+export function sampleAverage(s: SampleScores | null | undefined, criteria: Label[]): number | null {
+  const v = criteria.map(({ k }) => s?.[k]).filter((x): x is number => typeof x === "number" && x >= 1 && x <= 5);
   return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
 }
 

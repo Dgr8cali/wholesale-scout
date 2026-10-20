@@ -16,8 +16,10 @@ order: 3
 **Add quote** adds a card; three sit side by side and more wrap below. Each has the supplier, **source** (Alibaba, 1688, UK wholesaler, Other), **contact** (a URL opens), **unit price** ex-works in its **currency** (USD, GBP, CNY, EUR), **MOQ**, the **next tier** (a larger order's unit price and its quantity, e.g. $2.85 at 1,000), **production** and **transit to FBA** days (the longest the supplier quoted), **notes**, and a **status**: requested, received, samples ordered, samples received, chosen, rejected. Changes save as you type.
 
 - **Extras on the invoice**, in the quote's currency: **plate / setup**, **cards**, **shrink wrap** and **other**. With the units they make the **EXW total** (unit price × units + extras), and they're part of the landed cost.
-- **Samples**: whether they're **not ordered**, **ordered** or **received**, the day they arrived, their cost and lead time, a score of 1–5 on each of moisture / stays wet, cleaning / no streaks, smell, sachet opens easily, wipe size / feel and box quality, and a note.
-- **Spec**: wipe size, sachet size / material, box size / weight, shelf life.
+- **Samples**: whether they're **not ordered**, **ordered** or **received**, the day they arrived, their cost and lead time, a score of 1–5 on each of the candidate's six criteria, and a note.
+- **Spec**: four notes under the candidate's spec labels.
+
+**Score labels** (in the Quotes header) names the six criteria and the four spec labels for this candidate. A new candidate starts with a generic set: build quality / finish, works as described, materials / feel, size / fit, packaging, durability; and product size, materials, box size / weight, shelf life / warranty. Lens cleaning wipes has its own (moisture / stays wet, cleaning / no streaks, smell, sachet opens easily, wipe size / feel, box quality; wipe size, sachet size / material, box size / weight, shelf life). Renaming a label keeps the scores and notes already given under it. **Reset to the generic set** puts the generic names back.
 
 ## Landed cost
 
@@ -49,8 +51,8 @@ For example: $1.80 a unit, MOQ 500, FX 1.27, freight £180, duty 6.5%: goods £7
 - **Cost and profit**: landed per unit (ex import VAT once you're VAT-registered, as Gate 0 takes it), total cash required, the price multiple at Gate 0's sell price, and the **profit per unit after fees** (the sell price less referral, FBA, storage, inbound, prep and returns from Gate 6's fee figures, and the landed cost; before ads).
 - **Lead time**: production, transit, and the day it would **arrive at FBA if ordered today** (production + transit; it needs both).
 - **Samples**: status, cost, the day received.
-- **Sample scores**: the six scores, editable here, their **average** and a note.
-- **Spec**: the four spec notes.
+- **Sample scores**: the candidate's six scores, editable here, their **average** and a note.
+- **Spec**: the four spec notes, under the candidate's labels.
 
 In each row the best value (the lowest cost, the shortest lead time, the highest score, multiple or profit) is tinted and marked with a trophy, and screen readers hear "best". Nothing is marked when only one quote has the value or they're all the same. On a phone it shows one supplier at a time: switch with the buttons above the card or swipe the card left or right.
 

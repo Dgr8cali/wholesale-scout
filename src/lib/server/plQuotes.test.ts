@@ -3,7 +3,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { __setDbForTests } from "./db";
 import { FakeDb } from "./fakeDb";
 import { createCandidate, setField } from "./pl";
-import { applyQuote, chooseQuote, createQuote } from "./plQuotes";
+import { GENERIC_CRITERIA, LENS_CRITERIA, LENS_SPEC } from "../pl/quotes";
+import { applyQuote, candidateExtras, chooseQuote, createQuote, quoteLabels, saveQuoteLabels } from "./plQuotes";
 
 describe("choosing a quote (FakeDb)", () => {
   let fake: FakeDb;
@@ -37,5 +38,18 @@ describe("choosing a quote (FakeDb)", () => {
     await expect(createQuote(c.id, { freight_mode: "boat" })).rejects.toThrow(/Freight/);
     const q = await createQuote(c.id, { sample_scores: { moisture: 9, smell: 4, note: " fresh " }, spec: { wipe: "12 × 15 cm", junk: "x" }, sample_received_on: "not a date" });
     expect(q).toMatchObject({ sample_scores: { smell: 4, note: "fresh" }, spec: { wipe: "12 × 15 cm" }, sample_received_on: null });
+  });
+
+  it("labels: generic until set; renamed per candidate; the scores stay under their key; reset", async () => {
+    const c = await createCandidate({ name: "Lens cleaning wipes", asins: [] });
+    expect((await quoteLabels(c.id)).criteria).toEqual(GENERIC_CRITERIA);
+    await saveQuoteLabels(c.id, { criteria: LENS_CRITERIA, spec: LENS_SPEC });
+    await createQuote(c.id, { supplier_name: "Sophia", sample_scores: { smell: 4 } });
+    const renamed = await saveQuoteLabels(c.id, { criteria: LENS_CRITERIA.map((l) => (l.k === "smell" ? { k: l.k, label: "Scent" } : l)) });
+    expect(renamed.criteria.find((l) => l.k === "smell")!.label).toBe("Scent");
+    const x = await candidateExtras(c.id);
+    expect(x.labels.criteria[2].label).toBe("Scent");
+    expect(x.quotes[0].sample_scores).toMatchObject({ smell: 4 });
+    expect((await saveQuoteLabels(c.id, { reset: true })).criteria).toEqual(GENERIC_CRITERIA);
   });
 });

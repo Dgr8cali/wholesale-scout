@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { arrival, bestOf, certificationsFor, exwTotal, landedCost, landedInputs, priceMultiple, rfqText, sampleAverage, sampleStatusOf } from "./quotes";
+import { GENERIC_CRITERIA, LENS_CRITERIA, LENS_SPEC, arrival, bestOf, certificationsFor, checkLabels, labelsOf, exwTotal, landedCost, landedInputs, priceMultiple, rfqText, sampleAverage, sampleStatusOf } from "./quotes";
 
 const q = { unit_price: 1.8, moq: 500, currency: "USD" as const, calc: { fx: 1.27, freight: 180, dutyPct: 6.5 } };
 
@@ -42,8 +42,9 @@ describe("extras, the EXW total and the comparison", () => {
     expect(bestOf([2, null], "low").size).toBe(0);
   });
   it("sample scores: the average over the scored criteria; the samples' state", () => {
-    expect(sampleAverage({ moisture: 4, smell: 5, note: "ok" })).toBe(4.5);
-    expect(sampleAverage({})).toBeNull();
+    expect(sampleAverage({ moisture: 4, smell: 5, note: "ok" }, LENS_CRITERIA)).toBe(4.5);
+    expect(sampleAverage({ moisture: 4 }, GENERIC_CRITERIA)).toBeNull();
+    expect(sampleAverage({}, LENS_CRITERIA)).toBeNull();
     expect(sampleStatusOf({ status: "samples received" })).toBe("received");
     expect(sampleStatusOf({ status: "chosen", sample_status: "ordered" })).toBe("ordered");
     expect(sampleStatusOf({ status: "requested" })).toBe("not ordered");
@@ -66,5 +67,22 @@ describe("RFQ", () => {
     expect(t).toMatch(/300, 500 and 1,000 units/);
     expect(t).toMatch(/EN 14350/);
     expect(certificationsFor("Kitchen and Home")[0]).toMatch(/Food-contact/);
+  });
+});
+
+describe("per-candidate labels", () => {
+  it("a candidate's own labels, else the generic set; a malformed set falls back", () => {
+    expect(labelsOf({ sample_criteria: LENS_CRITERIA, spec_fields: LENS_SPEC }).criteria[0].label).toBe("Moisture / stays wet");
+    expect(labelsOf({}).criteria).toBe(GENERIC_CRITERIA);
+    expect(labelsOf({ sample_criteria: LENS_CRITERIA.slice(0, 3) }).criteria).toBe(GENERIC_CRITERIA);
+  });
+  it("renaming keeps the key (so the scores stay); six and four, named, under 40 characters", () => {
+    const cur = labelsOf({ sample_criteria: LENS_CRITERIA, spec_fields: LENS_SPEC });
+    const next = checkLabels({ criteria: LENS_CRITERIA.map((l, i) => (i === 2 ? { label: "Scent" } : l)) }, cur);
+    expect(next.criteria[2]).toEqual({ k: "smell", label: "Scent" });
+    expect(next.spec).toBe(cur.spec);
+    expect(() => checkLabels({ criteria: LENS_CRITERIA.slice(0, 5) }, cur)).toThrow(/exactly 6/);
+    expect(() => checkLabels({ spec: ["a", "", "c", "d"].map((label) => ({ label })) }, cur)).toThrow(/Spec label 2: give it a name/);
+    expect(() => checkLabels({ criteria: LENS_CRITERIA.map((l) => ({ ...l, k: "same" })) }, cur)).toThrow(/share a key/);
   });
 });

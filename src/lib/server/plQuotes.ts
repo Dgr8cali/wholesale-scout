@@ -1,7 +1,7 @@
 import "server-only";
 import { LAUNCH_STEPS, STEP_KEYS, statusFromSteps, type LaunchStep, type PlStatus } from "../pl/launch";
 import type { Fill } from "../pl/fill";
-import { CURRENCIES, EXTRAS, FREIGHT_MODES, QUOTE_SOURCES, QUOTE_STATUSES, SAMPLE_CRITERIA, SAMPLE_STATUSES, SPEC_FIELDS, landedCost, type LandedInputs, type Quote } from "../pl/quotes";
+import { CURRENCIES, EXTRAS, FREIGHT_MODES, QUOTE_SOURCES, QUOTE_STATUSES, LABEL_KEY, SAMPLE_STATUSES, checkLabels, labelsOf, landedCost, type QuoteLabels, type LandedInputs, type Quote } from "../pl/quotes";
 import { adsDashboard, saveAdsProduct } from "./ads";
 import { ensureStockItemForAsin } from "./stock";
 import { businessSettings } from "./business";
@@ -54,7 +54,8 @@ function quotePatch(x: Record<string, unknown>): Record<string, unknown> {
   if (x.sample_scores !== undefined) {
     const e = (x.sample_scores ?? {}) as Record<string, unknown>;
     const scores: Record<string, number | string> = {};
-    for (const { k } of SAMPLE_CRITERIA) { const v = numOrNull(e[k]); if (v != null && v >= 1 && v <= 5) scores[k] = Math.round(v); }
+    // Under the candidate's criteria keys (any well-formed key: the labels are the candidate's).
+    for (const [k, raw] of Object.entries(e).slice(0, 20)) { if (k === "note" || !LABEL_KEY.test(k)) continue; const v = numOrNull(raw); if (v != null && v >= 1 && v <= 5) scores[k] = Math.round(v); }
     const note = String(e.note ?? "").trim().slice(0, 2000);
     if (note) scores.note = note;
     out.sample_scores = scores;
@@ -62,7 +63,7 @@ function quotePatch(x: Record<string, unknown>): Record<string, unknown> {
   if (x.spec !== undefined) {
     const e = (x.spec ?? {}) as Record<string, unknown>;
     const spec: Record<string, string> = {};
-    for (const { k } of SPEC_FIELDS) { const v = String(e[k] ?? "").trim().slice(0, 300); if (v) spec[k] = v; }
+    for (const [k, raw] of Object.entries(e).slice(0, 12)) { if (!LABEL_KEY.test(k)) continue; const v = String(raw ?? "").trim().slice(0, 300); if (v) spec[k] = v; }
     out.spec = spec;
   }
   if (x.calc !== undefined) {
@@ -133,6 +134,22 @@ export async function chooseQuote(id: string, rejectOthers = true): Promise<{ ch
   return { chosenLanded: perUnit };
 }
 
+/** A candidate's sample-score criteria and spec labels (its own, else the generic set). */
+export async function quoteLabels(candidateId: string): Promise<QuoteLabels> {
+  return labelsOf(must(await db().from("pl_candidates").select("sample_criteria, spec_fields").eq("id", candidateId).single(), "candidate") as Record<string, unknown>);
+}
+
+/** Rename the criteria and spec labels ({ criteria?, spec? }, or { reset: true } for the generic set). */
+export async function saveQuoteLabels(candidateId: string, input: { criteria?: unknown; spec?: unknown; reset?: boolean }): Promise<QuoteLabels> {
+  if (input.reset) {
+    must(await db().from("pl_candidates").update({ sample_criteria: null, spec_fields: null, updated_at: now() }).eq("id", candidateId), "reset labels");
+    return labelsOf({});
+  }
+  const next = checkLabels(input, await quoteLabels(candidateId));
+  must(await db().from("pl_candidates").update({ sample_criteria: next.criteria, spec_fields: next.spec, updated_at: now() }).eq("id", candidateId), "save labels");
+  return next;
+}
+
 /* ===================== launch ===================== */
 
 export async function launchSteps(candidateId: string): Promise<LaunchStep[]> {
@@ -197,10 +214,10 @@ export async function candidateExtras(candidateId: string) {
   const d = db();
   const [quotes, steps, c] = await Promise.all([
     listQuotes(candidateId), launchSteps(candidateId),
-    d.from("pl_candidates").select("listing_asin, chosen_quote, chosen_landed, status").eq("id", candidateId).single(),
+    d.from("pl_candidates").select("listing_asin, chosen_quote, chosen_landed, status, sample_criteria, spec_fields").eq("id", candidateId).single(),
   ]);
-  const cand = must(c, "candidate") as { listing_asin: string | null; chosen_quote: string | null; chosen_landed: number | null; status: PlStatus };
-  return { quotes, steps, stepDefs: LAUNCH_STEPS, listingAsin: cand.listing_asin, chosenQuote: cand.chosen_quote, chosenLanded: numOrNull(cand.chosen_landed), ads: await adsSummary(cand.listing_asin) };
+  const cand = must(c, "candidate") as { listing_asin: string | null; chosen_quote: string | null; chosen_landed: number | null; status: PlStatus; sample_criteria: unknown; spec_fields: unknown };
+  return { quotes, steps, labels: labelsOf(cand), stepDefs: LAUNCH_STEPS, listingAsin: cand.listing_asin, chosenQuote: cand.chosen_quote, chosenLanded: numOrNull(cand.chosen_landed), ads: await adsSummary(cand.listing_asin) };
 }
 
 /** Per candidate, for the lists: quotes, the chosen landed cost, the next launch step. */

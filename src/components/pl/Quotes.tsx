@@ -1,10 +1,11 @@
 "use client";
 
-import { CheckIcon, ClipboardCopyIcon, ColumnsIcon, ExternalLinkIcon, FileTextIcon, LayoutGridIcon, PlusIcon, Trash2Icon } from "lucide-react";
+import { CheckIcon, ClipboardCopyIcon, ColumnsIcon, TagsIcon, ExternalLinkIcon, FileTextIcon, LayoutGridIcon, PlusIcon, Trash2Icon } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { useDialogs } from "@/components/Dialogs";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { InfoTip } from "@/components/ui/info-tip";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
@@ -13,8 +14,8 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
-  CURRENCIES, DEFAULT_FX, EXTRAS, FREIGHT_MODES, QUOTE_SOURCES, QUOTE_STATUSES, SAMPLE_CRITERIA, SAMPLE_STATUSES, SPEC_FIELDS,
-  exwTotal, landedCost, landedInputs, priceMultiple, rfqText, sampleStatusOf, type LandedInputs, type Quote,
+  CURRENCIES, DEFAULT_FX, EXTRAS, FREIGHT_MODES, GENERIC_CRITERIA, GENERIC_SPEC, QUOTE_SOURCES, QUOTE_STATUSES, SAMPLE_STATUSES,
+  exwTotal, landedCost, landedInputs, priceMultiple, rfqText, sampleStatusOf, type Label, type LandedInputs, type Quote, type QuoteLabels,
 } from "@/lib/pl/quotes";
 import { api } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
@@ -36,9 +37,11 @@ const VIEW_KEY = "ws.quotes.view";
  * A candidate's supplier quotes, each with its landed cost, and the RFQ to send. With `compare`
  * (the candidate's fees and settings), a Compare view sets every quote side by side.
  */
-export function QuotesSection({ c, quotes, chosenQuote, compare, view: asked, onChanged, onFieldsChanged }: {
+export function QuotesSection({ c, quotes, chosenQuote, labels, compare, view: asked, onChanged, onFieldsChanged }: {
   c: QuotesCandidate; quotes: Quote[]; chosenQuote: string | null;
-  compare?: Omit<CompareContext, "sell" | "fields">;
+  /** The candidate's sample-score criteria and spec labels. */
+  labels: QuoteLabels;
+  compare?: Omit<CompareContext, "sell" | "fields" | "labels">;
   /** The view the address asks for (`?quotes=compare`); it wins over the remembered one. */
   view?: "list" | "compare" | null;
   /** Reload the quotes (and the chosen landed cost). */
@@ -47,6 +50,7 @@ export function QuotesSection({ c, quotes, chosenQuote, compare, view: asked, on
   onFieldsChanged: () => void;
 }) {
   const [rfq, setRfq] = useState(false);
+  const [editLabels, setEditLabels] = useState(false);
   // The view you last used, per browser (the section only renders in the browser, once the quotes load).
   const [view, setView] = useState<"list" | "compare">(() => { if (asked) return asked; try { return localStorage.getItem(VIEW_KEY) === "compare" ? "compare" : "list"; } catch { return "list"; } });
   const pick = (v: "list" | "compare") => { setView(v); try { localStorage.setItem(VIEW_KEY, v); } catch { /* private window */ } };
@@ -78,15 +82,17 @@ export function QuotesSection({ c, quotes, chosenQuote, compare, view: asked, on
             <ToggleGroupItem value="compare"><ColumnsIcon /> Compare</ToggleGroupItem>
           </ToggleGroup>
         )}
+        <Button variant="secondary" size="sm" onClick={() => setEditLabels(true)}><TagsIcon /> Score labels</Button>
         <Button variant="secondary" size="sm" onClick={() => setRfq((v) => !v)}><FileTextIcon /> RFQ text</Button>
         <Button size="sm" onClick={add}><PlusIcon /> Add quote</Button>
       </div>
       {rfq && <RfqPanel text={text} hasSix={!!f("sixWordsText")} />}
+      {editLabels && <LabelsDialog candidateId={c.id} name={c.name} labels={labels} onClose={() => setEditLabels(false)} onSaved={() => { setEditLabels(false); onChanged(); }} />}
       {!quotes.length ? <p className="rounded-lg bg-subtle px-3 py-2.5 text-sm text-muted-foreground">No quotes yet. Send the RFQ to three suppliers, then add each quote as it comes in.</p> : comparing ? (
-        <QuoteCompare quotes={quotes} chosenQuote={chosenQuote} ctx={{ ...compare!, sell: c.sell, fields: c.fields as CompareContext["fields"] }} onChanged={onChanged} onFieldsChanged={onFieldsChanged} />
+        <QuoteCompare quotes={quotes} chosenQuote={chosenQuote} ctx={{ ...compare!, sell: c.sell, fields: c.fields as CompareContext["fields"], labels }} onChanged={onChanged} onFieldsChanged={onFieldsChanged} />
       ) : (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {quotes.map((q) => <QuoteCard key={q.id} q={q} sell={c.sell} chosen={chosenQuote === q.id} others={quotes.length - 1} onChanged={onChanged} onFieldsChanged={onFieldsChanged} />)}
+          {quotes.map((q) => <QuoteCard key={q.id} q={q} labels={labels} sell={c.sell} chosen={chosenQuote === q.id} others={quotes.length - 1} onChanged={onChanged} onFieldsChanged={onFieldsChanged} />)}
         </div>
       )}
     </section>
@@ -111,7 +117,7 @@ function RfqPanel({ text, hasSix }: { text: string; hasSix: boolean }) {
 
 type Draft = Omit<Quote, "calc"> & { calc: Partial<LandedInputs> };
 
-function QuoteCard({ q, sell, chosen, others, onChanged, onFieldsChanged }: { q: Quote; sell: number | null; chosen: boolean; others: number; onChanged: () => void; onFieldsChanged: () => void }) {
+function QuoteCard({ q, labels, sell, chosen, others, onChanged, onFieldsChanged }: { q: Quote; labels: QuoteLabels; sell: number | null; chosen: boolean; others: number; onChanged: () => void; onFieldsChanged: () => void }) {
   const [d, setD] = useState<Draft>({ ...q, calc: q.calc ?? {} });
   const [rejectOthers, setRejectOthers] = useState(true);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -199,8 +205,8 @@ function QuoteCard({ q, sell, chosen, others, onChanged, onFieldsChanged }: { q:
           {field("Received on", <Input className="h-8" type="date" value={d.sample_received_on ?? ""} onChange={(e) => set({ sample_received_on: e.target.value || null, ...(e.target.value ? { sample_status: "received" as const } : {}) })} />)}
           {field(`Sample cost (${d.currency})`, <NumIn value={d.sample_cost} onChange={(v) => set({ sample_cost: v })} step="0.01" />)}
           {field("Sample lead (days)", <NumIn value={d.sample_lead_days} onChange={(v) => set({ sample_lead_days: v })} step="1" />)}
-          {SAMPLE_CRITERIA.map(({ k, label }) => <div key={k}>{field(`${label} (1–5)`, (
-            <NativeSelect className="h-8 w-full" value={d.sample_scores?.[k] ?? ""} onChange={(e) => set({ sample_scores: { ...d.sample_scores, [k]: e.target.value === "" ? undefined : Number(e.target.value) } })}>
+          {labels.criteria.map(({ k, label }) => <div key={k}>{field(`${label} (1–5)`, (
+            <NativeSelect className="h-8 w-full" value={(d.sample_scores?.[k] as number | undefined) ?? ""} onChange={(e) => set({ sample_scores: { ...d.sample_scores, [k]: e.target.value === "" ? undefined : Number(e.target.value) } })}>
               <NativeSelectOption value="">Not scored</NativeSelectOption>
               {[1, 2, 3, 4, 5].map((n) => <NativeSelectOption key={n} value={n}>{n}</NativeSelectOption>)}
             </NativeSelect>
@@ -212,7 +218,7 @@ function QuoteCard({ q, sell, chosen, others, onChanged, onFieldsChanged }: { q:
       <div className="space-y-2">
         <h3 className="section-label">Spec</h3>
         <div className="grid grid-cols-2 gap-2">
-          {SPEC_FIELDS.map(({ k, label }) => <div key={k}>{field(label, <Input className="h-8" value={d.spec?.[k] ?? ""} onChange={(e) => set({ spec: { ...d.spec, [k]: e.target.value } })} />)}</div>)}
+          {labels.spec.map(({ k, label }) => <div key={k}>{field(label, <Input className="h-8" value={d.spec?.[k] ?? ""} onChange={(e) => set({ spec: { ...d.spec, [k]: e.target.value } })} />)}</div>)}
         </div>
       </div>
 
@@ -266,6 +272,64 @@ function QuoteCard({ q, sell, chosen, others, onChanged, onFieldsChanged }: { q:
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * The candidate's six sample-score criteria and four spec labels. Renaming keeps what's been scored
+ * or noted under each; Reset goes back to the generic set.
+ */
+function LabelsDialog({ candidateId, name, labels, onClose, onSaved }: { candidateId: string; name: string; labels: QuoteLabels; onClose: () => void; onSaved: () => void }) {
+  const [criteria, setCriteria] = useState<Label[]>(labels.criteria);
+  const [spec, setSpec] = useState<Label[]>(labels.spec);
+  const [busy, setBusy] = useState(false);
+  const dirty = JSON.stringify({ criteria, spec }) !== JSON.stringify(labels);
+  const bad = (l: Label) => !l.label.trim() ? "Give it a name" : l.label.trim().length > 40 ? "40 characters at most" : null;
+  const invalid = [...criteria, ...spec].some((l) => bad(l));
+  const save = async (reset = false) => {
+    setBusy(true);
+    try {
+      await api(`/api/pl/candidates/${candidateId}/quote-labels`, { method: "PUT", json: reset ? { reset: true } : { criteria, spec } });
+      toast.success(reset ? "Labels back to the generic set" : "Labels saved");
+      onSaved();
+    } catch (e) {
+      toast.error((e as Error).message);
+      setBusy(false);
+    }
+  };
+  const list = (title: string, items: Label[], setItems: (l: Label[]) => void) => (
+    <fieldset className="space-y-2">
+      <legend className="section-label">{title}</legend>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {items.map((l, i) => (
+          <label key={l.k} className="block space-y-1">
+            <span className="field-label">{i + 1}.</span>
+            <Input value={l.label} aria-invalid={!!bad(l)} onChange={(e) => setItems(items.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))} />
+            {bad(l) && <span className="block text-xs text-danger">{bad(l)}</span>}
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+  const generic = JSON.stringify(labels) === JSON.stringify({ criteria: GENERIC_CRITERIA, spec: GENERIC_SPEC });
+  return (
+    <Dialog open onOpenChange={(o) => !o && !busy && onClose()}>
+      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle className="pr-6">Score labels for {name}</DialogTitle>
+          <DialogDescription>What each sample is scored on (1–5) and the spec notes kept per quote. Renaming one keeps the scores and notes already given under it.</DialogDescription>
+        </DialogHeader>
+        {list("Sample-score criteria", criteria, setCriteria)}
+        {list("Spec labels", spec, setSpec)}
+        <DialogFooter className="gap-2 sm:justify-between">
+          <Button variant="ghost" onClick={() => save(true)} disabled={busy || generic}>Reset to the generic set</Button>
+          <span className="flex gap-2">
+            <Button variant="secondary" onClick={onClose} disabled={busy}>Cancel</Button>
+            <Button onClick={() => save()} disabled={!dirty || invalid} loading={busy}>Save labels</Button>
+          </span>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
