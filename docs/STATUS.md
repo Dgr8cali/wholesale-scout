@@ -1,7 +1,7 @@
 # Wholesale Scout: status
 
 Read this first in a new session. Keep it current: every commit that changes a feature updates
-it (what's built, the backlog, the rough edges). Last updated: 20 Oct 2026 (UI redesign phase 4c: one results table for wholesale products).
+it (what's built, the backlog, the rough edges). Last updated: 20 Oct 2026 (UI redesign complete: phase 5, polish, accessibility and speed).
 
 Wholesale Scout is a single-user Amazon UK seller's workbench: Next.js 16 (App Router, `proxy.ts`
 password gate), self-hosted Supabase (Postgres, RLS on, service-role access from the server only),
@@ -13,7 +13,7 @@ four workspaces, each a labelled group in one sidebar (main pages, then a collap
 
 **Logo** (18 Oct 2026): the master mark is `public/logo.svg` (teal tile, magnifier, amber bars), drawn by `<Logo size>` (`src/components/Logo.tsx`, alt "Wholesale Scout") in the sidebar header, the Help centre header, and as the default mark of an `EmptyState` given no icon. Favicon and app icons by Next's file conventions: `src/app/favicon.ico` (16/32/48), `icon.svg`, `apple-icon.png` (180, full-bleed teal: iOS rounds it), and `manifest.ts` (Wholesale Scout / Scout, theme #2F7F8C, `public/icon-192.png` and `icon-512.png`). The proxy serves those files without the password (a browser fetches the manifest without credentials). The extension (0.6.0 on) uses the same mark: `extension/icons/` 16/32/48/128 for its icon and toolbar button, the popup's heading, and a 16 px mark in every panel heading (built as SVG nodes, so no page's CSP blocks it). There's no login page to put it on: the password is the browser's own Basic-auth dialog.
 
-**UI redesign** ("Calm Workbench", from `docs/ui-audit.md`). Phase 1, the audit, done (19 Oct 2026). Phase 2, foundations, done (19 Oct 2026):
+**UI redesign** ("Calm Workbench", from `docs/ui-audit.md`; complete, summary in `docs/ui-redesign-summary.md`). Phase 1, the audit, done (19 Oct 2026). Phase 2, foundations, done (19 Oct 2026):
 tokens in `src/app/globals.css` (one source of truth: the logo teal #2F7F8C as primary with hover/soft/ink, the amber #F2B544 as
 `highlight` (shadcn's `accent` stays the hover surface), warn/danger/success soft+ink pairs, light and dark; the old names
 pass/warn/fail/empty, brand, surface-2, ink-2, line-strong are aliases of the new ones); IBM Plex Sans for all text and IBM Plex Mono
@@ -258,6 +258,11 @@ results drawer's details, the candidate page's tabs other than Overview, and the
 cards; DataTable and `panel` replaced them), `SortTableHead`, the pipeline's unused `Dot`, `sharedGet`, and the old results
 table's `.table-scroll` / `.sticky-th` CSS. The workspace switcher, the old sidebar and the moved pages' components were
 already gone; the redirects stay (`src/lib/moved.ts`, `LEGACY_REDIRECTS` in next.config).
+Help no longer describes the old layout (Today, the extension's chips, Shortlist, New run's tabs, the drawer, ⌘K). On a phone a
+select keeps its 44px height without overlapping the row below (a NativeSelect's wrapper grows). Screenshots of every route at
+1440 and 390, light and dark: `docs/ui-audit/final/` (gitignored; `E2E_SCREENS=1`, `e2e/screens.ts`). What changed in each
+phase, old → new addresses, the verdict words and where things are now: [`docs/ui-redesign-summary.md`](ui-redesign-summary.md).
+**UI redesign complete** (20 Oct 2026).
 **Extension 0.8.0**: the product panel and search results show the app's words, colours and icons (Buy / Check / Skip / Not scored as round chips; the panel lists each gate as Pass / Check / Fail), and candidate links open `/pl/candidates/<id>` (Suppliers & quotes, Reviews or Gate 3 tab) instead of the old `?c=` redirect.
 
 ## Workspaces

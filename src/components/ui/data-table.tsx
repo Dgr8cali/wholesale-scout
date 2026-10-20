@@ -201,7 +201,7 @@ function MobileRow<T extends RowData>({ row, title, keys, details, onClick, attr
     <li className="space-y-2 px-4 py-3" {...(attrs ?? {})}>
       <div className={cn("min-w-0 text-sm font-medium", onClick && "cursor-pointer")} onClick={onClick ? () => onClick(row) : undefined}>{title.cell(row)}</div>
       {keys.length > 0 && (
-        <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-meta">
+        <dl className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-1 text-meta">
           {keys.map((c) => <Fragment key={c.id}><dt className="text-muted-foreground">{c.header}</dt><dd className={cn("min-w-0 break-words", c.numeric && "num")}>{c.cell(row)}</dd></Fragment>)}
         </dl>
       )}

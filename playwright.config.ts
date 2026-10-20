@@ -9,7 +9,7 @@ import { defineConfig } from "@playwright/test";
 const PORT = Number(process.env.E2E_PORT || 3311);
 export default defineConfig({
   testDir: "e2e",
-  testMatch: process.env.E2E_AUDIT ? "audit.ts" : "*.spec.ts",
+  testMatch: process.env.E2E_AUDIT ? "audit.ts" : process.env.E2E_SCREENS ? "screens.ts" : "*.spec.ts",
   timeout: 120_000,
   fullyParallel: true,
   workers: 4,
