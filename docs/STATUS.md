@@ -215,6 +215,7 @@ A combined filter (profit, ROI, sales, BSR, not gated) went from ~4.1 s to ~0.3 
 **Results on a phone: 10 cards a page** (was 20; Run detail, Brand detail, Shortlist, and Products' server pages, `?size=10`), the pager under them worded Previous / Next (44px) with a page picker ("Page [n] of N"), and a new page scrolls back to its first card.
 **My niches on a phone**: each niche is a card (need, its terms, score; SV 360d, growth 180d, average price; flags, shape, status; tap to open its detail), the table from 640px; no sideways scroll at 390px.
 **Ads import previews** (a CSV report's rows, a bulk export's campaigns, in the Import sheet) are DataTables (sortable, 25 a page, cards on a phone) instead of hand-made tables; the reading and import calls are unchanged.
+**Today's "Add costs"** opens the purchase itself: `/stock/purchases?edit=<id>` opens that purchase's edit dialog (`OrderEditDialog`, exported) with its row marked (each row has `id="purchase-<id>"`); with several missing, the oldest ("Add the first").
 **Extension 0.8.0**: the product panel and search results show the app's words, colours and icons (Buy / Check / Skip / Not scored as round chips; the panel lists each gate as Pass / Check / Fail), and candidate links open `/pl/candidates/<id>` (Suppliers & quotes, Reviews or Gate 3 tab) instead of the old `?c=` redirect.
 
 ## Workspaces
@@ -445,7 +446,7 @@ StockPilot data is imported (3 items). Ads days of cover and the stock guard cou
 
 ## Known rough edges
 
-- Next steps: "Add costs" opens Stock → Purchases, not the purchase itself (the page has no per-purchase link yet). Keepa's low-token step
+- Next steps: Keepa's low-token step
   comes back each day it's still low (its condition has no change to wait for). Ad spend in the key numbers reads daily campaign
   rows only; with range reports alone it shows the date the data stops.
 - Ask Scout's £ uses the AI price table's Sonnet 5.5 row ($3 / $15 per million tokens); Anthropic now lists Sonnet 5.5 at $2 / $10, so the

@@ -49,7 +49,8 @@ export function OrderEditButton({ p, onSaved, label = "Edit" }: { p: OrderLike; 
   );
 }
 
-function OrderEditDialog({ p, onClose, onSaved }: { p: OrderLike; onClose: () => void; onSaved: () => void }) {
+/** The order's edit dialog (also opened straight from Today's "Add costs" step: /stock/purchases?edit=<id>). */
+export function OrderEditDialog({ p, onClose, onSaved }: { p: OrderLike; onClose: () => void; onSaved: () => void }) {
   const [items, setItems] = useState<{ id: string; sku: string; name: string }[]>([]);
   const [item, setItem] = useState(p.stock_item_id ?? "");
   const [supplier, setSupplier] = useState(p.supplier_id ?? "");

@@ -255,7 +255,8 @@ export function buildSteps(f: TodayFacts, now: Date): NextStep[] {
       why: costs.length === 1
         ? `The order of ${plural(c.units, "unit")}${c.supplier ? ` from ${c.supplier}` : ""} on ${shortDate(c.orderedOn)} has ${what(c)}.`
         : `${costs.length} open orders have ${allNoPrice ? "a landed cost but no supplier price" : "a cost missing"}: ${costs.slice(0, 4).map((x) => `${shortName(x.name, x.asin)} (${shortDate(x.orderedOn)}${allNoPrice ? `, landed ${gbp(x.landed!)}` : ""})`).join(", ")}${costs.length > 4 ? ` and ${costs.length - 4} more` : ""}.`,
-      cta: { label: "Open Purchases", href: "/stock/purchases" },
+      // The oldest one's edit dialog, on Stock → Purchases.
+      cta: { label: costs.length === 1 ? "Add costs" : "Add the first", href: `/stock/purchases?edit=${c.purchaseId}` },
       fingerprint: costs.map((x) => x.purchaseId).sort().join(","),
     });
   }

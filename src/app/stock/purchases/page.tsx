@@ -19,7 +19,7 @@ import { SyncStatus } from "@/components/product/SyncStatus";
 import { CalibrationPanel } from "@/components/product/CalibrationPanel";
 import { RecordPurchaseDialog } from "@/components/product/RecordPurchaseDialog";
 import { ReceiveDialog, StockPurchaseDialog } from "@/components/tracker/StockPurchase";
-import { OrderDeleteButton, OrderEditButton, OrderLine } from "@/components/tracker/OrderDetails";
+import { OrderDeleteButton, OrderEditButton, OrderEditDialog, OrderLine } from "@/components/tracker/OrderDetails";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -52,6 +52,8 @@ export default function PurchasesPage() {
     const q = new URLSearchParams(window.location.search);
     return q.get("new") === "stock" && q.get("item") ? { item: q.get("item")!, qty: Number(q.get("qty")) || null, supplier: q.get("supplier") || null } : null;
   });
+  // From Today's "Add costs" step: ?edit=<purchase id> opens that purchase's edit dialog, its row marked.
+  const [editId, setEditId] = useState<string | null>(() => (typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("edit")));
   const [receiving, setReceiving] = useState<Row | null>(null);
   const setStatus = async (p: Row, status: PurchaseStatus, bucket?: "home" | "tiktok_fbt" | null) => {
     if (status === "received" && bucket === undefined) { setReceiving(p); return; }
@@ -98,6 +100,8 @@ export default function PurchasesPage() {
   for (const p of open) counts.set(p.status, (counts.get(p.status) ?? 0) + 1);
 
   const reload = () => setNonce((n) => n + 1);
+  const editing = editId ? rows.find((p) => p.id === editId) ?? null : null;
+  const closeEdit = () => { setEditId(null); window.history.replaceState(null, "", "/stock/purchases"); };
   const columns: DataColumn<Row>[] = [
     {
       id: "product", header: "Product", mobile: "title", className: "min-w-72 max-w-96 whitespace-normal", sortValue: (p) => p.product?.title ?? p.stock?.name ?? p.asin,
@@ -147,6 +151,7 @@ export default function PurchasesPage() {
     <div className="space-y-6">
       {header}
       {stockNew && <StockPurchaseDialog open itemId={stockNew.item || null} qty={stockNew.qty} supplierId={stockNew.supplier} onOpenChange={(o) => { if (!o) { setStockNew(null); window.history.replaceState(null, "", "/stock/purchases"); } }} onSaved={() => setNonce((n) => n + 1)} />}
+      {editing && <OrderEditDialog p={editing} onClose={closeEdit} onSaved={reload} />}
       {receiving && <ReceiveDialog open units={receiving.units} onOpenChange={(o) => { if (!o) setReceiving(null); }} onReceive={(bucket) => { const p = receiving; setReceiving(null); setStatus(p, "received", bucket); }} />}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -170,7 +175,8 @@ export default function PurchasesPage() {
         getRowId={(p) => p.id}
         storageKey="stock.purchases"
         caption="Purchases"
-        rowAttrs={(p) => ({ "data-verdict": p.actuals?.profitPerUnit != null ? (p.actuals.profitPerUnit > 0 ? "pass" : "fail") : "empty" })}
+        rowAttrs={(p) => ({ id: `purchase-${p.id}`, "data-verdict": p.actuals?.profitPerUnit != null ? (p.actuals.profitPerUnit > 0 ? "pass" : "fail") : "empty" })}
+        rowClassName={(p) => (p.id === editId ? "bg-primary-soft/60" : undefined)}
         empty={rows.length === 0
           ? { icon: <PackageIcon />, title: "Nothing bought yet", description: "Record a purchase here, from a product's page or from the Plan; its prediction is frozen then.", action: <Button variant="secondary" onClick={() => setStockNew({ item: "", qty: null, supplier: null })}>Record a stock order</Button> }
           : { icon: <PackageIcon />, title: "Nothing open", description: "Every purchase is closed.", action: <Button variant="secondary" onClick={() => setShow("all")}>Show all, with closed</Button> }}
