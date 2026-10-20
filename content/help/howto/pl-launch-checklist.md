@@ -5,7 +5,7 @@ synonyms: [launch, launch checklist, samples, trademark, uk ipo, purchase order,
 workspace: pl
 order: 4
 ---
-**Private label → Launch** lists the candidates ready to launch (verdict **Order samples**, or status samples or launched; **Show all candidates** for the rest) with their next step. Each such candidate's page also has a **Launch** section under Quotes.
+Each candidate's page has a **Launch** tab: one flow in four steps. **1. Checklist** (below), **2. Inbound / stock check** (the listing ASIN's stock in each bucket, days of cover and its purchases, with the shipping steps ticked so far), **3. Ads launch plan** (the same builder as **Ads → Launch**, filled from the candidate) and **4. Export bulk file** (create the sheet and download it). The old Private label → Launch address opens the Launch tab of the candidate you're launching. The header's primary button ticks the next checklist step (for example **Mark samples received**), and the Pipeline moves the card to Launch and Live as the steps are ticked.
 
 ## The checklist
 
@@ -29,7 +29,7 @@ Each step has a **done** tick (today's date is filled in; change it), a **note**
 
 **The status follows**: anything done moves a draft to **researching**, samples ordered to **samples**, listing live to **launched**. It only moves forwards, and never changes a dropped candidate.
 
-**Ads launched** links to **Ads → Launch** with the candidate's listing ASIN, its Gate 5 head terms and its page-one competitors filled in (see [Ads: launching a product](/help/howto/ads-launching-a-product)).
+**Ads launched** links to step 3, the Ads launch plan, with the candidate's listing ASIN, its Gate 5 head terms and its page-one competitors filled in (see [Ads: launching a product](/help/howto/ads-launching-a-product)).
 
 ## Listing ASIN
 

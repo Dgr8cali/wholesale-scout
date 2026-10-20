@@ -5,7 +5,7 @@ synonyms: [listing, listing writer, brand name, key specs, suitable for, not for
 workspace: pl
 order: 6
 ---
-Each candidate has a **Listing** section under Suppliers and Quotes. It writes the Amazon listing from what you've already captured, so the bullets answer the complaints buyers have about the products on page one and the title carries the search terms people actually use. The Launch checklist's **Listing written** step links straight to it.
+Each candidate has a **Listing** tab on its page. It writes the Amazon listing from what you've already captured, so the bullets answer the complaints buyers have about the products on page one and the title carries the search terms people actually use. The Launch tab's checklist step **Listing written** links straight to it.
 
 ## What it's written from
 

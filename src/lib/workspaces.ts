@@ -47,7 +47,6 @@ export const WORKSPACES: Workspace[] = [
       { href: "/pl/candidates", label: "Candidates" },
       { href: "/pl/niches", label: "Niches" },
       { href: "/pl/suppliers", label: "Suppliers & quotes" },
-      { href: "/pl/launch", label: "Launch checklist", more: true },
     ],
   },
   {

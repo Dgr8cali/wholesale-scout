@@ -31,13 +31,14 @@ describe("workspaces", () => {
     expect(main("wholesale")).toEqual(["Runs", "New run", "Products", "Suppliers", "Shortlist"]);
     expect(more("wholesale")).toEqual(["Sellers", "Brands", "Plan"]);
     expect(main("pl")).toEqual(["Pipeline", "Candidates", "Niches", "Suppliers & quotes"]);
-    expect(more("pl")).toEqual(["Launch checklist"]);
+    expect(more("pl")).toEqual([]);
     expect(main("ads")).toEqual(["Dashboard", "Proposals", "Launch", "Search terms"]);
     expect(more("ads")).toEqual(["Rules", "Review"]);
     expect(main("stock")).toEqual(["Levels", "Purchases", "Reorder"]);
     expect(more("stock")).toEqual(["Movements", "Sales", "Import"]);
     // A group's main pages come before its More.
-    for (const w of WORKSPACES) expect(w.nav.findIndex((n) => n.more)).toBe(w.nav.filter((n) => !n.more).length);
+    // (Private label has no More since its launch checklist became a candidate tab.)
+    for (const w of WORKSPACES) if (w.nav.some((n) => n.more)) expect(w.nav.findIndex((n) => n.more)).toBe(w.nav.filter((n) => !n.more).length);
     expect(SHARED_NAV.map((n) => n.label)).toEqual(["Today", "Settings", "Help"]);
   });
 

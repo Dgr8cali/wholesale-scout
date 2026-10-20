@@ -56,7 +56,7 @@ export function LaunchSection({ candidateId, status, steps, listingAsin, ads, pl
       toast.error((e as Error).message);
     }
   };
-  const adsHref = `/ads/launch?candidateId=${candidateId}${listingAsin ? `&asin=${listingAsin}` : ""}`;
+  const adsHref = `/pl/candidates/${candidateId}?tab=launch&step=ads`;
   type Row = { d: (typeof LAUNCH_STEPS)[number]; i: number; s: LaunchStep | undefined };
   const rows: Row[] = LAUNCH_STEPS.map((d, i) => ({ d, i, s: byKey.get(d.key) }));
   const columns: DataColumn<Row>[] = [
@@ -68,7 +68,7 @@ export function LaunchSection({ candidateId, status, steps, listingAsin, ads, pl
           <span><span className={cn("font-medium", s?.done && "text-success")}>{i + 1}. {d.label}</span>
             {d.hint && <span className="block text-meta font-normal text-muted-foreground">{d.hint}</span>}
             {d.key === "listing_written" && <Link href={`/pl/candidates/${candidateId}?tab=listing`} className="inline-flex items-center gap-1 text-meta font-medium text-primary hover:underline"><PenLineIcon className="size-3" /> Write it on the Listing tab</Link>}
-            {d.key === "ads_launched" && <Link href={adsHref} className="inline-flex items-center gap-1 text-meta font-medium text-primary hover:underline"><MegaphoneIcon className="size-3" /> Build the campaigns in Ads → Launch</Link>}
+            {d.key === "ads_launched" && <Link href={adsHref} className="inline-flex items-center gap-1 text-meta font-medium text-primary hover:underline"><MegaphoneIcon className="size-3" /> Build the campaigns in step 3, Ads launch plan</Link>}
           </span>
         </label>
       ),

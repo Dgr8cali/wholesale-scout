@@ -1,7 +1,7 @@
 # Wholesale Scout: status
 
 Read this first in a new session. Keep it current: every commit that changes a feature updates
-it (what's built, the backlog, the rough edges). Last updated: 20 Oct 2026 (UI redesign phase 4b: Private label pipeline board and candidate page).
+it (what's built, the backlog, the rough edges). Last updated: 20 Oct 2026 (UI redesign phase 4b done: Private label pipeline board, tabbed candidate page, one launch flow).
 
 Wholesale Scout is a single-user Amazon UK seller's workbench: Next.js 16 (App Router, `proxy.ts`
 password gate), self-hosted Supabase (Postgres, RLS on, service-role access from the server only),
@@ -157,7 +157,17 @@ then its quotes), **Listing** (the Listing Writer, unchanged), **Launch**. `GET 
 settings, rate card and ads CPC. Every link to a candidate (Today's steps, ⌘K, Ask Scout, Niches, the supplier table, the Ads
 dashboard) goes to the page and, from Today, the right tab and gate. Heights at 1440 for Lens cleaning wipes: Overview 1,758,
 Gates 1,226–1,446, Reviews 2,487, Suppliers & quotes 1,379, Listing 2,766 (the Listing Writer's own length), Launch 1,470.
-To do: phase 4b's one launch flow, phase 4c (one
+**One launch flow**: the candidate's Launch tab is four steps (`?step=`): Checklist (the old launch checklist, listing ASIN and
+budget against Gate 7) → Inbound / stock check (`GET /api/pl/candidates/[id]/stock`: the listing ASIN's stock item per bucket, cover,
+its purchases and units inbound, the shipping steps ticked) → Ads launch plan (the Ads launch builder for that candidate, logic
+unchanged) → Export bulk file (create and download the sheet). The builder is one component, `src/components/ads/LaunchBuilder.tsx`
+(`useLaunchBuilder`, `LaunchForm`, `LaunchPlan`, `LaunchExport`; the same `/api/ads/launch` calls and bulk sheet as before), and
+Ads → Launch stays in the Ads menu, rendering it with its product picker. The checklist's "Ads launched" links to step 3. The
+Private label menu no longer has Launch checklist: `/pl/launch` redirects to the Launch tab of the candidate most recently worked
+on that's launching (samples, launched or a checklist step done), else to the pipeline (today: the pipeline). Help updated
+(getting started, Private label, launch checklist, writing the listing). Screenshots: `docs/ui-audit/after/4b/` (gitignored).
+Phase 4b done.
+To do: phase 4c (one
 shared results table for Run detail / Brand detail / Products) and phase 5 (the remaining polish, including the extension's
 PASS/WARN/FAIL badges in the new verdict words and the Products page's length on phones).
 

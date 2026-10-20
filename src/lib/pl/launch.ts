@@ -20,7 +20,7 @@ export const LAUNCH_STEPS: LaunchStepDef[] = [
   { key: "at_fba", label: "At FBA", line: "other" },
   { key: "listing_written", label: "Listing written", line: "photography", hint: "Title, bullets and backend terms from the candidate's Listing section" },
   { key: "listing_live", label: "Listing live", line: "photography", hint: "Photography and the listing" },
-  { key: "ads_launched", label: "Ads launched", line: "launchAds", hint: "Ads → Launch builds the campaigns" },
+  { key: "ads_launched", label: "Ads launched", line: "launchAds", hint: "The Launch tab's Ads launch plan builds the campaigns" },
   { key: "first_review", label: "First review", line: "other" },
 ];
 export const STEP_KEYS = LAUNCH_STEPS.map((s) => s.key);
