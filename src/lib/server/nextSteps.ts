@@ -242,16 +242,21 @@ export function buildSteps(f: TodayFacts, now: Date): NextStep[] {
   }
 
   /* ---------- Stock ---------- */
-  const costsBy = new Map<string, TodayFacts["stock"]["missingCosts"]>();
-  for (const c of f.stock.missingCosts) costsBy.set(c.asin, [...(costsBy.get(c.asin) ?? []), c]);
-  for (const [asin, list] of costsBy) {
-    const c = [...list].sort((a, b) => a.orderedOn.localeCompare(b.orderedOn))[0];
-    const missing = c.unitCost == null && c.landed! > 0 ? `a landed cost (${gbp(c.landed!)} a unit) but no supplier price` : c.unitCost == null ? "no supplier price and no landed cost" : "no landed cost";
+  // One step for every open order missing a cost (oldest first), so they don't crowd the list.
+  const costs = [...f.stock.missingCosts].sort((a, b) => a.orderedOn.localeCompare(b.orderedOn));
+  if (costs.length) {
+    const c = costs[0];
+    const what = (x: typeof c) => (x.unitCost == null && x.landed! > 0 ? `a landed cost (${gbp(x.landed!)} a unit) but no supplier price` : x.unitCost == null ? "no supplier price and no landed cost" : "no landed cost");
+    const names = [...new Set(costs.map((x) => shortName(x.name, x.asin)))];
+    const allNoPrice = costs.every((x) => x.unitCost == null && x.landed! > 0);
     out.push({
-      id: `stock:costs:${asin}`, workspace: "Stock", title: `Add costs for ${shortName(c.name, asin)}`, minutes: 2, priority: 2, since: c.orderedOn,
-      why: `The order of ${plural(c.units, "unit")}${c.supplier ? ` from ${c.supplier}` : ""} on ${shortDate(c.orderedOn)} has ${missing}.${list.length > 1 ? ` So ${list.length === 2 ? "does 1 other order" : `do ${list.length - 1} other orders`} for it.` : ""}`,
+      id: "stock:costs", workspace: "Stock", minutes: 2 * Math.min(5, costs.length) + (costs.length > 1 ? 1 : 0), priority: 2, since: c.orderedOn,
+      title: names.length === 1 ? `Add costs for ${names[0]}` : `Add costs for ${names[0]} and ${plural(names.length - 1, "more product")}`,
+      why: costs.length === 1
+        ? `The order of ${plural(c.units, "unit")}${c.supplier ? ` from ${c.supplier}` : ""} on ${shortDate(c.orderedOn)} has ${what(c)}.`
+        : `${costs.length} open orders have ${allNoPrice ? "a landed cost but no supplier price" : "a cost missing"}: ${costs.slice(0, 4).map((x) => `${shortName(x.name, x.asin)} (${shortDate(x.orderedOn)}${allNoPrice ? `, landed ${gbp(x.landed!)}` : ""})`).join(", ")}${costs.length > 4 ? ` and ${costs.length - 4} more` : ""}.`,
       cta: { label: "Open Purchases", href: "/stock/purchases" },
-      fingerprint: list.map((x) => x.purchaseId).sort().join(","),
+      fingerprint: costs.map((x) => x.purchaseId).sort().join(","),
     });
   }
   for (const r of f.stock.reorders) {

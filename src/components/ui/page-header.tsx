@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react"
 
-import { usePageCrumbs, type Crumb } from "@/components/Crumbs"
+import { usePageCrumbs, usePageHeaderMounted, type Crumb } from "@/components/Crumbs"
 import { InfoTip } from "@/components/ui/info-tip"
 import { cn } from "@/lib/utils"
 
@@ -20,6 +20,7 @@ export function PageHeader({ title, subtitle, info, actions, crumbs, className }
   className?: string
 }) {
   usePageCrumbs(crumbs ?? null)
+  usePageHeaderMounted()
   return (
     <header data-slot="page-header" className={cn("flex flex-wrap items-start justify-between gap-x-6 gap-y-3", className)}>
       {/* At least 16rem before it shares the row: on a phone the actions wrap below instead of squeezing the title. */}

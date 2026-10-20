@@ -112,16 +112,20 @@ describe("Ads rules", () => {
 describe("Stock rules", () => {
   it("a purchase with no supplier price: add costs", () => {
     const f = facts({ stock: { missingCosts: [{ purchaseId: "p1", name: "Lifeproof Ceramic Coating Spray Kit - Shine, Seal", asin: "B08Y5WCL4H", supplier: "Lifeproofhome", units: 30, orderedOn: "2026-10-03", landed: 17, unitCost: null }] } });
-    const s = one(f, "stock:costs:B08Y5WCL4H");
+    const s = one(f, "stock:costs");
     expect(s.title).toBe("Add costs for Lifeproof Ceramic Coating Spray Kit");
     expect(s.why).toBe("The order of 30 units from Lifeproofhome on 3 Oct has a landed cost (£17.00 a unit) but no supplier price.");
   });
-  it("two orders for one product are one step", () => {
-    const c = { name: "Tetra AlguMin", asin: "B000LXUWU4", supplier: null, units: 20, landed: 0, unitCost: null };
-    const f = facts({ stock: { missingCosts: [{ ...c, purchaseId: "a", orderedOn: "2026-10-08" }, { ...c, purchaseId: "b", orderedOn: "2026-10-01" }] } });
+  it("several orders missing costs are one step, oldest first", () => {
+    const c = { supplier: null, units: 20, unitCost: null };
+    const f = facts({ stock: { missingCosts: [
+      { ...c, purchaseId: "a", name: "Tetra AlguMin", asin: "B000LXUWU4", orderedOn: "2026-10-08", landed: 9.1 },
+      { ...c, purchaseId: "b", name: "Biotene Mouth Spray, Gentle Mint", asin: "B00IC4XC6K", orderedOn: "2026-09-30", landed: 23.5 },
+    ] } });
     const s = buildSteps(f, NOW).filter((x) => x.id.startsWith("stock:costs"));
     expect(s).toHaveLength(1);
-    expect(s[0].why).toBe("The order of 20 units on 1 Oct has no supplier price and no landed cost. So does 1 other order for it.");
+    expect(s[0].title).toBe("Add costs for Biotene Mouth Spray and 1 more product");
+    expect(s[0].why).toBe("2 open orders have a landed cost but no supplier price: Biotene Mouth Spray (30 Sept, landed £23.50), Tetra AlguMin (8 Oct, landed £9.10).");
   });
   it("reorder due is high priority, soon is medium; the numbers are in the why", () => {
     const base = { name: "7-Day Pill Organiser", total: 40, perDay: 3.2, reorderPoint: 224, suggestedQty: 300, leadTimeDays: 60 };

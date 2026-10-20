@@ -107,6 +107,13 @@ day 49, each shown until the next); Stock (open purchases with no supplier price
 (each active candidate's next action: the next launch checklist step, order samples on a pass, fix or drop on a failed gate, else the
 first gate with no answers; Alibaba leads scoring 60+ not messaged; messaged suppliers with no quote after 7 days); Wholesale (applied
 brand approvals over 7 days old, the best brand to apply for with a Buy product, one at a time; Shortlist items over a week old).
+Today's layout (`src/app/page.tsx`, `src/components/today/`): PageHeader "Today" with the date, New run in the header; numbered step
+cards (number, "WORKSPACE · n min", title, why, the button that does it, Show me how, Later, Done with Undo in a toast), the top five
+then "Show all (n)"; when nothing's left, "You're all caught up" with the next launch milestone. Under the steps one row of six key
+numbers (ad spend over 7 days with ACoS, open proposals, candidates in progress, stock to reorder, Keepa tokens, brands to approve with
+a Buy product), each its own icon, wrapping instead of truncating. Open orders missing costs are one step. The old tiles, Recent runs,
+Qogita overnight, Favourites and Brands to chase cards are gone (Runs, New run → Qogita, Shortlist and Brands show them). App-wide:
+the top bar leaves the page name out when the page has a PageHeader (`usePageHeaderMounted` in `Crumbs.tsx`).
 To do: phase 4 (Today's layout, the candidate detail page, a pipeline board, Private label Launch + Ads Launch, one results table
 for Run detail / Brand detail / Products) and phase 5 (polish).
 

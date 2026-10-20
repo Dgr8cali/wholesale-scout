@@ -8,7 +8,7 @@ import { CommandPaletteButton, CommandPaletteProvider } from "@/components/Comma
 import { Logo } from "@/components/Logo";
 import { NAV_ICON } from "@/components/navIcons";
 import { SHARED_NAV, WORKSPACES, type NavItem, type Workspace } from "@/lib/workspaces";
-import { CrumbsProvider, useCrumbs } from "@/components/Crumbs";
+import { CrumbsProvider, useCrumbs, useHasPageHeader } from "@/components/Crumbs";
 import { QogitaCartButton, QogitaCartProvider } from "@/components/QogitaCart";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { HelpButton } from "@/components/help/HelpButton";
@@ -163,10 +163,12 @@ function StatusPopover() {
   );
 }
 
-/** The page's name: its last breadcrumb, else its menu label. */
+/** The page's name: its last breadcrumb, else its menu label. Left out when the page shows its own PageHeader. */
 function TopTitle() {
   const crumbs = useCrumbs();
   const path = usePathname();
+  const hasHeader = useHasPageHeader();
+  if (hasHeader) return null;
   const nav = [...SHARED_NAV, ...WORKSPACES.flatMap((w) => w.nav)].find((n) => isActive(n.href, path));
   const title = crumbs.length ? crumbs[crumbs.length - 1].label : nav?.label;
   return title ? <p className="min-w-0 truncate text-sm font-medium">{title}</p> : null;
