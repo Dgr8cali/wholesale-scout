@@ -9,6 +9,8 @@ import { Textarea } from "@/components/ui/textarea";
 import type { AskRun } from "@/lib/server/askScout";
 import { api } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
+import { ListButton } from "@/components/ui/list-button";
+import { ListSkeleton } from "@/components/ui/skeletons";
 
 const EXAMPLES = ["Is the seat belt making money after ads?", "When should I reorder the pill box?", "Which suppliers haven't replied?"];
 /** Every open panel reloads when one of them asks something. */
@@ -100,13 +102,13 @@ export function AskScout({ inputId, autoAsk, className }: { inputId?: string; au
   return (
     <div className={cn("flex min-h-0 flex-col", className)}>
       <div className="min-h-0 flex-1 overflow-y-auto pr-1">
-        {history === null ? <p className="py-6 text-center text-sm text-muted-foreground">Loading…</p>
+        {history === null ? <ListSkeleton rows={3} className="py-2" />
           : !list.length && !busy ? (
             <div className="space-y-3 py-2">
               <p className="text-sm text-muted-foreground">Ask about your own products, stock, ads, candidates and suppliers. Scout only reads, and says when the data isn&apos;t there.</p>
               <ul className="space-y-1.5">
                 {EXAMPLES.map((x) => (
-                  <li key={x}><button type="button" onClick={() => void ask(x)} className="w-full cursor-pointer rounded-[10px] border border-border px-3 py-2 text-left text-sm hover:bg-accent">{x}</button></li>
+                  <li key={x}><ListButton onClick={() => void ask(x)} className="rounded-[10px] border border-border px-3 py-2">{x}</ListButton></li>
                 ))}
               </ul>
             </div>

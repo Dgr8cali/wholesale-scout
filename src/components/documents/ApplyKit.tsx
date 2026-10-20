@@ -7,6 +7,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { applyOrder, staleInvoice, type DocumentRow } from "@/lib/documents";
 import { api } from "@/lib/ui/client";
 import { DocumentLine } from "./Documents";
+import { ListSkeleton } from "@/components/ui/skeletons";
 
 /**
  * The Apply flow with your paperwork: the brand's documents and the supplier's invoices, and one
@@ -41,7 +42,7 @@ export function ApplyKit({ brand, supplierId, applyUrl, compact = false }: { bra
       </PopoverTrigger>
       <PopoverContent align="end" className="w-[26rem] max-w-[calc(100vw-2rem)] space-y-3" onClick={(e) => e.stopPropagation()}>
         <p className="text-sm font-semibold">Apply{brand ? ` for ${brand}` : ""}</p>
-        {docs == null ? <p className="text-sm text-muted-foreground">Loading…</p> : docs.length ? (
+        {docs == null ? <ListSkeleton rows={2} /> : docs.length ? (
           <ul className="max-h-64 space-y-1.5 overflow-y-auto">{docs.map((d) => <DocumentLine key={d.id} d={d} />)}</ul>
         ) : (
           <p className="text-sm text-muted-foreground">No documents yet. Attach invoices and brand letters on the brand&apos;s or the supplier&apos;s page.</p>

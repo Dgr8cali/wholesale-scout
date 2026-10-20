@@ -22,6 +22,7 @@ import { BUCKET_LABEL, type Bucket } from "@/lib/stock/levels";
 import { PURCHASE_STATUSES } from "@/lib/tracker";
 import { api, gbp, when } from "@/lib/ui/client";
 import { DocumentUploader } from "@/components/documents/Documents";
+import { FormSkeleton, TableSkeleton } from "@/components/ui/skeletons";
 
 interface Detail {
   supplier: SupplierRecord;
@@ -75,7 +76,7 @@ export default function SupplierPage() {
   }
 
   if (error) return <ErrorState title="Couldn't load this supplier" message={error} onRetry={load} />;
-  if (!data) return <div className="space-y-4"><Skeleton className="h-10 w-64" /><Skeleton className="h-72" /><Skeleton className="h-48" /></div>;
+  if (!data) return <div className="space-y-4"><Skeleton className="h-10 w-64 rounded-lg" /><FormSkeleton fields={8} /><TableSkeleton rows={5} columns={5} /></div>;
   const s = data.supplier;
   const text = (k: keyof SupplierRecord, placeholder?: string, type = "text") => (
     <Input type={type} defaultValue={(s[k] as string | number | null) ?? ""} placeholder={placeholder} aria-label={k}
@@ -88,7 +89,7 @@ export default function SupplierPage() {
         crumbs={[{ label: "Wholesale", href: "/runs" }, { label: "Suppliers", href: "/suppliers" }, { label: s.name }]}
         title={<span className="flex items-center gap-2">
           {s.name}
-          {s.website && <a className="text-primary" href={s.website} target="_blank" rel="noreferrer" aria-label="Website"><ExternalLinkIcon className="size-4" /></a>}
+          {s.website && <a className="text-link" href={s.website} target="_blank" rel="noreferrer" aria-label="Website"><ExternalLinkIcon className="size-4" /></a>}
         </span>}
         subtitle={<>
           {SOURCE[s.source_type]} · {data.stats.runs} run{data.stats.runs === 1 ? "" : "s"} · {data.stats.products.toLocaleString("en-GB")} products seen
@@ -171,7 +172,7 @@ export default function SupplierPage() {
                 id: "product", header: "Product", mobile: "title", className: "max-w-80", sortValue: (b) => b.title ?? b.ean,
                 cell: (b) => <>
                   <p className="line-clamp-2 text-sm">{b.title ?? b.ean}</p>
-                  <p className="num text-xs font-normal text-muted-foreground">{b.brand} · {b.asin ? <a className="text-primary hover:underline" href={`https://www.amazon.co.uk/dp/${b.asin}`} target="_blank" rel="noreferrer">{b.asin}</a> : b.ean}</p>
+                  <p className="num text-xs font-normal text-muted-foreground">{b.brand} · {b.asin ? <a className="link" href={`https://www.amazon.co.uk/dp/${b.asin}`} target="_blank" rel="noreferrer">{b.asin}</a> : b.ean}</p>
                 </>,
               },
               { id: "verdict", header: "Verdict", mobile: 1, sortValue: (b) => (b.verdict === "pass" ? 1 : b.verdict === "warn" ? 2 : 3), cell: (b) => <ProductDecision verdict={b.verdict} /> },

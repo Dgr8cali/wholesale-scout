@@ -7,21 +7,29 @@ import { toast } from "sonner";
 import { ErrorState } from "@/components/States";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
 import { SETTINGS_DEF, type Settings } from "@/lib/pl/gatekeeper";
 import { api } from "@/lib/ui/client";
+import { useDirty } from "@/lib/ui/useDirty";
+import { FormSkeleton } from "@/components/ui/skeletons";
 
 /** Gatekeeper's thresholds and cost assumptions for Private label (shared by every candidate). */
 export function PlSettingsTab() {
   const [s, setS] = useState<Record<string, string> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const fill = (x: Settings) => setS(Object.fromEntries(Object.entries(x).map(([k, v]) => [k, String(v)])));
+  const { dirty, settle } = useDirty(s);
+  const fill = (x: Settings) => {
+    const y = Object.fromEntries(Object.entries(x).map(([k, v]) => [k, String(v)]));
+    setS(y);
+    settle(y);
+  };
   useEffect(() => {
     api<{ settings: Settings }>("/api/pl/settings").then((r) => fill(r.settings)).catch((e: Error) => setError(e.message));
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- load once, on open
   }, []);
   if (error) return <ErrorState title="Couldn't load the private-label settings" message={error} />;
-  if (!s) return <Skeleton className="h-64 rounded-lg" />;
+  if (!s) return <FormSkeleton fields={8} />;
   const bad = SETTINGS_DEF.filter((d) => s[d.k] === "" || !Number.isFinite(Number(s[d.k]))).map((d) => d.label);
   const save = async () => {
     setSaving(true);
@@ -40,18 +48,19 @@ export function PlSettingsTab() {
         <div className="space-y-1">
           <SectionTitle title={<>Private label</>}>The budget, cost assumptions and Gate 6 floors used for every Private label candidate. Fees come from the rate card under Fees. Peak rates (October–December) apply automatically by date, as in screening.</SectionTitle>
         </div>
-        <Button variant="secondary" onClick={save} disabled={saving || bad.length > 0}>Save</Button>
+        <Button variant="secondary" onClick={save} disabled={!dirty || bad.length > 0} loading={saving}>Save</Button>
       </div>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {SETTINGS_DEF.map((d) => (
           <label key={d.k} className="space-y-1.5">
             <span className="field-label">{d.label} ({d.unit})</span>
-            <Input className="num" type="number" step="any" value={s[d.k]} disabled={d.k === "vat"} onChange={(e) => setS({ ...s, [d.k]: e.target.value })} />
-            <span className="block text-xs text-muted-foreground">{d.k === "vat" ? <>Set in <Link className="text-primary underline" href="/settings?tab=business">Settings → Business</Link>, with VAT registration</> : `Default ${d.d}`}</span>
+            <Input className="num" type="number" step="any" value={s[d.k]} disabled={d.k === "vat"} aria-invalid={bad.includes(d.label)} onChange={(e) => setS({ ...s, [d.k]: e.target.value })} />
+            {bad.includes(d.label)
+              ? <span className="block text-xs text-danger">Enter a number (the default is {d.d})</span>
+              : <span className="block text-xs text-muted-foreground">{d.k === "vat" ? <>Set in <Link className="link" href="/settings?tab=business">Settings → Business</Link>, with VAT registration</> : `Default ${d.d}`}</span>}
           </label>
         ))}
       </div>
-      {bad.length > 0 && <p className="text-sm text-danger">Needs a number: {bad.join(", ")}</p>}
       <BrandTermsEditor />
       <OffNicheEditor />
       <RfqTemplateEditor />
@@ -89,7 +98,7 @@ function BrandTermsEditor() {
           <Button variant="secondary" size="sm" disabled={busy || text === saved} onClick={() => save()}>Save brands</Button>
         </span>
       </div>
-      <textarea className="min-h-40 w-full max-w-xl rounded-lg border border-border bg-transparent px-2 py-1.5 font-mono text-xs" value={text} onChange={(e) => setText(e.target.value)} />
+      <Textarea aria-label="Niche Import: brand terms, one a line" className="min-h-40 max-w-xl font-mono text-xs" value={text} onChange={(e) => setText(e.target.value)} />
     </div>
   );
 }
@@ -124,7 +133,7 @@ function OffNicheEditor() {
           <Button variant="secondary" size="sm" disabled={busy || text === saved} onClick={() => save()}>Save words</Button>
         </span>
       </div>
-      <textarea className="min-h-40 w-full max-w-xl rounded-lg border border-border bg-transparent px-2 py-1.5 font-mono text-xs" value={text} onChange={(e) => setText(e.target.value)} />
+      <Textarea aria-label="Niche Import: off-niche words, one a line" className="min-h-40 max-w-xl font-mono text-xs" value={text} onChange={(e) => setText(e.target.value)} />
     </div>
   );
 }
@@ -161,7 +170,7 @@ function RfqTemplateEditor() {
           <Button variant="secondary" size="sm" disabled={busy || text === saved} onClick={() => save()}>Save template</Button>
         </span>
       </div>
-      <textarea className="min-h-72 w-full max-w-3xl rounded-lg border border-border bg-transparent px-2 py-1.5 font-mono text-xs" value={text} onChange={(e) => setText(e.target.value)} />
+      <Textarea aria-label="Supplier Scout: RFQ template" className="min-h-72 max-w-3xl font-mono text-xs" value={text} onChange={(e) => setText(e.target.value)} />
     </div>
   );
 }

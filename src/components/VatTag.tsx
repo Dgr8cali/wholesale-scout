@@ -9,7 +9,7 @@ export function VatTag({ registered, className }: { registered: boolean | null |
   return (
     <span
       title={registered ? "VAT registered: revenue is the sale price less output VAT; fees and goods count ex-VAT (the VAT is reclaimed)" : "Not VAT registered: revenue is the full sale price; VAT on fees and goods is a cost"}
-      className={cn("inline-block rounded px-1 py-px align-middle text-xs leading-tight font-semibold tracking-wide whitespace-nowrap normal-case", registered ? "bg-primary-soft text-primary" : "bg-subtle text-ink-2", className)}
+      className={cn("inline-block rounded px-1 py-px align-middle text-xs leading-tight font-semibold tracking-wide whitespace-nowrap normal-case", registered ? "bg-primary-soft text-link" : "bg-subtle text-ink-2", className)}
     >
       {registered ? "VAT reg." : "Non-VAT"}
     </span>

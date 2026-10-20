@@ -15,7 +15,7 @@ export function StatusPill({ status, label, big }: { status: Status; label?: str
 }
 
 const SOURCE: Record<FieldSource, { label: string; cls: string; title: string }> = {
-  keepa: { label: "Keepa", cls: "bg-brand-soft text-brand", title: "Filled from Keepa; Refresh from Keepa updates it" },
+  keepa: { label: "Keepa", cls: "bg-brand-soft text-link", title: "Filled from Keepa; Refresh from Keepa updates it" },
   poe: { label: "POE", cls: "bg-warn-soft text-warn", title: "Filled from an Opportunity Explorer capture" },
   poe_derived: { label: "POE (derived)", cls: "bg-warn-soft text-warn", title: "Worked out from an Opportunity Explorer capture, which doesn't state it: how, under the field" },
   fees: { label: "Fees", cls: "bg-pass-soft text-pass", title: "Worked out from the rate card" },

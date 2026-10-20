@@ -12,7 +12,6 @@ import { StatusChip, StockLevel } from "@/components/ui/status-chip";
 import { capitalFor } from "@/lib/pl/gatekeeper";
 import { LAUNCH_STEPS, type LaunchStep, type PlStatus } from "@/lib/pl/launch";
 import { BUCKET_LABEL, BUCKETS } from "@/lib/stock/levels";
-import { cn } from "@/lib/utils";
 import type { Quote } from "@/lib/pl/quotes";
 import { api } from "@/lib/ui/client";
 import { LaunchSection, type AdsSummary } from "../Launch";
@@ -23,6 +22,7 @@ import { SuppliersSection } from "../Suppliers";
 import { valuesOf } from "../types";
 import { CriticalReviewsTable } from "./parts";
 import type { CandidateState } from "./useCandidate";
+import { StepButton } from "@/components/ui/step-button";
 
 export interface Extras { quotes: Quote[]; steps: LaunchStep[]; listingAsin: string | null; chosenQuote: string | null; chosenLanded: number | null; ads: AdsSummary | null }
 
@@ -113,10 +113,9 @@ export function LaunchTab({ id, s, onChanged }: { id: string; s: CandidateState;
         <ol className="flex min-w-max gap-1.5 sm:min-w-0 sm:flex-wrap">
           {STEPS.map((x, n) => (
             <li key={x.key}>
-              <button type="button" onClick={() => go(x.key)} aria-current={step === x.key ? "step" : undefined}
-                className={cn("flex cursor-pointer items-center gap-2 rounded-[10px] border px-2.5 py-1.5 text-sm", step === x.key ? "border-primary bg-primary-soft font-medium text-primary-ink" : "border-border hover:bg-accent")}>
+              <StepButton current={step === x.key} onClick={() => go(x.key)} className="gap-2 px-2.5 py-1.5 text-sm">
                 <span className="num flex size-6 flex-none items-center justify-center rounded-md bg-muted text-xs font-semibold">{n + 1}</span>{x.label}
-              </button>
+              </StepButton>
             </li>
           ))}
         </ol>
@@ -203,8 +202,8 @@ function StockCheck({ id, steps }: { id: string; steps: LaunchStep[] }) {
             ) : <p className="text-sm text-muted-foreground">No purchases recorded for {d.asin}.</p>}
           </div>
           <p className="flex flex-wrap gap-4 text-sm">
-            {d.item && <Link className="text-primary hover:underline" href={`/stock/levels?item=${d.item.id}`}>Stock → Levels →</Link>}
-            <Link className="text-primary hover:underline" href="/stock/purchases">Stock → Purchases →</Link>
+            {d.item && <Link className="link" href={`/stock/levels?item=${d.item.id}`}>Stock → Levels →</Link>}
+            <Link className="link" href="/stock/purchases">Stock → Purchases →</Link>
           </p>
         </>
       )}

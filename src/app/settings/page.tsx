@@ -26,6 +26,7 @@ import {
 } from "@/lib/screening/config";
 import type { CategoryRule } from "@/lib/screening/rules";
 import { api } from "@/lib/ui/client";
+import { useDirty } from "@/lib/ui/useDirty";
 
 import { Button } from "@/components/ui/button";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
@@ -45,6 +46,9 @@ import { SectionTitle } from "@/components/ui/info-tip";
 import { PageHeader } from "@/components/ui/page-header";
 import { ThemeChoice } from "@/components/ThemeToggle";
 import { cn } from "@/lib/utils";
+import { TextButton } from "@/components/ui/text-button";
+import { ListButton } from "@/components/ui/list-button";
+import { FormSkeleton } from "@/components/ui/skeletons";
 interface Profile { id: string; name: string; config: ProfileConfig; is_default: boolean }
 
 /** Numeric parameters per gate, as shown in Settings. */
@@ -82,10 +86,10 @@ function NumberField({ label, unit, value, step, onChange }: { label: string; un
   );
 }
 
-function ModeSelect({ value, onChange, allowOff = true }: { value: GateMode; onChange: (m: GateMode) => void; allowOff?: boolean }) {
+function ModeSelect({ value, onChange, allowOff = true, label }: { value: GateMode; onChange: (m: GateMode) => void; allowOff?: boolean; label?: string }) {
   const cls = value === "fail" ? "text-danger" : value === "warn" ? "text-warn-ink" : "text-muted-foreground";
   return (
-    <NativeSelect className={`w-24 font-medium ${cls}`} value={value} onChange={(e) => onChange(e.target.value as GateMode)}>
+    <NativeSelect className={`w-24 font-medium ${cls}`} value={value} onChange={(e) => onChange(e.target.value as GateMode)} aria-label={label}>
       {MODES.filter((m) => allowOff || m !== "off").map((m) => <NativeSelectOption key={m} value={m}>{MODE_LABEL[m]}</NativeSelectOption>)}
     </NativeSelect>
   );
@@ -119,7 +123,7 @@ function Section({ title, note, actions, children, className }: { title: ReactNo
   );
 }
 
-const LoadingBlocks = () => <div className="space-y-4"><Skeleton className="h-16 rounded-lg" /><Skeleton className="h-64 rounded-lg" /><Skeleton className="h-40 rounded-lg" /></div>;
+const LoadingBlocks = () => <div className="space-y-4"><Skeleton className="h-16 rounded-lg" /><FormSkeleton fields={6} /><FormSkeleton fields={4} /></div>;
 const LoadError = ({ message }: { message: string }) => <ErrorState title="Couldn't load settings" message={message} onRetry={() => window.location.reload()} />;
 
 export default function SettingsPage() {
@@ -140,7 +144,7 @@ function Settings() {
     <div className="space-y-6">
       <PageHeader
         title="Settings"
-        crumbs={[{ label: "Settings" }]}
+        crumbs={[{ label: "Home", href: "/" }, { label: "Settings" }]}
         subtitle="How the app screens, scores and runs each workspace."
         info={<p>Screening profiles (gates, score and fees), shared rules and rate card, waived gates, saved filter sets, the Business, Private label, Ads and Stock settings, and how the app looks.</p>}
       />
@@ -149,20 +153,22 @@ function Settings() {
         <NativeSelect value={tab} onChange={(e) => setTab(e.target.value)} className="w-full" aria-label="Settings section">
           {TABS.map((t) => <NativeSelectOption key={t.id} value={t.id}>{t.label}</NativeSelectOption>)}
         </NativeSelect>
-        <span className="block pt-1 text-meta text-muted-foreground">Ads settings are on <Link className="text-primary underline" href="/ads/rules?tab=settings">Ads → Rules → Ad settings</Link>.</span>
+        <span className="block pt-1 text-meta text-muted-foreground">Ads settings are on <Link className="link" href="/ads/rules?tab=settings">Ads → Rules → Ad settings</Link>.</span>
       </label>
       <Tabs value={tab} onValueChange={setTab} orientation="vertical" className="gap-6 lg:grid lg:grid-cols-[13rem_minmax(0,1fr)] lg:items-start">
-        <TabsList variant="line" className="hidden w-full gap-0.5 lg:sticky lg:top-[calc(var(--app-header)+1.5rem)] lg:flex">
-          {TABS.map((t) => (
-            <TabsTrigger key={t.id} value={t.id} className="h-9 w-full justify-start rounded-lg px-3 after:hidden hover:bg-subtle data-active:bg-primary-soft! data-active:text-primary-ink!">
-              {t.icon}{t.label}
-            </TabsTrigger>
-          ))}
-          {/* Ads settings live with the rules that use them. */}
-          <Link href="/ads/rules?tab=settings" className="mt-2 flex h-9 w-full items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-muted-foreground hover:bg-subtle hover:text-foreground [&_svg]:size-4">
+        <div className="hidden w-full flex-col gap-0.5 lg:sticky lg:top-[calc(var(--app-header)+1.5rem)] lg:flex">
+          <TabsList variant="line" className="w-full gap-0.5" aria-label="Settings sections">
+            {TABS.map((t) => (
+              <TabsTrigger key={t.id} value={t.id} className="h-9 w-full justify-start rounded-lg px-3 after:hidden hover:bg-subtle data-active:bg-primary-soft! data-active:text-primary-ink!">
+                {t.icon}{t.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+          {/* Ads settings live with the rules that use them (a link, so outside the tab list). */}
+          <Link href="/ads/rules?tab=settings" className="mt-2 flex h-9 w-full items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-muted-foreground hover:bg-subtle hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 focus-visible:outline-none [&_svg]:size-4">
             <MegaphoneIcon /> Ads <ArrowUpRightIcon className="ml-auto" />
           </Link>
-        </TabsList>
+        </div>
         <div className="min-w-0 flex-1 space-y-5">
         {profileTab && <ProfileBar editor={editor} manage={tab === "profiles"} />}
         <TabsContent value="gates" className="space-y-5">{editor.ready ? <GatesTab editor={editor} /> : editor.error ? <LoadError message={editor.error} /> : <LoadingBlocks />}</TabsContent>
@@ -310,7 +316,7 @@ function GatesTab({ editor: e }: { editor: Editor }) {
                   <p className="font-medium">{GATE_LABELS[g]}</p>
                   <p className="text-xs text-muted-foreground">Needs: {GATE_NEEDS[g]}</p>
                 </div>
-                <ModeSelect value={draft.gates[g].mode} onChange={(m) => setGate(g, { mode: m } as Partial<GateConfigs[typeof g]>)} />
+                <ModeSelect label={`${GATE_LABELS[g]}: what a fail does`} value={draft.gates[g].mode} onChange={(m) => setGate(g, { mode: m } as Partial<GateConfigs[typeof g]>)} />
               </div>
               {GATE_PARAMS[g].length > 0 && (
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -328,7 +334,7 @@ function GatesTab({ editor: e }: { editor: Editor }) {
               {g === "gating" && (
                 <label className="flex flex-wrap items-center gap-2 text-sm">
                   <span>Approval needed counts as</span>
-                  <ModeSelect value={draft.gates.gating.approvalRequired} onChange={(m) => setGate("gating", { approvalRequired: m })} />
+                  <ModeSelect label="Approval required: what it does" value={draft.gates.gating.approvalRequired} onChange={(m) => setGate("gating", { approvalRequired: m })} />
                   <span className="text-xs text-muted-foreground">Blocked always uses the gate&apos;s mode</span>
                 </label>
               )}
@@ -368,7 +374,7 @@ function ScoreTab({ editor: e }: { editor: Editor }) {
       <Section title="Scoring price" note="The sell price fees, profit and the score are worked out at.">
         <p className="text-sm">
           <b>{PRICE_BASIS_LABEL[draft.scoringPrice]}</b> <span className="text-muted-foreground">· the price basis for every profile, set in </span>
-          <Link className="text-primary underline" href="/settings?tab=business">Settings → Business</Link>
+          <Link className="link" href="/settings?tab=business">Settings → Business</Link>
         </p>
       </Section>
 
@@ -412,14 +418,14 @@ function ScoreTab({ editor: e }: { editor: Editor }) {
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
                         {sc.points.map(([x, y], i) => (
-                          <div key={i} className="flex items-center gap-1 rounded-lg border border-border bg-card px-1.5 py-1">
-                            <input className="num w-16 bg-transparent text-right text-xs outline-none" type="number" step="any" value={x} aria-label={`${d.label} value ${i + 1} (${d.unit})`}
+                          <div key={i} className="flex items-center gap-1 rounded-lg border border-border bg-card px-1.5 py-1 focus-within:ring-2 focus-within:ring-ring/40">
+                            <input className="num w-16 bg-transparent text-right text-xs outline-none max-sm:min-h-11" type="number" step="any" value={x} aria-label={`${d.label} value ${i + 1} (${d.unit})`}
                               onChange={(ev) => setScale({ points: sc.points.map((p, j) => (j === i ? [Number(ev.target.value), p[1]] : p)) as [number, number][] })} />
                             <span className="text-xs text-muted-foreground">{d.unit} →</span>
-                            <input className="num w-10 bg-transparent text-right text-xs outline-none" type="number" min={0} max={100} value={y} aria-label={`${d.label} score ${i + 1}`}
+                            <input className="num w-10 bg-transparent text-right text-xs outline-none max-sm:min-h-11" type="number" min={0} max={100} value={y} aria-label={`${d.label} score ${i + 1}`}
                               onChange={(ev) => setScale({ points: sc.points.map((p, j) => (j === i ? [p[0], Number(ev.target.value)] : p)) as [number, number][] })} />
                             {sc.points.length > 2 && (
-                              <button type="button" className="cursor-pointer px-1 text-xs text-muted-foreground hover:text-danger" aria-label="Remove point" onClick={() => setScale({ points: sc.points.filter((_, j) => j !== i) })}>×</button>
+                              <TextButton tone="danger" className="px-1 text-xs" aria-label="Remove point" onClick={() => setScale({ points: sc.points.filter((_, j) => j !== i) })}>×</TextButton>
                             )}
                           </div>
                         ))}
@@ -448,7 +454,7 @@ function FeesTab({ editor: e }: { editor: Editor }) {
         <p className="flex flex-wrap items-center gap-2 text-sm">
           <StatusChip tone={draft.fees.vatRegistered ? "info" : "neutral"} icon={false}>{draft.fees.vatRegistered ? "VAT reg." : "Non-VAT"}</StatusChip>
           {draft.fees.vatRegistered ? `VAT registered at ${draft.fees.vatRatePct}%: output VAT comes off the sale price; fees and goods count ex-VAT.` : `Not VAT registered: VAT on fees and goods is a cost (${draft.fees.vatRatePct}%).`}
-          <Link className="text-primary underline" href="/settings?tab=business">Set in Settings → Business</Link>
+          <Link className="link" href="/settings?tab=business">Set in Settings → Business</Link>
         </p>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <NumberField label="Digital services fee" unit="%" value={draft.fees.dsfPct} step={0.1} onChange={(n) => setDraft({ ...draft, fees: { ...draft.fees, dsfPct: n } })} />
@@ -494,7 +500,7 @@ function ProfilesTab({ editor: e }: { editor: Editor }) {
               id: "name", header: "Name", mobile: "title", sortValue: (p) => p.name,
               cell: (p) => (
                 <span className="inline-flex flex-wrap items-center gap-2 font-medium">
-                  <button type="button" className="cursor-pointer hover:underline" onClick={() => e.select(p.id)}>{p.name}</button>
+                  <TextButton tone="plain" onClick={() => e.select(p.id)}>{p.name}</TextButton>
                   {p.is_default && <StatusChip tone="info" icon={false}>Default</StatusChip>}
                   {p.id === e.id && <span className="text-xs font-normal text-muted-foreground">editing</span>}
                 </span>
@@ -593,8 +599,10 @@ function Rules() {
   const [open, setOpen] = useState<Set<number>>(new Set());
   const { confirm } = useDialogs();
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const { dirty: rulesDirty, settle: settleRules } = useDirty(rules);
   useEffect(() => {
-    api<{ rules: CategoryRule[] }>("/api/rules").then((r) => setRules(r.rules)).catch((e) => setMsg({ ok: false, text: e.message }));
+    api<{ rules: CategoryRule[] }>("/api/rules").then((r) => { setRules(r.rules); settleRules(r.rules); }).catch((e) => setMsg({ ok: false, text: e.message }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on open
   }, []);
   if (!rules) return msg ? <LoadError message={msg.text} /> : <Skeleton className="h-40 rounded-lg" />;
 
@@ -603,7 +611,8 @@ function Rules() {
   const save = async () => {
     try {
       await api("/api/rules", { method: "PUT", json: { rules } });
-      toast.success("Saved");
+      settleRules(rules);
+      toast.success("Compliance rules saved");
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -611,19 +620,19 @@ function Rules() {
 
   return (
     <Section title="Compliance rules" note={<>Shared by every profile; each profile sets each rule to off, warn or fail above. Keywords and exclusion words match whole words or phrases; write /pattern/ for a regular expression. Amazon categories match the display group or any of Amazon&apos;s own signals for the listing (its browse path, item type, product type), by name or /pattern/. Keywords run on the row&apos;s own text before any API call.</>}
-      actions={<Button variant="secondary" onClick={save}>Save rules</Button>}>
+      actions={<Button variant="secondary" onClick={save} disabled={!rulesDirty}>Save rules</Button>}>
       <ul className="divide-y divide-divider rounded-lg border border-border">
       {rules.map((r, i) => (
         <li key={i}>
-          <button type="button" aria-expanded={open.has(i)} onClick={() => setOpen((o) => { const n = new Set(o); if (n.has(i)) n.delete(i); else n.add(i); return n; })}
-            className="flex w-full cursor-pointer items-center gap-3 px-4 py-3 text-left hover:bg-subtle/60">
+          <ListButton aria-expanded={open.has(i)} onClick={() => setOpen((o) => { const n = new Set(o); if (n.has(i)) n.delete(i); else n.add(i); return n; })}
+            className="gap-3 px-4 py-3">
             <ChevronRightIcon className={cn("size-4 flex-none text-muted-foreground transition-transform", open.has(i) && "rotate-90")} />
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm font-medium">{r.name || "Untitled rule"} <span className="num text-xs font-normal text-muted-foreground">{r.key}</span></span>
               {r.note && <span className="block truncate text-meta text-muted-foreground">{r.note}</span>}
             </span>
             <span className="num hidden flex-none text-xs text-muted-foreground sm:block">{r.keywords.length} keyword{r.keywords.length === 1 ? "" : "s"} · {r.amazon_categories.length} categor{r.amazon_categories.length === 1 ? "y" : "ies"}</span>
-          </button>
+          </ListButton>
           {open.has(i) && (
         <div className="grid gap-3 border-t border-divider p-4 lg:grid-cols-2">
           <div className="grid grid-cols-2 gap-3">
@@ -667,11 +676,14 @@ interface CardRow { id: string; name: string; effective_from: string; is_active:
 function Rates() {
   const [cards, setCards] = useState<CardRow[] | null>(null);
   const [text, setText] = useState("");
+  const [savedText, setSavedText] = useState("");
   const apply = useCallback((list: CardRow[]) => {
     setCards(list);
     const active = list.find((c) => c.is_active) ?? list[0];
-    if (active) setText(JSON.stringify(active.card, null, 2));
+    if (active) { setText(JSON.stringify(active.card, null, 2)); setSavedText(JSON.stringify(active.card, null, 2)); }
   }, []);
+  // Said under the box as you type, in plain words; Save waits for valid JSON and a change.
+  const jsonError = (() => { try { JSON.parse(text || "null"); return null; } catch (e) { return `That isn't valid JSON yet: ${(e as Error).message}`; } })();
   const load = async () => apply((await api<{ cards: CardRow[] }>("/api/rate-card")).cards);
   useEffect(() => {
     api<{ cards: CardRow[] }>("/api/rate-card").then((r) => apply(r.cards)).catch((e) => toast.error(e.message));
@@ -696,7 +708,7 @@ function Rates() {
 
   return (
     <Section title="Rate card" note="Shared by every profile. Fee amounts are GBP ex-VAT and ex-DSF. Tiers: max sorted dimensions in cm and [max grams, fee] bands; parcel tiers bill on the greater of actual and L×W×H ÷ divisor. Referral bands apply their rate to the whole price. Saving keeps the previous card for comparison."
-      actions={<Button variant="secondary" onClick={save}>Save as new version</Button>}>
+      actions={<Button variant="secondary" onClick={save} disabled={text === savedText || !!jsonError}>Save as new version</Button>}>
       {!cards ? <Skeleton className="h-24 rounded-lg" /> : (
         <DataTable
           rows={cards}
@@ -711,7 +723,11 @@ function Rates() {
           ]}
         />
       )}
-      <Textarea className="num h-[50vh] text-xs" spellCheck={false} value={text} onChange={(e) => setText(e.target.value)} aria-label="Rate card JSON" />
+      <label className="block space-y-1.5">
+        <span className="field-label">The card, as JSON</span>
+        <Textarea className="num h-[50vh] text-xs" spellCheck={false} value={text} onChange={(e) => setText(e.target.value)} aria-invalid={!!jsonError} aria-describedby="rate-card-error" />
+        {jsonError && <span id="rate-card-error" className="block text-xs text-danger">{jsonError}</span>}
+      </label>
     </Section>
   );
 }

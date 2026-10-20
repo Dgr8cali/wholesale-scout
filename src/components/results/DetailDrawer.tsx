@@ -29,9 +29,16 @@ export function DetailDrawer({ r, index, count, sparks, onStep, onClose, childre
   children: ReactNode;
 }) {
   const body = useRef<HTMLDivElement>(null);
+  const panel = useRef<HTMLElement>(null);
   useEffect(() => {
     body.current?.scrollTo({ top: 0 });
   }, [r.id]);
+  // Opening moves the keyboard into the drawer; closing gives it back to where it was (the row).
+  useEffect(() => {
+    const before = document.activeElement as HTMLElement | null;
+    panel.current?.focus({ preventScroll: true });
+    return () => { if (before?.isConnected) before.focus({ preventScroll: true }); };
+  }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -55,7 +62,7 @@ export function DetailDrawer({ r, index, count, sparks, onStep, onClose, childre
   );
 
   return (
-    <aside aria-label="Result details" className="fixed top-(--app-header) right-0 bottom-0 z-40 flex w-full max-w-[28rem] flex-col border-l bg-background shadow-2xl">
+    <aside ref={panel} tabIndex={-1} aria-label="Result details" className="fixed outline-none top-(--app-header) right-0 bottom-0 z-40 flex w-full max-w-[28rem] flex-col border-l bg-background shadow-2xl">
       <div className="flex flex-none items-center gap-1 border-b px-3 py-2">
         <Button variant="ghost" size="icon-sm" aria-label="Previous row (Up)" disabled={index <= 0} onClick={() => onStep(-1)}><ChevronUpIcon /></Button>
         <Button variant="ghost" size="icon-sm" aria-label="Next row (Down)" disabled={index >= count - 1} onClick={() => onStep(1)}><ChevronDownIcon /></Button>
@@ -68,11 +75,11 @@ export function DetailDrawer({ r, index, count, sparks, onStep, onClose, childre
           <ProductThumb url={r.product?.image_url} asin={r.product?.asin} title={titleOf(r)} brand={brandOf(r)} size={72} />
           <div className="min-w-0">
             <h2 className="section-title leading-snug">
-              {r.product?.asin ? <Link className="hover:text-primary hover:underline" href={`/products/${r.product.asin}`}>{titleOf(r)}</Link> : titleOf(r)}
+              {r.product?.asin ? <Link className="hover:text-link hover:underline" href={`/products/${r.product.asin}`}>{titleOf(r)}</Link> : titleOf(r)}
             </h2>
             <p className="num mt-0.5 text-xs text-muted-foreground">
               {[brandOf(r), r.product?.ean].filter(Boolean).join(" · ")}
-              {r.product?.asin && <> · <a className="text-primary hover:underline" href={`https://www.amazon.co.uk/dp/${r.product.asin}`} target="_blank" rel="noreferrer">{r.product.asin}</a></>}
+              {r.product?.asin && <> · <a className="link" href={`https://www.amazon.co.uk/dp/${r.product.asin}`} target="_blank" rel="noreferrer">{r.product.asin}</a></>}
             </p>
             {r.offer?.supplier && <p className="text-xs text-muted-foreground">{r.offer.supplier.name}</p>}
             <div className="mt-1.5 flex items-center gap-2">

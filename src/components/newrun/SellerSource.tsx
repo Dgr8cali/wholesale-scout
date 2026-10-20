@@ -111,13 +111,13 @@ export function SellerSource() {
               <h2 className="flex items-center gap-2 text-base font-semibold">
                 <StoreIcon className="size-4 text-muted-foreground" />
                 {p.seller.name ?? p.seller.sellerId}
-                <a className="text-primary" href={storefrontUrl(p.seller.sellerId)} target="_blank" rel="noreferrer" aria-label="Storefront on Amazon"><ExternalLinkIcon className="size-3.5" /></a>
+                <a className="text-link" href={storefrontUrl(p.seller.sellerId)} target="_blank" rel="noreferrer" aria-label="Storefront on Amazon"><ExternalLinkIcon className="size-3.5" /></a>
               </h2>
               <p className="text-xs text-muted-foreground">
                 {p.seller.businessName && p.seller.businessName !== p.seller.name ? `${p.seller.businessName} · ` : ""}
                 {p.seller.ratingPct != null ? `${p.seller.ratingPct}% positive of ${n(p.seller.ratingCount ?? 0)} ratings` : "No rating"}
                 {p.seller.buyBoxOwnershipPct != null ? ` · holds the Buy Box on ${p.seller.buyBoxOwnershipPct}% of its listings` : ""}
-                {p.seller.lastScan && <> · <Link className="text-primary hover:underline" href={`/runs/${p.seller.lastScan.runId}`}>last scanned {when(p.seller.lastScan.at)}</Link></>}
+                {p.seller.lastScan && <> · <Link className="link" href={`/runs/${p.seller.lastScan.runId}`}>last scanned {when(p.seller.lastScan.at)}</Link></>}
               </p>
             </div>
             <StatusChip tone="neutral" icon={false} title={p.seller.fetchedAt ? `Storefront list from Keepa, ${when(p.seller.fetchedAt)}` : undefined}>

@@ -5,7 +5,7 @@ import { useTheme } from "next-themes";
 import { useSyncExternalStore } from "react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 const subscribe = () => () => {};
 const useMounted = () => useSyncExternalStore(subscribe, () => true, () => false);
@@ -41,14 +41,10 @@ export function ThemeChoice() {
   const mounted = useMounted();
   const current = mounted ? theme ?? "system" : "system";
   return (
-    <div role="radiogroup" aria-label="Theme" className="inline-flex gap-1 rounded-xl border border-border bg-card p-1">
+    <ToggleGroup type="single" variant="outline" value={current} onValueChange={(v) => v && setTheme(v)} aria-label="Theme">
       {CHOICES.map(({ value, label, Icon }) => (
-        <button key={value} type="button" role="radio" aria-checked={current === value} onClick={() => setTheme(value)}
-          className={cn("inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground [&_svg]:size-4",
-            current === value && "bg-primary-soft text-primary-ink hover:text-primary-ink")}>
-          <Icon /> {label}
-        </button>
+        <ToggleGroupItem key={value} value={value} className="gap-1.5 px-3"><Icon /> {label}</ToggleGroupItem>
       ))}
-    </div>
+    </ToggleGroup>
   );
 }

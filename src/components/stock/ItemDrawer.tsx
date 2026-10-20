@@ -35,6 +35,8 @@ export function ItemDrawer({ row, onClose, onChanged }: { row: ItemLevels | null
   const [action, setAction] = useState<StockAction | null>(null);
   const { confirm } = useDialogs();
   const [d, setD] = useState<Record<string, string>>({});
+  // What's saved, so Save details waits for a change.
+  const [savedD, setSavedD] = useState("");
   const [newL, setNewL] = useState({ marketplace: "", marketplace_sku: "", price: "", fee_pct: "", default_bucket: "home", url: "" });
   const id = row?.item.id;
 
@@ -48,7 +50,9 @@ export function ItemDrawer({ row, onClose, onChanged }: { row: ItemLevels | null
   if (row && shownId !== row.item.id) {
     setShownId(row.item.id);
     const it = row.item;
-    setD({ sku: it.sku, name: it.name, asin: it.asin ?? "", barcode: it.barcode ?? "", category: it.category ?? "", unit_cost: it.unit_cost?.toString() ?? "", packaging_cost: it.packaging_cost?.toString() ?? "", reorder_level: it.reorder_level?.toString() ?? "", lead_time_days: it.lead_time_days?.toString() ?? "", supplier_id: it.supplier_id ?? "", status: it.status, notes: it.notes ?? "" });
+    const x = { sku: it.sku, name: it.name, asin: it.asin ?? "", barcode: it.barcode ?? "", category: it.category ?? "", unit_cost: it.unit_cost?.toString() ?? "", packaging_cost: it.packaging_cost?.toString() ?? "", reorder_level: it.reorder_level?.toString() ?? "", lead_time_days: it.lead_time_days?.toString() ?? "", supplier_id: it.supplier_id ?? "", status: it.status, notes: it.notes ?? "" };
+    setD(x);
+    setSavedD(JSON.stringify(x));
   }
 
   if (!row) return null;
@@ -56,7 +60,8 @@ export function ItemDrawer({ row, onClose, onChanged }: { row: ItemLevels | null
   const saveDetails = async () => {
     try {
       await api(`/api/stock/items/${it.id}`, { method: "PATCH", json: d });
-      toast.success("Saved");
+      setSavedD(JSON.stringify(d));
+      toast.success(`${d.name || it.name} saved`);
       onChanged();
     } catch (e) {
       toast.error((e as Error).message);
@@ -104,7 +109,7 @@ export function ItemDrawer({ row, onClose, onChanged }: { row: ItemLevels | null
         <SheetContent side="right" className="w-full gap-0 overflow-y-auto sm:max-w-xl">
           <SheetHeader className="border-b">
             <SheetTitle>{it.name}</SheetTitle>
-            <SheetDescription><span className="num">{it.sku}</span>{it.asin && <> · <a className="num text-primary hover:underline" href={`https://www.amazon.co.uk/dp/${it.asin}`} target="_blank" rel="noreferrer">{it.asin}</a></>}{it.supplier_name ? ` · ${it.supplier_name}` : ""}</SheetDescription>
+            <SheetDescription><span className="num">{it.sku}</span>{it.asin && <> · <a className="link num" href={`https://www.amazon.co.uk/dp/${it.asin}`} target="_blank" rel="noreferrer">{it.asin}</a></>}{it.supplier_name ? ` · ${it.supplier_name}` : ""}</SheetDescription>
           </SheetHeader>
           <div className="space-y-5 p-4">
             <div className="flex flex-wrap gap-1.5">
@@ -143,15 +148,15 @@ export function ItemDrawer({ row, onClose, onChanged }: { row: ItemLevels | null
                 <div className="col-span-2">{field("notes", "Notes")}</div>
               </div>
               <div className="flex items-center gap-3">
-                <Button size="sm" variant="secondary" onClick={saveDetails}>Save details</Button>
-                {it.supplier_id && <Link href={`/suppliers/${it.supplier_id}`} className="text-xs text-primary hover:underline">Supplier →</Link>}
+                <Button size="sm" variant="secondary" onClick={saveDetails} disabled={JSON.stringify(d) === savedD}>Save details</Button>
+                {it.supplier_id && <Link href={`/suppliers/${it.supplier_id}`} className="link text-xs">Supplier →</Link>}
                 <Button size="sm" variant="danger" className="ml-auto" onClick={async () => { if (await acts.archive(it)) onClose(); }}><Trash2Icon /> Delete item</Button>
               </div>
             </section>
 
             {orders.length > 0 && (
               <section className="space-y-2">
-                <div className="flex items-center"><h3 className="text-sm font-semibold">Orders</h3><Link href="/stock/purchases" className="ml-auto text-xs text-primary hover:underline">Purchases →</Link></div>
+                <div className="flex items-center"><h3 className="text-sm font-semibold">Orders</h3><Link href="/stock/purchases" className="link ml-auto text-xs">Purchases →</Link></div>
                 <table className="w-full text-xs"><tbody>{orders.slice(0, 10).map((o) => (
                   <tr key={o.id} className="border-t align-top">
                     <td className="py-1 pr-2 whitespace-nowrap">{o.ordered_on}</td>
@@ -195,7 +200,7 @@ export function ItemDrawer({ row, onClose, onChanged }: { row: ItemLevels | null
             </section>
 
             <section className="space-y-2">
-              <div className="flex items-center"><h3 className="text-sm font-semibold">Movements</h3><Link href={`/stock/movements?item=${it.id}`} className="ml-auto text-xs text-primary hover:underline">All, to edit or delete →</Link></div>
+              <div className="flex items-center"><h3 className="text-sm font-semibold">Movements</h3><Link href={`/stock/movements?item=${it.id}`} className="link ml-auto text-xs">All, to edit or delete →</Link></div>
               {!moves.length ? <p className="text-xs text-muted-foreground">None yet.</p> : (
                 <table className="w-full text-xs"><tbody>{moves.slice(0, 30).map((m) => (
                   <tr key={m.id} className="border-t">

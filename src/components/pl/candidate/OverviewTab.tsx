@@ -186,7 +186,7 @@ function Details({ s, onDeleted, onRefreshed }: { s: CandidateState; onDeleted: 
         ) : <AsinTable data={data!} />}
       </div>
       <div className="flex flex-wrap items-center gap-3 border-t border-divider pt-3">
-        <Link href="/pl" className="inline-flex items-center gap-1 text-sm text-primary hover:underline">Pipeline <ArrowRightIcon className="size-3.5" /></Link>
+        <Link href="/pl" className="link inline-flex items-center gap-1 text-sm">Pipeline <ArrowRightIcon className="size-3.5" /></Link>
         <Button variant="danger" size="sm" className="ml-auto" onClick={remove}><Trash2Icon /> Delete candidate</Button>
       </div>
     </section>

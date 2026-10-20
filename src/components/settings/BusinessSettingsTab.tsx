@@ -9,13 +9,13 @@ import { useDialogs } from "@/components/Dialogs";
 import { ErrorState } from "@/components/States";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Switch } from "@/components/ui/switch";
 import { PRICE_BASES, PRICE_BASIS_LABEL, type PriceBasis } from "@/lib/screening/config";
 import { api } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
+import { FormSkeleton } from "@/components/ui/skeletons";
 
 interface Business { vatRegistered: boolean; vatRate: number; qogitaRegion: "UK" | "EU"; priceBasis: PriceBasis; launchCapital: number }
 interface Change { id: string; runId: string; asin: string | null; title: string | null; before: number | null; after: number | null; change: number }
@@ -54,7 +54,7 @@ export function BusinessSettingsTab() {
   }, []);
 
   if (error) return <ErrorState title="Couldn't load the business settings" message={error} />;
-  if (!b || !saved) return <div className="space-y-4"><Skeleton className="h-40 rounded-xl" /><Skeleton className="h-64 rounded-xl" /></div>;
+  if (!b || !saved) return <div className="space-y-4"><FormSkeleton fields={4} /><FormSkeleton fields={6} /></div>;
   const changed = JSON.stringify(b) !== JSON.stringify(saved);
   const basisChanged = b.vatRegistered !== saved.vatRegistered || b.vatRate !== saved.vatRate || b.priceBasis !== saved.priceBasis;
 
@@ -132,7 +132,7 @@ export function BusinessSettingsTab() {
             <NativeSelectOption value="UK">UK (GBP)</NativeSelectOption>
             <NativeSelectOption value="EU">EU (EUR)</NativeSelectOption>
           </NativeSelect></label>
-        <p className="text-xs text-muted-foreground">Each supplier&apos;s <b>Supplier prices are: ex-VAT / inc-VAT</b> is on its page under <Link className="text-primary underline" href="/suppliers">Suppliers</Link>.</p>
+        <p className="text-xs text-muted-foreground">Each supplier&apos;s <b>Supplier prices are: ex-VAT / inc-VAT</b> is on its page under <Link className="link" href="/suppliers">Suppliers</Link>.</p>
       </section>
 
       <section className="panel space-y-4 p-4 sm:p-5">
@@ -167,7 +167,7 @@ export function BusinessSettingsTab() {
                 caption="Biggest profit changes"
                 initialSort={{ id: "change", desc: true }}
                 columns={[
-                  { id: "product", header: "Product", mobile: "title", className: "max-w-96 truncate", sortValue: (c) => c.asin, cell: (c) => <><Link className="text-primary hover:underline" href={`/runs/${c.runId}`}>{c.asin ?? "—"}</Link> <span className="text-muted-foreground">{c.title?.slice(0, 70)}</span></> },
+                  { id: "product", header: "Product", mobile: "title", className: "max-w-96 truncate", sortValue: (c) => c.asin, cell: (c) => <><Link className="link" href={`/runs/${c.runId}`}>{c.asin ?? "—"}</Link> <span className="text-muted-foreground">{c.title?.slice(0, 70)}</span></> },
                   { id: "before", header: "Profit before", numeric: true, mobile: 1, sortValue: (c) => c.before, cell: (c) => gbp(c.before) },
                   { id: "after", header: "After", numeric: true, mobile: 2, sortValue: (c) => c.after, cell: (c) => gbp(c.after) },
                   { id: "change", header: "Change", numeric: true, mobile: 3, sortValue: (c) => Math.abs(c.change), cell: (c) => <span className={cn("font-semibold", c.change > 0 ? "text-success" : "text-danger")}>{c.change > 0 ? "+" : ""}{gbp(c.change)}</span> },

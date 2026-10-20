@@ -10,10 +10,10 @@ import { SearchTermsTable, type TermRow } from "@/components/ads/SearchTermsTabl
 import { EmptyState, ErrorState } from "@/components/States";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "@/lib/ui/client";
 import { useTab } from "@/lib/ui/useTab";
+import { TableSkeleton } from "@/components/ui/skeletons";
 
 const TABS = ["keywords", "ngrams", "all"] as const;
 type Tab = (typeof TABS)[number];
@@ -55,11 +55,11 @@ function SearchTerms() {
         subtitle={SUBTITLE[tab]}
         info={<>
           <p><b>Keywords</b>: one place per product for every term worth knowing: Opportunity Explorer&apos;s search terms (from a linked private-label candidate), harvested terms, n-gram winners, rank-tracked terms and your own. <b>Add as exact</b> and <b>Add as negative</b> queue approved proposals for the next bulk sheet; <b>Track rank</b> adds it to the rank checks. The launcher&apos;s head terms come from here.</p>
-          <p><b>N-grams</b> splits the search terms into words and word pairs; <b>All search terms</b> lists each term with its spend, orders and status. The product picker applies to every tab. See <Link className="text-primary underline" href="/help/howto/ads-keyword-bank">Ads: keyword bank</Link>.</p>
+          <p><b>N-grams</b> splits the search terms into words and word pairs; <b>All search terms</b> lists each term with its spend, orders and status. The product picker applies to every tab. See <Link className="link" href="/help/howto/ads-keyword-bank">Ads: keyword bank</Link>.</p>
         </>}
       />
       {error ? <ErrorState title="Couldn't load the products" message={error} />
-        : !d ? <Skeleton className="h-64 rounded-xl" />
+        : !d ? <TableSkeleton rows={10} columns={6} />
         : !products.length && !asin ? <EmptyState icon={<TextSearchIcon />} title="No product has ad campaigns yet" action={<Button variant="secondary" asChild><Link href="/ads/dashboard?import=1">Import a bulk export</Link></Button>}>Import a bulk export on the Dashboard to see its search terms.</EmptyState>
         : (
           <>

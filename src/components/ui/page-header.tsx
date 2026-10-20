@@ -1,6 +1,6 @@
 "use client"
 
-import type { ReactNode } from "react"
+import { useEffect, type ReactNode } from "react"
 
 import { usePageCrumbs, usePageHeaderMounted, type Crumb } from "@/components/Crumbs"
 import { InfoTip } from "@/components/ui/info-tip"
@@ -21,6 +21,12 @@ export function PageHeader({ title, subtitle, info, actions, crumbs, className }
 }) {
   usePageCrumbs(crumbs ?? null)
   usePageHeaderMounted()
+  // The browser tab says the same as the breadcrumb, nearest first ("Beter · Brands · Wholesale ·
+  // Wholesale Scout"), so a detail page is named after its record, not just its list.
+  // ("Home" is the menu's group, not part of a page's name.)
+  const tab = (crumbs ?? []).map((c) => c.label).filter((l) => l !== "Home").reverse()
+  const docTitle = [...tab, "Wholesale Scout"].filter((p, i, a) => p !== a[i - 1]).join(" · ")
+  useEffect(() => { if (tab.length) document.title = docTitle }, [docTitle, tab.length])
   return (
     <header data-slot="page-header" className={cn("flex flex-wrap items-start justify-between gap-x-6 gap-y-3", className)}>
       {/* At least 16rem before it shares the row: on a phone the actions wrap below instead of squeezing the title. */}

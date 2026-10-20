@@ -9,11 +9,11 @@ import { DataTable, type DataColumn } from "@/components/ui/data-table";
 import { SectionTitle } from "@/components/ui/info-tip";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { LOOKBACKS, RULES, type RuleConfig, type RuleId, type RuleMeta, type RulesConfig, type Threshold } from "@/lib/ads/rules";
 import { api } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
+import { PanelSkeleton } from "@/components/ui/skeletons";
 
 interface DryRun { counts: Record<RuleId, { total: number; byAsin: Record<string, number> }>; notes: Partial<Record<RuleId, string[]>> }
 
@@ -42,7 +42,7 @@ export function RulesTab() {
   }, [run]);
 
   if (error) return <ErrorState title="Couldn't load the rules" message={error} />;
-  if (!saved || !draft) return <Skeleton className="h-96 rounded-lg" />;
+  if (!saved || !draft) return <div className="space-y-4"><PanelSkeleton lines={3} /><PanelSkeleton lines={3} /><PanelSkeleton lines={3} /></div>;
 
   const edit = (id: RuleId, patch: Partial<RuleConfig>) => setDraft((d) => d && { ...d, [id]: { ...d[id], ...patch, thresholds: { ...d[id].thresholds, ...(patch.thresholds ?? {}) } } });
   const save = async (id: RuleId) => {
@@ -132,5 +132,5 @@ function DryRunByProduct({ dry }: { dry: DryRun }) {
     ...firing.map((rule): DataColumn<{ asin: string }> => ({ id: rule.id, header: rule.label, numeric: true, sortValue: (r) => dry.counts[rule.id].byAsin[r.asin] ?? null, cell: (r) => dry.counts[rule.id].byAsin[r.asin] ?? "—" })),
     { id: "all", header: "All", numeric: true, mobile: 1, sortValue: (r) => total(r.asin), cell: (r) => <span className="font-medium">{total(r.asin)}</span> },
   ];
-  return <DataTable rows={rows} columns={columns} getRowId={(r) => r.asin} storageKey="ads.dryrun" caption="Dry run by product" />;
+  return <DataTable rows={rows} columns={columns} getRowId={(r) => r.asin} storageKey="ads.dryrun" caption="Dry run by product" empty={{ title: "No proposals on this data", description: "With these settings the rules propose nothing for any product." }} />;
 }

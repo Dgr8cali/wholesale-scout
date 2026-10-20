@@ -45,7 +45,7 @@ const features = tableFeatures({
 
 const PAGE_SIZES = [25, 50, 100, 200]
 /** A pinned last column: opaque, with a soft edge where the scrolled columns pass under it. */
-const PIN_END = "sticky right-0 bg-card shadow-[inset_1px_0_0_var(--border),-8px_0_8px_-8px_rgb(0_0_0/0.12)]"
+const PIN_END = "sticky right-0 bg-card shadow-[inset_1px_0_0_var(--border),-8px_0_8px_-8px_var(--edge-shadow)]"
 
 const readSize = (key: string | undefined, fallback: number) => {
   // On a phone each row is a card: half a page by default keeps the page a sensible length.
@@ -110,7 +110,10 @@ export function DataTable<T extends RowData>({
   })
 
   if (!rows.length) {
-    return empty ? <EmptyState icon={empty.icon} title={empty.title} action={empty.action} className={className}>{empty.description}</EmptyState> : null
+    // Every list says when it's empty: the page's own words, else a plain line in the table's place.
+    return empty
+      ? <EmptyState icon={empty.icon} title={empty.title} action={empty.action} className={className}>{empty.description}</EmptyState>
+      : <p data-slot="data-table-empty" className={cn("panel px-4 py-6 text-center text-sm text-muted-foreground", className)}>Nothing to show yet.</p>
   }
 
   const byId = new Map(columns.map((c) => [c.id, c]))
@@ -157,6 +160,9 @@ export function DataTable<T extends RowData>({
           <tbody>
             {shown.map((r) => (
               <tr key={r.id} {...(rowAttrs?.(r.original) ?? {})} onClick={onRowClick ? () => onRowClick(r.original) : undefined}
+                // A clickable row is reachable by Tab and opens with Enter or Space.
+                tabIndex={onRowClick ? 0 : undefined}
+                onKeyDown={onRowClick ? (e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onRowClick(r.original) } } : undefined}
                 className={cn("border-b border-divider last:border-b-0 hover:bg-subtle/60", onRowClick && "cursor-pointer", rowClassName?.(r.original))}>
                 {columns.map((c) => <td key={c.id} className={cn(dense ? "px-2 py-1.5" : "px-3 py-2.5", "align-middle", c.numeric && "num text-right", c.pinEnd && PIN_END, c.className)}>{c.cell(r.original)}</td>)}
               </tr>
@@ -201,7 +207,7 @@ function MobileRow<T extends RowData>({ row, title, keys, details, onClick, attr
       )}
       {details.length > 0 && (
         <>
-          <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="inline-flex cursor-pointer items-center gap-1 text-meta font-medium text-primary">
+          <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="inline-flex min-h-9 cursor-pointer items-center gap-1 text-meta font-medium text-link max-sm:min-h-11">
             {open ? "Hide details" : "Details"} <ChevronDownIcon className={cn("size-3.5 transition-transform", open && "rotate-180")} />
           </button>
           {open && (

@@ -20,7 +20,7 @@ export function OrderLink({ id, url, className }: { id: string | null | undefine
   if (!id && !url) return null;
   if (!url) return <span className={cn("num", className)}>{id}</span>;
   return (
-    <a className={cn("num inline-flex items-center gap-0.5 text-primary hover:underline", className)} href={url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>
+    <a className={cn("link num inline-flex items-center gap-0.5", className)} href={url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>
       {id || "Order"} <ExternalLinkIcon className="size-3" />
     </a>
   );

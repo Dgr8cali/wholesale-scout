@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/ui/client";
 import { ago, stamp } from "@/lib/ui/when";
+import { TextButton } from "@/components/ui/text-button";
 
 /**
  * "Checked 2 h ago · Re-check": when the verdict was reached, and a fresh check of the same
@@ -33,9 +34,9 @@ export function Checked({ at, recheck }: { at: string | null | undefined; rechec
       {at && <span title={stamp(at)}>Checked {ago(at)}</span>}
       {at && recheck && " · "}
       {recheck && (
-        <button type="button" className="font-medium text-primary hover:underline disabled:opacity-50" disabled={busy} onClick={(e) => { e.stopPropagation(); void go(); }}>
+        <TextButton className="font-medium" disabled={busy} onClick={(e) => { e.stopPropagation(); void go(); }}>
           {busy ? "Checking…" : "Re-check"}
-        </button>
+        </TextButton>
       )}
     </p>
   );

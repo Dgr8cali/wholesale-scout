@@ -56,7 +56,7 @@ export function BulkBar({ count, stashed, onReselect, onClear, onStar, onUnstar,
     return stashed ? (
       <div className="panel flex flex-wrap items-center gap-2 px-3 py-2 text-sm">
         <span className="text-muted-foreground">Selection of {stashed} cleared because the filters changed.</span>
-        <Button variant="link" size="sm" className="h-auto p-0 text-primary" onClick={onReselect}>Reselect {stashed}</Button>
+        <Button variant="link" size="sm" className="h-auto p-0 text-link" onClick={onReselect}>Reselect {stashed}</Button>
       </div>
     ) : null;
   }

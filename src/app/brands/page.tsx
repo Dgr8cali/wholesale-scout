@@ -80,7 +80,7 @@ export default function BrandsPage() {
         <div className="flex items-center gap-1.5">
           <StatusChip tone={GATING_TONE[GATING_VARIANT[b.gating]]}>{GATING_LABELS[b.gating]}</StatusChip>
           {b.applyUrl && (
-            <a href={b.applyUrl} target="_blank" rel="noreferrer noopener" title="Request approval in Seller Central" className="text-primary"><ExternalLinkIcon className="size-3.5" /></a>
+            <a href={b.applyUrl} target="_blank" rel="noreferrer noopener" title="Request approval in Seller Central" className="text-link"><ExternalLinkIcon className="size-3.5" /></a>
           )}
         </div>
       ),

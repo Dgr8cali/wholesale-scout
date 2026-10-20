@@ -19,6 +19,8 @@ import { VerdictBadge } from "@/components/VerdictBadge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { NativeSelect } from "@/components/ui/native-select";
+import { SortButton } from "@/components/ui/sort-button";
+import { TextButton } from "@/components/ui/text-button";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -130,7 +132,7 @@ const columns = helper.columns(COLS.map((c) => helper.display({
   enableResizing: !c.fixed || c.id === "product",
 })));
 
-const BAND_STYLE = { green: "bg-success text-white", amber: "bg-highlight text-white", grey: "bg-subtle text-muted-foreground" } as const;
+const BAND_STYLE = { green: "bg-success-soft text-success", amber: "bg-warn-soft text-warn-ink", grey: "bg-subtle text-muted-foreground" } as const;
 const VERDICT_EDGE = { pass: "var(--pass)", warn: "var(--highlight)", fail: "var(--fail)" } as const;
 const GATED: Record<string, { label: string; tone: "good" | "warn" | "bad" }> = {
   open: { label: "Open", tone: "good" },
@@ -380,6 +382,9 @@ function DesktopTable(props: ResultsTableProps & { prefs: TablePrefs; setPrefs: 
                 <tr key={row.id} data-index={vi.index} ref={virtual ? virtualizer.measureElement : undefined} data-row-id={d.r.id}
                   className="rt-row group cursor-pointer scroll-mt-12 align-top"
                   data-alt={d.alt || undefined} data-selected={props.selected.has(d.r.id) || undefined} data-active={activeId === d.r.id || undefined}
+                  // Keyboard: Tab to a row, Enter (or Space) opens it in the drawer.
+                  tabIndex={0}
+                  onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); props.onOpen(d.r.id); } }}
                   onClick={() => props.onOpen(d.r.id)}>
                   {cells.map((cell) => (
                     <td key={cell.id} style={pinStyle(cell.column)}
@@ -424,7 +429,6 @@ function HeaderCell({ header, spec, sort, onSort, style, edge, children, draggin
   const movable = !spec.fixed;
   const sorted = spec.sort && sort.key === spec.sort;
   const label = spec.header ?? spec.label;
-  const Arrow = sorted ? (sort.dir === -1 ? ArrowDownIcon : ArrowUpIcon) : null;
   return (
     <th scope="col" style={style} title={spec.hint}
       aria-sort={sorted ? (sort.dir === 1 ? "ascending" : "descending") : undefined}
@@ -437,11 +441,8 @@ function HeaderCell({ header, spec, sort, onSort, style, edge, children, draggin
         <span className={cn("flex items-end gap-0.5", spec.numeric && "justify-end")}>
           {movable && <GripVerticalIcon aria-hidden="true" className="mb-px size-3 flex-none cursor-grab text-muted-foreground/0 group-hover/th:text-muted-foreground/60" />}
           {spec.sort ? (
-            <button type="button" className={cn("inline-flex cursor-pointer items-end gap-1 uppercase hover:text-foreground", spec.numeric ? "flex-row-reverse text-right" : "text-left", sorted && "text-foreground")}
-              onClick={() => onSort(spec.sort!)}>
-              <span>{label}</span>
-              {Arrow ? <Arrow className="mb-px size-3 flex-none" aria-hidden="true" /> : <span className="size-3 flex-none" />}
-            </button>
+            <SortButton sorted={sorted ? (sort.dir === -1 ? "desc" : "asc") : null} numeric={spec.numeric} onClick={() => onSort(spec.sort!)}
+              className={cn("items-end uppercase", spec.numeric ? "text-right" : "text-left")}>{label}</SortButton>
           ) : <span>{label}</span>}
         </span>
       )}
@@ -471,7 +472,7 @@ function ProductCell({ d, props, compact, size }: { d: ResultRow; props: Results
         </div>
         <div className="num truncate text-xs text-muted-foreground">
           {r.product?.asin
-            ? <a className="text-primary hover:underline" href={`https://www.amazon.co.uk/dp/${r.product.asin}`} target="_blank" rel="noreferrer" onClick={stop}>{r.product.asin}</a>
+            ? <a className="link" href={`https://www.amazon.co.uk/dp/${r.product.asin}`} target="_blank" rel="noreferrer" onClick={stop}>{r.product.asin}</a>
             : r.product?.ean}
           {r.product?.asin && r.product.ean && r.product.ean !== r.product.asin && <> · {r.product.ean}</>}
           {r.offer?.supplier && <> · <span className="font-sans">{r.offer.supplier.name}{r.offer_count > 1 ? ` (+${r.offer_count - 1})` : ""}</span></>}
@@ -479,13 +480,13 @@ function ProductCell({ d, props, compact, size }: { d: ResultRow; props: Results
         {props.rowNote?.(r)}
         {props.scanSellerId && r.inputs?.market?.buyBoxSellerId != null && (
           r.inputs.market.buyBoxSellerId === props.scanSellerId
-            ? <span className="mt-0.5 inline-block rounded bg-primary-soft px-1 text-xs font-semibold text-primary" title="This seller holds the Buy Box now">Holds Buy Box</span>
+            ? <span className="mt-0.5 inline-block rounded bg-primary-soft px-1 text-xs font-semibold text-link" title="This seller holds the Buy Box now">Holds Buy Box</span>
             : <span className="mt-0.5 inline-block text-xs text-muted-foreground" title={`Buy Box held by ${r.inputs.market.buyBoxSellerId}`}>Buy Box: another seller</span>
         )}
         {!alt && (d.others ?? 0) > 0 && props.onToggleGroup && d.groupKey && (
-          <button type="button" className="cursor-pointer text-xs font-medium text-primary hover:underline" onClick={(e) => { stop(e); props.onToggleGroup!(d.groupKey!); }}>
+          <TextButton className="text-xs font-medium" aria-expanded={!!props.expandedGroups?.has(d.groupKey)} onClick={(e) => { stop(e); props.onToggleGroup!(d.groupKey!); }}>
             {props.expandedGroups?.has(d.groupKey) ? "▾ Hide" : "▸"} {d.others} other ASIN{d.others! > 1 ? "s" : ""} for this EAN
-          </button>
+          </TextButton>
         )}
       </div>
     </div>
@@ -674,7 +675,7 @@ function ResultCard({ d, props }: { d: ResultRow; props: ResultsTableProps }) {
       </div>
       <div className="flex flex-none flex-col items-end justify-between gap-1">
         <RowMenu r={r} actions={props.actions} />
-        <Button variant="ghost" size="xs" className="px-1.5 text-primary" onClick={() => props.onOpen(r.id)}>Details</Button>
+        <Button variant="ghost" size="xs" className="px-1.5 text-link" onClick={() => props.onOpen(r.id)}>Details</Button>
       </div>
     </li>
   );

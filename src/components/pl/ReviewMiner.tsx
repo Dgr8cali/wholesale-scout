@@ -14,6 +14,7 @@ import { markOf, mineThemes, reviewsOf, sixWordsDraft, splitReviews, type Review
 import { api } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
 import type { FieldMap } from "./types";
+import { TextButton } from "@/components/ui/text-button";
 
 type Mark = "chosen" | "not fixable" | "ignore";
 interface Data { dumps: { asin: string; text: string; pasted_at: string; captured?: { total: number; inDump: number; at: string | null } | null; removed_at?: string | null; kept_separate?: boolean }[]; marks: Record<string, Mark>; synonyms: SynonymGroup[]; summary: Run<ReviewSummary> | null }
@@ -131,8 +132,8 @@ export function ReviewMiner({ candidateId, asins, product, fields, onSave, onAsi
                 {a.brand && <span className="text-muted-foreground">{a.brand}</span>}
                 {a.state === "removed" && <span className="rounded-full bg-empty-soft px-1.5 py-px text-xs text-ink-2" title="This ASIN is no longer on the candidate; its reviews are kept and still mined">removed from candidate</span>}
                 {a.state === "separate" && <span className="rounded-full bg-empty-soft px-1.5 py-px text-xs text-ink-2" title="Not on the candidate; its reviews are kept and still mined">kept separate</span>}
-                <a className="inline-flex items-center gap-1 text-brand hover:underline" target="_blank" rel="noreferrer" href={criticalUrl(a.asin)}>1–3★ reviews <ExternalLinkIcon className="size-3" /></a>
-                {cap && <span className="rounded-full bg-brand-soft px-1.5 py-px text-xs text-brand" title={`Sent by the extension from Amazon's review pages${cap.at ? `, last ${new Date(cap.at).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}` : ""}. ${cap.total - cap.inDump} at 4–5★ kept out of the miner. Editing the text here makes it your paste.`}>from the extension: {cap.total} ({cap.inDump} at 1–3★)</span>}
+                <a className="link inline-flex items-center gap-1" target="_blank" rel="noreferrer" href={criticalUrl(a.asin)}>1–3★ reviews <ExternalLinkIcon className="size-3" /></a>
+                {cap && <span className="rounded-full bg-brand-soft px-1.5 py-px text-xs text-link" title={`Sent by the extension from Amazon's review pages${cap.at ? `, last ${new Date(cap.at).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}` : ""}. ${cap.total - cap.inDump} at 4–5★ kept out of the miner. Editing the text here makes it your paste.`}>from the extension: {cap.total} ({cap.inDump} at 1–3★)</span>}
                 <span className="ml-auto text-muted-foreground">{n ? `${n} review${n === 1 ? "" : "s"}${pasted.has(a.asin) ? "" : " (not saved)"}` : "none yet"}</span>
               </span>
               {a.state === "pending" && (
@@ -163,7 +164,7 @@ export function ReviewMiner({ candidateId, asins, product, fields, onSave, onAsi
           <p className="text-xs text-muted-foreground"><b className="text-foreground">{mined.total}</b> negative reviews across {new Set(reviews.map((r) => r.asin)).size} listing{new Set(reviews.map((r) => r.asin)).size === 1 ? "" : "s"}. A theme counts each review once.</p>
           {chosen && <ChosenTheme theme={chosen} fields={fields} onSave={onSave} onNotFixable={() => mark(chosen.key, "not fixable")} />}
           <ThemesTable themes={rows} marks={data.marks} onChoose={choose} onMark={mark} />
-          {ignored > 0 && <button type="button" className="text-xs text-brand hover:underline" onClick={() => setShowIgnored((s) => !s)}>{showIgnored ? "Hide" : "Show"} {ignored} ignored theme{ignored === 1 ? "" : "s"}</button>}
+          {ignored > 0 && <TextButton className="text-xs" onClick={() => setShowIgnored((s) => !s)}>{showIgnored ? "Hide" : "Show"} {ignored} ignored theme{ignored === 1 ? "" : "s"}</TextButton>}
           <Summary candidateId={candidateId} initial={data.summary} />
         </>
       )}
@@ -196,7 +197,7 @@ function ThemesTable({ themes, marks, onChoose, onMark }: { themes: Theme[]; mar
               <td className="px-2 py-1.5">
                 <b className={cn(m === "ignore" && "line-through")}>{x.theme}</b>
                 {x.kind === "group" && <span className="ml-1 text-xs text-muted-foreground uppercase" title="Any of the synonym group's words">group</span>}
-                {m && m !== "ignore" && <span className={cn("ml-1 rounded-full px-1.5 py-px text-xs font-semibold", m === "chosen" ? "bg-brand text-white" : "bg-empty-soft text-ink-2")}>{m === "chosen" ? "Gate 4" : m}</span>}
+                {m && m !== "ignore" && <span className={cn("ml-1 rounded-full px-1.5 py-px text-xs font-semibold", m === "chosen" ? "bg-primary text-primary-foreground" : "bg-neutral-soft text-neutral")}>{m === "chosen" ? "Gate 4" : m}</span>}
               </td>
               <td className="num px-2 py-1.5 text-right">{x.reviews}</td>
               <td className="num px-2 py-1.5 text-right">{x.pct.toFixed(1)}%</td>
@@ -251,7 +252,7 @@ function Summary({ candidateId, initial }: { candidateId: string; initial: Run<R
   return (
     <div className="space-y-2 rounded-lg border border-dashed p-3">
       <div className="flex flex-wrap items-center gap-2">
-        <SparklesIcon className="size-4 text-brand" />
+        <SparklesIcon className="size-4 text-link" />
         <span className="text-sm font-semibold">Ask Claude to summarise</span>
         <span className="text-xs text-muted-foreground">The top three fixable complaints, one sentence each, from the reviews and themes above. Calls the API only when you click.</span>
         <span className="ml-auto">

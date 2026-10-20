@@ -16,6 +16,7 @@ import { listingChecks, needsProof, requiredThemes, ruleContext } from "@/lib/pl
 import type { ListingInputs, ListingRun, ListingSettings } from "@/lib/server/plListing";
 import { api } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
+import { TextButton } from "@/components/ui/text-button";
 
 interface Version { id: string; version: number; source: string; outputs: ListingDraft; created_at: string }
 interface View { inputs: ListingInputs; settings: ListingSettings; versions: Version[]; latest: Version | null; lastRun: (ListingRun & { version: number }) | null }
@@ -250,7 +251,7 @@ export function ListingSection({ candidateId }: { candidateId: string }) {
             <li key={v.id} className="flex flex-wrap items-center gap-2">
               <b className="num">v{v.version}</b> <span className="text-muted-foreground">{v.source} · {when(v.created_at)}</span>
               <span className="truncate text-muted-foreground">{v.outputs.title.slice(0, 70)}</span>
-              {v.version !== view.latest?.version && <button type="button" className="text-brand hover:underline" disabled={!!busy} onClick={() => restore(v.version)}>Restore</button>}
+              {v.version !== view.latest?.version && <TextButton disabled={!!busy} onClick={() => restore(v.version)}>Restore</TextButton>}
             </li>
           ))}</ul>
         </details>

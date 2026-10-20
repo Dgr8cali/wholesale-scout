@@ -61,7 +61,7 @@ describe("workspaces", () => {
     expect(pageTitle("/pl/candidates", "Candidates")).toBe("Candidates · Private label · Wholesale Scout");
     expect(pageTitle("/ads/rules", "Rules")).toBe("Rules · Ads · Wholesale Scout");
     expect(pageTitle("/settings", "Settings")).toBe("Settings · Wholesale Scout");
-    expect(pageTitle("/", null)).toBe("Wholesale Scout");
+    expect(pageTitle("/", null)).toBe("Today · Wholesale Scout");
     // No breadcrumbs: the nav label.
     expect(pageTitle("/runs", null)).toBe("Runs · Wholesale · Wholesale Scout");
   });

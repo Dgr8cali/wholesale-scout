@@ -8,12 +8,12 @@ import { EmptyState } from "@/components/States";
 import { Button } from "@/components/ui/button";
 import { InfoTip } from "@/components/ui/info-tip";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { DEFAULT_HIDDEN_SUPPLIER_FLAGS, SUPPLIER_FLAG_LABEL, SUPPLIER_FLAGS, type SupplierFlag } from "@/lib/pl/supplierScore";
 import { api } from "@/lib/ui/client";
-import { cn } from "@/lib/utils";
 import { AlibabaSupplierTable, type Lead } from "./AlibabaSupplierTable";
+import { ChipToggle } from "@/components/ui/chip-toggle";
+import { KpiSkeleton, TableSkeleton } from "@/components/ui/skeletons";
 
 interface Summary { captured: number; scoring60: number; contacted: number; quoted: number; toContact: number }
 interface Data { leads: Lead[]; summary: Summary; candidates: { id: string; name: string }[]; targets: { exworks: number | null; exworksDerived: boolean; maxMoq: number; unit: string } | null }
@@ -28,7 +28,7 @@ export function SuppliersPanel({ candidateId, onQuoted, showCandidate, initialFi
   const load = useCallback(() => api<Data>(`/api/pl/suppliers${cand ? `?candidate=${cand}` : ""}`).then(setData).catch((e: Error) => toast.error(e.message)), [cand]);
   useEffect(() => { load(); }, [load]);
   const rows = useMemo(() => (data?.leads ?? []).filter((l) => !l.flags.some((f) => hide.has(f)) && (showRejected || l.status !== "rejected")), [data, hide, showRejected]);
-  if (!data) return <Skeleton className="h-48 rounded-xl" />;
+  if (!data) return <div className="space-y-4"><KpiSkeleton /><TableSkeleton rows={6} columns={6} /></div>;
   const s = data.summary;
   const hiddenCount = data.leads.length - rows.length;
   return (
@@ -48,8 +48,7 @@ export function SuppliersPanel({ candidateId, onQuoted, showCandidate, initialFi
         )}
         <span className="text-meta text-muted-foreground">Hide:</span>
         {SUPPLIER_FLAGS.map((f) => (
-          <button key={f} type="button" aria-pressed={hide.has(f)} onClick={() => { const y = new Set(hide); if (y.has(f)) y.delete(f); else y.add(f); setHide(y); }}
-            className={cn("cursor-pointer rounded-full border px-2.5 py-1", hide.has(f) ? "border-primary bg-primary-soft font-medium text-primary-ink" : "border-border text-muted-foreground hover:bg-subtle hover:text-foreground")}>{SUPPLIER_FLAG_LABEL[f]}</button>
+          <ChipToggle key={f} pressed={hide.has(f)} onPressedChange={() => { const y = new Set(hide); if (y.has(f)) y.delete(f); else y.add(f); setHide(y); }}>{SUPPLIER_FLAG_LABEL[f]}</ChipToggle>
         ))}
         <label className="ml-2 flex cursor-pointer items-center gap-2 text-meta text-muted-foreground"><Switch checked={showRejected} onCheckedChange={setShowRejected} /> Show rejected</label>
         {hiddenCount > 0 && <span className="text-meta text-muted-foreground">· <span className="num">{hiddenCount}</span> hidden</span>}

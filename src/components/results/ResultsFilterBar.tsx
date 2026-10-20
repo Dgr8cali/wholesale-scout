@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDownIcon, SearchIcon, SlidersHorizontalIcon, StarIcon, Trash2Icon, XIcon } from "lucide-react";
+import { ChevronDownIcon, SearchIcon, SlidersHorizontalIcon, StarIcon, Trash2Icon } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { useDialogs } from "@/components/Dialogs";
@@ -17,6 +17,7 @@ import {
 } from "@/lib/filters";
 import { api } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
+import { ChipRemove } from "@/components/ui/chip-toggle";
 
 /** What the page can offer to filter by: its brands, suppliers and failed gates, and verdict counts. */
 export interface FilterOptions {
@@ -197,7 +198,7 @@ export function ResultsFilterBar({ value, onChange, options, matching, total, un
           ))}
           <YesNo label="Gated" value={value.gated} onChange={(gated) => set({ gated })} />
           {options.suppliers.length > 0 && (
-            <NativeSelect size="sm" className={cn("w-auto max-w-48", value.supplier && "[&_select]:border-primary [&_select]:text-primary")} value={value.supplier ?? ""} aria-label="Supplier"
+            <NativeSelect size="sm" className={cn("w-auto max-w-48", value.supplier && "[&_select]:border-primary [&_select]:text-link")} value={value.supplier ?? ""} aria-label="Supplier"
               onChange={(e) => set({ supplier: e.target.value || null })}>
               <NativeSelectOption value="">Any supplier</NativeSelectOption>
               {/* A supplier from the address that this page doesn't list still shows as chosen. */}
@@ -215,10 +216,7 @@ export function ResultsFilterBar({ value, onChange, options, matching, total, un
           {count ?? <>Showing <span className="num font-semibold">{(matching ?? 0).toLocaleString("en-GB")}</span> of <span className="num">{(total ?? 0).toLocaleString("en-GB")}</span> {unit}</>}
         </span>
         {chips.map((c) => (
-          <button key={c.id} type="button" onClick={() => onChange(c.remove(value))} aria-label={`Remove filter ${c.label}`}
-            className="inline-flex h-6 cursor-pointer items-center gap-1 rounded-full bg-primary-soft px-2.5 text-xs font-medium text-primary-ink hover:ring-1 hover:ring-primary">
-            {c.label} <XIcon className="size-3" aria-hidden="true" />
-          </button>
+          <ChipRemove key={c.id} onClick={() => onChange(c.remove(value))} label={`Remove filter ${c.label}`}>{c.label}</ChipRemove>
         ))}
         {chips.length > 0 && <Button variant="ghost" size="xs" className="text-muted-foreground" onClick={() => onChange(EMPTY_FILTERS)}>Clear all</Button>}
       </div>
@@ -234,7 +232,7 @@ function MoreFilters({ value, onChange, options, active, favouritesAvailable }: 
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="secondary" size="sm" className={cn(active > 0 && "border-primary text-primary")}>
+        <Button variant="secondary" size="sm" className={cn(active > 0 && "border-primary text-link")}>
           More filters{active > 0 ? ` (${active})` : ""} <ChevronDownIcon data-icon="inline-end" />
         </Button>
       </PopoverTrigger>

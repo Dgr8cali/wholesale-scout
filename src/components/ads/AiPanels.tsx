@@ -63,7 +63,7 @@ export function ExplainPanel({ asin }: { asin: string }) {
   return (
     <div className="space-y-2 rounded-lg border border-border p-3">
       <div className="flex flex-wrap items-center gap-2">
-        <SparklesIcon className="size-4 text-primary" />
+        <SparklesIcon className="size-4 text-link" />
         <span className="text-sm font-semibold">Explain this product</span>
         <InfoTip label="About Explain this product">A short read of the period from these figures (Claude). Facts only from the data; it never sets bids or budgets. It runs only when you click.</InfoTip>
         <span className="ml-auto flex gap-1">
@@ -116,7 +116,7 @@ export function TargetsPanel({ asin, onApplied }: { asin: string; onApplied: () 
   return (
     <div className="space-y-2 rounded-lg border border-border p-3">
       <div className="flex flex-wrap items-center gap-2">
-        <SparklesIcon className="size-4 text-primary" />
+        <SparklesIcon className="size-4 text-link" />
         <span className="text-sm font-semibold">Recommend targets</span>
         <InfoTip label="About Recommend targets">Launch and steady target ACoS from break-even, reviews, rank, stock cover and conversion (Claude). Nothing changes until you Apply.</InfoTip>
         <span className="ml-auto flex gap-1">

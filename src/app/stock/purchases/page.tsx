@@ -7,7 +7,6 @@ import { ProductThumb } from "@/components/ProductThumb";
 import { ErrorState } from "@/components/States";
 import { DataTable, type DataColumn } from "@/components/ui/data-table";
 import { Kpi } from "@/components/ui/kpi";
-import { Skeleton } from "@/components/ui/skeleton";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { Actuals } from "@/lib/actuals";
 import type { Purchase } from "@/lib/server/purchases";
@@ -24,6 +23,7 @@ import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
+import { KpiSkeleton, TableSkeleton } from "@/components/ui/skeletons";
 
 type Row = Purchase & { actuals?: Actuals | null };
 /** A purchase's title and image: its stock item's, else (older rows) the catalogue product's. */
@@ -89,7 +89,7 @@ export default function PurchasesPage() {
     />
   );
   if (error) return <div className="space-y-6">{header}<ErrorState title="Couldn't load the purchases" message={error} /></div>;
-  if (!rows) return <div className="space-y-6">{header}<Skeleton className="h-64 rounded-xl" /></div>;
+  if (!rows) return <div className="space-y-6">{header}<KpiSkeleton /><TableSkeleton rows={6} columns={8} /></div>;
 
   const open = rows.filter((p) => p.status !== "closed");
   const invested = open.reduce((s, p) => s + p.units * p.landed_gbp, 0);
@@ -110,10 +110,10 @@ export default function PurchasesPage() {
           <ProductThumb url={purchaseImage(p)} asin={p.asin} title={purchaseTitle(p)} brand={p.stock?.brand ?? p.product?.brand ?? null} size={36} />
           <div className="min-w-0">
             {p.asin && p.product
-              ? <Link className="line-clamp-2 text-sm hover:text-primary hover:underline" href={`/products/${p.asin}`}>{purchaseTitle(p)}</Link>
-              : <Link className="line-clamp-2 text-sm hover:text-primary hover:underline" href={p.stock_item_id ? `/stock/levels?item=${p.stock_item_id}` : `/products/${p.asin}`}>{purchaseTitle(p)}</Link>}
+              ? <Link className="line-clamp-2 text-sm hover:text-link hover:underline" href={`/products/${p.asin}`}>{purchaseTitle(p)}</Link>
+              : <Link className="line-clamp-2 text-sm hover:text-link hover:underline" href={p.stock_item_id ? `/stock/levels?item=${p.stock_item_id}` : `/products/${p.asin}`}>{purchaseTitle(p)}</Link>}
             <p className="num text-xs text-muted-foreground">{p.asin ?? p.stock?.sku ?? "—"} · {p.supplier_name ?? "—"} · {p.ordered_on}{p.received_bucket ? ` · in Stock (${p.received_bucket === "home" ? "self-ship" : "TikTok FBT"})` : ""}</p>
-            <div className="mt-1 flex flex-wrap items-center gap-1"><OrderLine p={p} /><OrderEditButton p={p} onSaved={reload} /><OrderDeleteButton p={p} name={purchaseTitle(p)} onDeleted={reload} />{p.stock_item_id && <Link className="text-xs text-primary hover:underline" href={`/stock/levels?item=${p.stock_item_id}`}>Stock →</Link>}</div>
+            <div className="mt-1 flex flex-wrap items-center gap-1"><OrderLine p={p} /><OrderEditButton p={p} onSaved={reload} /><OrderDeleteButton p={p} name={purchaseTitle(p)} onDeleted={reload} />{p.stock_item_id && <Link className="link text-xs" href={`/stock/levels?item=${p.stock_item_id}`}>Stock →</Link>}</div>
           </div>
         </div>
       ),

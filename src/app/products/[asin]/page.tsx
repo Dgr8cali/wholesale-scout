@@ -35,6 +35,7 @@ import { cn } from "@/lib/utils";
 import { Tracker, type SupplierChoice } from "@/components/product/Tracker";
 import type { WatchCondition } from "@/lib/watch";
 import type { CostInput } from "@/lib/costOverride";
+import { KpiSkeleton, PanelSkeleton, TableSkeleton } from "@/components/ui/skeletons";
 
 const CONFIDENCE = { high: "good", medium: "warn", low: "bad" } as const;
 
@@ -76,7 +77,7 @@ export default function ProductPage() {
   const title = (v?.latest?.product as { title?: string } | undefined)?.title ?? (v?.products[0]?.title as string | undefined) ?? asin;
 
   if (error) return <ErrorState title="Couldn't load this product" message={error} onRetry={() => { setError(null); load(); }} />;
-  if (!v) return <div className="space-y-4"><Skeleton className="h-24" /><Skeleton className="h-48" /><Skeleton className="h-64" /></div>;
+  if (!v) return <div className="space-y-4"><Skeleton className="h-10 w-2/3 rounded-lg" /><KpiSkeleton /><PanelSkeleton lines={5} height="h-48" /><TableSkeleton rows={5} columns={5} /></div>;
 
   const p = (v.latest?.product ?? v.products[0]) as { ean: string; asin: string; title: string | null; brand: string | null; image_url?: string | null };
   const r = v.latest as unknown as (Result & { updated_at: string; run?: { id: string; name: string | null; source: string } }) | null;
@@ -135,11 +136,11 @@ export default function ProductPage() {
             crumbs={[{ label: "Wholesale", href: "/runs" }, { label: "Products", href: "/products" }, { label: String(title).slice(0, 60) }]}
             title={<span className="flex items-start gap-2"><span className="min-w-0">{p.title ?? v.asin}</span><FavouriteStar starred={!!fav} onToggle={star} /></span>}
             subtitle={<span className="inline-flex flex-wrap items-center gap-x-2">
-              {p.brand && <Link className="font-medium text-primary hover:underline" href={`/brands/${encodeURIComponent(brandKey(p.brand))}`}>{p.brand}</Link>}
+              {p.brand && <Link className="link font-medium" href={`/brands/${encodeURIComponent(brandKey(p.brand))}`}>{p.brand}</Link>}
               <span className="num">{v.asin}</span>
               {eans.length > 0 && <span className="num">EAN {eans.join(", ")}</span>}
-              <a className="inline-flex items-center gap-0.5 text-primary hover:underline" href={`https://www.amazon.co.uk/dp/${v.asin}`} target="_blank" rel="noreferrer">Amazon <ExternalLinkIcon className="size-3" /></a>
-              <a className="inline-flex items-center gap-0.5 text-primary hover:underline" href={`https://keepa.com/#!product/2-${v.asin}`} target="_blank" rel="noreferrer">Keepa <ExternalLinkIcon className="size-3" /></a>
+              <a className="link inline-flex items-center gap-0.5" href={`https://www.amazon.co.uk/dp/${v.asin}`} target="_blank" rel="noreferrer">Amazon <ExternalLinkIcon className="size-3" /></a>
+              <a className="link inline-flex items-center gap-0.5" href={`https://keepa.com/#!product/2-${v.asin}`} target="_blank" rel="noreferrer">Keepa <ExternalLinkIcon className="size-3" /></a>
             </span>}
           />
           <Checked at={r?.updated_at} recheck={{ text: cheapest?.landedGbp != null ? `${v.asin}, ${cheapest.landedGbp.toFixed(2)}` : v.asin, supplier: cheapest?.supplier?.name ?? null }} />
@@ -225,12 +226,12 @@ export default function ProductPage() {
               {
                 id: "supplier", header: "Supplier", mobile: "title", sortValue: (o) => o.supplier?.name ?? null,
                 cell: (o) => <>
-                  {o.supplier ? <Link className="font-medium text-primary hover:underline" href={`/suppliers/${o.supplier.id}`}>{o.supplier.name}</Link> : "—"}
+                  {o.supplier ? <Link className="link font-medium" href={`/suppliers/${o.supplier.id}`}>{o.supplier.name}</Link> : "—"}
                   {o.archived && <StatusChip tone="neutral" icon={false} className="ml-1.5 h-5 px-2" title="The Qogita UK account now prices this product: this EU offer is kept for history and left out of plans">Archived</StatusChip>}
                   {(o.stock != null || o.offerCount != null || o.preOrder || o.deliveryWeeks != null) && (
                     <span className="block text-xs font-normal text-muted-foreground">
                       {[o.stock != null ? `${o.stock.toLocaleString("en-GB")} in stock` : null, o.offerCount != null ? `${o.offerCount} offer${o.offerCount === 1 ? "" : "s"}` : null, o.preOrder ? "pre-order" : null, o.deliveryWeeks != null ? `${o.deliveryWeeks} wk delivery` : null].filter(Boolean).join(" · ")}
-                      {o.link && <> · <a className="text-primary hover:underline" href={o.link} target="_blank" rel="noreferrer">view</a></>}
+                      {o.link && <> · <a className="link" href={o.link} target="_blank" rel="noreferrer">view</a></>}
                     </span>
                   )}
                 </>,
@@ -260,7 +261,7 @@ export default function ProductPage() {
             empty={{ icon: <HistoryIcon />, title: "Not screened yet", description: "Each run that screens this product adds a line here." }}
             columns={[
               { id: "when", header: "When", sortValue: (h) => h.at, cell: (h) => <span className="num text-xs whitespace-nowrap">{new Date(h.at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span> },
-              { id: "run", header: "Run", mobile: "title", className: "max-w-48", sortValue: (h) => h.runName, cell: (h) => <><Link className="block truncate text-primary hover:underline" href={`/runs/${h.runId}`}>{h.runName}</Link>{h.profile && <span className="block text-xs font-normal text-muted-foreground">{h.profile}</span>}</> },
+              { id: "run", header: "Run", mobile: "title", className: "max-w-48", sortValue: (h) => h.runName, cell: (h) => <><Link className="link block truncate" href={`/runs/${h.runId}`}>{h.runName}</Link>{h.profile && <span className="block text-xs font-normal text-muted-foreground">{h.profile}</span>}</> },
               {
                 id: "verdict", header: "Verdict", mobile: 1, sortValue: (h) => (h.verdict ? { pass: 1, warn: 2, fail: 3 }[h.verdict] ?? 4 : null),
                 cell: (h) => <>{h.verdict ? <ProductDecision verdict={h.verdict} /> : "—"}{h.failedGate && <span className="block text-xs text-muted-foreground">{GATE_LABELS[h.failedGate as GateId] ?? h.failedGate}</span>}</>,
@@ -278,7 +279,7 @@ export default function ProductPage() {
         <Panel title="Approval and paperwork">
           <p className="text-sm">
             {v.approval ? <>Your approval for {p.brand}: <b>{v.approval.status.replace(/_/g, " ")}</b>{v.approval.requirement ? ` · ${v.approval.requirement}` : ""}</> : <>No approval recorded for {p.brand ?? "this brand"}.</>}
-            {p.brand && <> · <Link className="text-primary hover:underline" href={`/brands/${encodeURIComponent(brandKey(p.brand))}`}>brand page</Link></>}
+            {p.brand && <> · <Link className="link" href={`/brands/${encodeURIComponent(brandKey(p.brand))}`}>brand page</Link></>}
           </p>
           {v.documents.length ? <ul className="space-y-1.5">{v.documents.map((d) => <DocumentLine key={d.id} d={d} />)}</ul>
             : <p className="text-sm text-muted-foreground">No documents for this brand yet (attach them on the brand&apos;s or the supplier&apos;s page).</p>}
@@ -290,7 +291,7 @@ export default function ProductPage() {
 
       {/* The latest screening in full */}
       {r && (
-        <Panel title={<>Latest screening <span>· {r.run ? <Link className="text-primary hover:underline" href={`/runs/${r.run.id}`}>{r.run.name ?? r.run.source}</Link> : null}</span></>}>
+        <Panel title={<>Latest screening <span>· {r.run ? <Link className="link" href={`/runs/${r.run.id}`}>{r.run.name ?? r.run.source}</Link> : null}</span></>}>
           {r.run && <StaleBanner rows={[{ id: r.id, run_id: r.run.id, fees: r.fees as never }]} onRechecked={load} />}
           <Detail r={r} fav={fav ?? undefined} onNote={saveNote} onWaive={waive} onWatch={watch} onCost={cost} />
         </Panel>

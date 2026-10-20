@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { BUCKET_LABEL, KIND_LABEL, MANUAL_BUCKETS, type Bucket, type MovementKind } from "@/lib/stock/levels";
 import { api } from "@/lib/ui/client";
+import { TextButton } from "@/components/ui/text-button";
 
 export interface EditableMovement {
   id: string; bucket: Bucket; quantity: number; kind: MovementKind; date: string; reason: string | null; note: string | null; unit_cost: number | null;
@@ -95,7 +96,7 @@ export function AuditTable({ rows }: { rows: AuditRow[] }) {
       cell: (r) => (
         <div className="text-meta">
           {r.summary}
-          <button type="button" className="ml-2 cursor-pointer text-primary hover:underline" onClick={() => setOpen(open === r.id ? null : r.id)}>{open === r.id ? "Hide" : "Before / after"}</button>
+          <TextButton className="ml-2" onClick={() => setOpen(open === r.id ? null : r.id)}>{open === r.id ? "Hide" : "Before / after"}</TextButton>
           {open === r.id && (
             <div className="mt-1 grid gap-2 md:grid-cols-2">
               <pre className="max-h-60 overflow-auto rounded-lg bg-subtle p-2 text-xs">{JSON.stringify(r.before, null, 1)}</pre>

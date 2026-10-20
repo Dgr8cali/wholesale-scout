@@ -67,8 +67,8 @@ export function LaunchSection({ candidateId, status, steps, listingAsin, ads, pl
           <input type="checkbox" className="mt-1" checked={!!s?.done} onChange={(e) => save(d.key, { done: e.target.checked })} />
           <span><span className={cn("font-medium", s?.done && "text-success")}>{i + 1}. {d.label}</span>
             {d.hint && <span className="block text-meta font-normal text-muted-foreground">{d.hint}</span>}
-            {d.key === "listing_written" && <Link href={`/pl/candidates/${candidateId}?tab=listing`} className="inline-flex items-center gap-1 text-meta font-medium text-primary hover:underline"><PenLineIcon className="size-3" /> Write it on the Listing tab</Link>}
-            {d.key === "ads_launched" && <Link href={adsHref} className="inline-flex items-center gap-1 text-meta font-medium text-primary hover:underline"><MegaphoneIcon className="size-3" /> Build the campaigns in step 3, Ads launch plan</Link>}
+            {d.key === "listing_written" && <Link href={`/pl/candidates/${candidateId}?tab=listing`} className="link inline-flex items-center gap-1 text-meta font-medium"><PenLineIcon className="size-3" /> Write it on the Listing tab</Link>}
+            {d.key === "ads_launched" && <Link href={adsHref} className="link inline-flex items-center gap-1 text-meta font-medium"><MegaphoneIcon className="size-3" /> Build the campaigns in step 3, Ads launch plan</Link>}
           </span>
         </label>
       ),
@@ -104,7 +104,7 @@ export function LaunchSection({ candidateId, status, steps, listingAsin, ads, pl
           <div className="flex gap-2">
             <Input className="num h-8 w-40 uppercase" placeholder="B0…" value={asin} onChange={(e) => setAsin(e.target.value)} aria-label="Listing ASIN" />
             <Button size="sm" variant="secondary" onClick={saveAsin}>Save</Button>
-            {listingAsin && <Link href="/ads/dashboard" className="self-center text-meta text-primary hover:underline">Ads dashboard →</Link>}
+            {listingAsin && <Link href="/ads/dashboard" className="link self-center text-meta">Ads dashboard →</Link>}
           </div>
           {ads && (
             <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-3">

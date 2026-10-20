@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDownIcon, ArrowUpIcon } from "lucide-react";
+import { SortButton } from "@/components/ui/sort-button";
 import { useState, type ReactNode, type ThHTMLAttributes } from "react";
 import { inferKind, nextSort, parseStoredSort, sortRows, sortStorageKey, type SortDir, type SortKind, type SortState } from "@/lib/ui/sort";
 import { cn } from "@/lib/utils";
@@ -67,12 +67,7 @@ export function SortTh({ sortKey, sort, onSort, children, className, numeric, ..
   const dir: SortDir | null = active ? sort!.dir : null;
   return (
     <th {...rest} className={cn(className, "select-none")} aria-sort={dir === "asc" ? "ascending" : dir === "desc" ? "descending" : undefined}>
-      <button type="button" onClick={() => onSort(sortKey)}
-        className={cn("inline-flex items-center gap-0.5 uppercase hover:text-foreground", numeric && "flex-row-reverse", active && "text-foreground")}
-        title="Sort by this column (click again to reverse)">
-        <span>{children}</span>
-        {dir === "asc" ? <ArrowUpIcon className="size-3" aria-hidden /> : dir === "desc" ? <ArrowDownIcon className="size-3" aria-hidden /> : <span className="inline-block size-3" aria-hidden />}
-      </button>
+      <SortButton sorted={dir} numeric={numeric} onClick={() => onSort(sortKey)} className="uppercase">{children}</SortButton>
     </th>
   );
 }
@@ -90,11 +85,7 @@ export function SortTableHead({ sortKey, sort, onSort, children, className, nume
     <th data-slot="table-head" {...rest}
       className={cn("h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground select-none", numeric && "text-right", className)}
       aria-sort={dir === "asc" ? "ascending" : dir === "desc" ? "descending" : undefined}>
-      <button type="button" onClick={() => onSort(sortKey)} title="Sort by this column (click again to reverse)"
-        className={cn("inline-flex items-center gap-0.5 hover:text-foreground", numeric && "flex-row-reverse", !active && "text-muted-foreground")}>
-        <span>{children}</span>
-        {dir === "asc" ? <ArrowUpIcon className="size-3" aria-hidden /> : dir === "desc" ? <ArrowDownIcon className="size-3" aria-hidden /> : <span className="inline-block size-3" aria-hidden />}
-      </button>
+      <SortButton sorted={dir} numeric={numeric} onClick={() => onSort(sortKey)} className={cn(!active && "text-muted-foreground")}>{children}</SortButton>
     </th>
   );
 }

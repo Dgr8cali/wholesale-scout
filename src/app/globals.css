@@ -27,6 +27,14 @@
   --primary-soft: #E6F2F3;
   --primary-ink: #134B54;
   --primary-foreground: #FFFFFF;
+  /* Teal as text (links, text buttons): a shade darker than the fill so it reads at 4.5:1 on every
+     surface (page, subtle, primary-soft). */
+  --link: #276C77;
+  /* Behind product photos (Amazon's are on white): white in both themes. */
+  --media: #FFFFFF;
+  /* Behind a dialog or sheet, and the soft edge where a pinned column overlaps scrolled ones. */
+  --overlay: rgb(0 0 0 / 0.1);
+  --edge-shadow: rgb(0 0 0 / 0.12);
   /* The accent (the logo's amber): highlights only, never a button. Named "highlight" in Tailwind,
      because shadcn's own "accent" is the hover background. */
   --highlight: #F2B544;
@@ -55,6 +63,10 @@
   --primary-soft: #1E2E35;
   --primary-ink: #B5E7ED;
   --primary-foreground: #0F1416;
+  --link: #4FA3AF;
+  --media: #FFFFFF;
+  --overlay: rgb(0 0 0 / 0.45);
+  --edge-shadow: rgb(0 0 0 / 0.4);
   --highlight: #F2B544;
   --warn-soft: #3A2E12;
   --warn-ink: #F2CB7A;
@@ -149,6 +161,9 @@
   --color-primary-hover: var(--primary-hover);
   --color-primary-soft: var(--primary-soft);
   --color-primary-ink: var(--primary-ink);
+  --color-link: var(--link);
+  --color-media: var(--media);
+  --color-overlay: var(--overlay);
   --color-highlight: var(--highlight);
   --color-warn-ink: var(--warn-ink);
   --color-danger: var(--danger);
@@ -224,6 +239,12 @@
     @apply bg-background text-foreground;
     font-size: 14px;
     line-height: 20px;
+  }
+  /* Every control shows where the keyboard is: a 2px ring outline unless the component draws its
+     own ring (those set outline-none, which wins over this zero-specificity rule). */
+  :where(a, button, summary, input, select, textarea, [role="button"], [role="tab"], [role="option"], [role="menuitem"], [tabindex]):focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
   }
 }
 
@@ -309,9 +330,9 @@
 .rt-row[data-active] { --row-bg: var(--brand-soft); }
 .rt-row > td { background: var(--row-bg); }
 /* The last pinned column's edge, drawn as a shadow because borders don't travel with sticky cells. */
-.rt-edge { box-shadow: inset -1px 0 0 var(--border), 6px 0 8px -6px oklch(0 0 0 / 0.12); }
+.rt-edge { box-shadow: inset -1px 0 0 var(--border), 6px 0 8px -6px var(--edge-shadow); }
 /* The row menu pinned at the right edge. */
-.rt-edge-end { box-shadow: inset 1px 0 0 var(--border), -6px 0 8px -6px oklch(0 0 0 / 0.12); }
+.rt-edge-end { box-shadow: inset 1px 0 0 var(--border), -6px 0 8px -6px var(--edge-shadow); }
 
 /* Any table row with data-verdict: a 4px verdict-coloured edge on its first cell. */
 tr[data-verdict] > td:first-child { box-shadow: inset 4px 0 0 var(--empty); }
@@ -338,7 +359,7 @@ tr[data-verdict] > td:first-child { padding-left: 0.75rem; }
 .help-prose h2 { @apply mt-6 scroll-mt-16 text-base font-semibold; }
 .help-prose h3 { @apply mt-5 scroll-mt-16 text-sm font-semibold; }
 .help-prose h4 { @apply mt-4 scroll-mt-16 text-sm font-medium; }
-.help-prose a { @apply font-medium text-brand underline-offset-2 hover:underline; }
+.help-prose a { @apply link font-medium; }
 .help-prose ul { @apply list-disc space-y-1 pl-5; }
 .help-prose ol { @apply list-decimal space-y-1 pl-5; }
 .help-prose li > ul, .help-prose li > ol { @apply mt-1; }
@@ -350,3 +371,17 @@ tr[data-verdict] > td:first-child { padding-left: 0.75rem; }
 .help-prose th, .help-prose td { @apply border px-2 py-1 text-left align-top; }
 .help-prose th { @apply bg-muted/60 font-semibold; }
 .help-prose hr { @apply my-6; }
+
+/*
+ * A text link: teal (--link, 4.5:1 on every surface) and always underlined, lightly, so a link in a
+ * sentence doesn't rely on colour alone (WCAG 1.4.1); the underline darkens on hover.
+ */
+@utility link {
+  color: var(--link);
+  text-decoration-line: underline;
+  text-decoration-color: color-mix(in srgb, var(--link) 40%, transparent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  &:hover { text-decoration-color: var(--link); }
+}

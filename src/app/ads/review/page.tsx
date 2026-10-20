@@ -65,7 +65,7 @@ function Review() {
         subtitle={`The monthly AI review of ${monthName(month)}: what worked, and three recommendations.`}
         info={<>
           <p>Claude reads the month&apos;s figures from your imports, per product then account-wide, checks whether last month&apos;s applied batches worked (14 days before against 14 after) and ranks three recommendations by expected profit.</p>
-          <p>It never sets bids or budgets: changes still come from the <Link className="text-primary underline" href="/ads/rules">rules</Link>. It runs only when you click, or on the 1st at 06:00 if you turn that on in Ads → Rules → Ad settings.</p>
+          <p>It never sets bids or budgets: changes still come from the <Link className="link" href="/ads/rules">rules</Link>. It runs only when you click, or on the 1st at 06:00 if you turn that on in Ads → Rules → Ad settings.</p>
         </>}
         actions={<>
           <Input type="month" className="w-40" aria-label="Month" value={month} onChange={(e) => { if (e.target.value) router.replace(`/ads/review?month=${e.target.value}`); }} />
@@ -90,11 +90,11 @@ function Review() {
               {run.result.recommendations.map((r) => (
                 <li key={r.rank} className="panel p-4 text-sm">
                   <div className="flex flex-wrap items-baseline gap-2">
-                    <span className="num font-semibold text-primary">{r.rank}.</span>
+                    <span className="num font-semibold text-link">{r.rank}.</span>
                     <b>{r.title}</b>
                     {r.expected_profit_gbp_month != null && <span className="text-xs text-success">about <span className="num">£{r.expected_profit_gbp_month.toFixed(0)}</span> a month</span>}
                     <span className="ml-auto text-xs">
-                      {r.maps_to === "manual" ? <span className="text-muted-foreground">Manual action</span> : <Link className="text-primary underline" href="/ads/rules">Rule: {ruleLabel(r.maps_to) ?? r.maps_to}</Link>}
+                      {r.maps_to === "manual" ? <span className="text-muted-foreground">Manual action</span> : <Link className="link" href="/ads/rules">Rule: {ruleLabel(r.maps_to) ?? r.maps_to}</Link>}
                     </span>
                   </div>
                   <p className="mt-1">{r.detail}</p>

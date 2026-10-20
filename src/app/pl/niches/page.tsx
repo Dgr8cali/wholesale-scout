@@ -33,10 +33,10 @@ function Niches() {
         subtitle={tab === "mine" ? "Opportunity Explorer niches, scored 0–100 from their own figures." : "Niches that already pass Gates 0 and 1, from Keepa's Product Finder."}
         info={tab === "mine" ? <>
           <p>Opportunity Explorer category downloads, every niche scored 0–100 from its own figures (demand, growth, price, fragmentation, units a product) and flagged. No Keepa tokens until you ask for an incumbent check.</p>
-          <p>See <Link className="text-primary underline" href="/help/howto/pl-importing-niches">Private label: importing Opportunity Explorer niches</Link>.</p>
+          <p>See <Link className="link" href="/help/howto/pl-importing-niches">Private label: importing Opportunity Explorer niches</Link>.</p>
         </> : <>
           <p>Products that already pass Gates 0 and 1, from Keepa&apos;s Product Finder, grouped by leaf category: each leaf is a niche. Direct mode asks Keepa once per category with the thresholds applied; leaf mode sizes each leaf first.</p>
-          <p>Turn a niche into a candidate. See <Link className="text-primary underline" href="/help/concepts/niche-hunt">Niche Hunt</Link>.</p>
+          <p>Turn a niche into a candidate. See <Link className="link" href="/help/concepts/niche-hunt">Niche Hunt</Link>.</p>
         </>}
       />
       <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)} className="gap-6">

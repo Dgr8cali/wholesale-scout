@@ -34,6 +34,7 @@ import { storefrontUrl } from "@/lib/check/seller";
 import { groupRows } from "@/lib/ui/group";
 import { brandOf, dormantOf, toFilterRow } from "@/lib/ui/resultRows";
 import { cn } from "@/lib/utils";
+import { TextButton } from "@/components/ui/text-button";
 
 export default function RunPage() {
   const { id } = useParams<{ id: string }>();
@@ -334,11 +335,11 @@ export default function RunPage() {
       {run.stats?.scan && (
         <p className="-mt-2 text-meta text-muted-foreground">
           Storefront of{" "}
-          <a className="font-medium text-primary hover:underline" href={storefrontUrl(run.stats.scan.sellerId)} target="_blank" rel="noreferrer">{run.stats.scan.sellerName ?? run.stats.scan.sellerId}</a>
+          <a className="link font-medium" href={storefrontUrl(run.stats.scan.sellerId)} target="_blank" rel="noreferrer">{run.stats.scan.sellerName ?? run.stats.scan.sellerId}</a>
           : {run.stats.scan.asins.toLocaleString("en-GB")} ASINs screened with no cost
           {run.stats.scan.more > 0 ? `; ${run.stats.scan.more.toLocaleString("en-GB")} more on the storefront not scanned` : ""}
           {" · "}{results.filter((x) => x.inputs?.market?.buyBoxSellerId === run.stats?.scan?.sellerId).length} where it holds the Buy Box now
-          {" · "}<Link className="text-primary hover:underline" href="/sellers">Sellers</Link>
+          {" · "}<Link className="link" href="/sellers">Sellers</Link>
         </p>
       )}
 
@@ -360,7 +361,7 @@ export default function RunPage() {
             </span>
             <span className="text-muted-foreground">
               {progress.paused
-                ? <>Nothing runs and no Keepa tokens are spent until you <button className="cursor-pointer font-medium text-primary underline-offset-2 hover:underline" onClick={() => control("resume")}>resume</button>.</>
+                ? <>Nothing runs and no Keepa tokens are spent until you <TextButton className="font-medium" onClick={() => control("resume")}>resume</TextButton>.</>
                 : progress.working ? "Working in the background: you can close this page." : "Resuming…"}
             </span>
           </div>
@@ -393,7 +394,7 @@ export default function RunPage() {
           )}
         </div>
       )}
-      {error && <p className="rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p>}
+      {error && <ErrorState compact title="Couldn't refresh the run" message={error} onRetry={() => { setError(null); setNonce((n) => n + 1); }} />}
 
       <BulkBar count={selected.size} stashed={stash?.size ?? 0}
         onReselect={() => { if (stash) setSelected(new Set([...stash].filter((x) => results.some((r) => r.id === x)))); setStash(null); }}

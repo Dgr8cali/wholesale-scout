@@ -15,6 +15,7 @@ import { PURCHASE_STATUSES, type PurchaseStatus } from "@/lib/tracker";
 import { api, gbp } from "@/lib/ui/client";
 import type { Actuals } from "@/lib/actuals";
 import { PurchaseOutcome } from "./PurchaseOutcome";
+import { ListSkeleton } from "@/components/ui/skeletons";
 
 export interface SupplierChoice { id: string | null; name: string; landedGbp: number | null; unitCostGbp: number | null }
 
@@ -104,7 +105,7 @@ export function Tracker({ asin, suppliers, defaultLanded, openForm = false }: { 
         </div>
       )}
 
-      {rows == null ? <p className="text-sm text-muted-foreground">Loading…</p> : rows.length === 0 ? (
+      {rows == null ? <ListSkeleton rows={2} /> : rows.length === 0 ? (
         <p className="text-sm text-muted-foreground">Not bought yet. When you order it, record it here: the tracker then compares the prediction with Amazon&apos;s real sales, price and fees.</p>
       ) : (
         <ul className="space-y-3">
@@ -114,7 +115,7 @@ export function Tracker({ asin, suppliers, defaultLanded, openForm = false }: { 
                 {(p.stock || p.product) && (
                   <span className="flex min-w-0 items-center gap-2">
                     <ProductThumb url={p.stock?.image_url || p.product?.image_url || null} asin={p.asin} title={p.stock?.name ?? p.product?.title ?? p.asin} brand={p.stock?.brand ?? p.product?.brand ?? null} size={28} />
-                    {p.stock_item_id ? <Link className="num text-xs text-primary hover:underline" href={`/stock/levels?item=${p.stock_item_id}`} title={p.stock?.name ?? ""}>{p.stock?.sku ?? "Stock item"}</Link> : null}
+                    {p.stock_item_id ? <Link className="link num text-xs" href={`/stock/levels?item=${p.stock_item_id}`} title={p.stock?.name ?? ""}>{p.stock?.sku ?? "Stock item"}</Link> : null}
                   </span>
                 )}
                 <span className="num font-medium">{p.units} units × {gbp(p.landed_gbp)}</span>

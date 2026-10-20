@@ -32,6 +32,7 @@ export default function TodayPage() {
     <div className="space-y-6">
       <PageHeader
         title="Today"
+        crumbs={[{ label: "Home" }, { label: "Today" }]}
         subtitle={today()}
         info={<>
           <p>The most useful jobs to do now, from your own data: imports due, proposals to review, launch milestones, costs to add, stock to reorder, candidates&apos; next actions, suppliers and brands to chase. Problems with the nightly cron, Keepa or SP-API come first.</p>

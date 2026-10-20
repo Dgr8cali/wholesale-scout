@@ -14,7 +14,6 @@ import { InfoTip, SectionTitle } from "@/components/ui/info-tip";
 import { Input } from "@/components/ui/input";
 import { Kpi } from "@/components/ui/kpi";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
-import { Skeleton } from "@/components/ui/skeleton";
 import { StatusChip, type Tone } from "@/components/ui/status-chip";
 import { Textarea } from "@/components/ui/textarea";
 import { DEFAULT_HIDDEN_FLAGS, FLAG_LABEL, NICHE_FLAGS, type NicheFlag } from "@/lib/pl/nicheScore";
@@ -23,6 +22,10 @@ import { TERM_SIGNAL_LABEL, termSignalText, type TermSignal } from "@/lib/pl/ter
 import type { NicheRow } from "@/lib/server/plNiches";
 import { api } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
+import { ListButton } from "@/components/ui/list-button";
+import { TextButton } from "@/components/ui/text-button";
+import { ChipToggle } from "@/components/ui/chip-toggle";
+import { KpiSkeleton, PanelSkeleton, TableSkeleton } from "@/components/ui/skeletons";
 
 interface Imp { id: string; category: string; imported_at: string; row_count: number; filename: string | null; unmapped: string[]; duplicates: number; poeCategory: string | null; feeCategory: string }
 interface Stats { total: number; scoring60: number; hiddenByFlags: number; shortlisted: number; checked: number }
@@ -96,7 +99,7 @@ export function MyNiches() {
   // Any change but the page itself goes back to page 1.
   const change = (p: Partial<Filters>) => { setF((x) => ({ ...x, ...p })); setPage(1); };
   if (error && !data) return <ErrorState title="Couldn't load the niches" message={error} onRetry={load} />;
-  if (!data) return <Skeleton className="h-96 rounded-xl" />;
+  if (!data) return <div className="space-y-5"><PanelSkeleton lines={3} /><KpiSkeleton count={5} /><TableSkeleton rows={10} columns={8} /></div>;
   return (
     <div className="space-y-5">
       <ImportCard imports={data.imports} onImported={load} />
@@ -279,8 +282,7 @@ function NicheTable({ data, loading, f, change, hide, setHide, sorting, page, se
       <div className="flex flex-wrap items-center gap-1.5 text-xs">
         <span className="text-meta text-muted-foreground">Hide flagged:</span>
         {NICHE_FLAGS.map((x) => (
-          <button key={x} type="button" aria-pressed={hide.has(x)} onClick={() => { const y = new Set(hide); if (y.has(x)) y.delete(x); else y.add(x); setHide(y); }}
-            className={cn("cursor-pointer rounded-full border px-2.5 py-1", hide.has(x) ? "border-primary bg-primary-soft font-medium text-primary-ink" : "border-border text-muted-foreground hover:bg-subtle hover:text-foreground")}>{FLAG_LABEL[x]}</button>
+          <ChipToggle key={x} pressed={hide.has(x)} onPressedChange={() => { const y = new Set(hide); if (y.has(x)) y.delete(x); else y.add(x); setHide(y); }}>{FLAG_LABEL[x]}</ChipToggle>
         ))}
         <Button variant="link" size="sm" className="ml-1 text-xs" onClick={() => setHide(new Set(DEFAULT_HIDDEN_FLAGS))}>Defaults</Button>
       </div>
@@ -301,10 +303,10 @@ function NicheTable({ data, loading, f, change, hide, setHide, sorting, page, se
                   <label className="-m-2 flex size-11 flex-none items-center justify-center">
                     <input type="checkbox" className="size-4" aria-label={`Select ${n.customer_need}`} checked={sel.has(n.id)} onChange={() => toggle(n.id)} />
                   </label>
-                  <button type="button" aria-expanded={open === n.id} className="min-h-11 min-w-0 flex-1 cursor-pointer text-left font-medium hover:text-primary" onClick={() => setOpen(open === n.id ? null : n.id)}>
+                  <ListButton aria-expanded={open === n.id} className="min-h-11 min-w-0 flex-1 font-medium" onClick={() => setOpen(open === n.id ? null : n.id)}>
                     {n.customer_need}
                     <span className="block truncate text-meta font-normal text-muted-foreground">{n.search_terms.join(" · ")}</span>
-                  </button>
+                  </ListButton>
                   <span className={cn("num flex-none text-lg", scoreTone(n.score))} title="Score">{n.score ?? "—"}</span>
                 </div>
                 <dl className="grid grid-cols-3 gap-x-3 gap-y-1 pl-9 text-meta">
@@ -317,7 +319,7 @@ function NicheTable({ data, loading, f, change, hide, setHide, sorting, page, se
                     {n.flags.map((x) => <StatusChip key={x} tone={FLAG_TONE[x as NicheFlag] ?? "neutral"} icon={false}>{FLAG_LABEL[x as NicheFlag] ?? x}</StatusChip>)}
                     {n.shape && <ShapeChip shape={n.shape} />}
                     {n.status === "candidate" && n.candidate_id
-                      ? <Link className="text-meta text-primary underline" href={`/pl/candidates/${n.candidate_id}`}>Candidate</Link>
+                      ? <Link className="link text-meta" href={`/pl/candidates/${n.candidate_id}`}>Candidate</Link>
                       : n.status !== "new" && <span className="text-meta text-muted-foreground">{n.status[0].toUpperCase() + n.status.slice(1)}</span>}
                   </div>
                 )}
@@ -351,9 +353,9 @@ function NicheTable({ data, loading, f, change, hide, setHide, sorting, page, se
                   <tr className={cn("border-b border-divider hover:bg-subtle/60", sel.has(n.id) && "bg-primary-soft/40", n.status === "dismissed" && "opacity-60")}>
                     <td className={TD}><input type="checkbox" aria-label={`Select ${n.customer_need}`} checked={sel.has(n.id)} onChange={() => toggle(n.id)} /></td>
                     <td className={cn(TD, "min-w-48")}>
-                      <button type="button" aria-expanded={open === n.id} className="flex cursor-pointer items-start gap-1 text-left font-medium hover:text-primary" onClick={() => setOpen(open === n.id ? null : n.id)}>
+                      <TextButton tone="plain" aria-expanded={open === n.id} className="items-start gap-1 font-medium" onClick={() => setOpen(open === n.id ? null : n.id)}>
                         <ChevronRightIcon className={cn("mt-0.5 size-3.5 flex-none text-muted-foreground transition-transform", open === n.id && "rotate-90")} />{n.customer_need}
-                      </button>
+                      </TextButton>
                       {(n.categories?.length ?? 0) > 0 && (!f.category || n.categories.length > 1) && (
                         <span className="flex flex-wrap gap-1 pt-1 pl-4" title={n.categories.length > 1 ? "In each of these categories' downloads: one niche" : undefined}>
                           {n.categories.map((c) => <span key={c} className={cn("rounded-full px-2 py-px text-xs", c === f.category ? "bg-primary-soft text-primary-ink" : "bg-subtle text-muted-foreground")}>{c}</span>)}
@@ -377,7 +379,7 @@ function NicheTable({ data, loading, f, change, hide, setHide, sorting, page, se
                     <td className={cn(TD, "num text-right")}>{pct(n.return_rate, 2).replace("+", "")}</td>
                     <td className={TD}><span className="flex flex-wrap gap-1">{n.flags.map((x) => <StatusChip key={x} tone={FLAG_TONE[x as NicheFlag] ?? "neutral"} icon={false}>{FLAG_LABEL[x as NicheFlag] ?? x}</StatusChip>)}</span></td>
                     <td className={TD}>{n.shape ? <ShapeChip shape={n.shape} /> : <span className="text-muted-foreground">—</span>}</td>
-                    <td className={cn(TD, "text-meta")}>{n.status === "candidate" && n.candidate_id ? <Link className="text-primary underline" href={`/pl/candidates/${n.candidate_id}`}>Candidate</Link> : n.status[0].toUpperCase() + n.status.slice(1)}</td>
+                    <td className={cn(TD, "text-meta")}>{n.status === "candidate" && n.candidate_id ? <Link className="link" href={`/pl/candidates/${n.candidate_id}`}>Candidate</Link> : n.status[0].toUpperCase() + n.status.slice(1)}</td>
                   </tr>
                   {open === n.id && <tr className="border-b border-divider bg-subtle/50"><td /><td colSpan={15} className="px-3 py-4"><NicheDetail n={n} onChanged={onChanged} /></td></tr>}
                 </Fragment>
@@ -477,7 +479,7 @@ function NicheDetail({ n, onChanged }: { n: NicheRow; onChanged: () => void }) {
             <div className="overflow-x-auto rounded-lg border border-border bg-card">
               <table className="w-full text-meta"><tbody className="divide-y divide-divider">{inc.incumbents.map((x) => (
                 <tr key={x.asin} className="align-top">
-                  <td className="py-1.5 pr-3 pl-3"><a className="num text-primary hover:underline" href={`https://www.amazon.co.uk/dp/${x.asin}`} target="_blank" rel="noreferrer">{x.asin}</a></td>
+                  <td className="py-1.5 pr-3 pl-3"><a className="link num" href={`https://www.amazon.co.uk/dp/${x.asin}`} target="_blank" rel="noreferrer">{x.asin}</a></td>
                   <td className="num py-1.5 pr-3 text-right whitespace-nowrap">{x.reviews?.toLocaleString("en-GB") ?? "?"} reviews</td>
                   <td className="num py-1.5 pr-3 text-right whitespace-nowrap">{x.monthlySold != null ? `${x.monthlySold.toLocaleString("en-GB")}+/mo` : x.rank != null ? `#${x.rank.toLocaleString("en-GB")}` : "—"}</td>
                   <td className="num py-1.5 pr-3 text-right">{gbp(x.price)}</td>

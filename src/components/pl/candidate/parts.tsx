@@ -22,8 +22,10 @@ import { Readout, SourceChip, StatusPill } from "../bits";
 import { ReviewMiner } from "../ReviewMiner";
 import { TONE, valuesOf, type CandidateDetail, type FieldMap } from "../types";
 import { WaivePopover } from "../WaivePopover";
+import { TextButton } from "@/components/ui/text-button";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
-const CHECK_BG: Record<Status, string> = { pass: "bg-pass", warn: "bg-highlight", fail: "bg-fail", empty: "bg-empty" };
+const CHECK_BG: Record<Status, string> = { pass: "bg-success-soft text-success", warn: "bg-warn-soft text-warn-ink", fail: "bg-danger-soft text-danger", empty: "bg-neutral-soft text-neutral" };
 const n0 = (v: number | null | undefined) => (v == null ? "—" : Math.round(v).toLocaleString("en-GB"));
 
 /** Free-text notes at the top of the candidate: saved a moment after you stop typing, and on leaving the box. */
@@ -117,11 +119,11 @@ export function FieldRow({ def, field, why, onSave, manualOnly, derived }: {
       <div className="flex min-w-0 flex-col gap-1">
         <div className="flex items-center gap-1.5">
           <span className="text-xs font-medium text-ink-2">{def.label}</span>
-          <span title="Worked out from other figures (shown below): type a value to use your own" className="rounded bg-brand-soft px-1.5 py-px text-xs font-semibold tracking-wide text-brand uppercase">Derived</span>
+          <span title="Worked out from other figures (shown below): type a value to use your own" className="rounded bg-brand-soft px-1.5 py-px text-xs font-semibold tracking-wide text-link uppercase">Derived</span>
         </div>
         <div className="flex min-h-9 items-center gap-2 rounded-lg border border-dashed bg-surface-2 px-2.5 py-1.5">
           <span className="num flex-1 text-sm">£{derived.value.toFixed(2)}</span>
-          <button type="button" className="text-xs font-medium text-brand hover:underline" onClick={() => onSave(def.k, String(derived.value), 0)}>edit</button>
+          <TextButton className="text-xs font-medium" onClick={() => onSave(def.k, String(derived.value), 0)}>edit</TextButton>
         </div>
         <span className="text-xs text-muted-foreground">{derived.why}</span>
       </div>
@@ -138,14 +140,14 @@ export function FieldRow({ def, field, why, onSave, manualOnly, derived }: {
     control = (
       <div className="flex min-h-9 items-center gap-2 rounded-lg border border-dashed bg-surface-2 px-2.5 py-1.5">
         <span className="num flex-1 text-sm">{shown}</span>
-        <button type="button" className="text-xs font-medium text-brand hover:underline" onClick={() => onSave(def.k, value, 0)}>edit</button>
+        <TextButton className="text-xs font-medium" onClick={() => onSave(def.k, value, 0)}>edit</TextButton>
       </div>
     );
   } else if (def.type === "num") {
     control = (
       <div className="flex items-center overflow-hidden rounded-lg border border-input focus-within:ring-2 focus-within:ring-ring/40">
         {def.unit === "£" && <span className="num self-stretch border-r bg-surface-2 px-2 py-1.5 text-xs text-muted-foreground">£</span>}
-        <input id={id} type="number" inputMode="decimal" step={def.step ?? "any"} className="num min-w-0 flex-1 bg-transparent px-2.5 py-1.5 text-sm outline-none" value={value}
+        <input id={id} type="number" inputMode="decimal" step={def.step ?? "any"} className="num min-h-9 min-w-0 flex-1 bg-transparent px-2.5 py-1.5 text-sm outline-none max-sm:min-h-11" value={value}
           onChange={(e) => onSave(def.k, e.target.value)} />
         {def.unit && def.unit !== "£" && <span className="num self-stretch border-l bg-surface-2 px-2 py-1.5 text-xs text-muted-foreground">{def.unit}</span>}
       </div>
@@ -153,7 +155,7 @@ export function FieldRow({ def, field, why, onSave, manualOnly, derived }: {
   } else if (def.type === "area") {
     control = <Textarea id={id} rows={4} maxLength={4000} className="text-sm" value={value} onChange={(e) => onSave(def.k, e.target.value)} />;
   } else if (def.type === "text") {
-    control = <input id={id} type="text" maxLength={200} className="min-h-9 rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring/40" value={value} onChange={(e) => onSave(def.k, e.target.value)} />;
+    control = <input id={id} type="text" maxLength={200} className="min-h-9 rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring/40 max-sm:min-h-11" value={value} onChange={(e) => onSave(def.k, e.target.value)} />;
   } else if (def.type === "sel") {
     control = (
       <NativeSelect id={id} className="w-full" value={value} onChange={(e) => onSave(def.k, e.target.value, 0)}>
@@ -162,12 +164,11 @@ export function FieldRow({ def, field, why, onSave, manualOnly, derived }: {
     );
   } else {
     control = (
-      <div className="flex overflow-hidden rounded-lg border border-input" role="group" aria-label={def.label}>
-        {(["yes", "no"] as const).map((v) => (
-          <button key={v} type="button" onClick={() => onSave(def.k, value === v ? "" : v, 0)}
-            className={cn("flex-1 px-2 py-1.5 text-sm font-medium text-muted-foreground not-first:border-l", value === v && (v === "yes" ? "bg-pass text-white" : "bg-ink-2 text-white"))}>{v === "yes" ? "Yes" : "No"}</button>
-        ))}
-      </div>
+      // Click the chosen answer again to clear it.
+      <ToggleGroup type="single" variant="outline" spacing={0} value={value} onValueChange={(v) => onSave(def.k, v, 0)} aria-label={def.label} className="w-full">
+        <ToggleGroupItem value="yes" className="flex-1 data-[state=on]:bg-success-soft data-[state=on]:text-success">Yes</ToggleGroupItem>
+        <ToggleGroupItem value="no" className="flex-1">No</ToggleGroupItem>
+      </ToggleGroup>
     );
   }
   return (
@@ -218,13 +219,13 @@ export function PageOneTable({ asins }: { asins: CandidateDetail["asins"] }) {
             const y = young.has(a.asin), f = fewest.has(a.asin);
             return (
               <tr key={a.asin} className={cn("border-b last:border-0", (y || f) && "bg-brand-soft/40")}>
-                <td className="num px-2 py-1.5"><a className="text-brand hover:underline" href={`https://www.amazon.co.uk/dp/${a.asin}`} target="_blank" rel="noreferrer">{a.asin}</a>{a.is_reference && <span className="ml-1 text-xs text-muted-foreground">ref</span>}</td>
+                <td className="num px-2 py-1.5"><a className="link" href={`https://www.amazon.co.uk/dp/${a.asin}`} target="_blank" rel="noreferrer">{a.asin}</a>{a.is_reference && <span className="ml-1 text-xs text-muted-foreground">ref</span>}</td>
                 <td className="max-w-40 truncate px-2 py-1.5" title={a.title ?? ""}>{a.brand ?? "—"}</td>
-                <td className={cn("num px-2 py-1.5 text-right", f && "font-semibold text-brand")}>{a.review_count?.toLocaleString("en-GB") ?? "—"}</td>
+                <td className={cn("num px-2 py-1.5 text-right", f && "font-semibold text-link")}>{a.review_count?.toLocaleString("en-GB") ?? "—"}</td>
                 <td className="num px-2 py-1.5 text-right">{a.rating ?? "—"}</td>
                 <td className="num px-2 py-1.5 text-right">{a.bought_past_month != null ? `${a.bought_past_month.toLocaleString("en-GB")}+` : "—"}</td>
                 <td className="num px-2 py-1.5 text-right">{money(priceOf(a))}</td>
-                <td className={cn("num px-2 py-1.5 text-right whitespace-nowrap", y && "font-semibold text-brand")}>{a.first_seen ? new Date(a.first_seen).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "—"}
+                <td className={cn("num px-2 py-1.5 text-right whitespace-nowrap", y && "font-semibold text-link")}>{a.first_seen ? new Date(a.first_seen).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "—"}
                   {y && <span className="ml-1 text-xs font-normal">({listingAge(a.first_seen)?.text})</span>}</td>
               </tr>
             );
@@ -307,7 +308,7 @@ export function RankSparkline({ points }: { points: [number, number][] }) {
   return (
     <span className="inline-flex items-center gap-2 text-xs text-muted-foreground" title={`Sales rank, ${fmt(t0)}–${fmt(t1)}, weekly (log scale; up is better). Best #${best.toLocaleString("en-GB")}, worst #${worst.toLocaleString("en-GB")}.`}>
       <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="overflow-visible" aria-label="Sales rank, 12 months">
-        <path d={d} fill="none" stroke="currentColor" strokeWidth={1.5} className="text-brand" />
+        <path d={d} fill="none" stroke="currentColor" strokeWidth={1.5} className="text-link" />
       </svg>
       <span className="num">#{points[points.length - 1][1].toLocaleString("en-GB")} now</span>
     </span>
@@ -395,7 +396,7 @@ export function ScorecardPanel({ ev }: { ev: Evaluation }) {
     why: { value: (r) => (r.info ? r.info.text : r.pts == null ? null : r.why[r.pts]), kind: "text" },
     structural: { value: (r) => (r.structural ? "structural" : null), kind: "text" },
   });
-  const PTS = ["bg-fail-soft text-fail", "bg-warn-soft text-warn", "bg-brand-soft text-brand", "bg-pass-soft text-pass"];
+  const PTS = ["bg-fail-soft text-fail", "bg-warn-soft text-warn", "bg-brand-soft text-link", "bg-pass-soft text-pass"];
   return (
     <section className="panel p-4">
       <div className="mb-3 flex flex-wrap items-center gap-3.5">
@@ -449,17 +450,17 @@ export function CheckRow({ row: r, gate, gateWaived, onWaive, onUnwaive }: { row
   const own = r.waiver && r.waiver.check_label != null ? r.waiver : null;
   return (
     <div className="grid grid-cols-[22px_1fr_auto] items-center gap-2.5 border-t px-3 py-2 text-sm first:border-t-0">
-      <span className={cn("flex size-[18px] items-center justify-center rounded-full text-xs font-bold text-white", CHECK_BG[r.status], r.waiver && "opacity-60")}>{r.status === "pass" ? "✓" : r.status === "fail" ? "✕" : r.status === "warn" ? "!" : "·"}</span>
+      <span className={cn("flex size-[18px] items-center justify-center rounded-full text-xs font-bold", CHECK_BG[r.status], r.waiver && "opacity-60")}>{r.status === "pass" ? "✓" : r.status === "fail" ? "✕" : r.status === "warn" ? "!" : "·"}</span>
       <span className="flex min-w-0 flex-wrap items-center gap-1.5">
         <span className={cn(r.waiver && cn("line-through decoration-2", TONE[r.status].text))} title={r.waiver ? `Waived: ${r.waiver.reason}` : undefined}>{r.label}</span>
         {r.waiver && <WaivedChip waiver={r.waiver} />}
       </span>
       <span className="flex items-center gap-2">
         <span className="num text-xs whitespace-nowrap text-muted-foreground">{r.detail}</span>
-        {own ? <button type="button" className="text-xs font-medium text-brand hover:underline" onClick={() => onUnwaive(own)}>Remove waiver</button>
+        {own ? <TextButton className="text-xs font-medium" onClick={() => onUnwaive(own)}>Remove waiver</TextButton>
           : waivable && !r.waiver && !gateWaived && (
             <WaivePopover title={`Waive “${r.label}” (Gate ${gate.n})`} onWaive={onWaive}
-              trigger={<button type="button" className="text-xs font-medium text-brand hover:underline">Waive</button>} />
+              trigger={<TextButton className="text-xs font-medium">Waive</TextButton>} />
           )}
       </span>
     </div>
@@ -494,7 +495,7 @@ export function WaiversPanel({ waivers, ev, onUnwaive }: { waivers: Waiver[]; ev
                 <td className="px-2 py-2">{w.check_label ?? <em>Whole gate</em>}{!inEffect(w) && <span className="block text-xs text-muted-foreground">Passes now: the waiver isn&apos;t needed</span>}</td>
                 <td className="px-2 py-2 text-muted-foreground">{w.reason}</td>
                 <td className="px-2 py-2 whitespace-nowrap text-muted-foreground">{new Date(w.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</td>
-                <td className="px-2 py-2 text-right"><button type="button" className="text-xs font-medium text-brand hover:underline" onClick={() => onUnwaive(w)}>Remove waiver</button></td>
+                <td className="px-2 py-2 text-right"><TextButton className="text-xs font-medium" onClick={() => onUnwaive(w)}>Remove waiver</TextButton></td>
               </tr>
             );
           })}</tbody>
@@ -551,7 +552,7 @@ export function CriticalReviewsTable({ asins }: { asins: CandidateDetail["asins"
             <td className="num px-2 py-1.5 text-right">{a.rating?.toFixed(1) ?? "—"}</td>
             <td className="num px-2 py-1.5 text-right">{n0(a.review_count)}</td>
             <td className="px-2 py-1.5">
-              <a className="inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline" target="_blank" rel="noreferrer"
+              <a className="link inline-flex items-center gap-1 text-xs font-medium" target="_blank" rel="noreferrer"
                 href={`https://www.amazon.co.uk/product-reviews/${a.asin}/?filterByStar=critical&sortBy=recent&reviewerType=all_reviews`}>Read the critical reviews <ExternalLinkIcon className="size-3" /></a>
             </td>
           </tr>

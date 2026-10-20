@@ -2,18 +2,19 @@
 
 import { useEffect, useRef } from "react";
 import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
 /** A star that marks a product (EAN + ASIN) as a favourite: an outline always, filled when starred. */
 export function FavouriteStar({ starred, onToggle, busy = false }: { starred: boolean; onToggle: () => void; busy?: boolean }) {
   return (
-    <button type="button" disabled={busy} aria-pressed={starred} aria-label={starred ? "Remove from favourites" : "Add to favourites"}
+    <Button variant="ghost" size="icon-xs" disabled={busy} aria-pressed={starred} aria-label={starred ? "Remove from favourites" : "Add to favourites"}
       title={starred ? "Favourite: click to remove" : "Add to favourites"}
       onClick={(e) => { e.stopPropagation(); onToggle(); }}
-      className={`-m-1 flex-none rounded p-1 disabled:opacity-50 ${starred ? "text-warn-ink" : "text-muted-foreground hover:text-warn-ink"}`}>
+      className={`-m-1 flex-none ${starred ? "text-warn-ink" : "text-muted-foreground hover:text-warn-ink"}`}>
       <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
         <path d="M12 2.8l2.8 5.8 6.3.9-4.6 4.4 1.1 6.3L12 17.2l-5.6 3 1.1-6.3-4.6-4.4 6.3-.9L12 2.8z"
           fill={starred ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
       </svg>
-    </button>
+    </Button>
   );
 }
 

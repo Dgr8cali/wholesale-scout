@@ -36,7 +36,7 @@ export function CandidateExtras({ c, status, verdictTitle, budget, show = "both"
     <>
       {/* On Suppliers & quotes → Quotes the supplier table is the Suppliers tab, not repeated here. */}
       {show === "both" && <SuppliersSection candidateId={c.id} onQuoted={load} />}
-      {show === "quotes" && <p className="text-sm"><Link className="font-medium text-primary hover:underline" href={`/pl/suppliers?candidate=${c.id}`}>{c.name}&apos;s Alibaba suppliers →</Link> <span className="text-muted-foreground">to message with the RFQ, then Add quote</span></p>}
+      {show === "quotes" && <p className="text-sm"><Link className="link font-medium" href={`/pl/suppliers?candidate=${c.id}`}>{c.name}&apos;s Alibaba suppliers →</Link> <span className="text-muted-foreground">to message with the RFQ, then Add quote</span></p>}
       {show !== "launch" && <QuotesSection key={`q${v}`} c={c} quotes={x.quotes} chosenQuote={x.chosenQuote} onChanged={load} onFieldsChanged={() => { onFieldsChanged(); load(); }} />}
       {show === "both" && <ListingSection candidateId={c.id} />}
       {launchOn && (

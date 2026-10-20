@@ -22,11 +22,14 @@ import { Sparkline } from "@/components/results/Sparkline";
 import { ProductPicker, useAdsProduct } from "@/components/ads/ProductPicker";
 import { ProductThumb } from "@/components/ProductThumb";
 import { ExplainPanel, TargetsPanel } from "@/components/ads/AiPanels";
-import { Skeleton } from "@/components/ui/skeleton";
 import type { Ratios, TermStatus, Totals } from "@/lib/ads/metrics";
 import { api } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
 import { KeywordBankPanel } from "@/components/ads/KeywordBank";
+import { TextButton } from "@/components/ui/text-button";
+import { ChipToggle } from "@/components/ui/chip-toggle";
+import { ListButton } from "@/components/ui/list-button";
+import { KpiSkeleton, PanelSkeleton, TableSkeleton } from "@/components/ui/skeletons";
 
 interface Economics {
   price: number; fees: number | null; landed: number | null; priceSource: "manual" | "keepa" | "ads" | null; referralCategory: string;
@@ -119,10 +122,10 @@ function AdsDashboard() {
         </TabsList>
         <TabsContent value="overview">
           {error ? <ErrorState title="Couldn't load Ads" message={error} onRetry={load} />
-            : !d ? <div className="space-y-4"><Skeleton className="h-40 rounded-xl" /><Skeleton className="h-64 rounded-xl" /></div>
+            : !d ? <div className="space-y-4"><KpiSkeleton /><PanelSkeleton lines={6} /><TableSkeleton rows={6} /></div>
             : !d.campaigns.length ? (
               <EmptyState icon={<FileUpIcon />} title="No ad data yet" action={<Button variant="secondary" onClick={() => setImporting(true)}><FileUpIcon /> Import</Button>}>
-                Import the bulk export from Amazon Ads; <Link className="text-primary underline" href="/help/ads-playbook">the playbook</Link> covers the rest.
+                Import the bulk export from Amazon Ads; <Link className="link" href="/help/ads-playbook">the playbook</Link> covers the rest.
               </EmptyState>
             ) : <Dashboard d={d} load={load} />}
         </TabsContent>
@@ -156,8 +159,8 @@ function Dashboard({ d, load }: { d: Dash; load: () => void }) {
         <FetchStock onDone={load} />
       </div>
 
-      {unlisted && <p className="panel p-4 text-sm text-muted-foreground"><span className="num">{pick}</span> has no ads data yet: no imported campaign and no launch plan. <button type="button" className="cursor-pointer text-primary underline" onClick={() => setPick("")}>Show all products</button></p>}
-      {!products.length && <p className="panel p-4 text-sm text-muted-foreground">No campaign is linked to a product yet: assign one below. Then see <Link className="text-primary underline" href="/help/ads-playbook">Ads: the playbook</Link> for the weekly loop.</p>}
+      {unlisted && <p className="panel p-4 text-sm text-muted-foreground"><span className="num">{pick}</span> has no ads data yet: no imported campaign and no launch plan. <TextButton onClick={() => setPick("")}>Show all products</TextButton></p>}
+      {!products.length && <p className="panel p-4 text-sm text-muted-foreground">No campaign is linked to a product yet: assign one below. Then see <Link className="link" href="/help/ads-playbook">Ads: the playbook</Link> for the weekly loop.</p>}
       {d.asins.filter((a) => shown(a.asin)).map((a) => (
         <ProductSection key={a.asin} asin={a.asin} look={d.looks?.[a.asin]} stock={d.stock[a.asin]} plan={d.plans.find((p) => p.asin === a.asin)} onSaved={load}
           sub={`${a.campaigns} campaign${a.campaigns === 1 ? "" : "s"} · ${day(a.from)} – ${day(a.to)} · ${a.phase} · target ACoS ${pct(a.targetAcos, 0)}`}>
@@ -167,7 +170,7 @@ function Dashboard({ d, load }: { d: Dash; load: () => void }) {
           <KeywordBankPanel asin={a.asin} />
           <CampaignTable rows={d.campaigns.filter((c) => c.asin === a.asin)} onSaved={load} />
           <KeywordTable rows={d.keywords.filter((k) => k.asin === a.asin)} />
-          <p className="text-sm"><Link className="font-medium text-primary hover:underline" href={`/ads/search-terms?tab=all&asin=${a.asin}`}>Search terms (<span className="num">{d.terms.filter((t) => t.asin === a.asin).length}</span>) →</Link> <span className="text-muted-foreground">with their status, the n-grams and the keyword bank</span></p>
+          <p className="text-sm"><Link className="link font-medium" href={`/ads/search-terms?tab=all&asin=${a.asin}`}>Search terms (<span className="num">{d.terms.filter((t) => t.asin === a.asin).length}</span>) →</Link> <span className="text-muted-foreground">with their status, the n-grams and the keyword bank</span></p>
         </ProductSection>
       ))}
       {launchOnly.filter((p) => shown(p.asin)).map((p) => (
@@ -215,10 +218,10 @@ function ProductSection({ asin, look, sub, stock, plan, onSaved, children }: { a
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <h2 className="section-title">{look?.title ?? asin}</h2>
-            <a className="num text-xs text-primary hover:underline" href={`https://www.amazon.co.uk/dp/${asin}`} target="_blank" rel="noreferrer">{asin}</a>
+            <a className="link num text-xs" href={`https://www.amazon.co.uk/dp/${asin}`} target="_blank" rel="noreferrer">{asin}</a>
             <StockChip s={stock} />
           </div>
-          <div className="text-meta text-muted-foreground">{sub}{look?.candidate && <> · <Link href={`/pl/candidates/${look.candidate}`} className="text-primary hover:underline">Private label candidate →</Link></>}</div>
+          <div className="text-meta text-muted-foreground">{sub}{look?.candidate && <> · <Link href={`/pl/candidates/${look.candidate}`} className="link">Private label candidate →</Link></>}</div>
         </div>
         {(!look?.image || !look?.title) && <Button size="sm" variant="secondary" loading={busy} onClick={fetchLook} title="Keepa: title, image, size and weight">Title and image (1 token)</Button>}
       </div>
@@ -306,16 +309,16 @@ function UnassignedRow({ c, onSaved }: { c: CampaignRow; onSaved: () => void }) 
         <Button size="sm" variant="ghost" onClick={archive}>Archive</Button>
       </div>
       {c.advertised.length > 1 && !q && (
-        <div className="flex flex-wrap gap-1 text-xs"><span className="text-muted-foreground">Its product ads:</span>{c.advertised.map((a) => <button key={a} type="button" className="num cursor-pointer rounded-md border border-border px-1.5 hover:bg-subtle" onClick={() => setQ(a)}>{a}</button>)}</div>
+        <div className="flex flex-wrap gap-1 text-xs"><span className="text-muted-foreground">Its product ads:</span>{c.advertised.map((a) => <ChipToggle pressed={false} onPressedChange={() => setQ(a)} key={a} className="num" onClick={() => setQ(a)}>{a}</ChipToggle>)}</div>
       )}
       {searching && matches && !chosen && (
         <div className="space-y-1">
           {matches.map((m) => (
-            <button key={m.asin} type="button" onClick={() => setChosen(m)} className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1 text-left text-sm hover:bg-subtle">
+            <ListButton key={m.asin} onClick={() => setChosen(m)} className="py-1">
               <ProductThumb url={m.image} asin={m.asin} title={m.title} brand={null} size={28} />
               <span className="min-w-0 flex-1 truncate">{m.title ?? <span className="text-muted-foreground">no title yet</span>}</span>
               <span className="num text-xs">{m.asin}</span><span className="text-xs text-muted-foreground">{m.source}</span>
-            </button>
+            </ListButton>
           ))}
           {!matches.length && <p className="px-2 text-xs text-muted-foreground">Nothing in the app matches.{isAsin ? "" : " Try the ASIN."}</p>}
           {isAsin && !matches.some((m) => m.asin === q.trim().toUpperCase() && m.title) && (
@@ -412,9 +415,9 @@ function AsinTile({ a, onSaved }: { a: AsinRow; onSaved: () => void }) {
       {a.insights?.suggestTacos && (
         <p className="rounded-lg bg-primary-soft px-3 py-1.5 text-xs text-primary-ink">Organic sales are {pct(a.insights.share30?.value ?? null, 0)} of units ({a.insights.share30?.period}) with {a.insights.reviews} reviews: consider <b>TACoS mode</b> (Price, costs and target), so the ads are judged on all sales, not only their own.</p>
       )}
-      <button type="button" aria-expanded={open} className="flex cursor-pointer items-center gap-1 text-meta font-medium text-primary hover:underline" onClick={() => setOpen((v) => !v)}>
+      <TextButton aria-expanded={open} className="text-meta font-medium" onClick={() => setOpen((v) => !v)}>
         <ChevronRightIcon className={cn("size-3.5 transition-transform", open && "rotate-90")} /> Price, costs and target
-      </button>
+      </TextButton>
       {open && <EconEditor a={a} onSaved={onSaved} />}
     </div>
   );
@@ -428,6 +431,8 @@ function EconEditor({ a, onSaved }: { a: AsinRow; onSaved: () => void }) {
     weight: "", l: "", w: "", h: "", phase: a.phase, launch: "", steady: "",
     optimise: ins?.optimise ?? "acos", tacos: ins?.optimise === "tacos" && ins.targetTacos != null && ins.targetTacos !== ins.breakEvenTacos ? String(Math.round(ins.targetTacos * 1000) / 10) : "",
   });
+  // As opened (the panel reopens with the saved values): Save waits for a change.
+  const [opened] = useState(() => JSON.stringify(f));
   const [busy, setBusy] = useState<string | null>(null);
   const num = (s: string) => (s.trim() === "" ? null : Number(s));
   const save = async () => {
@@ -504,7 +509,7 @@ function EconEditor({ a, onSaved }: { a: AsinRow; onSaved: () => void }) {
         <p className="text-xs text-muted-foreground sm:self-end sm:pb-2">TACoS = ad spend ÷ all sales (ads and organic){ins?.tacos != null ? `: ${pct(ins.tacos)} ${ins.period}` : ""}.</p>
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <Button size="sm" variant="secondary" onClick={save} disabled={!!busy} loading={busy === "save"}>Save</Button>
+        <Button size="sm" variant="secondary" onClick={save} disabled={!!busy || JSON.stringify(f) === opened} loading={busy === "save"}>Save</Button>
         {!e.sizeKnown && <Button size="sm" variant="ghost" onClick={keepa} disabled={!!busy} loading={busy === "keepa"}>Size and weight from Keepa (1 token)</Button>}
         <span className="text-xs text-muted-foreground">Referral category: {e.referralCategory}. Fees from the active rate card, VAT and the digital services fee included.</span>
       </div>
@@ -527,9 +532,9 @@ function AsinCell({ c, onSaved }: { c: CampaignRow; onSaved: () => void }) {
   };
   if (!editing) {
     return (
-      <button type="button" className={cn("num cursor-pointer text-xs hover:underline", c.asin ? "" : "font-medium text-primary")} onClick={() => setEditing(true)} title={c.asin_source === "product_ad" ? "From the campaign's product ads" : c.asin_source === "name" ? "From the campaign's name" : c.asin ? "Set by you" : c.advertised.length > 1 ? `Its product ads advertise ${c.advertised.join(", ")}: set which one it counts towards` : "Set the ASIN this campaign advertises"}>
+      <TextButton tone="plain" className={cn("num cursor-pointer text-xs hover:underline", c.asin ? "" : "font-medium text-link")} onClick={() => setEditing(true)} title={c.asin_source === "product_ad" ? "From the campaign's product ads" : c.asin_source === "name" ? "From the campaign's name" : c.asin ? "Set by you" : c.advertised.length > 1 ? `Its product ads advertise ${c.advertised.join(", ")}: set which one it counts towards` : "Set the ASIN this campaign advertises"}>
         {c.asin ?? "Set ASIN"}
-      </button>
+      </TextButton>
     );
   }
   return (
@@ -590,10 +595,10 @@ function CampaignTable({ rows, onSaved }: { rows: CampaignRow[]; onSaved: () => 
         empty={{ icon: <MegaphoneIcon />, title: "No campaigns for this product", description: "Import a bulk export that includes its campaigns." }} />
       {placements.length > 0 && (
         <details className="group">
-          <summary className="flex cursor-pointer list-none items-center gap-1 text-meta font-medium text-primary hover:underline [&::-webkit-details-marker]:hidden">
+          <summary className="link flex cursor-pointer list-none items-center gap-1 text-meta font-medium [&::-webkit-details-marker]:hidden">
             <ChevronRightIcon className="size-3.5 transition-transform group-open:rotate-90" /> Placements <span className="num">({placements.length})</span>
           </summary>
-          <DataTable className="mt-2" rows={placements} columns={placementColumns} getRowId={(p) => `${p.c.id}|${p.placement}`} pageSize={25} storageKey="ads.placements" caption="Placements by campaign" />
+          <DataTable className="mt-2" rows={placements} columns={placementColumns} getRowId={(p) => `${p.c.id}|${p.placement}`} pageSize={25} storageKey="ads.placements" empty={{ title: "No placement figures yet", description: "They come from a bulk export or the daily Placement report." }} caption="Placements by campaign" />
         </details>
       )}
     </section>

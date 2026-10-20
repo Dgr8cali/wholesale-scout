@@ -8,12 +8,12 @@ import { Button } from "@/components/ui/button";
 import { DataTable, type DataColumn } from "@/components/ui/data-table";
 import { Input } from "@/components/ui/input";
 import { PageHeader } from "@/components/ui/page-header";
-import { Skeleton } from "@/components/ui/skeleton";
 import type { SupplierRecord, SupplierStats } from "@/lib/server/suppliers";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { SUPPLIER_KIND_LABEL, SUPPLIER_KINDS } from "@/lib/stock/orders";
 import { api, when } from "@/lib/ui/client";
-import { cn } from "@/lib/utils";
+import { ChipToggle } from "@/components/ui/chip-toggle";
+import { TableSkeleton } from "@/components/ui/skeletons";
 
 type Row = SupplierRecord & { stats: SupplierStats; stock: { items: number; purchases: number } };
 /** No price lists: never in an upload, a Qogita pull or a run. */
@@ -85,7 +85,7 @@ export default function SuppliersPage() {
   ];
 
   if (error) return <div className="space-y-5">{header}<ErrorState title="Couldn't load suppliers" message={error} onRetry={() => window.location.reload()} /></div>;
-  if (!rows) return <div className="space-y-5">{header}<Skeleton className="h-64 rounded-xl" /></div>;
+  if (!rows) return <div className="space-y-5">{header}<TableSkeleton rows={8} columns={7} /></div>;
 
   return (
     <div className="space-y-5">
@@ -106,10 +106,9 @@ export default function SuppliersPage() {
               {SUPPLIER_KINDS.map((k) => <NativeSelectOption key={k} value={k}>{SUPPLIER_KIND_LABEL[k]}</NativeSelectOption>)}
               <NativeSelectOption value="none">Type not set</NativeSelectOption>
             </NativeSelect>
-            <button type="button" aria-pressed={onlyStock} onClick={() => setOnlyStock((v) => !v)}
-              className={cn("h-8 cursor-pointer rounded-full border px-3 text-meta font-medium", onlyStock ? "border-primary bg-primary-soft text-primary-ink" : "border-border-strong text-muted-foreground hover:text-foreground")}>
+            <ChipToggle pressed={onlyStock} onPressedChange={setOnlyStock}>
               Stock only · {rows.filter(stockOnly).length}
-            </button>
+            </ChipToggle>
             <span className="num text-meta text-muted-foreground">{filtered.length} of {rows.length}</span>
           </div>
           <DataTable

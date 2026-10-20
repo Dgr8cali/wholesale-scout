@@ -10,7 +10,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { DataTable } from "@/components/ui/data-table";
 import { StatusChip } from "@/components/ui/status-chip";
@@ -18,6 +17,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { IP_LEVELS, parseIpCsv, type IpLevel, type IpRiskBrand } from "@/lib/ipRisk";
 import { api } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
+import { FormSkeleton, TableSkeleton } from "@/components/ui/skeletons";
 
 type Entry = IpRiskBrand & { id: string };
 
@@ -89,7 +89,7 @@ export function IpRiskTab() {
   }), [list, q, unverified]);
 
   if (error) return <ErrorState title="Couldn't load the IP-risk list" message={error} onRetry={load} />;
-  if (!list) return <div className="space-y-4"><Skeleton className="h-40 rounded-xl" /><Skeleton className="h-64 rounded-xl" /></div>;
+  if (!list) return <div className="space-y-4"><FormSkeleton fields={2} /><TableSkeleton rows={6} columns={4} /></div>;
   const seeds = list.filter((x) => /unverified/i.test(x.source ?? "")).length;
 
   return (

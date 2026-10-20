@@ -17,7 +17,7 @@ export function HelpHome({ docs, sections }: { docs: SearchDoc[]; sections: stri
     <div className="mx-auto max-w-4xl space-y-6">
       <PageHeader
         title="Help"
-        crumbs={[{ label: "Help" }]}
+        crumbs={[{ label: "Home", href: "/" }, { label: "Help" }]}
         subtitle="How each page, gate and number works, written from the app as it is."
         info={<p>Every page&apos;s <b>?</b> in the top bar opens its article. Search finds a page, a gate or a term.</p>}
       />
@@ -64,7 +64,7 @@ export function HelpHome({ docs, sections }: { docs: SearchDoc[]; sections: stri
                         <ul className="space-y-1.5">
                           {list.map((d) => (
                             <li key={d.slug}>
-                              <Link href={`/help/${d.slug}`} className="text-sm font-medium text-primary hover:underline">{d.title}</Link>
+                              <Link href={`/help/${d.slug}`} className="link text-sm font-medium">{d.title}</Link>
                               {d.summary && <p className="text-xs text-muted-foreground">{d.summary}</p>}
                             </li>
                           ))}

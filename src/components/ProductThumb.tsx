@@ -44,14 +44,14 @@ export function ProductThumb({ url, asin, title, brand, size = 40 }: { url: stri
     // Plain <img>: Amazon's CDN serves the sizes; no need to route thumbnails through image optimisation.
     // eslint-disable-next-line @next/next/no-img-element
     <img src={amazonImage(url!, size * 2)} alt="" width={size} height={size} loading="lazy" decoding="async"
-      onError={() => setFailed(true)} className="rounded border border-border bg-white object-contain" style={{ width: size, height: size }} />
+      onError={() => setFailed(true)} className="rounded border border-border bg-media object-contain" style={{ width: size, height: size }} />
   ) : <Placeholder size={size} />;
 
   const card = preview && typeof document !== "undefined" && createPortal(
     <div role="tooltip" className="pointer-events-none fixed z-50 w-[316px] rounded-lg border border-border bg-card p-2 shadow-xl" style={{ left: preview.x, top: preview.y }}>
       {hasImage ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={amazonImage(url!, 600)} alt="" width={300} height={300} className="h-[300px] w-[300px] rounded bg-white object-contain" />
+        <img src={amazonImage(url!, 600)} alt="" width={300} height={300} className="h-[300px] w-[300px] rounded bg-media object-contain" />
       ) : <Placeholder size={300} />}
       <p className="mt-2 line-clamp-3 text-sm font-medium leading-snug">{title ?? "Untitled"}</p>
       <p className="mt-0.5 text-xs text-muted-foreground">{[brand, asin].filter(Boolean).join(" · ") || "No ASIN"}</p>
@@ -75,7 +75,7 @@ export function ProductThumb({ url, asin, title, brand, size = 40 }: { url: stri
           {thumb}
         </a>
       ) : (
-        <span tabIndex={0} aria-label={title ?? "No image"} {...common}>{thumb}</span>
+        <span tabIndex={0} role="img" aria-label={title ?? "No image"} {...common}>{thumb}</span>
       )}
       {card}
     </>

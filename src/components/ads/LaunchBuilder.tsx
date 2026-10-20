@@ -153,7 +153,7 @@ export function LaunchExport({ b }: { b: LaunchBuilderState }) {
       <div className="flex flex-wrap items-center gap-3">
         <Button onClick={b.create} loading={b.busy}><RocketIcon /> Create launch sheet ({b.preview.rows} rows)</Button>
         {b.made && <Button variant="secondary" asChild><a href={`/api/ads/exports/${b.made.id}`}><DownloadIcon /> Download {b.made.label}</a></Button>}
-        {b.made && <Link href="/ads/proposals?tab=exports" className="text-sm text-primary hover:underline">All bulk exports →</Link>}
+        {b.made && <Link href="/ads/proposals?tab=exports" className="link text-sm">All bulk exports →</Link>}
       </div>
       <p className="text-xs text-muted-foreground">Creating it saves the sheet under Bulk exports and puts the product in its launch phase.</p>
     </div>

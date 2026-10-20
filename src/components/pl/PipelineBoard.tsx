@@ -19,6 +19,7 @@ import type { PipelineCard } from "@/lib/server/plPipeline";
 import { api } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
 import { NewCandidate } from "./NewCandidate";
+import { ChipToggle } from "@/components/ui/chip-toggle";
 
 interface Board { cards: PipelineCard[]; card: RateCard }
 
@@ -113,14 +114,14 @@ export function PipelineBoard() {
             <Switch checked={showParked} onCheckedChange={setShowParked} /> Show parked ({parked.length})
           </label>
         )}
-        <Link href="/pl/candidates" className="text-sm text-primary hover:underline">Candidates as a table →</Link>
+        <Link href="/pl/candidates" className="link text-sm">Candidates as a table →</Link>
       </div>
       {/* Phones: one column a screen, swiped; this strip jumps to one. */}
       <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 lg:hidden" role="group" aria-label="Go to a column">
         {STAGES.map((s) => (
-          <button key={s} type="button" onClick={() => jump(s)} className="flex-none cursor-pointer rounded-full border border-border px-3 py-1 text-meta hover:bg-accent">
+          <ChipToggle pressed={false} onPressedChange={() => jump(s)} key={s} onClick={() => jump(s)} className="flex-none">
             {STAGE_LABEL[s]} <span className="num text-muted-foreground">{shown.filter((c) => c.stage === s).length}</span>
-          </button>
+          </ChipToggle>
         ))}
       </div>
       <div className="-mx-4 flex items-start snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 lg:mx-0 lg:grid lg:snap-none lg:grid-cols-5 lg:overflow-visible lg:px-0">
@@ -180,8 +181,8 @@ function Card({ c, onMove, onUnpark }: { c: PipelineCard; onMove: (c: PipelineCa
           : candidate ? (c.verdict && c.verdict.cls !== "empty" ? <CandidateDecision cls={c.verdict.cls} title={c.verdict.title} /> : <StatusChip tone="neutral" icon={false}>{c.verdict?.title ?? "Not scored"}</StatusChip>)
           : <StatusChip tone="good">Selling</StatusChip>}
         <span className="ml-auto flex items-center gap-2 text-meta">
-          {candidate && <Link href={c.href} className="font-medium text-primary hover:underline">Open</Link>}
-          {c.links.map((l) => <Link key={l.label} href={l.href} className="inline-flex items-center gap-0.5 font-medium text-primary hover:underline">{l.label} <ArrowRightIcon className="size-3" /></Link>)}
+          {candidate && <Link href={c.href} className="link font-medium">Open</Link>}
+          {c.links.map((l) => <Link key={l.label} href={l.href} className="link inline-flex items-center gap-0.5 font-medium">{l.label} <ArrowRightIcon className="size-3" /></Link>)}
         </span>
       </div>
     </article>

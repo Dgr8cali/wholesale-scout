@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
 import { cookies } from "next/headers";
 import { AppShell } from "@/components/AppShell";
@@ -14,6 +14,10 @@ export const metadata: Metadata = {
   title: "Wholesale Scout",
   description: "Amazon UK wholesale research: price lists in, ranked shortlist out.",
 };
+
+// viewport-fit=cover: the page runs under a phone's rounded corners and home bar, and the content
+// keeps clear of them with env(safe-area-inset-*) (AppShell).
+export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover" };
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
   // The sidebar remembers collapsed/expanded in a cookie; read it so the first paint matches.

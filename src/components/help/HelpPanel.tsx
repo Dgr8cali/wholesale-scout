@@ -5,6 +5,7 @@ import Link from "next/link";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { api } from "@/lib/ui/client";
+import { Button } from "@/components/ui/button";
 
 interface Loaded { slug: string; title: string; summary: string; section: string; html: string }
 
@@ -58,16 +59,16 @@ export function HelpProvider({ children }: { children: ReactNode }) {
           <SheetHeader className="border-b pr-12">
             <div className="flex items-center gap-2">
               {stack.length > 1 && (
-                <button type="button" className="text-muted-foreground hover:text-foreground" aria-label="Back" onClick={() => setStack((s) => s.slice(0, -1))}>
-                  <ArrowLeftIcon className="size-4" />
-                </button>
+                <Button variant="ghost" size="icon-sm" className="text-muted-foreground" aria-label="Back" onClick={() => setStack((s) => s.slice(0, -1))}>
+                  <ArrowLeftIcon />
+                </Button>
               )}
               <p className="eyebrow">{data?.section ?? "Help"}</p>
             </div>
             <SheetTitle>{loading ? "Loading…" : data?.title ?? "Help"}</SheetTitle>
             <SheetDescription className={data?.summary ? undefined : "sr-only"}>{data?.summary || "Help article"}</SheetDescription>
             {top && (
-              <Link href={`/help/${top.slug}${top.hash ? `#${top.hash}` : ""}`} className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline" onClick={() => setStack([])}>
+              <Link href={`/help/${top.slug}${top.hash ? `#${top.hash}` : ""}`} className="link inline-flex items-center gap-1 text-xs font-medium" onClick={() => setStack([])}>
                 Open as a page <ExternalLinkIcon className="size-3" />
               </Link>
             )}

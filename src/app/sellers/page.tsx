@@ -8,11 +8,11 @@ import { VerdictBar } from "@/components/VerdictBar";
 import { Button } from "@/components/ui/button";
 import { DataTable, type DataColumn } from "@/components/ui/data-table";
 import { PageHeader } from "@/components/ui/page-header";
-import { Skeleton } from "@/components/ui/skeleton";
 import { StatusChip } from "@/components/ui/status-chip";
 import { storefrontUrl } from "@/lib/check/seller";
 import type { ScannedSeller } from "@/lib/server/sellerScan";
 import { api, when } from "@/lib/ui/client";
+import { TableSkeleton } from "@/components/ui/skeletons";
 
 const n = (x: number) => x.toLocaleString("en-GB");
 
@@ -58,7 +58,7 @@ export default function SellersPage() {
         const screened = r ? r.pass + r.warn + r.fail : 0;
         return s.lastScan ? (
           <div className="space-y-1">
-            <Link className="text-sm text-primary hover:underline" href={`/runs/${s.lastScan.runId}`}>{when(s.lastScan.at)}</Link>
+            <Link className="link text-sm" href={`/runs/${s.lastScan.runId}`}>{when(s.lastScan.at)}</Link>
             {r && (screened > 0 || r.pending > 0) && (
               <>
                 <VerdictBar counts={{ pass: r.pass, warn: r.warn, fail: r.fail, error: 0, pending: r.pending }} legend={false} />
@@ -88,7 +88,7 @@ export default function SellersPage() {
       />
 
       {error ? <ErrorState title="Couldn't load sellers" message={error} onRetry={() => window.location.reload()} />
-        : sellers == null ? <Skeleton className="h-64 rounded-xl" />
+        : sellers == null ? <TableSkeleton rows={6} columns={6} />
         : (
           <DataTable
             rows={sellers}

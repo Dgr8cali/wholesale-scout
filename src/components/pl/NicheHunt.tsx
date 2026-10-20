@@ -13,7 +13,6 @@ import { InfoTip, SectionTitle } from "@/components/ui/info-tip";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Skeleton } from "@/components/ui/skeleton";
 import { StatusChip, type Tone } from "@/components/ui/status-chip";
 import { Switch } from "@/components/ui/switch";
 import { money } from "@/lib/pl/gatekeeper";
@@ -22,6 +21,10 @@ import { priceOf } from "@/lib/pl/fill";
 import { api } from "@/lib/ui/client";
 import { ago } from "@/lib/ui/when";
 import { cn } from "@/lib/utils";
+import { TextButton } from "@/components/ui/text-button";
+import { ChipToggle } from "@/components/ui/chip-toggle";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { FormSkeleton } from "@/components/ui/skeletons";
 
 interface Start {
   categories: { id: number; name: string; products: number | null }[];
@@ -136,7 +139,7 @@ export function NicheHunt({ onCandidate }: { onCandidate: (id: string) => void }
   }, []);
 
   if (error) return <ErrorState title="Couldn't load Niche Hunt" message={error} />;
-  if (!start || !f) return <Skeleton className="h-96 rounded-xl" />;
+  if (!start || !f) return <FormSkeleton fields={8} />;
   const set = (p: Partial<NicheHuntFilters>) => setF({ ...f, ...p });
   const busyHunt = result ? running(result.hunt.status) : false;
 
@@ -184,18 +187,15 @@ export function NicheHunt({ onCandidate }: { onCandidate: (id: string) => void }
                 ? "Direct: one Keepa query per category with every threshold Keepa can check itself (price, rating, reviews, sales a month, no Amazon, listing age, Amazon brands), best rank drops first; then each product's detail is checked (Amazon in 90 days, weight, parcel size) and grouped by its leaf category."
                 : "Leaf: each leaf category is sized with wide filters, then the most promising leaves are detailed and qualified. Products over the review cap stay in their niche as the incumbents to beat."}</p>
             </SectionTitle>
-            <div className="flex gap-1" role="radiogroup" aria-label="Hunt mode">
+            <ToggleGroup type="single" variant="outline" value={f.mode} onValueChange={(m) => m && set({ mode: m as typeof f.mode })} aria-label="Hunt mode" className="flex-wrap">
               {(["direct", "leaf"] as const).map((m) => (
-                <button key={m} type="button" role="radio" aria-checked={f.mode === m} onClick={() => set({ mode: m })}
-                  className={cn("cursor-pointer rounded-lg border px-3 py-1.5 text-sm", f.mode === m ? "border-primary bg-primary-soft font-medium text-primary-ink" : "border-border text-muted-foreground hover:bg-subtle")}>
-                  {m === "direct" ? "Direct (one query per category)" : "Leaf by leaf"}
-                </button>
+                <ToggleGroupItem key={m} value={m} className="px-3">{m === "direct" ? "Direct (one query per category)" : "Leaf by leaf"}</ToggleGroupItem>
               ))}
-            </div>
+            </ToggleGroup>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {start.presets.length > 0 && (
-              <NativeSelect className="w-48" value={preset} onChange={(e) => { const p = start.presets.find((x) => x.id === e.target.value); setPreset(p?.id ?? ""); if (p) { setF({ ...start.defaults, ...p.filters }); toast.success(`Loaded “${p.name}”`); } }}>
+              <NativeSelect className="w-48" aria-label="Saved hunt" value={preset} onChange={(e) => { const p = start.presets.find((x) => x.id === e.target.value); setPreset(p?.id ?? ""); if (p) { setF({ ...start.defaults, ...p.filters }); toast.success(`Loaded “${p.name}”`); } }}>
                 <NativeSelectOption value="">Load a preset…</NativeSelectOption>
                 {start.presets.map((p) => <NativeSelectOption key={p.id} value={p.id}>{p.name}</NativeSelectOption>)}
               </NativeSelect>
@@ -272,11 +272,10 @@ export function NicheHunt({ onCandidate }: { onCandidate: (id: string) => void }
               const on = f.categories.includes(c.id);
               const avoid = AVOID_CATEGORY_NAMES.includes(c.name);
               return (
-                <button key={c.id} type="button" onClick={() => set({ categories: on ? f.categories.filter((x) => x !== c.id) : [...f.categories, c.id] })}
-                  title={avoid ? "A Gate 0 avoid category: off by default" : undefined}
-                  className={cn("cursor-pointer rounded-full border px-2.5 py-1 text-xs", on ? "border-primary bg-primary-soft font-medium text-primary-ink" : "border-border text-muted-foreground hover:bg-subtle", avoid && !on && "border-dashed")}>
+                <ChipToggle key={c.id} pressed={on} onPressedChange={() => set({ categories: on ? f.categories.filter((x) => x !== c.id) : [...f.categories, c.id] })}
+                  title={avoid ? "A Gate 0 avoid category: off by default" : undefined} className={cn(avoid && !on && "border-dashed")}>
                   {c.name}{avoid ? " · avoid" : ""}
-                </button>
+                </ChipToggle>
               );
             })}
             {!start.categories.length && <span className="text-xs text-muted-foreground">No categories yet: the wholesale Hunt page&apos;s “Load categories” fetches them (1 token).</span>}
@@ -397,7 +396,7 @@ function Results({ result, start, onReload, onPick, onCandidate, onStart, onRequ
   const columns: DataColumn<Niche>[] = [
     {
       id: "name", header: "Niche", mobile: "title", sortValue: (n) => n.name,
-      cell: (n) => <button type="button" className="min-w-36 cursor-pointer text-left font-medium hover:text-primary hover:underline" onClick={() => setOpenKey(n.key)} title="Show its ASINs">{n.name}</button>,
+      cell: (n) => <TextButton tone="plain" className="min-w-36 font-medium" onClick={() => setOpenKey(n.key)} title="Show its ASINs">{n.name}</TextButton>,
     },
     { id: "category", header: "Category", sortValue: (n) => n.rootCategory, cell: (n) => <span className="text-meta text-muted-foreground">{n.rootCategory ?? "—"}</span> },
     {
@@ -455,7 +454,7 @@ function Results({ result, start, onReload, onPick, onCandidate, onStart, onRequ
             {ago(h.created_at)} · <span className="num">{h.token_cost}</span> tokens · <span className="num">{result.qualifying}</span> qualifying, <span className="num">{result.near}</span> near misses, <span className="num">{result.incumbents}</span> incumbents
           </p>
           {h.leaves && (
-            <p className={cn("flex flex-wrap items-center gap-2 text-sm font-medium", running(h.status) ? "text-primary" : h.status === "error" ? "text-danger" : "text-muted-foreground")}>
+            <p className={cn("flex flex-wrap items-center gap-2 text-sm font-medium", running(h.status) ? "text-link" : h.status === "error" ? "text-danger" : "text-muted-foreground")}>
               {running(h.status) && <LoaderIcon className="size-4 animate-spin" />}
               {progressLine(h)}{h.status === "done" ? " · done" : h.status === "cancelled" ? " · cancelled" : h.status === "error" ? " · stopped" : ""}
               {h.note && <span className="font-normal text-muted-foreground">({h.note})</span>}

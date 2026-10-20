@@ -27,6 +27,7 @@ import { Switch } from "@/components/ui/switch";
 import { withDefaults, type ProfileConfig } from "@/lib/screening/config";
 import { api, when } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
+import { TextButton } from "@/components/ui/text-button";
 
 interface Summary { pass: number; warn: number; fail: number; error: number; pending: number; suppliers: string[]; newestKeepa: string | null }
 interface Run {
@@ -245,11 +246,11 @@ export default function RunsPage() {
                 {r.archived_at && <StatusChip tone="neutral" icon={false}>Archived</StatusChip>}
                 {isStale(r) && <StatusChip tone="warn" title={`Newest Keepa data ${when(r.summary!.newestKeepa!)}; over 7 days old`}>Stale</StatusChip>}
                 {!!count && (
-                  <button className="inline-flex cursor-pointer items-center gap-0.5 font-medium text-primary hover:underline" aria-expanded={groupOpen}
+                  <TextButton className="gap-0.5 font-medium" aria-expanded={groupOpen}
                     onClick={() => setOpenGroups((g) => { const n = new Set(g); if (n.has(groupKey)) n.delete(groupKey); else n.add(groupKey); return n; })}>
                     <ChevronRightIcon className={cn("size-3 transition-transform", groupOpen && "rotate-90")} />
                     ×{count + 1}: {count} earlier upload{count === 1 ? "" : "s"}
-                  </button>
+                  </TextButton>
                 )}
               </div>
             </div>

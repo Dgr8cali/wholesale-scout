@@ -17,7 +17,7 @@ export function InfoTip({ children, label = "More about this", className, align 
         <button
           type="button"
           aria-label={label}
-          className={cn("inline-flex size-6 flex-none cursor-pointer items-center justify-center rounded-full text-muted-foreground transition-colors outline-none hover:bg-subtle hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 [&_svg]:size-4", className)}
+          className={cn("inline-flex size-6 flex-none cursor-pointer items-center justify-center rounded-full max-sm:-m-2.5 max-sm:size-11 text-muted-foreground transition-colors outline-none hover:bg-subtle hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 [&_svg]:size-4", className)}
         >
           <CircleHelpIcon />
         </button>

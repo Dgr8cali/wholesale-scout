@@ -16,7 +16,6 @@ import { Input } from "@/components/ui/input";
 import { Kpi } from "@/components/ui/kpi";
 import { Label } from "@/components/ui/label";
 import { PageHeader } from "@/components/ui/page-header";
-import { Skeleton } from "@/components/ui/skeleton";
 import { StatusChip } from "@/components/ui/status-chip";
 import { Switch } from "@/components/ui/switch";
 import { GATE_LABELS, type GateId } from "@/lib/screening/config";
@@ -26,6 +25,7 @@ import { CostOverrideDialog } from "@/components/results/CostOverride";
 import type { CostInput } from "@/lib/costOverride";
 import { api, gbp, when } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
+import { KpiSkeleton, TableSkeleton } from "@/components/ui/skeletons";
 
 interface Data { limits: PlanLimits; profile: string; candidates: PlanCandidate[]; noOffer?: NoOffer[]; updatedAt: string | null; updating?: boolean; vatRegistered?: boolean; vatRate?: number }
 
@@ -156,7 +156,7 @@ export default function PlanPage() {
     </div>
   );
   if (error) return <div className="space-y-5">{header}<ErrorState title="Couldn't build the plan" message={error} onRetry={() => window.location.reload()} /></div>;
-  if (!data || !plan) return <div className="space-y-5">{header}<Skeleton className="h-24 rounded-xl" /><Skeleton className="h-72 rounded-xl" /></div>;
+  if (!data || !plan) return <div className="space-y-5">{header}<KpiSkeleton /><TableSkeleton rows={8} columns={7} /></div>;
 
   const l = data.limits;
   const over = plan.total > l.budget + 0.005;
@@ -282,9 +282,9 @@ function lineColumns({ lineCap, qty, onPin, onExclude, onQty }: {
       cell: (x) => {
         const c = x.c;
         return <>
-          <p className="line-clamp-2 text-sm">{c.asin ? <Link className="hover:text-primary hover:underline" href={`/products/${c.asin}`}>{c.title ?? c.ean}</Link> : c.title ?? c.ean}</p>
+          <p className="line-clamp-2 text-sm">{c.asin ? <Link className="hover:text-link hover:underline" href={`/products/${c.asin}`}>{c.title ?? c.ean}</Link> : c.title ?? c.ean}</p>
           <p className="num text-xs font-normal text-muted-foreground">
-            {c.brand} · {c.asin ? <a className="text-primary hover:underline" href={`https://www.amazon.co.uk/dp/${c.asin}`} target="_blank" rel="noreferrer">{c.asin}</a> : c.ean}
+            {c.brand} · {c.asin ? <a className="link" href={`https://www.amazon.co.uk/dp/${c.asin}`} target="_blank" rel="noreferrer">{c.asin}</a> : c.ean}
             {c.verdict === "warn" && <span className="font-sans text-warn-ink" title={gates(c.warnGates)}> · Check: {gates(c.warnGates) || "yes"}</span>}
             {c.moq ? ` · MOQ ${c.moq}` : ""}{c.step > 1 ? ` · cases of ${c.step}` : ""}
           </p>
@@ -309,7 +309,7 @@ function lineColumns({ lineCap, qty, onPin, onExclude, onQty }: {
       id: "act", header: <span className="sr-only">Pin or exclude</span>, className: "w-20",
       cell: (x) => (
         <div className="flex justify-end gap-0.5">
-          <Button size="icon-sm" variant="ghost" className={cn(x.pinned && "text-primary")} onClick={() => onPin(x)} aria-label={x.pinned ? "Unpin" : "Pin"} title={x.pinned ? "Unpin" : "Pin: always in the plan"}>
+          <Button size="icon-sm" variant="ghost" className={cn(x.pinned && "text-link")} onClick={() => onPin(x)} aria-label={x.pinned ? "Unpin" : "Pin"} title={x.pinned ? "Unpin" : "Pin: always in the plan"}>
             {x.pinned ? <PinOffIcon /> : <PinIcon />}
           </Button>
           <Button size="icon-sm" variant="ghost" onClick={() => onExclude(x)} aria-label="Exclude" title="Exclude from the plan"><XIcon /></Button>

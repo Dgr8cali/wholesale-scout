@@ -19,7 +19,6 @@ import { useSparks } from "@/components/results/useSparks";
 import { EmptyState, ErrorState } from "@/components/States";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
-import { Skeleton } from "@/components/ui/skeleton";
 import { StatusChip } from "@/components/ui/status-chip";
 import { Toggle } from "@/components/ui/toggle";
 import { filtersToQuery, isEmpty } from "@/lib/filters";
@@ -27,6 +26,7 @@ import { GATE_LABELS, withDefaults, type ProfileConfig } from "@/lib/screening/c
 import type { ProductListItem } from "@/lib/server/productPage";
 import { api } from "@/lib/ui/client";
 import { useUrlFilters } from "@/lib/ui/useUrlFilters";
+import { TableSkeleton } from "@/components/ui/skeletons";
 
 type Page = { items: ProductListItem[]; results: Record<string, Result>; more: boolean; suppliers: string[] };
 
@@ -41,7 +41,7 @@ function stub(i: ProductListItem): Result {
 }
 
 export default function ProductsPage() {
-  return <Suspense fallback={<Skeleton className="h-96 rounded-xl" />}><Products /></Suspense>;
+  return <Suspense fallback={<TableSkeleton rows={10} columns={8} />}><Products /></Suspense>;
 }
 
 /** Every product the app has screened: filter, open one in the drawer or on its page. */
@@ -170,7 +170,7 @@ function Products() {
         options={{ brands: [], suppliers: data?.suppliers ?? [], gates: [] }} favouritesAvailable={acts.favourites.size > 0}
         extra={<Toggle size="sm" pressed={bought} onPressedChange={setBought} className="h-8 rounded-full bg-subtle px-3 text-xs font-medium text-muted-foreground data-[state=on]:bg-primary-soft data-[state=on]:text-primary-ink data-[state=on]:ring-1 data-[state=on]:ring-brand">Bought</Toggle>} />
 
-      {!data ? <Skeleton className="h-96 rounded-xl" /> : !rows.length && !filtered ? (
+      {!data ? <TableSkeleton rows={10} columns={8} /> : !rows.length && !filtered ? (
         <EmptyState icon={<SearchIcon />} title="No products yet" action={<Button variant="secondary" asChild><Link href="/new-run">New run</Link></Button>}>
           Products appear here once a run screens them.
         </EmptyState>
@@ -182,7 +182,7 @@ function Products() {
           sort={shownSort} onSort={(key) => setSort(nextResultSort(shownSort, key))}
           sparks={sparks} observeSparks={observeSparks}
           rowNote={(r) => byResult.get(r.id)?.bought ? <StatusChip tone="info" icon={false} className="mt-0.5 h-5 px-2">Bought</StatusChip> : null}
-          empty={<>No products match these filters. A product the app hasn&apos;t seen can be checked on <Link className="text-primary hover:underline" href="/new-run?tab=check">New run → Check ASINs</Link>.</>}
+          empty={<>No products match these filters. A product the app hasn&apos;t seen can be checked on <Link className="link" href="/new-run?tab=check">New run → Check ASINs</Link>.</>}
           lineCapGbp={lineBudget} maxMonths={cfg.gates.demand.maxMonthsToSell} />
       )}
 

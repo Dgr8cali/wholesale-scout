@@ -35,6 +35,8 @@ import { cn } from "@/lib/utils";
 import { DataTable } from "@/components/ui/data-table";
 import { SectionTitle } from "@/components/ui/info-tip";
 import { StatusChip } from "@/components/ui/status-chip";
+import { StepButton } from "@/components/ui/step-button";
+import { ErrorState } from "@/components/States";
 
 const STEPS = ["Drop", "Map", "Review", "Screen"] as const;
 type Step = 0 | 1 | 2 | 3;
@@ -325,23 +327,22 @@ export function UploadSource() {
             <Fragment key={label}>
               {i > 0 && <li aria-hidden="true" className={cn("h-px flex-1", s <= step ? "bg-primary" : "bg-border")} />}
               <li>
-                <button type="button" disabled={!reachable} onClick={() => setStep(s)} aria-current={s === step ? "step" : undefined}
-                  className={cn("flex items-center gap-2 rounded-full py-1 pr-3 pl-1 text-sm transition-colors disabled:cursor-not-allowed",
-                    s === step ? "bg-primary-soft font-semibold text-primary" : reachable ? "text-foreground hover:bg-subtle" : "text-muted-foreground")}>
+                <StepButton current={s === step} disabled={!reachable} onClick={() => setStep(s)}
+                  className={cn("gap-2 rounded-full border-transparent py-1 pr-3 pl-1 text-sm disabled:opacity-100", s === step ? "border-transparent font-semibold" : reachable && "text-foreground")}>
                   <span className={cn("flex size-6 items-center justify-center rounded-full text-xs font-semibold",
-                    s === step ? "bg-primary text-primary-foreground" : done ? "bg-primary/15 text-primary" : "bg-subtle text-muted-foreground")}>
+                    s === step ? "bg-primary text-primary-foreground" : done ? "bg-primary/15 text-link" : "bg-subtle text-muted-foreground")}>
                     {done ? <CheckIcon className="size-3.5" /> : i + 1}
                   </span>
                   {/* Phones: only the current step's name, so the four fit. */}
                   <span className={s === step ? undefined : "hidden sm:inline"}>{label}</span>
-                </button>
+                </StepButton>
               </li>
             </Fragment>
           );
         })}
       </ol>
 
-      {error && <p className="rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p>}
+      {error && <ErrorState compact title="That didn't work" message={error} />}
 
       {step === 0 && (
         <div className="space-y-4">
@@ -548,7 +549,7 @@ function MapFile({ f, suppliers, problems, onUpdate, onCurrency, onSupplier, onS
             </div>
           )}
         </div>
-        {f.currencyHint && !f.fxError && <p className="text-xs text-primary">{f.currencyHint}</p>}
+        {f.currencyHint && !f.fxError && <p className="text-xs text-link">{f.currencyHint}</p>}
         {f.qogita?.warning && <p className="text-xs font-medium text-warn-ink">{f.qogita.warning}</p>}
       </section>
 

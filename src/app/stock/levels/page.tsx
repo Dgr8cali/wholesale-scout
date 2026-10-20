@@ -15,11 +15,12 @@ import { Button } from "@/components/ui/button";
 import { DataTable, type DataColumn } from "@/components/ui/data-table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { PageHeader } from "@/components/ui/page-header";
-import { Skeleton } from "@/components/ui/skeleton";
 import type { ItemLevels, StockSettings } from "@/lib/server/stock";
 import { BUCKET_LABEL, BUCKETS } from "@/lib/stock/levels";
 import { api } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
+import { ChipToggle } from "@/components/ui/chip-toggle";
+import { KpiSkeleton, TableSkeleton } from "@/components/ui/skeletons";
 
 interface Data { items: ItemLevels[]; settings: StockSettings; fbaSynced: string | null; archivedCount: number }
 
@@ -48,7 +49,7 @@ export default function StockLevelsPage() {
   useEffect(() => { load(); }, [load]);
   const acts = itemActions(confirm, () => { load(); });
   if (error) return <ErrorState title="Couldn't load stock" message={error} onRetry={load} />;
-  if (!d) return <Skeleton className="h-64 rounded-xl" />;
+  if (!d) return <div className="space-y-6"><KpiSkeleton /><TableSkeleton rows={8} columns={7} /></div>;
   const row = d.items.find((r) => r.item.id === open) ?? null;
   const shownIds = d.items.map((r) => r.item.id);
   const allShown = shownIds.length > 0 && shownIds.every((id) => selected.has(id));
@@ -140,10 +141,9 @@ export default function StockLevelsPage() {
         </>}
       />
       <div className="flex flex-wrap items-center gap-3 text-sm">
-        <button type="button" aria-pressed={archived} onClick={() => { setArchived((a) => !a); setSelected(new Set()); setOpen(null); }}
-          className={cn("h-8 cursor-pointer rounded-full border px-3 text-meta font-medium", archived ? "border-primary bg-primary-soft text-primary-ink" : "border-border text-muted-foreground hover:text-foreground")}>
+        <ChipToggle pressed={archived} onPressedChange={(v) => { setArchived(v); setSelected(new Set()); setOpen(null); }}>
           Show archived{d.archivedCount ? ` · ${d.archivedCount}` : ""}
-        </button>
+        </ChipToggle>
         {d.items.length > 0 && <span className="num text-meta text-muted-foreground">{BUCKETS.map((b) => `${BUCKET_LABEL[b]} ${d.items.reduce((a, r) => a + r.levels[b], 0)}`).join(" · ")}</span>}
         {selected.size > 0 && (
           <>

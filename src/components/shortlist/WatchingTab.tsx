@@ -8,11 +8,11 @@ import { toast } from "sonner";
 import { ErrorState } from "@/components/States";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
-import { Skeleton } from "@/components/ui/skeleton";
 import { decisionLabel, PRODUCT_DECISION, ProductDecision, StatusChip, type Tone } from "@/components/ui/status-chip";
 import type { LastCheck, WatchAlert } from "@/lib/server/watchlist";
 import { api, gbp, when } from "@/lib/ui/client";
 import { conditionLabel, type WatchCondition } from "@/lib/watch";
+import { KpiSkeleton, TableSkeleton } from "@/components/ui/skeletons";
 
 interface Item {
   favourite: { id: string; ean: string; asin: string | null; note: string | null; condition?: WatchCondition | null; no_supplier?: boolean };
@@ -66,7 +66,7 @@ export function WatchingTab() {
     </div>
   );
   if (error) return <div className="space-y-5">{header}<ErrorState title="Couldn't load the watchlist" message={error} onRetry={load} /></div>;
-  if (!data) return <div className="space-y-5">{header}<Skeleton className="h-40 rounded-xl" /><Skeleton className="h-64 rounded-xl" /></div>;
+  if (!data) return <div className="space-y-5">{header}<KpiSkeleton count={3} /><TableSkeleton rows={6} columns={6} /></div>;
 
   return (
     <div className="space-y-6">
@@ -93,8 +93,8 @@ export function WatchingTab() {
                   <p className="truncate text-sm font-medium">{a.title ?? a.asin ?? a.ean}</p>
                   <p className="text-xs text-muted-foreground">
                     {a.detail}
-                    {a.asin && <> · <a className="text-primary hover:underline" href={`https://www.amazon.co.uk/dp/${a.asin}`} target="_blank" rel="noreferrer">{a.asin}</a></>}
-                    {a.run_id && <> · <Link className="text-primary hover:underline" href={`/runs/${a.run_id}`}>open run</Link></>}
+                    {a.asin && <> · <a className="link" href={`https://www.amazon.co.uk/dp/${a.asin}`} target="_blank" rel="noreferrer">{a.asin}</a></>}
+                    {a.run_id && <> · <Link className="link" href={`/runs/${a.run_id}`}>open run</Link></>}
                     {" · "}{when(a.created_at)}{a.emailed_at ? " · emailed" : ""}
                   </p>
                 </div>
@@ -118,9 +118,9 @@ export function WatchingTab() {
             {
               id: "product", header: "Product", mobile: "title", className: "max-w-96 min-w-[14rem]", sortValue: (i) => i.latest?.product?.title ?? i.favourite.asin ?? i.favourite.ean,
               cell: ({ favourite: f, latest }) => <>
-                <p className="line-clamp-2 text-sm">{f.asin ? <Link className="hover:text-primary hover:underline" href={`/products/${f.asin}`}>{latest?.product?.title ?? f.asin}</Link> : latest?.product?.title ?? f.ean}</p>
+                <p className="line-clamp-2 text-sm">{f.asin ? <Link className="hover:text-link hover:underline" href={`/products/${f.asin}`}>{latest?.product?.title ?? f.asin}</Link> : latest?.product?.title ?? f.ean}</p>
                 <p className="num text-xs font-normal text-muted-foreground">
-                  {f.ean}{f.asin && <> · <a className="text-primary hover:underline" href={`https://www.amazon.co.uk/dp/${f.asin}`} target="_blank" rel="noreferrer">{f.asin}</a></>}
+                  {f.ean}{f.asin && <> · <a className="link" href={`https://www.amazon.co.uk/dp/${f.asin}`} target="_blank" rel="noreferrer">{f.asin}</a></>}
                   {f.note && <span className="font-sans"> · {f.note}</span>}
                 </p>
               </>,
@@ -144,7 +144,7 @@ export function WatchingTab() {
             {
               id: "latest", header: <span title="Sorts by verdict: Buy, Check, Skip">Latest result</span>, mobile: 3, sortValue: (i) => (i.latest?.verdict ? { pass: 1, warn: 2, fail: 3 }[i.latest.verdict] ?? 4 : null),
               cell: ({ latest }) => (latest ? (
-                <Link className="text-meta text-primary hover:underline" href={`/runs/${latest.run_id}`}>
+                <Link className="link text-meta" href={`/runs/${latest.run_id}`}>
                   {latest.verdict ? decisionLabel(PRODUCT_DECISION, latest.verdict) : "—"} · {latest.run?.name ?? "run"}
                 </Link>
               ) : <span className="text-meta text-muted-foreground">never screened</span>),

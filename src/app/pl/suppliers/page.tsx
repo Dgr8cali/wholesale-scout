@@ -32,10 +32,10 @@ function SuppliersAndQuotes() {
         subtitle={tab === "suppliers" ? "Alibaba listings from the extension, scored against each candidate's targets." : "Supplier quotes side by side, each turned into a landed cost per unit."}
         info={tab === "suppliers" ? <>
           <p>Supplier Scout: Alibaba listings you sent from the extension, each scored 0–100 against its candidate&apos;s Gate 6 target price, MOQ and unit (price 35, MOQ 20, trust 25, relevance 20), so you only message the top few. Open a candidate for its RFQ, then <b>Add quote</b> when they answer.</p>
-          <p>See <Link className="text-primary underline" href="/help/howto/pl-finding-suppliers">Private label: finding suppliers</Link>.</p>
+          <p>See <Link className="link" href="/help/howto/pl-finding-suppliers">Private label: finding suppliers</Link>.</p>
         </> : <>
           <p>Each quote becomes a landed cost per unit and the cash a first order needs, with Gatekeeper&apos;s price multiple. Write the one you trust into Gate 0 and Gate 7, choose it, and send the RFQ to more suppliers.</p>
-          <p>See <Link className="text-primary underline" href="/help/howto/pl-quotes-and-landed-cost">Private label: quotes and landed cost</Link>.</p>
+          <p>See <Link className="link" href="/help/howto/pl-quotes-and-landed-cost">Private label: quotes and landed cost</Link>.</p>
         </>}
       />
       <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)} className="gap-6">

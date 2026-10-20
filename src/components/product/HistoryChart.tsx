@@ -40,7 +40,7 @@ export function HistoryChart({ series, format, now, log = false, invert = false,
   now: number;
   log?: boolean; invert?: boolean; days?: number; height?: number;
 }) {
-  const W = 640, H = height, padL = 52, padR = 8, padT = 8, padB = 18;
+  const W = 640, H = height, padL = 56, padR = 8, padT = 8, padB = 20;
   const from = now - days * DAY;
   const data = useMemo(() => series.map((s) => ({ ...s, st: steps(s.points, from, now) })), [series, from, now]);
   const values = data.flatMap((s) => s.st.map((p) => p.v)).filter((v): v is number => v != null && (!log || v > 0));
@@ -75,11 +75,11 @@ export function HistoryChart({ series, format, now, log = false, invert = false,
         {ticks.map((t, i) => (
           <g key={i}>
             <line x1={padL} x2={W - padR} y1={t.yy} y2={t.yy} stroke="var(--divider)" strokeWidth="1" />
-            <text x={padL - 6} y={t.yy + 3} textAnchor="end" className="num" fontSize="10" fill="var(--muted-foreground)">{format(t.v)}</text>
+            <text x={padL - 6} y={t.yy + 3} textAnchor="end" className="num" fontSize="12" fill="var(--muted-foreground)">{format(t.v)}</text>
           </g>
         ))}
         {months.map((t, i) => (
-          <text key={i} x={x(t)} y={H - 4} textAnchor="middle" fontSize="10" fill="var(--muted-foreground)">
+          <text key={i} x={x(t)} y={H - 4} textAnchor="middle" fontSize="12" fill="var(--muted-foreground)">
             {new Date(t).toLocaleDateString("en-GB", { month: "short", year: "2-digit" })}
           </text>
         ))}

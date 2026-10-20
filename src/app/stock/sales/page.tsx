@@ -10,10 +10,10 @@ import { Button } from "@/components/ui/button";
 import { DataTable, type DataColumn } from "@/components/ui/data-table";
 import { PageHeader } from "@/components/ui/page-header";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
-import { Skeleton } from "@/components/ui/skeleton";
 import type { ItemLevels } from "@/lib/server/stock";
 import { SALE_CHANNELS } from "@/lib/stock/levels";
 import { api } from "@/lib/ui/client";
+import { TableSkeleton } from "@/components/ui/skeletons";
 
 interface Row {
   id: string; date: string; channel: string; order_id: string | null; quantity: number; price_each: number; returned_quantity: number;
@@ -79,7 +79,7 @@ export default function StockSalesPage() {
           </NativeSelect></label>
         {rows && rows.length > 0 && <span className="num pb-2 text-meta text-muted-foreground">{total.units} units net of returns · {gbp(total.revenue)} sales · {gbp(total.profit)} profit</span>}
       </div>
-      {!rows ? <Skeleton className="h-48 rounded-xl" /> : (
+      {!rows ? <TableSkeleton rows={6} columns={6} /> : (
         <DataTable
           rows={rows}
           columns={columns}

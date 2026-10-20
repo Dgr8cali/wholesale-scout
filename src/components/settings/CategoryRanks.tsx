@@ -7,6 +7,7 @@ import { InfoTip } from "@/components/ui/info-tip";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { DEFAULT_RANK_BY_CATEGORY, TOP_CATEGORIES } from "@/lib/screening/categories";
+import { TextButton } from "@/components/ui/text-button";
 
 /**
  * The Demand gate's rank ceiling per top-level category. Any category not listed uses the
@@ -26,7 +27,7 @@ export function CategoryRanks({ value, fallback, onChange }: { value: Record<str
             Only for products with no sales figure: when sales are known, sales and your share decide and the rank is just shown. Keepa&apos;s top-level category (the one the rank is in); any other category uses the max above ({Number.isFinite(fallback) ? fallback.toLocaleString("en-GB") : "—"}).
           </InfoTip>
         </span>
-        <button type="button" className="cursor-pointer text-xs font-medium text-primary hover:underline" onClick={() => onChange({ ...DEFAULT_RANK_BY_CATEGORY })}>Reset to suggested</button>
+        <TextButton className="text-xs font-medium" onClick={() => onChange({ ...DEFAULT_RANK_BY_CATEGORY })}>Reset to suggested</TextButton>
       </div>
       {rows.length > 0 && (
         <ul className="grid max-w-md grid-cols-1 gap-y-1.5">

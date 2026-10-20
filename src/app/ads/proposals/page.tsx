@@ -13,11 +13,11 @@ import { useTab } from "@/lib/ui/useTab";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatusChip, type Tone } from "@/components/ui/status-chip";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
-import { Skeleton } from "@/components/ui/skeleton";
 import { RULE_IDS, RULE_LABEL, type Confidence, type RuleId } from "@/lib/ads/rules";
 import { ProductPicker, useAdsProduct } from "@/components/ads/ProductPicker";
 import { api } from "@/lib/ui/client";
 import type { NgramData } from "@/components/ads/NgramsTab";
+import { TableSkeleton } from "@/components/ui/skeletons";
 
 interface Row {
   id: string; rule: RuleId; asin: string | null; campaign: string | null; campaign_name: string | null; campaign_state: string | null;
@@ -59,7 +59,7 @@ function AdsProposals() {
   const rows = useMemo(() => [...shown].sort((a, b) => (a.asin ?? "").localeCompare(b.asin ?? "") || RULE_IDS.indexOf(a.rule) - RULE_IDS.indexOf(b.rule) || CONF_RANK[b.confidence] - CONF_RANK[a.confidence]), [shown]);
 
   if (error) return <ErrorState title="Couldn't load the proposals" message={error} />;
-  if (!data) return <Skeleton className="h-64 rounded-lg" />;
+  if (!data) return <TableSkeleton rows={8} columns={7} />;
 
   const act = async (ids: string[], action: "approve" | "skip" | "snooze" | "reopen") => {
     if (!ids.length) return;
@@ -133,7 +133,7 @@ function AdsProposals() {
         crumbs={[{ label: "Ads", href: "/ads/dashboard" }, { label: "Proposals" }]}
         subtitle={tab === "review" ? "What your rules suggest. Approve what you agree with, then export the bulk sheet." : "Every bulk sheet: download it, mark it uploaded, revert or discard it."}
         info={<>
-          <p>Proposals come from your <Link className="text-primary underline" href="/ads/rules">rules</Link>, run on the imported data. Approve what you agree with, then export the bulk sheet and upload it in Amazon Ads (Campaign manager → Bulk operations).</p>
+          <p>Proposals come from your <Link className="link" href="/ads/rules">rules</Link>, run on the imported data. Approve what you agree with, then export the bulk sheet and upload it in Amazon Ads (Campaign manager → Bulk operations).</p>
           <p>Nothing changes in Amazon Ads until you upload it. Skip keeps a proposal away for 30 days, Snooze for 14. Confidence: low under 10 clicks, medium 10–29, high from 30 clicks or 3 orders.</p>
         </>}
         actions={<>
@@ -205,7 +205,7 @@ function NgramCard({ d }: { d: NgramData }) {
       <div className="flex flex-wrap items-baseline gap-2">
         <h2 className="font-semibold">N-grams</h2>
         <span className="text-xs text-muted-foreground">{fired.length ? `${fired.length} gram${fired.length === 1 ? "" : "s"} fire Rule 9 or 10: ${fired.map((r) => `"${r.gram}" (${r.trigger})`).join(", ")}` : "No gram fires Rule 9 (negative) or Rule 10 (winner) on this data"}</span>
-        <Link href="/ads/search-terms?tab=ngrams" className="ml-auto text-xs font-medium whitespace-nowrap text-primary hover:underline">All n-grams →</Link>
+        <Link href="/ads/search-terms?tab=ngrams" className="link ml-auto text-xs font-medium whitespace-nowrap">All n-grams →</Link>
       </div>
       <div className="flex flex-wrap gap-2">{waste.map((r) => (
         <span key={r.asin + r.gram} className="rounded-full bg-subtle px-3 py-1 text-xs" title={`${r.clicks} clicks, £${r.cost.toFixed(2)} spent, ${r.orders} orders, in ${r.terms} terms (${r.convertingTerms} with an order)`}>

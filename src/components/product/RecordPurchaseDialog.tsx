@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from "@/components/ui/input";
 import { asinFromUrl } from "@/lib/check/parse";
 import { api } from "@/lib/ui/client";
+import { ListButton } from "@/components/ui/list-button";
 
 type Hit = { asin: string; ean: string; title: string | null; brand: string | null };
 
@@ -76,10 +77,10 @@ export function RecordPurchaseDialog({ variant = "default" }: { variant?: "defau
             <ul className="max-h-72 divide-y divide-divider overflow-y-auto">
               {hits.map((h) => (
                 <li key={h.asin}>
-                  <button type="button" className="w-full cursor-pointer rounded-md px-1 py-2 text-left hover:bg-subtle" onClick={() => go(h.asin)}>
+                  <ListButton className="flex-col items-start gap-0 py-2" onClick={() => go(h.asin)}>
                     <span className="line-clamp-1 text-sm">{h.title ?? h.asin}</span>
                     <span className="num text-xs text-muted-foreground">{h.asin}{h.brand ? ` · ${h.brand}` : ""}</span>
-                  </button>
+                  </ListButton>
                 </li>
               ))}
             </ul>

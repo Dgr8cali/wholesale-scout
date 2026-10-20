@@ -18,6 +18,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { api, when } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
+import { TextButton } from "@/components/ui/text-button";
+import { ListButton } from "@/components/ui/list-button";
+import { ChipRemove } from "@/components/ui/chip-toggle";
 
 interface Category { name: string; slug: string; path: string[] }
 interface Filters {
@@ -178,8 +181,8 @@ export function QogitaSource() {
                 <fieldset className="mt-2 space-y-1.5 rounded-lg border border-border p-3">
                   <legend className="px-1 text-xs text-muted-foreground">
                     {filters.leaves ? `${filters.leaves.length} of ${leaves.length}` : `All ${leaves.length}`} categories under it
-                    {" · "}<button type="button" className="cursor-pointer text-primary hover:underline" onClick={() => set({ leaves: null })}>all</button>
-                    {" · "}<button type="button" className="cursor-pointer text-primary hover:underline" onClick={() => set({ leaves: [] })}>none</button>
+                    {" · "}<TextButton onClick={() => set({ leaves: null })}>all</TextButton>
+                    {" · "}<TextButton onClick={() => set({ leaves: [] })}>none</TextButton>
                   </legend>
                   <div className="grid max-h-48 gap-x-4 gap-y-1 overflow-auto sm:grid-cols-2 lg:grid-cols-3">
                     {leaves.map((leaf) => (
@@ -250,10 +253,10 @@ export function QogitaSource() {
             : presets.map((p) => (
               <div key={p.id} className="panel space-y-2 p-3">
                 <div className="flex items-start gap-2">
-                  <button className="min-w-0 flex-1 cursor-pointer text-left" onClick={() => { setFilters({ ...EMPTY, ...p.filters }); setName(p.name); if (p.profile_id) setProfileId(p.profile_id); }} title="Load these filters">
+                  <ListButton onClick={() => { setFilters({ ...EMPTY, ...p.filters }); setName(p.name); if (p.profile_id) setProfileId(p.profile_id); }} title="Load these filters">
                     <p className="truncate font-medium hover:underline">{p.name}</p>
                     <p className="text-xs text-muted-foreground">{describeFilters(p.filters, cur).join(" · ")}</p>
-                  </button>
+                  </ListButton>
                   <Button variant="danger" size="sm" aria-label={`Delete ${p.name}`}
                     onClick={async () => {
                       if (!(await confirm({ title: `Delete “${p.name}”?`, description: "Its runs are kept.", confirmLabel: "Delete", destructive: true }))) return;
@@ -263,7 +266,7 @@ export function QogitaSource() {
                 {p.lastPull && (
                   <p className="text-xs text-muted-foreground">
                     {when(p.lastPull.started_at)}{p.lastPull.kind === "nightly" ? " (nightly)" : ""}: {p.lastPull.stats.screened ?? p.lastPull.stats.kept} screened
-                    {p.lastPull.run_id && <> · <Link className="text-primary hover:underline" href={`/runs/${p.lastPull.run_id}`}>run</Link></>}
+                    {p.lastPull.run_id && <> · <Link className="link" href={`/runs/${p.lastPull.run_id}`}>run</Link></>}
                   </p>
                 )}
                 <div className="flex items-center justify-between gap-2">
@@ -318,13 +321,13 @@ function CategoryPicker({ cats, value, onChange }: { cats: Category[]; value: Fi
               const selected = value?.path.join("›") === n.path.join("›");
               return (
                 <li key={n.path.join("›")}>
-                  <button role="option" aria-selected={selected} onClick={() => { onChange({ name: n.name, path: n.path }); setOpen(false); }}
+                  <ListButton role="option" aria-selected={selected} onClick={() => { onChange({ name: n.name, path: n.path }); setOpen(false); }}
                     className={cn("flex w-full cursor-pointer items-center gap-2 rounded-md py-1 pr-2 text-left text-sm hover:bg-subtle", selected && "bg-primary-soft")}
                     style={{ paddingLeft: q ? 8 : 8 + (n.path.length - 1) * 14 }}>
                     <span className="min-w-0 flex-1 truncate">{q ? n.path.slice(1).join(" › ") || n.name : n.name}</span>
                     {n.path.length < 4 && n.leaves > 1 && <span className="num text-xs text-muted-foreground">{n.leaves}</span>}
-                    {selected && <CheckIcon className="size-3.5 text-primary" />}
-                  </button>
+                    {selected && <CheckIcon className="size-3.5 text-link" />}
+                  </ListButton>
                 </li>
               );
             })}
@@ -366,8 +369,7 @@ function BrandInput({ value, onChange }: { value: string[]; onChange: (b: string
       {value.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {value.map((b) => (
-            <button key={b} type="button" onClick={() => onChange(value.filter((x) => x !== b))} aria-label={`Remove ${b}`}
-              className="inline-flex h-6 cursor-pointer items-center gap-1 rounded-full bg-primary-soft px-2.5 text-xs font-medium text-primary-ink hover:bg-primary-soft/70">{b} <XIcon className="size-3" /></button>
+            <ChipRemove key={b} onClick={() => onChange(value.filter((x) => x !== b))} label={`Remove ${b}`}>{b}</ChipRemove>
           ))}
         </div>
       )}

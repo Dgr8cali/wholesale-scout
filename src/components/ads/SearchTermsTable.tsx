@@ -64,7 +64,7 @@ export function SearchTermsTable({ rows, campaigns }: { rows: TermRow[]; campaig
           </NativeSelect></label>
         <InfoTip label="About the statuses" className="mb-2">
           <p>Converting: orders at or under the target ACoS. Over target: orders above it. Watch: no order yet, under 15 clicks. Waste: no order after 15 clicks, or after spending half the product&apos;s price.</p>
-          <p>The Negative rule on <Link className="text-primary underline" href="/ads/rules">Rules</Link> uses the same thresholds by default. ACoS is green at or under the target, amber up to break-even, red past it.</p>
+          <p>The Negative rule on <Link className="link" href="/ads/rules">Rules</Link> uses the same thresholds by default. ACoS is green at or under the target, amber up to break-even, red past it.</p>
         </InfoTip>
       </div>
       <DataTable rows={filtered} columns={columns} getRowId={(t) => `${t.campaign}|${t.term}`} storageKey="ads.terms" caption="Search terms" initialSort={{ id: "cost", desc: true }}

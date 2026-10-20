@@ -38,8 +38,8 @@ export const STATUSES = ["draft", "researching", "samples", "parked", "dropped",
 export const valuesOf = (m: FieldMap): Fields => Object.fromEntries(Object.entries(m).map(([k, v]) => [k, v.value]));
 
 export const TONE: Record<Status, { text: string; soft: string; solid: string; border: string }> = {
-  pass: { text: "text-pass", soft: "bg-pass-soft", solid: "bg-pass text-white", border: "border-pass" },
-  warn: { text: "text-warn", soft: "bg-warn-soft", solid: "bg-highlight text-white", border: "border-warn" },
-  fail: { text: "text-fail", soft: "bg-fail-soft", solid: "bg-fail text-white", border: "border-fail" },
+  pass: { text: "text-pass", soft: "bg-pass-soft", solid: "bg-success-soft text-success ring-1 ring-success/30", border: "border-pass" },
+  warn: { text: "text-warn", soft: "bg-warn-soft", solid: "bg-warn-soft text-warn-ink ring-1 ring-warn-ink/30", border: "border-warn" },
+  fail: { text: "text-fail", soft: "bg-fail-soft", solid: "bg-danger-soft text-danger ring-1 ring-danger/30", border: "border-fail" },
   empty: { text: "text-empty", soft: "bg-empty-soft", solid: "bg-surface-2 text-ink-2", border: "border-border" },
 };

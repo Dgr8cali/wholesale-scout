@@ -19,6 +19,7 @@ import { priceMultiple } from "@/lib/pl/quotes";
 import { api } from "@/lib/ui/client";
 import { ago } from "@/lib/ui/when";
 import { cn } from "@/lib/utils";
+import { TableSkeleton } from "@/components/ui/skeletons";
 
 const VERDICT_RANK: Record<Status, number> = { pass: 3, warn: 2, fail: 1, empty: 0 };
 type Scored = { c: CandidateRow; ev: ReturnType<typeof evaluate> };
@@ -44,7 +45,7 @@ function Candidates() {
   const parked = all.filter((x) => x.c.status === "parked").sort((a, b) => (b.c.parked_at ?? "").localeCompare(a.c.parked_at ?? ""));
 
   if (error) return <ErrorState title="Couldn't load Private label" message={error} onRetry={load} />;
-  if (!list) return <div className="space-y-6"><Skeleton className="h-16 rounded-xl" /><Skeleton className="h-64 rounded-xl" /></div>;
+  if (!list) return <div className="space-y-6"><Skeleton className="h-16 rounded-xl" /><TableSkeleton rows={8} columns={6} /></div>;
 
   const rows = showParked ? [...scored, ...parked] : scored;
   const open = (id: string) => router.push(`/pl/candidates/${id}`);
@@ -79,7 +80,7 @@ function Candidates() {
         subtitle={`Products you might launch, scored against Gatekeeper's eight gates.`}
         info={<>
           <p>Should ~{capitalText(list.settings.budget)} launch your own product into this niche? A candidate must clear every gate <em>and</em> score well; a good score never overrides a failed gate.</p>
-          <p>Thresholds: launch capital {capital}, min multiple {list.settings.minMultiple}×, steady margin {list.settings.minSteadyMargin}% (<Link className="text-primary underline" href="/settings?tab=pl">Settings → Private label</Link>). Rate card: {list.card.name}; peak rates apply automatically in October–December.</p>
+          <p>Thresholds: launch capital {capital}, min multiple {list.settings.minMultiple}×, steady margin {list.settings.minSteadyMargin}% (<Link className="link" href="/settings?tab=pl">Settings → Private label</Link>). Rate card: {list.card.name}; peak rates apply automatically in October–December.</p>
         </>}
         actions={<Button onClick={() => setAdding(true)}><PlusIcon /> New candidate</Button>}
       />

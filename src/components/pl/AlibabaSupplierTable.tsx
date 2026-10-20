@@ -66,7 +66,7 @@ export function AlibabaSupplierTable({ rows, showCandidate, onChanged, onQuoted 
         </div>
       ),
     },
-    ...(showCandidate ? [{ id: "candidate", header: "Candidate", sortValue: (l: Lead) => l.candidate_name ?? "", cell: (l: Lead) => <Link className="text-primary hover:underline" href={`/pl/candidates/${l.candidate_id}?tab=suppliers`}>{l.candidate_name}</Link> }] : []),
+    ...(showCandidate ? [{ id: "candidate", header: "Candidate", sortValue: (l: Lead) => l.candidate_name ?? "", cell: (l: Lead) => <Link className="link" href={`/pl/candidates/${l.candidate_id}?tab=suppliers`}>{l.candidate_name}</Link> }] : []),
     {
       id: "ours", header: <span title="The price per unit of our product, at the MOQ (the top of the range)">Per our unit</span>, numeric: true, mobile: 2, sortValue: (l) => l.score_breakdown?.perUnit ?? null,
       cell: (l) => { const b = l.score_breakdown; return <span title={b?.parts.price.note}>{b?.perUnit != null ? `${gbp(b.perUnit)}/${b.unit}` : <span className="text-muted-foreground">?</span>}</span>; },

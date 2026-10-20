@@ -13,6 +13,8 @@ import { TONE, valuesOf } from "../types";
 import { WaivePopover } from "../WaivePopover";
 import { CheckRow, FieldRow, GateExtras, ReferencePanel, ScorecardPanel, WaivedChip, WaiversPanel } from "./parts";
 import type { CandidateState } from "./useCandidate";
+import { TextButton } from "@/components/ui/text-button";
+import { StepButton } from "@/components/ui/step-button";
 
 const SCORE = "score";
 
@@ -47,19 +49,17 @@ export function GatesTab({ s }: { s: CandidateState }) {
         <ol className="flex min-w-max gap-1.5 sm:min-w-0 sm:flex-wrap">
           {ev.gates.map(({ g, status, waiver }) => (
             <li key={g.id}>
-              <button type="button" onClick={() => go(g.n)} aria-current={at === g.n ? "step" : undefined} title={`Gate ${g.n}: ${g.title}`}
-                className={cn("relative flex cursor-pointer items-center gap-2 rounded-[10px] border px-2.5 py-1.5 text-sm", at === g.n ? "border-primary bg-primary-soft font-medium text-primary-ink" : "border-border hover:bg-accent")}>
+              <StepButton current={at === g.n} onClick={() => go(g.n)} title={`Gate ${g.n}: ${g.title}`} className="relative gap-2 px-2.5 py-1.5 text-sm">
                 <span className={cn("flex size-6 flex-none items-center justify-center rounded-md text-xs font-bold", TONE[status].solid)}>{g.n}</span>
                 <span className="hidden max-w-32 truncate xl:inline">{g.title}</span>
                 <span className="sr-only">{waiver ? "waived" : status === "empty" ? "not complete" : status}</span>
-              </button>
+              </StepButton>
             </li>
           ))}
           <li>
-            <button type="button" onClick={() => go(SCORE)} aria-current={at === SCORE ? "step" : undefined}
-              className={cn("flex cursor-pointer items-center gap-2 rounded-[10px] border px-2.5 py-1.5 text-sm", at === SCORE ? "border-primary bg-primary-soft font-medium text-primary-ink" : "border-border hover:bg-accent")}>
+            <StepButton current={at === SCORE} onClick={() => go(SCORE)} className="gap-2 px-2.5 py-1.5 text-sm">
               Scorecard <span className="num text-muted-foreground">{ev.sc.answered === 10 ? `${ev.sc.total}/30` : `${ev.sc.answered}/10`}</span>
-            </button>
+            </StepButton>
           </li>
         </ol>
       </nav>
@@ -75,11 +75,11 @@ export function GatesTab({ s }: { s: CandidateState }) {
               {gateWaiver ? (
                 <span className="flex items-center gap-1.5">
                   <WaivedChip waiver={gateWaiver} />
-                  <button type="button" className="text-xs font-medium text-primary hover:underline" onClick={() => unwaive(gateWaiver)}>Remove waiver</button>
+                  <TextButton className="text-xs font-medium" onClick={() => unwaive(gateWaiver)}>Remove waiver</TextButton>
                 </span>
               ) : (rawStatus === "fail" || rawStatus === "warn") && (
                 <WaivePopover title={`Waive Gate ${g.n}: ${g.title}`} onWaive={(reason) => waive(g.id, null, reason)}
-                  trigger={<button type="button" className="text-xs font-medium text-primary hover:underline">Waive gate</button>} />
+                  trigger={<TextButton className="text-xs font-medium">Waive gate</TextButton>} />
               )}
               <StatusPill status={status} label={gateWaiver ? "Waived" : undefined} />
             </div>
@@ -96,7 +96,7 @@ export function GatesTab({ s }: { s: CandidateState }) {
               {g.id === "g4" ? (
                 <p className="flex flex-wrap items-center gap-2 rounded-lg bg-subtle px-3 py-2.5 text-sm">
                   <MessageSquareTextIcon className="size-4 text-primary-ink" /> The review miner and the critical reviews of each listing are on the
-                  <Link className="font-medium text-primary hover:underline" href={`${path}?tab=reviews`}>Reviews tab</Link>.
+                  <Link className="link font-medium" href={`${path}?tab=reviews`}>Reviews tab</Link>.
                 </p>
               ) : <GateExtras g={g} data={data} fields={fields} settings={data.settings} card={data.card} onSave={saveField} onAsinsChanged={async () => { await reload(); }} />}
               <div className="overflow-hidden rounded-lg border">

@@ -27,8 +27,8 @@ export function HelpArticle({ title, summary, section, html, prev, next }: { slu
       />
       {(prev || next) && (
         <nav className="flex justify-between gap-4 border-t border-divider pt-4 text-sm" aria-label="More in this section">
-          {prev ? <Link href={`/help/${prev.slug}`} className="inline-flex items-center gap-1 text-primary hover:underline"><ArrowLeftIcon className="size-4" />{prev.title}</Link> : <span />}
-          {next ? <Link href={`/help/${next.slug}`} className="inline-flex items-center gap-1 text-primary hover:underline">{next.title}<ArrowRightIcon className="size-4" /></Link> : <span />}
+          {prev ? <Link href={`/help/${prev.slug}`} className="link inline-flex items-center gap-1"><ArrowLeftIcon className="size-4" />{prev.title}</Link> : <span />}
+          {next ? <Link href={`/help/${next.slug}`} className="link inline-flex items-center gap-1">{next.title}<ArrowRightIcon className="size-4" /></Link> : <span />}
         </nav>
       )}
     </article>

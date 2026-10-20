@@ -15,6 +15,7 @@ import { StatusChip, type Tone } from "@/components/ui/status-chip";
 import { BANK_SOURCE_LABEL, type BankRow, type BankSource } from "@/lib/ads/bank";
 import { api } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
+import { TextButton } from "@/components/ui/text-button";
 
 interface Bank { asin: string; rows: BankRow[]; counts: Record<BankSource, number>; candidate: string | null; headTerms: string[] }
 
@@ -27,9 +28,9 @@ export function KeywordBankPanel({ asin }: { asin: string }) {
   const [open, setOpen] = useState(false);
   return (
     <div>
-      <button type="button" aria-expanded={open} className="flex cursor-pointer items-center gap-1 text-meta font-medium text-primary hover:underline" onClick={() => setOpen((v) => !v)}>
+      <TextButton aria-expanded={open} className="text-meta font-medium" onClick={() => setOpen((v) => !v)}>
         <ChevronRightIcon className={cn("size-3.5 transition-transform", open && "rotate-90")} /> Keyword bank
-      </button>
+      </TextButton>
       {open && <div className="mt-2"><KeywordBank asin={asin} /></div>}
     </div>
   );
@@ -120,7 +121,7 @@ export function KeywordBank({ asin }: { asin: string }) {
             <Button size="sm" variant="ghost" disabled={!!busy} loading={busy === "track"} onClick={() => act("track", chosen)}>Track rank</Button>
           </>
         )}
-        <Link className="ml-auto text-meta text-primary hover:underline" href={`/ads/launch?asin=${asin}`}>Launcher (head terms from here) →</Link>
+        <Link className="link ml-auto text-meta" href={`/ads/launch?asin=${asin}`}>Launcher (head terms from here) →</Link>
       </div>
       <DataTable rows={bank.rows} columns={columns} getRowId={(r) => r.norm} storageKey="ads.bank" caption="Keyword bank"
         rowClassName={(r) => (sel.has(r.norm) ? "bg-primary-soft/40" : undefined)}

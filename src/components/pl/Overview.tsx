@@ -6,7 +6,6 @@ import { ReceiptTextIcon, RocketIcon } from "lucide-react";
 import { ErrorState } from "@/components/States";
 import { Button } from "@/components/ui/button";
 import { DataTable, type DataColumn } from "@/components/ui/data-table";
-import { Skeleton } from "@/components/ui/skeleton";
 import { CandidateDecision, StatusChip } from "@/components/ui/status-chip";
 import { Switch } from "@/components/ui/switch";
 import { withAdsDefaults } from "@/lib/pl/adsDefaults";
@@ -17,6 +16,7 @@ import { api } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
 import { CandidateExtras } from "./Extras";
 import { valuesOf, type ListResponse } from "./types";
+import { TableSkeleton } from "@/components/ui/skeletons";
 
 const MULT_CLS = { pass: "text-success", warn: "text-warn-ink", fail: "text-danger" } as const;
 const STATUS_RANK: Record<string, number> = { draft: 0, researching: 1, samples: 2, launched: 3, parked: 4, dropped: 5 };
@@ -45,7 +45,7 @@ export function PlOverview({ mode }: { mode: "quotes" | "launch" }) {
     return { c, ev, sell, landed, m: priceMultiple(sell, landed), quotes: counts[c.id] ?? 0, inLaunch };
   }).filter((r) => (mode === "launch" && !all ? r.inLaunch : all || (r.c.status !== "dropped" && r.c.status !== "parked"))), [list, counts, mode, all]);
   if (error) return <ErrorState title="Couldn't load the candidates" message={error} />;
-  if (!list) return <Skeleton className="h-64 rounded-xl" />;
+  if (!list) return <TableSkeleton rows={8} columns={6} />;
   type Row = (typeof rows)[number];
   const sel = rows.find((r) => r.c.id === picked) ?? rows[0] ?? null;
   const columns: DataColumn<Row>[] = [
@@ -85,7 +85,7 @@ export function PlOverview({ mode }: { mode: "quotes" | "launch" }) {
         <div className="space-y-3">
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
             <h2 className="section-title">{sel.c.name}</h2>
-            <Link href={`/pl/candidates/${sel.c.id}${mode === "quotes" ? "?tab=suppliers" : "?tab=launch"}`} className="text-meta text-primary hover:underline">Open the candidate →</Link>
+            <Link href={`/pl/candidates/${sel.c.id}${mode === "quotes" ? "?tab=suppliers" : "?tab=launch"}`} className="link text-meta">Open the candidate →</Link>
           </div>
           <CandidateExtras key={sel.c.id} show={mode}
             c={{ id: sel.c.id, name: sel.c.name, niche_keyword: sel.c.niche_keyword, category: sel.c.category, sell: sel.sell, fields: sel.c.fields }}

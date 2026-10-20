@@ -14,12 +14,12 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { PageHeader } from "@/components/ui/page-header";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
-import { Skeleton } from "@/components/ui/skeleton";
 import { BUCKET_LABEL, BUCKETS, KIND_LABEL, MOVEMENT_KINDS, type Bucket, type MovementKind } from "@/lib/stock/levels";
 import { OrderLink } from "@/components/stock/orderBits";
 import { trackingText } from "@/lib/stock/orders";
 import { api } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
+import { TableSkeleton } from "@/components/ui/skeletons";
 
 interface Row {
   id: string; item_id: string; bucket: Bucket; quantity: number; kind: MovementKind; date: string; reason: string | null; unit_cost: number | null; note: string | null; created_at: string;
@@ -131,7 +131,7 @@ export default function StockMovementsPage() {
         <ToggleGroupItem value="ledger">Ledger</ToggleGroupItem>
         <ToggleGroupItem value="audit">Audit log</ToggleGroupItem>
       </ToggleGroup>
-      {view === "audit" ? (audit ? <AuditTable rows={audit} /> : <Skeleton className="h-48 rounded-xl" />) : <>
+      {view === "audit" ? (audit ? <AuditTable rows={audit} /> : <TableSkeleton rows={6} columns={6} />) : <>
       <div className="flex flex-wrap items-end gap-3">
         <label className="space-y-1"><span className="field-label">Item</span>
           <NativeSelect value={f.item} onChange={(e) => set({ item: e.target.value })} className="max-w-xs">
@@ -157,7 +157,7 @@ export default function StockMovementsPage() {
           {negatives > 0 && <span className="text-meta text-danger">{negatives} row{negatives === 1 ? "" : "s"} leave{negatives === 1 ? "s" : ""} a bucket below 0: correct them (edit, receive or adjust).</span>}
         </div>
       )}
-      {!rows ? <Skeleton className="h-48 rounded-xl" /> : (
+      {!rows ? <TableSkeleton rows={8} columns={7} /> : (
         <DataTable
           rows={rows}
           columns={columns}

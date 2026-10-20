@@ -130,7 +130,7 @@ function PreviewTable({ src, preview, asins, setAsins, busy, onImport }: { src: 
       {preview.plan.notes.length > 0 && <ul className="list-inside list-disc space-y-0.5 text-xs text-muted-foreground">{preview.plan.notes.map((n) => <li key={n}>{n}</li>)}</ul>}
       <div className="flex items-center gap-3">
         <Button onClick={onImport} loading={busy} disabled={!preview.rows.length}><UploadIcon /> Import</Button>
-        <Link href="/stock/levels" className="text-sm text-primary hover:underline">Levels →</Link>
+        <Link href="/stock/levels" className="link text-sm">Levels →</Link>
         <span className="text-xs text-muted-foreground">Self-ship and TikTok FBT are where each item ends up after the import.</span>
       </div>
     </section>

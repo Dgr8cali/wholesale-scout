@@ -7,10 +7,10 @@ import { ErrorState } from "@/components/States";
 import { Button } from "@/components/ui/button";
 import { DataTable, type DataColumn } from "@/components/ui/data-table";
 import { PageHeader } from "@/components/ui/page-header";
-import { Skeleton } from "@/components/ui/skeleton";
 import { StatusChip, type Tone } from "@/components/ui/status-chip";
 import type { ItemLevels, StockSettings } from "@/lib/server/stock";
 import { api } from "@/lib/ui/client";
+import { TableSkeleton } from "@/components/ui/skeletons";
 
 // The reorder statuses keep their own words, in the shared chip tones.
 const STATUS_CHIP: Record<"due" | "soon" | "ok" | "no demand", { label: string; tone: Tone }> = {
@@ -27,7 +27,7 @@ export default function StockReorderPage() {
   useEffect(() => { api<{ items: ItemLevels[]; settings: StockSettings }>("/api/stock/levels").then(setD).catch((e: Error) => setError(e.message)); }, []);
   const rows = (d?.items ?? []).filter((r) => r.item.status === "active");
   if (error) return <div className="space-y-4"><PageHeader title="Reorder" crumbs={crumbs} /><ErrorState title="Couldn't load the reorder list" message={error} /></div>;
-  if (!d) return <div className="space-y-4"><PageHeader title="Reorder" crumbs={crumbs} /><Skeleton className="h-48 rounded-xl" /></div>;
+  if (!d) return <div className="space-y-4"><PageHeader title="Reorder" crumbs={crumbs} /><TableSkeleton rows={6} columns={7} /></div>;
   const S = d.settings;
   const due = rows.filter((r) => r.reorder.status === "due").length;
   const soon = rows.filter((r) => r.reorder.status === "soon").length;

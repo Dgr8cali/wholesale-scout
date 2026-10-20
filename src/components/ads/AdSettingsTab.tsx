@@ -13,6 +13,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { costTxt, type AiModel } from "@/lib/ads/ai";
 import { api } from "@/lib/ui/client";
+import { useDirty } from "@/lib/ui/useDirty";
 
 /** The Ads workspace's settings: the target ACoS, with what break-even means. */
 export function AdsSettingsTab() {
@@ -22,25 +23,34 @@ export function AdsSettingsTab() {
   const [smoothK, setSmoothK] = useState("20");
   const [ctrB, setCtrB] = useState("0.4");
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const form = acos == null ? null : { acos, cpc, cpcAuto, smoothK, ctrB };
+  const { dirty, settle } = useDirty(form);
   const take = (st: { targetAcos: number; cpc: number; cpcAuto: boolean; smoothingK: number; ctrBenchmark: number }) => {
-    setAcos(String(st.targetAcos));
-    setCpc(st.cpc.toFixed(2));
-    setCpcAuto(st.cpcAuto);
-    setSmoothK(String(st.smoothingK));
-    setCtrB(String(st.ctrBenchmark));
+    const f = { acos: String(st.targetAcos), cpc: st.cpc.toFixed(2), cpcAuto: st.cpcAuto, smoothK: String(st.smoothingK), ctrB: String(st.ctrBenchmark) };
+    setAcos(f.acos);
+    setCpc(f.cpc);
+    setCpcAuto(f.cpcAuto);
+    setSmoothK(f.smoothK);
+    setCtrB(f.ctrB);
+    settle(f);
   };
   useEffect(() => {
     api<{ settings: { targetAcos: number; cpc: number; cpcAuto: boolean; smoothingK: number; ctrBenchmark: number } }>("/api/ads/settings").then((r) => take(r.settings)).catch((e: Error) => setError(e.message));
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- load once, on open
   }, []);
   if (error) return <ErrorState title="Couldn't load the Ads settings" message={error} />;
   if (acos == null) return <Skeleton className="h-40 rounded-lg" />;
   const save = async () => {
+    setBusy(true);
     try {
       const r = await api<{ settings: { targetAcos: number; cpc: number; cpcAuto: boolean; smoothingK: number; ctrBenchmark: number } }>("/api/ads/settings", { method: "PUT", json: { targetAcos: Number(acos), cpc: Number(cpc), cpcAuto, smoothingK: Number(smoothK), ctrBenchmark: Number(ctrB) } });
       take(r.settings);
-      toast.success("Saved");
+      toast.success("Ad settings saved");
     } catch (e) {
       toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
     }
   };
   return (
@@ -49,7 +59,7 @@ export function AdsSettingsTab() {
         <div className="space-y-1">
           <SectionTitle title="Ad settings">The default target ACoS for the Ads dashboard&apos;s products and search-term chips (a product can have its own), and the CPC behind Private label&apos;s ads-per-unit estimate.</SectionTitle>
         </div>
-        <Button onClick={save}>Save</Button>
+        <Button onClick={save} disabled={!dirty} loading={busy}>Save</Button>
       </div>
       <label className="block max-w-xs space-y-1.5">
         <span className="flex items-center gap-1"><span className="field-label">Target ACoS (%)</span>
@@ -85,7 +95,7 @@ export function AdsSettingsTab() {
       </div>
       <KeywordListsEditor />
       <p className="max-w-3xl text-sm text-muted-foreground">
-        Each rule&apos;s thresholds, on/off and mode are on the <Link className="text-primary underline" href="/ads/rules">Rules</Link> tab.
+        Each rule&apos;s thresholds, on/off and mode are on the <Link className="link" href="/ads/rules">Rules</Link> tab.
       </p>
       <AiSettings />
     </section>
@@ -99,12 +109,16 @@ interface AiSpend { calls: number; totalGbp: number; last30Gbp: number; last30Ca
 function AiSettings() {
   const [data, setData] = useState<{ settings: AiSet; models: AiModel[]; spend: AiSpend } | null>(null);
   const [draft, setDraft] = useState<{ model: string; inUsd: string; outUsd: string; gbpPerUsd: string; reviewSchedule: boolean } | null>(null);
+  const { dirty, settle } = useDirty(draft);
   const take = (r: { settings: AiSet; models: AiModel[]; spend: AiSpend }) => {
     setData(r);
-    setDraft({ model: r.settings.model, inUsd: String(r.settings.inUsd), outUsd: String(r.settings.outUsd), gbpPerUsd: String(r.settings.gbpPerUsd), reviewSchedule: r.settings.reviewSchedule });
+    const d = { model: r.settings.model, inUsd: String(r.settings.inUsd), outUsd: String(r.settings.outUsd), gbpPerUsd: String(r.settings.gbpPerUsd), reviewSchedule: r.settings.reviewSchedule };
+    setDraft(d);
+    settle(d);
   };
   useEffect(() => {
     api<{ settings: AiSet; models: AiModel[]; spend: AiSpend }>("/api/ads/ai/settings").then(take).catch((e: Error) => toast.error(e.message));
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- load once, on open
   }, []);
   if (!data || !draft) return <Skeleton className="h-32 rounded-lg" />;
   const pickModel = (id: string) => {
@@ -115,7 +129,7 @@ function AiSettings() {
     try {
       await api("/api/ads/ai/settings", { method: "PUT", json: { model: draft.model, inUsd: Number(draft.inUsd), outUsd: Number(draft.outUsd), gbpPerUsd: Number(draft.gbpPerUsd), reviewSchedule: draft.reviewSchedule } });
       take(await api("/api/ads/ai/settings"));
-      toast.success("Saved");
+      toast.success("AI review settings saved");
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -125,11 +139,11 @@ function AiSettings() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
           <div className="flex items-center gap-1"><h3 className="text-sm font-semibold">AI review (Claude)</h3><InfoTip label="More about AI review (Claude)">
-            Explain this product, Recommend targets and the <Link className="text-primary underline" href="/ads/review">monthly review</Link>. The API is called only when you click, or by the monthly schedule if you turn it on. {data.settings.keySet ? <span className="text-success">ANTHROPIC_API_KEY is set.</span> : <span className="text-warn-ink">ANTHROPIC_API_KEY isn&apos;t set.</span>}
+            Explain this product, Recommend targets and the <Link className="link" href="/ads/review">monthly review</Link>. The API is called only when you click, or by the monthly schedule if you turn it on. {data.settings.keySet ? <span className="text-success">ANTHROPIC_API_KEY is set.</span> : <span className="text-warn-ink">ANTHROPIC_API_KEY isn&apos;t set.</span>}
           </InfoTip></div>
           <p className="text-sm">Spent: <b className="num">{costTxt(data.spend.last30Gbp)}</b> over {data.spend.last30Calls} call{data.spend.last30Calls === 1 ? "" : "s"} in the last 30 days · {costTxt(data.spend.totalGbp)} in all ({data.spend.calls})</p>
         </div>
-        <Button variant="secondary" onClick={save}>Save</Button>
+        <Button variant="secondary" onClick={save} disabled={!dirty}>Save</Button>
       </div>
       <div className="flex flex-wrap items-end gap-4">
         <label className="block space-y-1.5">
@@ -167,13 +181,17 @@ function KeywordListsEditor() {
   const [products, setProducts] = useState<{ asin: string; title: string | null }[]>([]);
   const [scope, setScope] = useState("account");
   const [draft, setDraft] = useState<{ whitelist: string; blacklist: string; useAccount: boolean } | null>(null);
+  const { dirty, settle } = useDirty(draft);
   const fill = (d: ListsData, sc: string) => {
     const l = sc === "account" ? { ...d.account, useAccount: true } : d.products[sc] ?? { whitelist: [], blacklist: [], useAccount: true };
-    setDraft({ whitelist: l.whitelist.join("\n"), blacklist: l.blacklist.join("\n"), useAccount: l.useAccount });
+    const x = { whitelist: l.whitelist.join("\n"), blacklist: l.blacklist.join("\n"), useAccount: l.useAccount };
+    setDraft(x);
+    settle(x);
   };
   useEffect(() => {
     api<ListsData>("/api/ads/keyword-lists").then((d) => { setData(d); fill(d, "account"); }).catch((e: Error) => toast.error(e.message));
     api<{ asins: { asin: string; title: string | null }[] }>("/api/ads/dashboard").then((r) => setProducts(r.asins.map((a) => ({ asin: a.asin, title: a.title })))).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- load once, on open
   }, []);
   if (!data || !draft) return null;
   const save = async () => {
@@ -192,7 +210,7 @@ function KeywordListsEditor() {
         <div className="space-y-1">
           <div className="flex items-center gap-1"><h3 className="text-sm font-semibold">Keyword lists</h3><InfoTip label="More about Keyword lists"><b>Whitelist</b>: terms never negatived or paused (your brand name, the product&apos;s exact head terms); the rules skip them and say so. <b>Blacklist</b>: words or phrases always added as negative phrase to a product&apos;s new campaigns (the launcher and harvest&apos;s new Exact campaign), and proposed for its broad and auto campaigns. One term a line.</InfoTip></div>
         </div>
-        <Button variant="secondary" onClick={save}>Save lists</Button>
+        <Button variant="secondary" onClick={save} disabled={!dirty}>Save lists</Button>
       </div>
       <label className="flex items-center gap-2 text-sm"><span className="field-label">Lists for</span>
         <NativeSelect value={scope} onChange={(e) => { setScope(e.target.value); fill(data, e.target.value); }}>

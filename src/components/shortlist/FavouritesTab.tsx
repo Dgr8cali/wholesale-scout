@@ -18,7 +18,6 @@ import { useSparks } from "@/components/results/useSparks";
 import { EmptyState, ErrorState } from "@/components/States";
 import { Button } from "@/components/ui/button";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
-import { Skeleton } from "@/components/ui/skeleton";
 import { StatusChip } from "@/components/ui/status-chip";
 import { matches, type FilterSet } from "@/lib/filters";
 import { GATE_LABELS, withDefaults, type GateId, type ProfileConfig } from "@/lib/screening/config";
@@ -27,6 +26,7 @@ import { brandOf, dormantOf, toFilterRow } from "@/lib/ui/resultRows";
 import { useUrlFilters } from "@/lib/ui/useUrlFilters";
 import type { WatchCondition } from "@/lib/watch";
 import type { CostInput } from "@/lib/costOverride";
+import { PanelSkeleton, TableSkeleton } from "@/components/ui/skeletons";
 
 interface Item {
   favourite: Fav & { created_at: string };
@@ -209,7 +209,7 @@ export function FavouritesTab() {
   );
 
   if (error && !items) return <div className="space-y-4">{header}<ErrorState title="Couldn't load favourites" message={error} onRetry={load} /></div>;
-  if (!items) return <div className="space-y-4">{header}<Skeleton className="h-24 rounded-xl" /><Skeleton className="h-72 rounded-xl" /></div>;
+  if (!items) return <div className="space-y-4">{header}<PanelSkeleton lines={2} /><TableSkeleton rows={8} columns={8} /></div>;
 
   return (
     <div className="space-y-4">
@@ -247,7 +247,7 @@ export function FavouritesTab() {
               if (!i) return null;
               return (
                 <div className="text-xs text-muted-foreground">
-                  {i.latest ? <>Screened {when(i.latest.updated_at)}{i.latest.run && <> · <Link className="text-primary hover:underline" href={`/runs/${i.latest.run.id}`} onClick={(e) => e.stopPropagation()}>{i.latest.run.name}</Link></>}</> : <span className="text-warn-ink">Not screened yet</span>}
+                  {i.latest ? <>Screened {when(i.latest.updated_at)}{i.latest.run && <> · <Link className="link" href={`/runs/${i.latest.run.id}`} onClick={(e) => e.stopPropagation()}>{i.latest.run.name}</Link></>}</> : <span className="text-warn-ink">Not screened yet</span>}
                   {i.outdated && i.latest && <StatusChip tone="warn" className="ml-1.5 h-5 px-2">Outdated</StatusChip>}
                   {i.favourite.note && <span className="italic"> · {i.favourite.note}</span>}
                 </div>

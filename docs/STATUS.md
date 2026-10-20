@@ -216,6 +216,34 @@ A combined filter (profit, ROI, sales, BSR, not gated) went from ~4.1 s to ~0.3 
 **My niches on a phone**: each niche is a card (need, its terms, score; SV 360d, growth 180d, average price; flags, shape, status; tap to open its detail), the table from 640px; no sideways scroll at 390px.
 **Ads import previews** (a CSV report's rows, a bulk export's campaigns, in the Import sheet) are DataTables (sortable, 25 a page, cards on a phone) instead of hand-made tables; the reading and import calls are unchanged.
 **Today's "Add costs"** opens the purchase itself: `/stock/purchases?edit=<id>` opens that purchase's edit dialog (`OrderEditDialog`, exported) with its row marked (each row has `id="purchase-<id>"`); with several missing, the oldest ("Add the first").
+**Accessibility (WCAG 2.1 AA)**: axe (`@axe-core/playwright`) on every route (57 views: each tab, the detail pages with a real
+record) in light and dark: 103 serious or critical page×rule violations (491 elements) before, 0 after. The causes: `cn()`
+(tailwind-merge) read the app's `text-meta` size as a colour, so every small primary button lost its white text (now taught
+the size, `src/lib/utils.ts`, tested); teal text was 4.0–4.3:1 on the page and tinted surfaces, so text and links use a new
+`--link` token (#276C77 light, 4.5:1+ on every surface; the fill stays the logo's #2F7F8C); links in running text are
+underlined (`link` utility, globals.css); inactive tabs at full muted colour; Settings' section list no longer holds a link
+inside its tab list; selects, slider thumbs and textareas named; product thumbnails `role="img"`; Yes/No toggles, gate
+squares, score bands and sonner's toasts in the soft + ink pairs instead of white on colour. Every control shows a focus ring
+(a global `:focus-visible` outline unless the component draws its own). Keyboard: a results or DataTable row is a Tab stop
+(Enter or Space opens it), the drawer takes focus when it opens and gives it back on close; the board's cards move with their
+"Move to…" menu; menus and dialogs are Radix. On a phone every control is at least 44px (Button, inputs, selects, toggles, tabs,
+the "About" InfoTips, the card's Details; checkboxes and switches by a larger tap area). `npm run test:a11y` (Playwright,
+`e2e/`, against `next start` of the built app, read only) runs axe in both themes and the phone checks (`e2e/mobile.spec.ts`:
+nothing wider than 390px, 44px targets, the primary action on the first screen, the menu drawer closing after a page is
+chosen); `E2E_AUDIT=1` writes the full report to `test-results/axe.json`.
+**Consistency sweep**: one-off buttons 65 → 0 (`TextButton` link / plain / quiet / danger, `ChipToggle`, `ChipRemove`,
+`ListButton`, `StepButton`, `SortButton`, and ToggleGroup for the theme, hunt mode and Yes/No); hard-coded colours 16 → 0
+(tokens `--media`, `--overlay`, `--edge-shadow`, `--link`); off-scale font sizes 2 → 0. `src/lib/ui/consistency.test.ts`
+fails on any of them coming back. Loading: shaped skeletons (`ui/skeletons.tsx`: TableSkeleton, KpiSkeleton, PanelSkeleton,
+FormSkeleton, ListSkeleton) instead of one grey block or "Loading…", with the page header kept. Errors: every ErrorState has
+Try again (the given retry, else a reload); `compact` for a failure inside a working page. Empty: a DataTable with no rows
+always says so. Forms: Save disabled until something changes (`useDirty`; Ad settings, AI review, keyword lists, Stock and
+Private label settings, compliance rules, the rate card, a stock item's details, an Ads product's costs), plain-English
+messages under the field (Stock and Private label settings, the rate card's JSON), and a toast naming what was saved.
+Every page has a breadcrumb (Today, Settings and Help start at Home) and the browser tab follows it ("Beter · Brands ·
+Wholesale · Wholesale Scout"; Today is "Today · Wholesale Scout").
+**Phones**: `viewport-fit=cover` with the content clear of the home bar (`env(safe-area-inset-bottom)`), and the menu drawer
+closes on any move to another page (a menu item, the logo, ⌘K).
 **Extension 0.8.0**: the product panel and search results show the app's words, colours and icons (Buy / Check / Skip / Not scored as round chips; the panel lists each gate as Pass / Check / Fail), and candidate links open `/pl/candidates/<id>` (Suppliers & quotes, Reviews or Gate 3 tab) instead of the old `?c=` redirect.
 
 ## Workspaces
@@ -482,7 +510,7 @@ StockPilot data is imported (3 items). Ads days of cover and the stock guard cou
 
 - **Read this file first**, and `AGENTS.md`: this is Next.js 16 (read `node_modules/next/dist/docs/` before writing Next code; `proxy.ts` not middleware; route params are a Promise).
 - **After every commit, `git push origin main`** and report the commit hash with "pushed". If the push is rejected: `git pull --rebase origin main`, re-run `npm test`, push again.
-- **Never push with failing tests or a failing build** (`npm test`, `npm run lint`, `npm run build`).
+- **Never push with failing tests or a failing build** (`npm test`, `npm run lint`, `npm run build`, and after UI changes `npm run test:a11y` on the build).
 - **Migrations**: a new file in `supabase/migrations/` (`YYYYMMDDhhmmss_name.sql`), run with `npm run migrate` (never ask the user to paste SQL), then `npm run schema:backup`, all before pushing.
 - **RLS on every new table**, and `revoke all … from anon, authenticated` (the server uses the service role).
 - **Never commit `.env.local`** or any secret; never print `DATABASE_URL`, tokens or keys (names only).

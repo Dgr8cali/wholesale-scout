@@ -26,7 +26,7 @@ function AdsRules() {
         crumbs={[{ label: "Ads", href: "/ads/dashboard" }, { label: "Rules" }]}
         subtitle={tab === "rules" ? "The rules behind Proposals, with what each would propose now." : "Target ACoS, bid smoothing, keyword lists and the AI review: what the rules work from."}
         info={<>
-          <p>The rules behind <Link className="text-primary underline" href="/ads/proposals">Proposals</Link>. Each runs on the imported data whenever you import or open Proposals; what it suggests waits for your approval.</p>
+          <p>The rules behind <Link className="link" href="/ads/proposals">Proposals</Link>. Each runs on the imported data whenever you import or open Proposals; what it suggests waits for your approval.</p>
           <p>The target ACoS is each product&apos;s (launch or steady) on the dashboard, else the default on the <b>Ad settings</b> tab.</p>
         </>}
       />

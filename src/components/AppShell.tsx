@@ -24,6 +24,7 @@ import { StatusChip } from "@/components/ui/status-chip";
 import type { ShellCheck, ShellData } from "@/app/api/shell/route";
 import { api } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
 /** Home and a workspace's own root (/pl, the Pipeline) match only themselves, not the pages under them. */
 const isActive = (href: string, path: string) => (href === "/" || href === "/pl" ? path === href : path === href || path.startsWith(`${href}/`));
@@ -101,6 +102,9 @@ function WorkspaceGroup({ w, path }: { w: Workspace; path: string }) {
 
 function AppSidebar() {
   const path = usePathname();
+  // On a phone the menu is a drawer: any move to another page (a menu item, the logo, ⌘K) closes it.
+  const { isMobile, setOpenMobile } = useSidebar();
+  useEffect(() => { if (isMobile) setOpenMobile(false); }, [path, isMobile, setOpenMobile]);
   const today = SHARED_NAV.filter((n) => n.href === "/"), pinned = SHARED_NAV.filter((n) => n.href !== "/");
   return (
     <Sidebar collapsible="icon">
@@ -141,11 +145,11 @@ function StatusPopover() {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button type="button" className="cursor-pointer rounded-full outline-none focus-visible:ring-3 focus-visible:ring-ring/40" aria-label={issues ? `${issues} issue${issues === 1 ? "" : "s"}: show` : "All systems OK: show"}>
+        <Button variant="ghost" size="sm" className="h-auto rounded-full p-0 hover:bg-transparent max-sm:min-h-11" aria-label={issues ? `${issues} issue${issues === 1 ? "" : "s"}: show` : "All systems OK: show"}>
           <StatusChip tone={issues ? "warn" : "good"}>
             {issues ? <>{issues}<span className="hidden sm:inline"> issue{issues === 1 ? "" : "s"}</span></> : <span className="hidden sm:inline">All systems OK</span>}
           </StatusChip>
-        </button>
+        </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-[min(22rem,calc(100vw-2rem))] p-0">
         <p className="border-b border-divider px-4 py-3 text-xs font-semibold tracking-[0.06em] text-muted-foreground uppercase">Systems</p>
@@ -220,7 +224,7 @@ export function AppShell({ defaultOpen, qogita, children }: { defaultOpen: boole
               <ThemeToggle />
             </div>
           </header>
-          <div className="mx-auto w-full max-w-[1400px] min-w-0 flex-1 px-4 py-6 lg:px-8 lg:py-8">
+          <div className="mx-auto w-full max-w-[1400px] min-w-0 flex-1 px-4 pt-6 pb-[calc(2rem+env(safe-area-inset-bottom))] lg:px-8 lg:py-8">
             <PageCrumbs />
             {children}
           </div>

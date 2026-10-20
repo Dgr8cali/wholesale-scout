@@ -32,6 +32,7 @@ import { Checked } from "@/components/check/Checked";
 import { useHelp } from "@/components/help/HelpPanel";
 import { amazonLastSeen, isStale, stamp } from "@/lib/ui/when";
 import type { WatchCondition } from "@/lib/watch";
+import { TextButton } from "@/components/ui/text-button";
 
 /** A gate's result as a chip: Pass / Check / Fail, or Skipped / Off (neutral). Fixed width so the gates line up. */
 const GATE_CHIP = "h-5 w-[4.75rem] px-2";
@@ -69,7 +70,7 @@ function Sellers({ sellers, flaggedText }: { sellers: Seller[]; flaggedText: str
       <ul className="space-y-1 text-xs">
         {sellers.map((s) => (
           <li key={s.sellerId}>
-            <a className="font-medium text-primary hover:underline" href={`https://www.amazon.co.uk/sp?seller=${s.sellerId}`} target="_blank" rel="noreferrer">{s.name ?? s.sellerId}</a>
+            <a className="link font-medium" href={`https://www.amazon.co.uk/sp?seller=${s.sellerId}`} target="_blank" rel="noreferrer">{s.name ?? s.sellerId}</a>
             <span className="text-muted-foreground"> · {s.sharePct}% of Buy Box</span>
             {s.ratingPct != null && <span className="text-muted-foreground"> · {s.ratingPct}% of {s.ratingCount?.toLocaleString("en-GB")} ratings</span>}
             {s.storefrontSize != null && <span className="text-muted-foreground"> · {Math.max(s.storefrontSize, s.brandCount ?? 0).toLocaleString("en-GB")} listings</span>}
@@ -77,7 +78,7 @@ function Sellers({ sellers, flaggedText }: { sellers: Seller[]; flaggedText: str
               <span className={flagged(s) ? "font-semibold text-warn-ink" : "text-muted-foreground"}> · {s.brandCount != null ? `${s.brandCount.toLocaleString("en-GB")} (${Math.round(s.brandSharePct)}%)` : `${Math.round(Math.min(100, s.brandSharePct))}%`} this brand{flagged(s) ? " (likely distributor)" : ""}</span>
             )}
             <span className="text-muted-foreground"> · </span>
-            <Link className="font-medium text-primary hover:underline" href={`/new-run?tab=seller&seller=${s.sellerId}`} onClick={(e) => e.stopPropagation()}>Scan this seller</Link>
+            <Link className="link font-medium" href={`/new-run?tab=seller&seller=${s.sellerId}`} onClick={(e) => e.stopPropagation()}>Scan this seller</Link>
           </li>
         ))}
       </ul>
@@ -152,7 +153,7 @@ export function Detail({ r, fav, onNote, onWaive, onWatch, onCost, stacked = fal
     {(r.status === "done" || asin) && (
       <div className="flex flex-wrap items-center gap-x-3">
         {r.status === "done" && <Checked at={r.updated_at} recheck={recheck} />}
-        {asin && <Link className="text-xs font-medium text-primary hover:underline" href={`/products/${asin}`} onClick={(e) => e.stopPropagation()}>Product page →</Link>}
+        {asin && <Link className="link text-xs font-medium" href={`/products/${asin}`} onClick={(e) => e.stopPropagation()}>Product page →</Link>}
       </div>
     )}
     <div className={cn("grid gap-4", !stacked && "lg:grid-cols-[2fr_1fr_1fr]")}>
@@ -162,10 +163,10 @@ export function Detail({ r, fav, onNote, onWaive, onWatch, onCost, stacked = fal
           {r.gate_outcomes.map((g) => (
             <li key={g.gate} className="flex items-start gap-2 text-xs">
               <GateChip status={g.status} />
-              <button type="button" title={`What ${g.label} checks`} onClick={(e) => { e.stopPropagation(); help.open(`gates/${g.gate}`); }}
-                className={cn("flex-none cursor-pointer pt-0.5 text-left font-medium underline decoration-dotted decoration-muted-foreground/50 underline-offset-2 hover:text-primary", stacked ? "w-32" : "w-40")}>
+              <TextButton tone="plain" title={`What ${g.label} checks`} onClick={(e) => { e.stopPropagation(); help.open(`gates/${g.gate}`); }}
+                className={cn("flex-none cursor-pointer pt-0.5 text-left font-medium underline decoration-dotted decoration-muted-foreground/50 underline-offset-2 hover:text-link", stacked ? "w-32" : "w-40")}>
                 {g.label}
-              </button>
+              </TextButton>
               <span className="min-w-0 pt-0.5 text-muted-foreground">
                 {g.detail}{g.gate === "gating" && <RestrictionLink outcomes={r.gate_outcomes} asin={r.product?.asin} />}
                 {g.gate === "gating" && r.product?.asin && g.tags?.some((t) => t === "APPROVAL" || t === "BLOCKED") && (
@@ -229,7 +230,7 @@ export function Detail({ r, fav, onNote, onWaive, onWatch, onCost, stacked = fal
           <p className="mt-2 text-xs">
             <span className="text-muted-foreground">Source: </span>
             {r.offer.supplier.id
-              ? <Link className="font-medium text-primary hover:underline" href={`/suppliers/${r.offer.supplier.id}`} onClick={(e) => e.stopPropagation()}>{r.offer.supplier.name}</Link>
+              ? <Link className="link font-medium" href={`/suppliers/${r.offer.supplier.id}`} onClick={(e) => e.stopPropagation()}>{r.offer.supplier.name}</Link>
               : <span className="font-medium">{r.offer.supplier.name}</span>}
           </p>
         )}

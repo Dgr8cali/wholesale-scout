@@ -9,11 +9,12 @@ import { Button } from "@/components/ui/button";
 import { InfoTip, SectionTitle } from "@/components/ui/info-tip";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { finderSelection, finderTokens, HUNT_RESULTS, huntName, type HuntShape } from "@/lib/hunt";
 import { categoryEntry } from "@/lib/screening/categories";
 import { api } from "@/lib/ui/client";
+import { TextButton } from "@/components/ui/text-button";
+import { FormSkeleton } from "@/components/ui/skeletons";
 
 interface Start {
   profile: string; shape: HuntShape; rankByCategory: Record<string, number>;
@@ -45,7 +46,7 @@ export function HuntSource() {
   const selection = useMemo(() => (shape ? finderSelection(shape) : null), [shape]);
 
   if (error) return <ErrorState title="Couldn't load Hunt" message={error} />;
-  if (!start || !shape) return <Skeleton className="h-96 w-full" />;
+  if (!start || !shape) return <FormSkeleton fields={8} />;
 
   // The category's own rank ceiling from the profile, else the profile-wide one.
   const profileRank = start.shape.maxRank;
@@ -124,9 +125,9 @@ export function HuntSource() {
           </label>
         </div>
         <div className="flex items-center gap-1">
-          <button type="button" className="cursor-pointer text-meta font-medium text-primary hover:underline" onClick={() => setShape({ ...start.shape, category: shape.category, maxRank: rankFor(shape.category?.name ?? null) })}>
+          <TextButton className="text-meta font-medium" onClick={() => setShape({ ...start.shape, category: shape.category, maxRank: rankFor(shape.category?.name ?? null) })}>
             Reset to {start.profile}
-          </button>
+          </TextButton>
           <InfoTip label="About sellers">
             <p>Sellers here are Keepa&apos;s count of new offers (FBA and merchant); the run&apos;s Competition gate then checks FBA sellers.</p>
           </InfoTip>

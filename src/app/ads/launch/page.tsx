@@ -7,7 +7,7 @@ import { LaunchExport, LaunchForm, LaunchPlan, useLaunchBuilder } from "@/compon
 import { ErrorState } from "@/components/States";
 import { PageHeader } from "@/components/ui/page-header";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
-import { Skeleton } from "@/components/ui/skeleton";
+import { FormSkeleton, TableSkeleton } from "@/components/ui/skeletons";
 
 /** Ads → Launch: a product's four launch campaigns as a bulk Create sheet, with the 60-day plan. */
 export default function AdsLaunchPage() {
@@ -29,7 +29,7 @@ function AdsLaunch() {
   const { pick, form, error } = b;
 
   if (error) return <ErrorState title="Couldn't load the launcher" message={error} />;
-  if (!pick || !form) return <Skeleton className="h-96 rounded-lg" />;
+  if (!pick || !form) return <div className="space-y-6"><FormSkeleton fields={6} /><TableSkeleton rows={4} columns={5} /></div>;
 
   return (
     <div className="space-y-6">

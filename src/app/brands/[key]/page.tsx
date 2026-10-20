@@ -33,6 +33,7 @@ import { useUrlFilters } from "@/lib/ui/useUrlFilters";
 import { cn } from "@/lib/utils";
 import { ApplyKit } from "@/components/documents/ApplyKit";
 import { DocumentUploader } from "@/components/documents/Documents";
+import { KpiSkeleton, TableSkeleton } from "@/components/ui/skeletons";
 
 type Product = BrandProduct & { bestOffer: { supplier: string; unitCostGbp: number; moq: number | null; seenAt: string } | null; runId: string | null };
 
@@ -52,7 +53,7 @@ function Stat({ label, value, hint }: { label: string; value: React.ReactNode; h
 type BrandData = { summary: BrandSummary; products: Product[]; results: Record<string, Result> };
 
 export default function BrandPage() {
-  return <Suspense fallback={<Skeleton className="h-64" />}><Brand /></Suspense>;
+  return <Suspense fallback={<TableSkeleton rows={8} />}><Brand /></Suspense>;
 }
 
 function Brand() {
@@ -86,7 +87,7 @@ function Brand() {
   }
 
   if (error) return <ErrorState title="Couldn't load this brand" message={error} onRetry={load} />;
-  if (!data) return <div className="space-y-4"><Skeleton className="h-10 w-64" /><Skeleton className="h-32" /><Skeleton className="h-64" /></div>;
+  if (!data) return <div className="space-y-6"><Skeleton className="h-10 w-64 rounded-lg" /><KpiSkeleton /><TableSkeleton rows={8} columns={8} /></div>;
   const b = data.summary;
   const approval = b.approval;
   const topSellers = b.sellers.slice(0, 3);
@@ -261,7 +262,7 @@ function BrandProducts({ data, reload, onDrawer }: { data: BrandData; reload: ()
           return (
             <p className="text-xs text-muted-foreground">
               {p.bestOffer ? <span title={`Seen ${when(p.bestOffer.seenAt)}`}>Best offer <span className="num font-medium text-foreground">{gbp(p.bestOffer.unitCostGbp)}</span> ex-VAT · {p.bestOffer.supplier}{p.bestOffer.moq ? ` · MOQ ${p.bestOffer.moq}` : ""}</span> : "No costed offer"}
-              {p.runId && <> · <Link className="text-primary hover:underline" href={`/runs/${p.runId}`} onClick={(e) => e.stopPropagation()}>latest run</Link></>}
+              {p.runId && <> · <Link className="link" href={`/runs/${p.runId}`} onClick={(e) => e.stopPropagation()}>latest run</Link></>}
             </p>
           );
         }}

@@ -7,9 +7,9 @@ import { DataTable, type DataColumn } from "@/components/ui/data-table";
 import { InfoTip } from "@/components/ui/info-tip";
 import { StatusChip } from "@/components/ui/status-chip";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
-import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
+import { TableSkeleton } from "@/components/ui/skeletons";
 
 export interface GramRow {
   asin: string; gram: string; size: 1 | 2; impressions: number | null; clicks: number; cost: number; orders: number; sales: number;
@@ -32,7 +32,7 @@ export function NgramsTab({ asin }: { asin: string }) {
   useEffect(() => { api<NgramData>("/api/ads/ngrams").then(setD).catch((e: Error) => setError(e.message)); }, []);
   const rows = useMemo(() => (d?.rows ?? []).filter((r) => r.asin === asin && (!size || String(r.size) === size)), [d, asin, size]);
   if (error) return <ErrorState title="Couldn't load the n-grams" message={error} />;
-  if (!d) return <Skeleton className="h-96 rounded-xl" />;
+  if (!d) return <TableSkeleton rows={10} columns={6} />;
   const p = d.products.find((x) => x.asin === asin);
   const t = d.thresholds;
   const columns: DataColumn<GramRow>[] = [
@@ -57,7 +57,7 @@ export function NgramsTab({ asin }: { asin: string }) {
         {p && <span className="pb-2.5 text-sm text-muted-foreground">Price {p.price != null ? gbp(p.price) : "unknown"} · target ACoS {Math.round(p.targetAcos * 100)}%{d.range ? ` · ${day(d.range.from)} – ${day(d.range.to)}` : ""}</span>}
         <InfoTip label="About n-grams" className="mb-2">
           <p>Every search term split into words and adjacent word pairs (common words like &quot;for&quot; and &quot;with&quot; left out, numbers kept), with the terms&apos; figures summed per product. A word can waste money across many terms that each look too small to judge. <b>Waste</b> is spend in terms with no order.</p>
-          <p>Rule 9 (<b>N-gram negative</b>): {t.negative.minClicks}+ clicks or {t.negative.spendOfPrice}% of the price, no order, in {t.negative.minTerms}+ terms and none with an order. Rule 10 (<b>N-gram winner</b>): {t.winner.minOrders}+ orders at or under the target across {t.winner.minTerms}+ terms. Thresholds on <Link className="text-primary underline" href="/ads/rules">Rules</Link>.</p>
+          <p>Rule 9 (<b>N-gram negative</b>): {t.negative.minClicks}+ clicks or {t.negative.spendOfPrice}% of the price, no order, in {t.negative.minTerms}+ terms and none with an order. Rule 10 (<b>N-gram winner</b>): {t.winner.minOrders}+ orders at or under the target across {t.winner.minTerms}+ terms. Thresholds on <Link className="link" href="/ads/rules">Rules</Link>.</p>
         </InfoTip>
       </div>
       <DataTable rows={rows} columns={columns} getRowId={(g) => `${g.asin}|${g.gram}`} storageKey="ads.ngrams" caption="N-grams" initialSort={{ id: "cost", desc: true }}

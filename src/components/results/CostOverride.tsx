@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { overrideTitle, validCost, type CostInput, type CostOverride, type VatBasis } from "@/lib/costOverride";
+import { TextButton } from "@/components/ui/text-button";
 
 /**
  * Set your own cost for a product (one row, or every selected row's product): a landed cost, or a
@@ -126,16 +127,16 @@ export function CostOverrideControl({ override, onSet, onClear }: {
       {override ? (
         <>
           {override.active
-            ? <span className="cursor-help rounded bg-primary-soft px-1 font-semibold text-primary" title={overrideTitle(override)}>cost overridden</span>
+            ? <span className="cursor-help rounded bg-primary-soft px-1 font-semibold text-link" title={overrideTitle(override)}>cost overridden</span>
             : <span className="cursor-help text-muted-foreground" title={overrideTitle(override)}>Your cost isn&apos;t cheaper than the sheet&apos;s; the sheet&apos;s is scored</span>}
           {override.supplier && <span className="text-muted-foreground"> · {override.supplier}</span>}
-          <button type="button" className="ml-2 font-medium text-primary hover:underline" onClick={(e) => { stop(e); setOpen(true); }}>Edit</button>
-          <button type="button" className="ml-2 font-medium text-primary hover:underline disabled:opacity-50" disabled={clearing} onClick={clear}>{clearing ? "Clearing…" : "Clear"}</button>
+          <TextButton className="ml-2 font-medium" onClick={(e) => { stop(e); setOpen(true); }}>Edit</TextButton>
+          <TextButton className="ml-2 font-medium" disabled={clearing} onClick={clear}>{clearing ? "Clearing…" : "Clear"}</TextButton>
         </>
       ) : (
-        <button type="button" className="font-medium text-primary hover:underline" title="Your own cost for this product: it competes with the sheet's price in every run" onClick={(e) => { stop(e); setOpen(true); }}>
+        <TextButton className="font-medium" title="Your own cost for this product: it competes with the sheet's price in every run" onClick={(e) => { stop(e); setOpen(true); }}>
           Set your cost
-        </button>
+        </TextButton>
       )}
       {error && <span className="ml-2 text-danger">{error}</span>}
       {open && <CostOverrideDialog open={open} onOpenChange={setOpen} initial={override} onSave={onSet} onClear={override ? onClear : undefined} />}

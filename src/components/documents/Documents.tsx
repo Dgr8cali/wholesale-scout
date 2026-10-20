@@ -12,6 +12,7 @@ import { DOC_KINDS, docKindLabel, INVOICE_MAX_AGE_DAYS, MAX_DOC_BYTES, staleInvo
 import { api } from "@/lib/ui/client";
 import { SectionTitle } from "@/components/ui/info-tip";
 import { StatusChip } from "@/components/ui/status-chip";
+import { ListSkeleton } from "@/components/ui/skeletons";
 
 const size = (n: number | null) => (n == null ? "" : n >= 1_048_576 ? `${(n / 1_048_576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 const day = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
@@ -39,7 +40,7 @@ export function DocumentLine({ d, onDelete }: { d: DocumentRow; onDelete?: () =>
   return (
     <li className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm">
       <StatusChip tone="neutral" icon={false}>{docKindLabel(d.kind)}</StatusChip>
-      <a className="inline-flex min-w-0 items-center gap-1 font-medium text-primary hover:underline" href={`/api/documents/${d.id}/file`} target="_blank" rel="noreferrer">
+      <a className="link inline-flex min-w-0 items-center gap-1 font-medium" href={`/api/documents/${d.id}/file`} target="_blank" rel="noreferrer">
         <FileTextIcon className="size-3.5 flex-none" /><span className="truncate">{d.file_name}</span>
       </a>
       <span className="num text-xs text-muted-foreground">{d.doc_date ? day(d.doc_date) : "no date"}{d.size_bytes ? ` · ${size(d.size_bytes)}` : ""}</span>
@@ -101,7 +102,7 @@ export function DocumentUploader({ brand, supplier, suppliers = [] }: {
   return (
     <section className="panel space-y-3 p-4" aria-label="Documents">
       <SectionTitle title="Documents">Invoices, SDS and brand letters, with a type, date and note each. They&apos;re shown when you apply for approval.</SectionTitle>
-      {docs == null ? <p className="text-sm text-muted-foreground">Loading…</p>
+      {docs == null ? <ListSkeleton rows={2} />
         : docs.length ? <ul className="space-y-1.5">{docs.map((d) => <DocumentLine key={d.id} d={d} onDelete={() => remove(d)} />)}</ul>
         : <p className="text-sm text-muted-foreground">None yet.</p>}
       <div className="grid gap-2 border-t border-divider pt-3 sm:grid-cols-[10rem_9rem_1fr]">

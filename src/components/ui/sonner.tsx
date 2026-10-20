@@ -34,6 +34,11 @@ const Toaster = ({ ...props }: ToasterProps) => {
           "--normal-text": "var(--popover-foreground)",
           "--normal-border": "var(--border)",
           "--border-radius": "var(--radius)",
+          // richColors in the app's soft + ink pairs (sonner's own red and green miss 4.5:1).
+          "--success-bg": "var(--success-soft)", "--success-text": "var(--success)", "--success-border": "var(--border)",
+          "--error-bg": "var(--danger-soft)", "--error-text": "var(--danger)", "--error-border": "var(--border)",
+          "--warning-bg": "var(--warn-soft)", "--warning-text": "var(--warn-ink)", "--warning-border": "var(--border)",
+          "--info-bg": "var(--primary-soft)", "--info-text": "var(--primary-ink)", "--info-border": "var(--border)",
         } as React.CSSProperties
       }
       toastOptions={{

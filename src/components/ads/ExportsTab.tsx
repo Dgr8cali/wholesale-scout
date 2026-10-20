@@ -10,10 +10,11 @@ import { DataTable, type DataColumn } from "@/components/ui/data-table";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { SectionTitle } from "@/components/ui/info-tip";
 import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
 import { StatusChip, type Tone } from "@/components/ui/status-chip";
 import { RULE_LABEL, type RuleId } from "@/lib/ads/rules";
 import { api } from "@/lib/ui/client";
+import { TextButton } from "@/components/ui/text-button";
+import { TableSkeleton } from "@/components/ui/skeletons";
 
 interface Item { rule: RuleId; asin: string | null; campaign_name: string | null; entity: { type: string; label: string }; current_value: string | null; proposed_value: string | null; confidence: string }
 interface Batch {
@@ -47,7 +48,7 @@ export function ExportsTab() {
   ]).catch((e: Error) => setError(e.message)), []);
   useEffect(() => { load(); }, [load]);
   if (error) return <ErrorState title="Couldn't load the exports" message={error} />;
-  if (!batches) return <Skeleton className="h-48 rounded-lg" />;
+  if (!batches) return <TableSkeleton rows={5} columns={6} />;
 
   const call = async (fn: () => Promise<unknown>, ok: string) => {
     try {
@@ -106,7 +107,7 @@ export function ExportsTab() {
       cell: (b) => (
         <div className="min-w-0">
           <span className="inline-flex flex-wrap items-center gap-1.5">
-            <button type="button" className="cursor-pointer font-medium hover:underline" onClick={() => setOpen(b.id)}>{b.label}</button>
+            <TextButton tone="plain" className="font-medium" onClick={() => setOpen(b.id)}>{b.label}</TextButton>
             <StatusChip tone={KIND[b.kind].tone} icon={false}>{KIND[b.kind].label}</StatusChip>
           </span>
           <div className="text-meta text-muted-foreground">

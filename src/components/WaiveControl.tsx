@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { TextButton } from "@/components/ui/text-button";
 /**
  * "Waive" on a failed or warning gate (asks for an optional reason inline), "Un-waive" on a waived one.
  * The parent does the saving; a rejected promise shows its message here.
@@ -36,21 +37,21 @@ export function WaiveControl({ waived, failed = true, onWaive, onUnwaive }: {
 
   if (waived) {
     return (
-      <button type="button" disabled={busy} onClick={(e) => { stop(e); run(onUnwaive); }}
-        className="ml-2 flex-none text-xs font-medium text-primary hover:underline disabled:opacity-50">
+      <TextButton disabled={busy} onClick={(e) => { stop(e); run(onUnwaive); }}
+        className="ml-2 flex-none text-xs font-medium">
         {busy ? "…" : "Un-waive"}
-      </button>
+      </TextButton>
     );
   }
   if (!asking) {
     return (
-      <button type="button" onClick={(e) => { stop(e); setAsking(true); }}
-        className="ml-2 flex-none text-xs font-medium text-primary hover:underline"
+      <TextButton onClick={(e) => { stop(e); setAsking(true); }}
+        className="ml-2 flex-none text-xs font-medium"
         title={failed
           ? "Waive this gate for this product in every run: its fail becomes a warning and later gates run"
           : "Waive this warning for this product in every run: it stops counting against the row, which can go green"}>
         Waive
-      </button>
+      </TextButton>
     );
   }
   return (
@@ -60,7 +61,7 @@ export function WaiveControl({ waived, failed = true, onWaive, onUnwaive }: {
         onChange={(e) => setReason(e.target.value)}
         onKeyDown={(e) => { stop(e); if (e.key === "Enter") run(() => onWaive(reason)); if (e.key === "Escape") setAsking(false); }} />
       <Button type="button" disabled={busy} variant="secondary" size="xs" className="text-xs" onClick={() => run(() => onWaive(reason))}>{busy ? "Waiving…" : "Waive"}</Button>
-      <button type="button" className="text-xs text-muted-foreground hover:text-foreground" onClick={() => setAsking(false)}>Cancel</button>
+      <TextButton tone="quiet" className="text-xs" onClick={() => setAsking(false)}>Cancel</TextButton>
       {error && <span className="w-full text-xs text-danger">{error}</span>}
     </span>
   );

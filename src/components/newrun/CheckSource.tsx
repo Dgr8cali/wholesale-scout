@@ -15,6 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { parseCheckInput } from "@/lib/check/parse";
 import type { VerdictCard as Card } from "@/lib/server/check";
 import { api, when } from "@/lib/ui/client";
+import { ListSkeleton } from "@/components/ui/skeletons";
 
 interface Recent {
   id: string;
@@ -113,7 +114,7 @@ export function CheckSource() {
 
       <section className="space-y-2">
         <SectionTitle title="Recent checks">Your last 20 checks, newest first. Re-run checks one again with fresh data.</SectionTitle>
-        {recent == null ? <p className="panel px-4 py-3 text-sm text-muted-foreground">Loading…</p> : !recent.length ? (
+        {recent == null ? <ListSkeleton rows={3} /> : !recent.length ? (
           <p className="panel px-4 py-3 text-sm text-muted-foreground">Your last 20 checks will be here to re-run.</p>
         ) : (
           <ul className="panel divide-y divide-divider">
