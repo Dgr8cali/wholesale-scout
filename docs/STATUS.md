@@ -211,6 +211,7 @@ profit, ROI, sales, BSR and approval; the `product_list` view joins it to the br
 map's refresh also refreshes them when it finishes), narrows in the database, then `matches()` decides as on a run's table.
 A combined filter (profit, ROI, sales, BSR, not gated) went from ~4.1 s to ~0.3 s.
 **Runs remember their filters again**: `useUrlFilters({ remember })` saves a run's last filters (`ws.filters.run.<id>`, the old key) and puts them back when the run opens with none in the address; filters in the address win, Clear all forgets them.
+**Brand detail's drawer** pushes the page aside on wide screens (`xl:mr-[27rem]`, as on Run detail and Products) instead of covering the table's right edge.
 **Extension 0.8.0**: the product panel and search results show the app's words, colours and icons (Buy / Check / Skip / Not scored as round chips; the panel lists each gate as Pass / Check / Fail), and candidate links open `/pl/candidates/<id>` (Suppliers & quotes, Reviews or Gate 3 tab) instead of the old `?c=` redirect.
 
 ## Workspaces

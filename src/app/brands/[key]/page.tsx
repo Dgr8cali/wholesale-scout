@@ -59,6 +59,7 @@ function Brand() {
   const { key } = useParams<{ key: string }>();
   const [data, setData] = useState<BrandData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   const load = useCallback(() => {
     return api<BrandData>(`/api/brands/${encodeURIComponent(key)}`).then(setData).catch((e) => setError(e.message));
@@ -91,7 +92,8 @@ function Brand() {
   const topSellers = b.sellers.slice(0, 3);
 
   return (
-    <div className="space-y-6">
+    // An open product drawer pushes the page aside on wide screens (as on Run detail and Products).
+    <div className={cn("space-y-6 transition-[margin]", drawerOpen && "xl:mr-[27rem]")}>
       <div className="space-y-2">
         <PageHeader
           crumbs={[{ label: "Wholesale", href: "/runs" }, { label: "Brands", href: "/brands" }, { label: b.brand }]}
@@ -173,7 +175,7 @@ function Brand() {
 
       <section className="space-y-2">
         <SectionTitle title={<>Products across all runs <span>· latest result each, verdict on your default profile</span></>} />
-        <BrandProducts data={data} reload={load} />
+        <BrandProducts data={data} reload={load} onDrawer={setDrawerOpen} />
       </section>
     </div>
   );
@@ -183,7 +185,7 @@ function Brand() {
  * The brand's products on the results table: the latest result of each (verdict from the brand
  * map, on your default profile; Not scored when never priced), its best offer under the title.
  */
-function BrandProducts({ data, reload }: { data: BrandData; reload: () => Promise<unknown> }) {
+function BrandProducts({ data, reload, onDrawer }: { data: BrandData; reload: () => Promise<unknown>; onDrawer: (open: boolean) => void }) {
   const router = useRouter();
   const [filters, setFilters] = useUrlFilters();
   const [profiles, setProfiles] = useState<{ id: string; is_default: boolean; config: ProfileConfig }[]>([]);
@@ -224,6 +226,7 @@ function BrandProducts({ data, reload }: { data: BrandData; reload: () => Promis
   const [activeId, setActiveId] = useState<string | null>(null);
   const activeIndex = activeId ? rows.findIndex((d) => d.r.id === activeId) : -1;
   const active = activeIndex >= 0 ? rows[activeIndex].r : null;
+  useEffect(() => { onDrawer(!!active); }, [active, onDrawer]);
   const step = useCallback((by: -1 | 1) => {
     const i = activeIndex + by;
     if (i >= 0 && i < rows.length) setActiveId(rows[i].r.id);
