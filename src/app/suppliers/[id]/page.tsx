@@ -1,19 +1,19 @@
 "use client";
 
-import { CheckIcon, ExternalLinkIcon } from "lucide-react";
+import { BoxIcon, CheckIcon, ExternalLinkIcon, PackageSearchIcon, TruckIcon } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { toast } from "sonner";
-import { usePageCrumbs } from "@/components/Crumbs";
 import { ErrorState } from "@/components/States";
-import { Badge } from "@/components/ui/badge";
+import { DataTable } from "@/components/ui/data-table";
+import { SectionTitle } from "@/components/ui/info-tip";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { PageHeader } from "@/components/ui/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
-import { SortTableHead, useSortable } from "@/components/SortableTable";
-import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
+import { ProductDecision, StatusChip } from "@/components/ui/status-chip";
 import { Textarea } from "@/components/ui/textarea";
 import type { BestProduct, SupplierOrder, SupplierRecord, SupplierStats } from "@/lib/server/suppliers";
 import { OrderLink } from "@/components/stock/orderBits";
@@ -38,7 +38,7 @@ const SOURCE: Record<SupplierRecord["source_type"], string> = { upload: "Uploade
 function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
   return (
     <div className="space-y-1.5">
-      <Label className="text-xs text-muted-foreground" title={hint}>{label}</Label>
+      <Label className="field-label" title={hint}>{label}</Label>
       {children}
     </div>
   );
@@ -60,15 +60,6 @@ export default function SupplierPage() {
   const [data, setData] = useState<Detail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
-  const sorting = useSortable("wholesale.supplierProducts", data?.best ?? [], {
-    product: { value: (b) => b.title ?? b.ean, kind: "text" },
-    verdict: { value: (b) => `${b.verdict === "pass" ? 1 : b.verdict === "warn" ? 2 : 3} ${b.verdict}`, kind: "text" },
-    buyBox: { value: (b) => b.buyBox, kind: "number" },
-    landed: { value: (b) => b.landed, kind: "number" },
-    maxLanded: { value: (b) => b.maxLanded, kind: "number" },
-    room: { value: (b) => b.headroom, kind: "number" },
-  });
-  usePageCrumbs([{ label: "Suppliers", href: "/suppliers" }, { label: data?.supplier.name ?? "…" }]);
 
   const load = useCallback(() => { api<Detail>(`/api/suppliers/${id}`).then(setData).catch((e) => setError(e.message)); }, [id]);
   useEffect(() => { load(); }, [load]);
@@ -93,19 +84,18 @@ export default function SupplierPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="page-title flex items-center gap-2">
-            {s.name}
-            {s.website && <a className="text-brand" href={s.website} target="_blank" rel="noreferrer" aria-label="Website"><ExternalLinkIcon className="size-4" /></a>}
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {SOURCE[s.source_type]} · {data.stats.runs} run{data.stats.runs === 1 ? "" : "s"} · {data.stats.products.toLocaleString("en-GB")} products seen
-            {" · "}<span className="text-pass">{data.stats.pass} pass</span> · <span className="text-warn">{data.stats.warn} warn</span> on your default profile
-          </p>
-        </div>
-        {saved && <span className="inline-flex items-center gap-1 text-xs text-pass"><CheckIcon className="size-3" /> Saved</span>}
-      </div>
+      <PageHeader
+        crumbs={[{ label: "Wholesale", href: "/runs" }, { label: "Suppliers", href: "/suppliers" }, { label: s.name }]}
+        title={<span className="flex items-center gap-2">
+          {s.name}
+          {s.website && <a className="text-primary" href={s.website} target="_blank" rel="noreferrer" aria-label="Website"><ExternalLinkIcon className="size-4" /></a>}
+        </span>}
+        subtitle={<>
+          {SOURCE[s.source_type]} · {data.stats.runs} run{data.stats.runs === 1 ? "" : "s"} · {data.stats.products.toLocaleString("en-GB")} products seen
+          {" · "}<span className="text-success">{data.stats.pass} Buy</span> · <span className="text-warn-ink">{data.stats.warn} Check</span> on your default profile
+        </>}
+        actions={saved ? <span className="inline-flex items-center gap-1 text-meta text-success" role="status"><CheckIcon className="size-3.5" /> Saved</span> : undefined}
+      />
 
       <section className="panel grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-4" aria-label="Record">
         <Field label="Type">
@@ -168,44 +158,35 @@ export default function SupplierPage() {
 
       <div className="grid gap-4 lg:grid-cols-3">
         <section className="min-w-0 space-y-2 lg:col-span-2" aria-label="Best products">
-          <h2 className="section-label">Best products <span className="font-normal text-muted-foreground">· pass or warn, most room under the max landed cost</span></h2>
-          {!data.best.length ? <p className="panel px-4 py-6 text-center text-sm text-muted-foreground">None of its costed products pass or warn on your default profile.</p> : (
-            <div className="panel overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <SortTableHead {...sorting.th("product")} className="pl-4">Product</SortTableHead>
-                    <SortTableHead {...sorting.th("verdict")}>Verdict</SortTableHead>
-                    <SortTableHead {...sorting.th("buyBox")} numeric>Buy Box</SortTableHead>
-                    <SortTableHead {...sorting.th("landed")} numeric>Landed</SortTableHead>
-                    <SortTableHead {...sorting.th("maxLanded")} numeric>Max landed</SortTableHead>
-                    <SortTableHead {...sorting.th("room")} numeric className="pr-4">Room</SortTableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {sorting.rows.map((b) => (
-                    <TableRow key={b.productId} data-verdict={b.verdict}>
-                      <TableCell className="max-w-80 pl-4 whitespace-normal">
-                        <p className="line-clamp-2 text-sm">{b.title ?? b.ean}</p>
-                        <p className="num text-xs text-muted-foreground">{b.brand} · {b.asin ? <a className="text-brand hover:underline" href={`https://www.amazon.co.uk/dp/${b.asin}`} target="_blank" rel="noreferrer">{b.asin}</a> : b.ean}</p>
-                      </TableCell>
-                      <TableCell><Badge variant={b.verdict as "pass" | "warn"}>{b.verdict}</Badge></TableCell>
-                      <TableCell className="num text-right">{gbp(b.buyBox)}</TableCell>
-                      <TableCell className="num text-right">{gbp(b.landed)}</TableCell>
-                      <TableCell className="num text-right">{gbp(b.maxLanded)}</TableCell>
-                      <TableCell className="num pr-4 text-right font-medium text-pass">{gbp(b.headroom)}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
+          <SectionTitle title={<>Best products <span>· Buy or Check, most room under the max landed cost</span></>} />
+          <DataTable
+            rows={data.best}
+            getRowId={(b) => b.productId}
+            caption="Best products"
+            storageKey="wholesale.supplierProducts"
+            rowAttrs={(b) => ({ "data-verdict": b.verdict })}
+            empty={{ icon: <PackageSearchIcon />, title: "No Buy or Check products", description: "None of its costed products pass or warn on your default profile." }}
+            columns={[
+              {
+                id: "product", header: "Product", mobile: "title", className: "max-w-80", sortValue: (b) => b.title ?? b.ean,
+                cell: (b) => <>
+                  <p className="line-clamp-2 text-sm">{b.title ?? b.ean}</p>
+                  <p className="num text-xs font-normal text-muted-foreground">{b.brand} · {b.asin ? <a className="text-primary hover:underline" href={`https://www.amazon.co.uk/dp/${b.asin}`} target="_blank" rel="noreferrer">{b.asin}</a> : b.ean}</p>
+                </>,
+              },
+              { id: "verdict", header: "Verdict", mobile: 1, sortValue: (b) => (b.verdict === "pass" ? 1 : b.verdict === "warn" ? 2 : 3), cell: (b) => <ProductDecision verdict={b.verdict} /> },
+              { id: "buyBox", header: "Buy Box", numeric: true, sortValue: (b) => b.buyBox, cell: (b) => gbp(b.buyBox) },
+              { id: "landed", header: "Landed", numeric: true, mobile: 2, sortValue: (b) => b.landed, cell: (b) => gbp(b.landed) },
+              { id: "maxLanded", header: "Max landed", numeric: true, sortValue: (b) => b.maxLanded, cell: (b) => gbp(b.maxLanded) },
+              { id: "room", header: "Room", numeric: true, mobile: 3, sortValue: (b) => b.headroom, cell: (b) => <span className="font-medium text-success">{gbp(b.headroom)}</span> },
+            ]}
+          />
         </section>
         <div className="space-y-4">
           <section className="panel space-y-2 p-4" aria-label="Brands carried">
-            <h2 className="section-label">Brands carried <span className="font-normal text-muted-foreground">{data.stats.brands.length}</span></h2>
+            <h2 className="section-label">Brands carried <span className="num">· {data.stats.brands.length}</span></h2>
             <div className="flex flex-wrap gap-1">
-              {data.stats.brands.slice(0, 30).map((b) => <Badge key={b.brand} variant="outline" className="font-normal">{b.brand} <span className="num text-muted-foreground">{b.count}</span></Badge>)}
+              {data.stats.brands.slice(0, 30).map((b) => <StatusChip key={b.brand} tone="neutral" icon={false} className="font-normal">{b.brand} <span className="num opacity-80">{b.count}</span></StatusChip>)}
               {!data.stats.brands.length && <span className="text-sm text-muted-foreground">—</span>}
             </div>
           </section>
@@ -215,7 +196,7 @@ export default function SupplierPage() {
               {data.runs.map((r) => (
                 <li key={r.id} className="flex items-baseline justify-between gap-2">
                   <Link className="min-w-0 truncate hover:underline" href={`/runs/${r.id}`}>{r.name || r.source}</Link>
-                  <span className="flex-none text-xs text-muted-foreground">{when(r.started_at)}</span>
+                  <span className="flex-none text-meta text-muted-foreground">{when(r.started_at)}</span>
                 </li>
               ))}
             </ul>
@@ -230,87 +211,70 @@ const statusLabel = (st: string) => PURCHASE_STATUSES.find((x) => x.id === st)?.
 
 /** What Stock holds from this supplier: its items, its purchases (orders) and receipts typed on Receive. */
 function StockSection({ data }: { data: Detail }) {
-  const items = useSortable("suppliers.stockItems", data.stockItems, {
-    item: { value: (i) => i.name, kind: "text" }, sku: { value: (i) => i.sku, kind: "text" }, cost: { value: (i) => i.unit_cost, kind: "number" },
-  });
-  const orders = useSortable("suppliers.orders", data.purchases, {
-    date: { value: (p) => p.ordered_on, kind: "date" }, item: { value: (p) => p.item?.name ?? p.product?.title ?? p.asin, kind: "text" },
-    order: { value: (p) => p.order_id, kind: "text" }, units: { value: (p) => p.units, kind: "number" }, landed: { value: (p) => p.landed_gbp, kind: "number" },
-    status: { value: (p) => `${String(PURCHASE_STATUSES.findIndex((x) => x.id === p.status)).padStart(2, "0")}`, kind: "text" }, expected: { value: (p) => p.expected_date, kind: "date" },
-  }, { key: "date", dir: "desc" });
-  const receipts = useSortable("suppliers.receipts", data.receipts, {
-    date: { value: (r) => r.date, kind: "date" }, item: { value: (r) => r.item?.name ?? "", kind: "text" }, order: { value: (r) => r.order_id, kind: "text" },
-    quantity: { value: (r) => r.quantity, kind: "number" }, cost: { value: (r) => r.unit_cost, kind: "number" },
-  }, { key: "date", dir: "desc" });
   if (!data.stockItems.length && !data.purchases.length && !data.receipts.length) {
     return <section className="panel px-4 py-3 text-sm text-muted-foreground" aria-label="Stock">No stock items, orders or receipts from this supplier yet. Pick it as an item&apos;s supplier, or on an order (Stock → Levels → Record a new order).</section>;
   }
   return (
     <section className="space-y-3" aria-label="Stock">
-      <h2 className="section-label">Stock <span className="font-normal text-muted-foreground">· {data.stockItems.length} item{data.stockItems.length === 1 ? "" : "s"}, {data.purchases.length} order{data.purchases.length === 1 ? "" : "s"}</span></h2>
+      <SectionTitle title={<>Stock <span>· {data.stockItems.length} item{data.stockItems.length === 1 ? "" : "s"}, {data.purchases.length} order{data.purchases.length === 1 ? "" : "s"}</span></>} />
       <div className="grid gap-4 lg:grid-cols-3">
-        <div className="panel overflow-x-auto">
-          <Table>
-            <TableHeader><TableRow>
-              <SortTableHead {...items.th("item")} className="pl-4">Item</SortTableHead>
-              <SortTableHead {...items.th("cost")} numeric className="pr-4">Unit cost</SortTableHead>
-            </TableRow></TableHeader>
-            <TableBody>{items.rows.map((i) => (
-              <TableRow key={i.id}>
-                <TableCell className="pl-4 whitespace-normal"><Link className="text-sm hover:underline" href={`/stock/levels?item=${i.id}`}>{i.name}</Link><p className="num text-xs text-muted-foreground">{i.sku}{i.asin ? ` · ${i.asin}` : ""}{i.status === "discontinued" ? " · discontinued" : ""}</p></TableCell>
-                <TableCell className="num pr-4 text-right">{gbp(i.unit_cost)}</TableCell>
-              </TableRow>
-            ))}</TableBody>
-          </Table>
-          {!data.stockItems.length && <p className="px-4 py-3 text-xs text-muted-foreground">No items name this supplier.</p>}
-        </div>
-        <div className="panel overflow-x-auto lg:col-span-2">
-          <Table>
-            <TableHeader><TableRow>
-              <SortTableHead {...orders.th("date")} className="pl-4">Ordered</SortTableHead>
-              <SortTableHead {...orders.th("item")}>Item</SortTableHead>
-              <SortTableHead {...orders.th("order")}>Order</SortTableHead>
-              <SortTableHead {...orders.th("units")} numeric>Units</SortTableHead>
-              <SortTableHead {...orders.th("landed")} numeric>Landed</SortTableHead>
-              <SortTableHead {...orders.th("status")} title="In pipeline order">Status</SortTableHead>
-              <SortTableHead {...orders.th("expected")} className="pr-4">Expected</SortTableHead>
-            </TableRow></TableHeader>
-            <TableBody>{orders.rows.map((p) => (
-              <TableRow key={p.id}>
-                <TableCell className="num pl-4">{p.ordered_on}</TableCell>
-                <TableCell className="max-w-64 text-sm whitespace-normal">{p.stock_item_id ? <Link className="hover:underline" href={`/stock/levels?item=${p.stock_item_id}`}>{p.item?.name ?? p.asin}</Link> : <Link className="hover:underline" href={`/products/${p.asin}`}>{p.product?.title ?? p.asin}</Link>}</TableCell>
-                <TableCell className="text-xs"><OrderLink id={p.order_id} url={p.order_url} />{trackingText(p.tracking_carrier, p.tracking_number) && <span className="block text-xs text-muted-foreground">{trackingText(p.tracking_carrier, p.tracking_number)}</span>}</TableCell>
-                <TableCell className="num text-right">{p.units}</TableCell>
-                <TableCell className="num text-right">{gbp(p.landed_gbp)}{p.currency !== "GBP" && p.unit_cost_ccy != null && <span className="block text-xs text-muted-foreground">{p.currency} {Number(p.unit_cost_ccy).toFixed(2)}</span>}</TableCell>
-                <TableCell className="text-xs">{statusLabel(p.status)}</TableCell>
-                <TableCell className="num pr-4 text-xs">{p.status === "ordered" ? p.expected_date ?? "—" : ""}</TableCell>
-              </TableRow>
-            ))}</TableBody>
-          </Table>
-          {!data.purchases.length && <p className="px-4 py-3 text-xs text-muted-foreground">No orders yet.</p>}
-        </div>
+        <DataTable
+          rows={data.stockItems}
+          getRowId={(i) => i.id}
+          caption="Stock items"
+          storageKey="suppliers.stockItems"
+          className="min-w-0 self-start"
+          empty={{ icon: <BoxIcon />, title: "No items", description: "No items name this supplier." }}
+          columns={[
+            {
+              id: "item", header: "Item", mobile: "title", sortValue: (i) => i.name,
+              cell: (i) => <><Link className="text-sm hover:underline" href={`/stock/levels?item=${i.id}`}>{i.name}</Link><p className="num text-xs font-normal text-muted-foreground">{i.sku}{i.asin ? ` · ${i.asin}` : ""}{i.status === "discontinued" ? " · discontinued" : ""}</p></>,
+            },
+            { id: "cost", header: "Unit cost", numeric: true, mobile: 1, sortValue: (i) => i.unit_cost, cell: (i) => gbp(i.unit_cost) },
+          ]}
+        />
+        <DataTable
+          rows={data.purchases}
+          getRowId={(p) => p.id}
+          caption="Orders"
+          storageKey="suppliers.orders"
+          initialSort={{ id: "date", desc: true }}
+          className="min-w-0 self-start lg:col-span-2"
+          empty={{ icon: <TruckIcon />, title: "No orders yet", description: "Orders from this supplier show here once recorded in Stock." }}
+          columns={[
+            { id: "date", header: "Ordered", sortValue: (p) => p.ordered_on, cell: (p) => <span className="num whitespace-nowrap">{p.ordered_on}</span> },
+            {
+              id: "item", header: "Item", mobile: "title", className: "max-w-64", sortValue: (p) => p.item?.name ?? p.product?.title ?? p.asin,
+              cell: (p) => (p.stock_item_id ? <Link className="hover:underline" href={`/stock/levels?item=${p.stock_item_id}`}>{p.item?.name ?? p.asin}</Link> : <Link className="hover:underline" href={`/products/${p.asin}`}>{p.product?.title ?? p.asin}</Link>),
+            },
+            {
+              id: "order", header: "Order", sortValue: (p) => p.order_id,
+              cell: (p) => <span className="text-meta"><OrderLink id={p.order_id} url={p.order_url} />{trackingText(p.tracking_carrier, p.tracking_number) && <span className="block text-xs text-muted-foreground">{trackingText(p.tracking_carrier, p.tracking_number)}</span>}</span>,
+            },
+            { id: "units", header: "Units", numeric: true, mobile: 2, sortValue: (p) => p.units, cell: (p) => p.units },
+            { id: "landed", header: "Landed", numeric: true, mobile: 3, sortValue: (p) => p.landed_gbp, cell: (p) => <>{gbp(p.landed_gbp)}{p.currency !== "GBP" && p.unit_cost_ccy != null && <span className="block text-xs text-muted-foreground">{p.currency} {Number(p.unit_cost_ccy).toFixed(2)}</span>}</> },
+            { id: "status", header: "Status", mobile: 1, sortValue: (p) => PURCHASE_STATUSES.findIndex((x) => x.id === p.status), cell: (p) => <span className="text-meta">{statusLabel(p.status)}</span> },
+            { id: "expected", header: "Expected", sortValue: (p) => p.expected_date, cell: (p) => <span className="num text-meta">{p.status === "ordered" ? p.expected_date ?? "—" : ""}</span> },
+          ]}
+        />
       </div>
       {data.receipts.length > 0 && (
-        <div className="panel overflow-x-auto">
-          <p className="px-4 pt-3 text-xs text-muted-foreground">Receipts typed on Receive (not from an order in the Tracker):</p>
-          <Table>
-            <TableHeader><TableRow>
-              <SortTableHead {...receipts.th("date")} className="pl-4">Received</SortTableHead>
-              <SortTableHead {...receipts.th("item")}>Item</SortTableHead>
-              <SortTableHead {...receipts.th("order")}>Order</SortTableHead>
-              <SortTableHead {...receipts.th("quantity")} numeric>Quantity</SortTableHead>
-              <SortTableHead {...receipts.th("cost")} numeric className="pr-4">Unit cost</SortTableHead>
-            </TableRow></TableHeader>
-            <TableBody>{receipts.rows.map((r) => (
-              <TableRow key={r.id}>
-                <TableCell className="num pl-4">{r.date}</TableCell>
-                <TableCell className="text-sm"><Link className="hover:underline" href={`/stock/levels?item=${r.item_id}`}>{r.item?.name ?? ""}</Link> <span className="text-xs text-muted-foreground">into {BUCKET_LABEL[r.bucket as Bucket] ?? r.bucket}</span></TableCell>
-                <TableCell className="text-xs"><OrderLink id={r.order_id} url={r.order_url} /></TableCell>
-                <TableCell className="num text-right">{r.quantity}</TableCell>
-                <TableCell className="num pr-4 text-right">{gbp(r.unit_cost)}</TableCell>
-              </TableRow>
-            ))}</TableBody>
-          </Table>
+        <div className="space-y-2">
+          <SectionTitle title="Receipts">Receipts typed on Receive (not from an order in the Tracker).</SectionTitle>
+          <DataTable
+            rows={data.receipts}
+            getRowId={(r) => r.id}
+            caption="Receipts"
+            storageKey="suppliers.receipts"
+            initialSort={{ id: "date", desc: true }}
+            columns={[
+              { id: "date", header: "Received", sortValue: (r) => r.date, cell: (r) => <span className="num whitespace-nowrap">{r.date}</span> },
+              { id: "item", header: "Item", mobile: "title", sortValue: (r) => r.item?.name ?? "", cell: (r) => <><Link className="text-sm hover:underline" href={`/stock/levels?item=${r.item_id}`}>{r.item?.name ?? ""}</Link> <span className="text-xs font-normal text-muted-foreground">into {BUCKET_LABEL[r.bucket as Bucket] ?? r.bucket}</span></> },
+              { id: "order", header: "Order", sortValue: (r) => r.order_id, cell: (r) => <span className="text-meta"><OrderLink id={r.order_id} url={r.order_url} /></span> },
+              { id: "quantity", header: "Quantity", numeric: true, mobile: 1, sortValue: (r) => r.quantity, cell: (r) => r.quantity },
+              { id: "cost", header: "Unit cost", numeric: true, mobile: 2, sortValue: (r) => r.unit_cost, cell: (r) => gbp(r.unit_cost) },
+            ]}
+          />
         </div>
       )}
     </section>

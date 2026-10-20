@@ -4,7 +4,6 @@ import { ChevronDownIcon, StarIcon, Trash2Icon, XIcon } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { useDialogs } from "@/components/Dialogs";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -27,16 +26,19 @@ import { api } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
 
 /** Pill toggles: pressed state in the verdict's colour, or the brand colour. */
-const PILL = "h-7 rounded-full px-3 text-xs font-medium bg-muted text-muted-foreground hover:bg-muted hover:text-foreground";
+const PILL = "h-7 rounded-full px-3 text-xs font-medium bg-subtle text-muted-foreground hover:bg-subtle hover:text-foreground";
 const PRESSED: Record<Verdict | "brand" | "fav", string> = {
-  pass: "data-[state=on]:bg-pass-soft data-[state=on]:text-pass data-[state=on]:ring-1 data-[state=on]:ring-pass",
-  warn: "data-[state=on]:bg-warn-soft data-[state=on]:text-warn data-[state=on]:ring-1 data-[state=on]:ring-highlight",
-  fail: "data-[state=on]:bg-fail-soft data-[state=on]:text-fail data-[state=on]:ring-1 data-[state=on]:ring-fail",
-  error: "data-[state=on]:bg-fail-soft data-[state=on]:text-fail data-[state=on]:ring-1 data-[state=on]:ring-fail",
+  pass: "data-[state=on]:bg-success-soft data-[state=on]:text-success data-[state=on]:ring-1 data-[state=on]:ring-pass",
+  warn: "data-[state=on]:bg-warn-soft data-[state=on]:text-warn-ink data-[state=on]:ring-1 data-[state=on]:ring-highlight",
+  fail: "data-[state=on]:bg-danger-soft data-[state=on]:text-danger data-[state=on]:ring-1 data-[state=on]:ring-fail",
+  error: "data-[state=on]:bg-danger-soft data-[state=on]:text-danger data-[state=on]:ring-1 data-[state=on]:ring-fail",
   dormant: "data-[state=on]:bg-foreground/10 data-[state=on]:text-foreground data-[state=on]:ring-1 data-[state=on]:ring-foreground/40",
-  brand: "data-[state=on]:bg-brand-soft data-[state=on]:text-brand data-[state=on]:ring-1 data-[state=on]:ring-brand",
-  fav: "data-[state=on]:bg-warn-soft data-[state=on]:text-warn data-[state=on]:ring-1 data-[state=on]:ring-highlight",
+  brand: "data-[state=on]:bg-primary-soft data-[state=on]:text-primary data-[state=on]:ring-1 data-[state=on]:ring-brand",
+  fav: "data-[state=on]:bg-warn-soft data-[state=on]:text-warn-ink data-[state=on]:ring-1 data-[state=on]:ring-highlight",
 };
+
+/** The filter chips' words: the product decision for pass / warn / fail. */
+const VERDICT_WORD: Record<string, string> = { pass: "Buy", warn: "Check", fail: "Skip", error: "Error", dormant: "Dormant" };
 
 export interface FilterOptions {
   brands: string[];
@@ -58,7 +60,7 @@ function Popover({ label, active, children, wide = false }: { label: ReactNode; 
   return (
     <PopoverRoot>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" className={cn(active && "border-brand text-brand")}>
+        <Button variant="secondary" size="sm" className={cn(active && "border-primary text-primary")}>
           {label} <ChevronDownIcon data-icon="inline-end" />
         </Button>
       </PopoverTrigger>
@@ -81,7 +83,7 @@ function MultiSelect({ label, options, value, onChange, searchable = false }: {
       {searchable && <Input className="h-7 text-xs" placeholder={`Find ${label.toLowerCase()}`} value={q} onChange={(e) => setQ(e.target.value)} />}
       <div className="max-h-64 space-y-0.5 overflow-auto">
         {shown.map((o) => (
-          <label key={o.id} className="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-xs hover:bg-muted">
+          <label key={o.id} className="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-xs hover:bg-subtle">
             <Checkbox checked={value.includes(o.id)} onCheckedChange={() => onChange(toggle(value, o.id))} aria-label={o.label} />
             <span className="min-w-0 flex-1 truncate">{o.label}</span>
             {o.count != null && <span className="num text-muted-foreground">{o.count}</span>}
@@ -89,7 +91,7 @@ function MultiSelect({ label, options, value, onChange, searchable = false }: {
         ))}
         {!shown.length && <p className="px-1 text-xs text-muted-foreground">Nothing to choose.</p>}
       </div>
-      {value.length > 0 && <Button variant="link" size="xs" className="h-auto self-start p-0 text-brand" onClick={() => onChange([])}>Clear</Button>}
+      {value.length > 0 && <Button variant="link" size="xs" className="h-auto self-start p-0 text-primary" onClick={() => onChange([])}>Clear</Button>}
     </Popover>
   );
 }
@@ -144,7 +146,7 @@ export function FilterBar({ value, onChange, options, favouritesAvailable, match
 
   return (
     <div className="panel space-y-3 p-3">
-      <Button variant="outline" size="sm" className="sm:hidden" aria-expanded={shown} onClick={() => setShown((v) => !v)}>
+      <Button variant="secondary" size="sm" className="sm:hidden" aria-expanded={shown} onClick={() => setShown((v) => !v)}>
         {shown ? "Hide filters" : `Filters${chips.length ? ` (${chips.length} on)` : ""}`}
       </Button>
       <div className={cn("flex-wrap items-center gap-2", shown ? "flex" : "hidden sm:flex")}>
@@ -152,7 +154,7 @@ export function FilterBar({ value, onChange, options, favouritesAvailable, match
           {(["pass", "warn", "fail", "error", "dormant"] as Verdict[]).filter((v) => v !== "error" || options.verdictCounts.error).map((v) => (
             <Toggle key={v} size="sm" pressed={value.verdicts.includes(v)} onPressedChange={() => set({ verdicts: toggle(value.verdicts, v) })}
               className={cn(PILL, "font-semibold", PRESSED[v])}>
-              {v} <span className="num">{options.verdictCounts[v] ?? 0}</span>
+              {VERDICT_WORD[v]} <span className="num">{options.verdictCounts[v] ?? 0}</span>
             </Toggle>
           ))}
         </div>
@@ -165,7 +167,7 @@ export function FilterBar({ value, onChange, options, favouritesAvailable, match
         </div>
         <MultiSelect label="Failed gate" options={options.gates} value={value.gates} onChange={(gates) => set({ gates })} />
         <MultiSelect label="Brand" options={options.brands.map((b) => ({ id: b, label: b }))} value={value.brands} onChange={(brands) => set({ brands })} searchable />
-        <NativeSelect size="sm" className={cn("w-auto", value.supplier && "[&_select]:border-brand [&_select]:text-brand")} value={value.supplier ?? ""} aria-label="Supplier"
+        <NativeSelect size="sm" className={cn("w-auto", value.supplier && "[&_select]:border-primary [&_select]:text-primary")} value={value.supplier ?? ""} aria-label="Supplier"
           onChange={(e) => set({ supplier: e.target.value || null })}>
           <NativeSelectOption value="">Any supplier</NativeSelectOption>
           {options.suppliers.map((s) => <NativeSelectOption key={s} value={s}>{s}</NativeSelectOption>)}
@@ -217,11 +219,11 @@ export function FilterBar({ value, onChange, options, favouritesAvailable, match
             {sets.map((s) => (
               <div key={s.id} className="flex items-center gap-1 text-xs">
                 <Button variant="ghost" size="xs" className="min-w-0 flex-1 justify-start truncate" onClick={() => onChange(normalizeFilters(s.filters))}>{s.name}</Button>
-                <Button variant="ghost" size="icon-xs" className="text-muted-foreground hover:text-fail" aria-label={`Delete ${s.name}`} onClick={() => deleteSet(s)}><Trash2Icon /></Button>
+                <Button variant="danger" size="sm" aria-label={`Delete ${s.name}`} onClick={() => deleteSet(s)}><Trash2Icon /> Delete</Button>
               </div>
             ))}
             {!sets.length && <p className="px-1 text-xs text-muted-foreground">No saved filter sets yet.</p>}
-            <Button variant="outline" size="sm" className="w-full" onClick={saveSet} disabled={!chips.length}>Save current filters…</Button>
+            <Button variant="secondary" size="sm" className="w-full" onClick={saveSet} disabled={!chips.length}>Save current filters…</Button>
             {setsNote && <p className="px-1 text-xs text-muted-foreground">{setsNote}</p>}
           </div>
         </Popover>
@@ -232,11 +234,10 @@ export function FilterBar({ value, onChange, options, favouritesAvailable, match
           Showing <span className="num font-semibold">{matching}</span> of <span className="num">{total}</span> {unit}
         </span>
         {chips.map((c) => (
-          <Badge key={c.id} variant="brand" asChild>
-            <button onClick={() => onChange(c.remove(value))} aria-label={`Remove filter ${c.label}`} className="cursor-pointer hover:ring-1 hover:ring-brand">
-              {c.label} <XIcon aria-hidden="true" />
-            </button>
-          </Badge>
+          <button key={c.id} type="button" onClick={() => onChange(c.remove(value))} aria-label={`Remove filter ${c.label}`}
+            className="inline-flex h-6 cursor-pointer items-center gap-1 rounded-full bg-primary-soft px-2.5 text-xs font-medium text-primary-ink hover:ring-1 hover:ring-primary">
+            {c.label} <XIcon className="size-3" aria-hidden="true" />
+          </button>
         ))}
         {chips.length > 0 && <Button variant="link" size="xs" className="text-muted-foreground" onClick={() => onChange(EMPTY_FILTERS)}>Clear all</Button>}
       </div>

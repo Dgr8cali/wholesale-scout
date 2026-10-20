@@ -3,48 +3,31 @@
 import { BuildingIcon, ExternalLinkIcon, LoaderIcon, SearchIcon } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { usePageCrumbs } from "@/components/Crumbs";
 import { EmptyState, ErrorState } from "@/components/States";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { DataTable, type DataColumn } from "@/components/ui/data-table";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PageHeader } from "@/components/ui/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
+import { StatusChip, type Tone } from "@/components/ui/status-chip";
 import { Switch } from "@/components/ui/switch";
-import { SortTableHead, useSortable, type SortColumn } from "@/components/SortableTable";
-import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { GATING_LABELS, GATING_VARIANT, type BrandSummary } from "@/lib/brandMap";
 import { api, gbp } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
 
-const IP_VARIANT = { high: "fail", medium: "warn", low: "muted" } as const;
+const IP_TONE = { high: "bad", medium: "warn", low: "neutral" } as const;
 const IP_RANK = { high: 3, medium: 2, low: 1 } as const;
-/** Each column's sort (the shared table sort: numbers highest first, text A–Z, blanks last). */
-const COLUMNS: Record<string, SortColumn<BrandSummary>> = {
-  score: { value: (b) => b.score, kind: "number" },
-  brand: { value: (b) => b.brand, kind: "text" },
-  asins: { value: (b) => b.asins, kind: "number" },
-  passing: { value: (b) => b.pass * 1000 + b.warn, kind: "number" },
-  sellers: { value: (b) => b.avgSellers, kind: "number" },
-  amazon: { value: (b) => b.amazonSharePct, kind: "number" },
-  buyBox: { value: (b) => b.avgBuyBox, kind: "number" },
-  maxLanded: { value: (b) => b.medianMaxLanded, kind: "number" },
-  gating: { value: (b) => GATING_LABELS[b.gating], kind: "text" },
-  ipRisk: { value: (b) => (b.ipRisk ? IP_RANK[b.ipRisk.level] : null), kind: "number" },
-  carried: { value: (b) => b.suppliers[0]?.name ?? null, kind: "text" },
-};
-const PAGE = 200;
+/** The brand map's gating colours (lib/brandMap's badge variants) as chip tones. */
+const GATING_TONE: Record<(typeof GATING_VARIANT)[keyof typeof GATING_VARIANT], Tone> = { pass: "good", warn: "warn", fail: "bad", muted: "neutral", brand: "info" };
 
 /** The brand-level map: every brand seen in any run, on your default profile. */
 export default function BrandsPage() {
-  usePageCrumbs([{ label: "Brands" }]);
   const [data, setData] = useState<{ brands: BrandSummary[]; updating: boolean; profile: { name: string } } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [gating, setGating] = useState<"all" | "listable" | "approval" | "approved" | "blocked">("all");
   const [passingOnly, setPassingOnly] = useState(false);
-  const [limit, setLimit] = useState(PAGE);
 
   // While the map is being rebuilt in the background, check back every few seconds.
   useEffect(() => {
@@ -71,23 +54,65 @@ export default function BrandsPage() {
     // Ties keep the score order.
     return list.sort((a, b) => b.score - a.score);
   }, [data, q, gating, passingOnly]);
-  const sorting = useSortable("wholesale.brands", filtered, COLUMNS, { key: "score", dir: "desc" });
-  const shown = sorting.rows;
-  const th = (key: string, label: string, className?: string, title?: string) => (
-    <SortTableHead {...sorting.th(key)} numeric={className?.includes("text-right")} className={className?.replace("text-right", "")} title={title}>{label}</SortTableHead>
-  );
+  const columns: DataColumn<BrandSummary>[] = [
+    { id: "brand", header: "Brand", mobile: "title", className: "max-w-56", sortValue: (b) => b.brand, cell: (b) => <Link className="font-medium hover:underline" href={`/brands/${encodeURIComponent(b.key)}`}>{b.brand}</Link> },
+    {
+      id: "score", header: <span title="Wholesale-friendly, 0–100">Score</span>, numeric: true, mobile: 1, sortValue: (b) => b.score,
+      cell: (b) => <span className={cn("num inline-block min-w-8 rounded-md px-1.5 py-0.5 text-center text-xs font-semibold",
+        b.score >= 70 ? "bg-success-soft text-success" : b.score >= 50 ? "bg-warn-soft text-warn-ink" : "bg-subtle text-muted-foreground")}>{b.score}</span>,
+    },
+    { id: "asins", header: "ASINs", numeric: true, sortValue: (b) => b.asins, cell: (b) => b.asins },
+    {
+      id: "passing", header: <span title="On your default profile, among priced products">Buy / Check</span>, numeric: true, mobile: 2, sortValue: (b) => b.pass * 1000 + b.warn,
+      cell: (b) => <>
+        <span className={b.pass ? "font-semibold text-success" : "text-muted-foreground"}>{b.pass}</span>
+        <span className="text-muted-foreground"> / </span>
+        <span className={b.warn ? "text-warn-ink" : "text-muted-foreground"}>{b.warn}</span>
+      </>,
+    },
+    { id: "sellers", header: <span title="Average FBA sellers">Sellers</span>, numeric: true, sortValue: (b) => b.avgSellers, cell: (b) => b.avgSellers ?? "—" },
+    { id: "amazon", header: <span title="Share of its listings Amazon sells or sold">Amazon</span>, numeric: true, sortValue: (b) => b.amazonSharePct, cell: (b) => <span className={cn((b.amazonSharePct ?? 0) >= 50 && "text-danger")}>{b.amazonSharePct == null ? "—" : `${b.amazonSharePct}%`}</span> },
+    { id: "buyBox", header: <span title="Average Buy Box">Buy Box</span>, numeric: true, sortValue: (b) => b.avgBuyBox, cell: (b) => gbp(b.avgBuyBox) },
+    { id: "maxLanded", header: <span title="Median of the most each product can cost landed and clear the floors">Max landed</span>, numeric: true, sortValue: (b) => b.medianMaxLanded, cell: (b) => gbp(b.medianMaxLanded) },
+    {
+      id: "gating", header: "Gating", mobile: 3, sortValue: (b) => GATING_LABELS[b.gating],
+      cell: (b) => (
+        <div className="flex items-center gap-1.5">
+          <StatusChip tone={GATING_TONE[GATING_VARIANT[b.gating]]}>{GATING_LABELS[b.gating]}</StatusChip>
+          {b.applyUrl && (
+            <a href={b.applyUrl} target="_blank" rel="noreferrer noopener" title="Request approval in Seller Central" className="text-primary"><ExternalLinkIcon className="size-3.5" /></a>
+          )}
+        </div>
+      ),
+    },
+    {
+      id: "ipRisk", header: <span title="On your IP-risk list (Settings → IP risk); high halves the score">IP risk</span>, sortValue: (b) => (b.ipRisk ? IP_RANK[b.ipRisk.level] : null),
+      cell: (b) => (b.ipRisk ? (
+        <StatusChip tone={IP_TONE[b.ipRisk.level]} title={[b.ipRisk.note, b.ipRisk.source && `Source: ${b.ipRisk.source}`].filter(Boolean).join(" · ")}>
+          {b.ipRisk.level[0].toUpperCase() + b.ipRisk.level.slice(1)}{b.ipRisk.source?.includes("unverified") ? " ?" : ""}
+        </StatusChip>
+      ) : <span className="text-muted-foreground">—</span>),
+    },
+    {
+      id: "carried", header: <span title="Sorts by the first supplier">Carried by</span>, className: "max-w-64", sortValue: (b) => b.suppliers[0]?.name ?? null,
+      cell: (b) => <span className="text-xs text-muted-foreground">{[
+        [...b.suppliers.slice(0, 2).map((s) => s.name), ...(b.suppliers.length > 2 ? [`+${b.suppliers.length - 2}`] : [])].join(", "),
+        b.sellers.length ? `${b.sellers.length} seller${b.sellers.length === 1 ? "" : "s"}` : "",
+      ].filter(Boolean).join(" · ") || "—"}</span>,
+    },
+  ];
 
   const header = (
-    <div className="flex flex-wrap items-start justify-between gap-3">
-      <div>
-        <h1 className="page-title">Brands</h1>
-        <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-          Every brand seen in any run, each product&apos;s latest result re-checked on your default profile{data ? ` (${data.profile.name})` : ""}.
-          The score is high where you can list it, Amazon rarely sells it, 2–8 sellers share it and several ASINs pass.
-        </p>
-      </div>
-      {data?.updating && <Badge variant="muted"><LoaderIcon className="animate-spin" /> Updating from the latest results…</Badge>}
-    </div>
+    <PageHeader
+      title="Brands"
+      crumbs={[{ label: "Wholesale", href: "/runs" }, { label: "Brands" }]}
+      subtitle={`Every brand seen in any run, on your default profile${data ? ` (${data.profile.name})` : ""}.`}
+      info={<>
+        <p>Each product&apos;s latest result is re-checked on your default profile.</p>
+        <p>The score is high where you can list it, Amazon rarely sells it, 2–8 sellers share it and several ASINs are a Buy.</p>
+      </>}
+      actions={data?.updating ? <StatusChip tone="info" icon={false}><LoaderIcon className="size-3.5 animate-spin" /> Updating from the latest results…</StatusChip> : undefined}
+    />
   );
   if (error) return <div className="space-y-5">{header}<ErrorState title="Couldn't load brands" message={error} onRetry={() => window.location.reload()} /></div>;
   if (!data) return <div className="space-y-5">{header}<div className="panel space-y-3 p-4">{Array.from({ length: 8 }, (_, i) => <Skeleton key={i} className="h-10" />)}</div></div>;
@@ -106,9 +131,9 @@ export default function BrandsPage() {
     <div className="space-y-5">
       {header}
       <div className="flex flex-wrap items-center gap-3">
-        <div className="relative w-64">
+        <div className="relative w-64 max-w-full">
           <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input className="pl-8" placeholder="Find a brand or supplier" value={q} onChange={(e) => { setQ(e.target.value); setLimit(PAGE); }} aria-label="Find a brand or supplier" />
+          <Input className="pl-8" placeholder="Find a brand or supplier" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Find a brand or supplier" />
         </div>
         <ToggleGroup type="single" variant="outline" size="sm" spacing={0} value={gating} onValueChange={(v) => v && setGating(v as typeof gating)} aria-label="Gating">
           <ToggleGroupItem value="all" className="px-3 text-xs">All</ToggleGroupItem>
@@ -119,78 +144,20 @@ export default function BrandsPage() {
         </ToggleGroup>
         <div className="flex items-center gap-2">
           <Switch id="passing-only" checked={passingOnly} onCheckedChange={setPassingOnly} />
-          <Label htmlFor="passing-only" className="text-sm font-normal">Has passing ASINs</Label>
+          <Label htmlFor="passing-only" className="text-sm font-normal">Has Buy or Check ASINs</Label>
         </div>
-        <span className="text-sm text-muted-foreground"><span className="num font-medium text-foreground">{shown.length.toLocaleString("en-GB")}</span> of {data.brands.length.toLocaleString("en-GB")} brands</span>
+        <span className="text-sm text-muted-foreground"><span className="num font-medium text-foreground">{filtered.length.toLocaleString("en-GB")}</span> of {data.brands.length.toLocaleString("en-GB")} brands</span>
       </div>
 
-      <div className="panel overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              {th("brand", "Brand", "pl-4")}
-              {th("score", "Score", "text-right", "Wholesale-friendly, 0–100")}
-              {th("asins", "ASINs", "text-right")}
-              {th("passing", "Pass / warn", "text-right", "On your default profile, among priced products")}
-              {th("sellers", "Sellers", "text-right", "Average FBA sellers")}
-              {th("amazon", "Amazon", "text-right", "Share of its listings Amazon sells or sold")}
-              {th("buyBox", "Buy Box", "text-right", "Average Buy Box")}
-              {th("maxLanded", "Max landed", "text-right", "Median of the most each product can cost landed and clear the floors")}
-              {th("gating", "Gating")}
-              {th("ipRisk", "IP risk", undefined, "On your IP-risk list (Settings → IP risk); high halves the score")}
-              {th("carried", "Carried by", "pr-4", "Sorts by the first supplier")}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {!shown.length && <TableRow><TableCell colSpan={11} className="py-10 text-center text-muted-foreground">No brands match.</TableCell></TableRow>}
-            {shown.slice(0, limit).map((b) => (
-              <TableRow key={b.key}>
-                <TableCell className="max-w-56 pl-4 whitespace-normal">
-                  <Link className="font-medium hover:underline" href={`/brands/${encodeURIComponent(b.key)}`}>{b.brand}</Link>
-                </TableCell>
-                <TableCell className="text-right">
-                  <span className={cn("num inline-block min-w-8 rounded px-1.5 py-0.5 text-center text-xs font-semibold",
-                    b.score >= 70 ? "bg-pass-soft text-pass" : b.score >= 50 ? "bg-warn-soft text-warn" : "bg-muted text-muted-foreground")}>{b.score}</span>
-                </TableCell>
-                <TableCell className="num text-right">{b.asins}</TableCell>
-                <TableCell className="num text-right">
-                  <span className={b.pass ? "font-semibold text-pass" : "text-muted-foreground"}>{b.pass}</span>
-                  <span className="text-muted-foreground"> / </span>
-                  <span className={b.warn ? "text-warn" : "text-muted-foreground"}>{b.warn}</span>
-                </TableCell>
-                <TableCell className="num text-right">{b.avgSellers ?? "—"}</TableCell>
-                <TableCell className={cn("num text-right", (b.amazonSharePct ?? 0) >= 50 && "text-fail")}>{b.amazonSharePct == null ? "—" : `${b.amazonSharePct}%`}</TableCell>
-                <TableCell className="num text-right">{gbp(b.avgBuyBox)}</TableCell>
-                <TableCell className="num text-right">{gbp(b.medianMaxLanded)}</TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-1.5">
-                    <Badge variant={GATING_VARIANT[b.gating]}>{GATING_LABELS[b.gating]}</Badge>
-                    {b.applyUrl && (
-                      <a href={b.applyUrl} target="_blank" rel="noreferrer noopener" title="Request approval in Seller Central" className="text-brand"><ExternalLinkIcon className="size-3.5" /></a>
-                    )}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  {b.ipRisk ? (
-                    <Badge variant={IP_VARIANT[b.ipRisk.level]} title={[b.ipRisk.note, b.ipRisk.source && `Source: ${b.ipRisk.source}`].filter(Boolean).join(" · ")}>
-                      {b.ipRisk.level}{b.ipRisk.source?.includes("unverified") ? " ?" : ""}
-                    </Badge>
-                  ) : <span className="text-muted-foreground">—</span>}
-                </TableCell>
-                <TableCell className="max-w-64 pr-4 text-xs whitespace-normal text-muted-foreground">
-                  {[
-                    [...b.suppliers.slice(0, 2).map((s) => s.name), ...(b.suppliers.length > 2 ? [`+${b.suppliers.length - 2}`] : [])].join(", "),
-                    b.sellers.length ? `${b.sellers.length} seller${b.sellers.length === 1 ? "" : "s"}` : "",
-                  ].filter(Boolean).join(" · ") || "—"}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
-      {shown.length > limit && (
-        <div className="flex justify-center"><Button variant="outline" onClick={() => setLimit((l) => l + PAGE)}>Show {Math.min(PAGE, shown.length - limit)} more</Button></div>
-      )}
+      <DataTable
+        rows={filtered}
+        columns={columns}
+        getRowId={(b) => b.key}
+        storageKey="wholesale.brands"
+        caption="Brands"
+        initialSort={{ id: "score", desc: true }}
+        empty={{ icon: <SearchIcon />, title: "No brands match", description: "Try another name, or clear the filters." }}
+      />
     </div>
   );
 }

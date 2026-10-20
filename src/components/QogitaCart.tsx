@@ -5,7 +5,6 @@ import { ExternalLinkIcon, RefreshCwIcon, ShoppingCartIcon, Trash2Icon } from "l
 import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { useDialogs } from "@/components/Dialogs";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
@@ -15,6 +14,7 @@ import type { CartAllocation, CartLine } from "@/lib/qogita/cart";
 import type { Money } from "@/lib/qogita/client";
 import { api } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
+import { StatusChip } from "@/components/ui/status-chip";
 
 interface CartState {
   openCart: () => void;
@@ -75,9 +75,9 @@ export function QogitaCartProvider({ enabled, children }: { enabled: boolean; ch
           </SheetHeader>
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
             {error ? (
-              <div role="alert" className="space-y-2 rounded-lg bg-fail-soft p-3 text-sm text-fail">
+              <div role="alert" className="space-y-2 rounded-lg bg-danger-soft p-3 text-sm text-danger">
                 <p>Couldn&apos;t load the cart: {error}</p>
-                <Button variant="outline" size="sm" onClick={refresh}>Try again</Button>
+                <Button variant="secondary" size="sm" onClick={refresh}>Try again</Button>
               </div>
             ) : !allocations ? (
               <div className="space-y-3">{[0, 1].map((i) => <Skeleton key={i} className="h-40 rounded-lg" />)}</div>
@@ -100,7 +100,7 @@ export function QogitaCartProvider({ enabled, children }: { enabled: boolean; ch
           })()}
           <div className="flex items-center justify-between gap-2 border-t p-4">
             <Button variant="ghost" size="sm" onClick={refresh} disabled={loading}><RefreshCwIcon className={cn(loading && "animate-spin")} /> Refresh</Button>
-            <Button variant="outline" size="sm" asChild>
+            <Button variant="secondary" size="sm" asChild>
               <a href="https://www.qogita.com/cart/" target="_blank" rel="noreferrer">Check out on Qogita <ExternalLinkIcon /></a>
             </Button>
           </div>
@@ -119,8 +119,8 @@ function Allocation({ a, onChanged }: { a: CartAllocation; onChanged: () => void
         <p className="num text-sm"><span className="font-semibold">{money(a.subtotal)}</span> <span className="text-muted-foreground">of {money(a.mov)} MOV</span></p>
       </div>
       <div className="space-y-1">
-        <Progress value={a.movProgress * 100} className={cn("h-2", a.isMovMet && "[&>*]:bg-pass")} aria-label="Progress to MOV" />
-        <p className="text-xs">{a.isMovMet ? <Badge variant="pass">MOV met</Badge> : <span className="text-warn">{money({ amount: String(toGo), currency: a.mov.currency })} to go</span>}
+        <Progress value={a.movProgress * 100} className={cn("h-2", a.isMovMet && "[&>*]:bg-success")} aria-label="Progress to MOV" />
+        <p className="text-xs">{a.isMovMet ? <StatusChip tone="good">MOV met</StatusChip> : <span className="text-warn-ink">{money({ amount: String(toGo), currency: a.mov.currency })} to go</span>}
           {a.deliveryWeeks != null && <span className="ml-2 text-muted-foreground">about {a.deliveryWeeks} wk delivery</span>}</p>
       </div>
       <ul className="divide-y">
@@ -165,14 +165,14 @@ function Line({ allocationQid, l, onChanged }: { allocationQid: string; l: CartL
         <div className="min-w-0">
           <p className="text-sm leading-snug">{l.name}</p>
           <p className="num text-xs text-muted-foreground">{l.gtin} · {money(l.price)} each{l.unit > 1 ? ` · case of ${l.unit}` : ""}{l.availableQuantity != null ? ` · ${l.availableQuantity.toLocaleString("en-GB")} available` : ""}</p>
-          {l.warnings.map((w) => <Badge key={w} variant="warn" className="mt-1 mr-1">{w}</Badge>)}
+          {l.warnings.map((w) => <StatusChip tone="warn" key={w} className="mt-1 mr-1">{w}</StatusChip>)}
         </div>
         <p className="num flex-none text-sm font-medium">{money(l.subtotal)}</p>
       </div>
       <div className="flex items-center gap-2">
         <Input aria-label={`Quantity of ${l.name}`} className="num h-8 w-24" type="number" min={l.unit} step={l.unit} value={qty} onChange={(e) => setQty(e.target.value)} />
         {changed && <Button size="sm" disabled={busy} onClick={save}>Update</Button>}
-        <Button variant="ghost" size="icon-sm" className="ml-auto text-muted-foreground hover:text-fail" aria-label={`Remove ${l.name}`} disabled={busy} onClick={remove}><Trash2Icon /></Button>
+        <Button variant="danger" size="sm" className="ml-auto" aria-label={`Remove ${l.name}`} loading={busy} onClick={remove}>{busy ? "Removing" : <><Trash2Icon /> Remove</>}</Button>
       </div>
     </li>
   );
@@ -185,7 +185,7 @@ export function QogitaCartButton() {
   return (
     <Button variant="ghost" size="sm" onClick={cart.openCart} aria-label="Open the Qogita cart">
       <ShoppingCartIcon /> <span className="hidden md:inline">Cart</span>
-      {cart.lineCount != null && cart.lineCount > 0 && <Badge variant="brand" className="num">{cart.lineCount}</Badge>}
+      {cart.lineCount != null && cart.lineCount > 0 && <StatusChip tone="info" icon={false} className="num h-5 px-2">{cart.lineCount}</StatusChip>}
     </Button>
   );
 }

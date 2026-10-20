@@ -37,7 +37,7 @@ export function WaiveControl({ waived, failed = true, onWaive, onUnwaive }: {
   if (waived) {
     return (
       <button type="button" disabled={busy} onClick={(e) => { stop(e); run(onUnwaive); }}
-        className="ml-2 flex-none text-xs font-medium text-brand hover:underline disabled:opacity-50">
+        className="ml-2 flex-none text-xs font-medium text-primary hover:underline disabled:opacity-50">
         {busy ? "…" : "Un-waive"}
       </button>
     );
@@ -45,7 +45,7 @@ export function WaiveControl({ waived, failed = true, onWaive, onUnwaive }: {
   if (!asking) {
     return (
       <button type="button" onClick={(e) => { stop(e); setAsking(true); }}
-        className="ml-2 flex-none text-xs font-medium text-brand hover:underline"
+        className="ml-2 flex-none text-xs font-medium text-primary hover:underline"
         title={failed
           ? "Waive this gate for this product in every run: its fail becomes a warning and later gates run"
           : "Waive this warning for this product in every run: it stops counting against the row, which can go green"}>
@@ -59,9 +59,9 @@ export function WaiveControl({ waived, failed = true, onWaive, onUnwaive }: {
         disabled={busy} aria-label="Reason for waiving"
         onChange={(e) => setReason(e.target.value)}
         onKeyDown={(e) => { stop(e); if (e.key === "Enter") run(() => onWaive(reason)); if (e.key === "Escape") setAsking(false); }} />
-      <Button type="button" disabled={busy} variant="outline" size="xs" className="text-xs" onClick={() => run(() => onWaive(reason))}>{busy ? "Waiving…" : "Waive"}</Button>
+      <Button type="button" disabled={busy} variant="secondary" size="xs" className="text-xs" onClick={() => run(() => onWaive(reason))}>{busy ? "Waiving…" : "Waive"}</Button>
       <button type="button" className="text-xs text-muted-foreground hover:text-foreground" onClick={() => setAsking(false)}>Cancel</button>
-      {error && <span className="w-full text-xs text-fail">{error}</span>}
+      {error && <span className="w-full text-xs text-danger">{error}</span>}
     </span>
   );
 }

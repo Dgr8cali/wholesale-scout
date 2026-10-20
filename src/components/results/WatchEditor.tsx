@@ -38,7 +38,7 @@ export function WatchEditor({ r, fav, onWatch }: { r: Result; fav?: Fav; onWatch
 
   return (
     <div className="space-y-1.5 text-xs" onClick={(e) => e.stopPropagation()}>
-      <p className="font-semibold uppercase tracking-wide text-muted-foreground">
+      <p className="eyebrow">
         Watchlist{fav ? `: ${conditionLabel(fav.condition)}` : suggested ? ` · suggested: ${conditionLabel(suggested)}` : ""}
       </p>
       <div className="flex flex-wrap items-center gap-1.5">

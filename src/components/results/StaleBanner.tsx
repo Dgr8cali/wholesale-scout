@@ -1,6 +1,6 @@
 "use client";
 
-import { LoaderIcon, RefreshCwIcon } from "lucide-react";
+import { RefreshCwIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -54,11 +54,11 @@ export function StaleBanner({ rows, onRechecked }: { rows: { id: string; run_id:
   };
   return (
     <div role="status" className="flex flex-wrap items-center gap-2 rounded-lg border border-warn bg-warn-soft px-3 py-2 text-sm">
-      <span className="font-semibold text-warn">Stale</span>
+      <span className="font-semibold text-warn-ink">Stale</span>
       <span className="min-w-0 flex-1">
         {stale.length === rows.length && rows.length === 1 ? "This screening was" : `${stale.length.toLocaleString("en-GB")} screening${stale.length === 1 ? " was" : "s were"}`} made on other settings: {reasons.slice(0, 2).join("; ")}{reasons.length > 2 ? "; …" : ""}. Re-check to update the profit, ROI, margin and verdict.
       </span>
-      <Button size="sm" variant="outline" disabled={busy} onClick={recheck}>{busy ? <LoaderIcon className="animate-spin" /> : <RefreshCwIcon />} Re-check</Button>
+      <Button size="sm" variant="secondary" loading={busy} onClick={recheck}>{busy ? "Re-checking" : <><RefreshCwIcon /> Re-check</>}</Button>
     </div>
   );
 }

@@ -30,7 +30,7 @@ function Shortlist() {
         subtitle={tab === "products" ? "Products you've starred, each with its latest result." : "What would make each starred product a buy, checked every Sunday."}
         info={<>
           <p>Star a result (or use the extension) to put it here. <b>Products</b> shows each with its latest result from any run, to re-screen with a profile or export to xlsx.</p>
-          <p><b>Watching</b> shows the same products with their condition (e.g. Buy Box at or above a price). Every Sunday they&apos;re re-checked (Keepa only where the history is over 7 days old; gating refreshed) and anything that now passes or meets its condition is listed and emailed. A starred product without a condition is simply re-checked weekly.</p>
+          <p><b>Watching</b> shows the same products with their condition (e.g. Buy Box at or above a price). Every Sunday they&apos;re re-checked (Keepa only where the history is over 7 days old; gating refreshed) and anything that is now a buy or meets its condition is listed and emailed. A starred product without a condition is simply re-checked weekly.</p>
         </>}
       />
       <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)} className="gap-6">

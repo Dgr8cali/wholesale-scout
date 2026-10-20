@@ -17,7 +17,7 @@ Home is the first page you see, in every workspace: a row of tiles for each work
 | --- | --- | --- |
 | **Keepa tokens available** | Keepa's current balance, with "refills N/min" underneath. Shows "Keepa not configured" when there's no Keepa key, or "Keepa didn't answer" when the balance couldn't be read. Refreshes every minute. | (not a link) |
 | **Keepa tokens spent today** | Tokens your runs spent today (UK day), with a rough "≈ N products at 3 tokens each" and a bar for each of the last 7 days, today highlighted. Hover a bar for that day's figure. | (not a link) |
-| **Watchlist: now passes** | Watched products that passed, met their condition or found a supplier in the last 14 days. "nothing new in the last 14 days" when there are none. | [Watchlist](/help/pages/watchlist) |
+| **Watching: now a buy** | Watched products that passed, met their condition or found a supplier in the last 14 days. "nothing new in the last 14 days" when there are none. | [Watchlist](/help/pages/watchlist) |
 | **Favourites needing refresh** | How many favourites were last screened over 7 days ago, "of N favourites". | [Favourites](/help/pages/favourites) |
 | **Brands awaiting approval** | Brands you're not yet approved for that have products passing, and how many passing products they hold back. | [Brands](/help/pages/brands) |
 

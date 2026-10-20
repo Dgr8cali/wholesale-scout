@@ -5,7 +5,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useDialogs } from "@/components/Dialogs";
 import { exportDgAsins, useDgImport } from "@/components/DgReport";
@@ -14,16 +14,16 @@ import { allListings, downloadXlsx, exportRows } from "@/components/results/expo
 import type { Result } from "@/components/results/types";
 import { EmptyState, ErrorState } from "@/components/States";
 import { VerdictBar } from "@/components/VerdictBar";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { DataTable, type DataColumn } from "@/components/ui/data-table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { PageHeader } from "@/components/ui/page-header";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
+import { StatusChip } from "@/components/ui/status-chip";
 import { Switch } from "@/components/ui/switch";
-import { SortTableHead, useSortable } from "@/components/SortableTable";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { withDefaults, type ProfileConfig } from "@/lib/screening/config";
 import { api, when } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
@@ -97,17 +97,6 @@ export default function RunsPage() {
     });
     return gs;
   }, [runs, q]);
-  // Each group sorts by its newest run; the older ones stay folded under it, newest first.
-  const sorting = useSortable("wholesale.runs", groups, {
-    name: { value: (g) => g.lead.name || g.lead.source, kind: "text" },
-    supplier: { value: (g) => g.lead.summary?.suppliers[0] ?? null, kind: "text" },
-    started: { value: (g) => g.lead.started_at, kind: "date" },
-    rows: { value: (g) => g.lead.row_count, kind: "number" },
-    results: { value: (g) => g.lead.summary?.pass ?? null, kind: "number" },
-    status: { value: (g) => (g.lead.status === "done" ? "Done" : g.lead.status === "error" ? "Error" : g.lead.paused_at ? "Paused" : "Screening"), kind: "text" },
-  }, { key: "started", dir: "desc" });
-  const sortedGroups = sorting.rows;
-  const visibleIds = sortedGroups.flatMap((g) => [g.lead.id, ...(openGroups.has(g.key) ? g.older.map((r) => r.id) : [])]);
 
   const toggle = (id: string) => setSelected((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
 
@@ -210,18 +199,39 @@ export default function RunsPage() {
     </DropdownMenu>
   );
 
-  const row = (r: Run, opts: { older?: boolean; count?: number; groupKey?: string } = {}) => {
-    const k = sourceKind(r);
-    const s = r.summary;
-    const done = r.status === "done";
-    const pending = s?.pending ?? Math.max(0, r.row_count - r.processed_count);
-    const pctDone = r.row_count ? Math.min(100, ((r.row_count - pending) / r.row_count) * 100) : 0;
-    const groupOpen = opts.groupKey ? openGroups.has(opts.groupKey) : false;
-    return (
-      <TableRow key={r.id} data-state={selected.has(r.id) ? "selected" : undefined} className={cn(opts.older && "bg-muted/30")}>
-        <TableCell className="w-10 pl-4"><Checkbox aria-label={`Select ${r.name || r.source}`} checked={selected.has(r.id)} onCheckedChange={() => toggle(r.id)} /></TableCell>
-        <TableCell className={cn("max-w-[26rem] whitespace-normal", opts.older && "pl-8")}>
-          <div className="flex items-start gap-2">
+  // One table row per run: each group's newest run, with its older uploads under it when opened.
+  // Every sort value carries the group's position, so a group's rows stay together in any order.
+  type Line = { r: Run; lead: Run; gi: number; older: boolean; count: number; groupKey: string };
+  const lines: Line[] = groups.flatMap((g, gi) => [
+    { r: g.lead, lead: g.lead, gi, older: false, count: g.older.length, groupKey: g.key },
+    ...(openGroups.has(g.key) ? g.older.map((r) => ({ r, lead: g.lead, gi, older: true, count: 0, groupKey: g.key })) : []),
+  ]);
+  const visibleIds = lines.map((l) => l.r.id);
+  const byGroup = (v: string | null | undefined, l: Line) => (v == null ? null : `${v}\u0000${String(l.gi).padStart(6, "0")}`);
+  const numByGroup = (v: number | null | undefined, l: Line) => (v == null ? null : v + l.gi / 1e7);
+  const statusWord = (r: Run) => (r.status === "done" ? "Done" : r.status === "error" ? "Error" : r.paused_at ? "Paused" : "Screening");
+
+  const allChecked = visibleIds.length > 0 && visibleIds.every((id) => selected.has(id));
+  const someChecked = visibleIds.some((id) => selected.has(id));
+  const sel = [...selected];
+
+  const columns: DataColumn<Line>[] = [
+    {
+      id: "select", mobileHidden: true, className: "w-10",
+      header: <Checkbox aria-label={allChecked ? "Clear selection" : "Select all shown"} checked={allChecked ? true : someChecked ? "indeterminate" : false}
+        onCheckedChange={() => setSelected(allChecked ? new Set() : new Set(visibleIds))} />,
+      cell: ({ r }) => <Checkbox aria-label={`Select ${r.name || r.source}`} checked={selected.has(r.id)} onCheckedChange={() => toggle(r.id)} />,
+    },
+    {
+      id: "name", header: "Run", mobile: "title", className: "max-w-[26rem] min-w-[14rem]",
+      sortValue: (l) => byGroup(l.lead.name || l.lead.source, l),
+      cell: ({ r, older, count, groupKey }) => {
+        const k = sourceKind(r);
+        const groupOpen = openGroups.has(groupKey);
+        return (
+          <div className={cn("flex items-start gap-2", older && "pl-6")}>
+            {/* The checkbox, on a phone (the column is hidden there). */}
+            <Checkbox className="mt-0.5 sm:hidden" aria-label={`Select ${r.name || r.source}`} checked={selected.has(r.id)} onCheckedChange={() => toggle(r.id)} />
             <span title={k.label} className="mt-0.5 flex-none text-muted-foreground"><k.icon className="size-4" aria-label={k.label} /></span>
             <div className="min-w-0">
               <EditableName value={r.name || r.source} inputClassName="py-1"
@@ -230,90 +240,53 @@ export default function RunsPage() {
                   await api(`/api/runs/${r.id}`, { method: "PATCH", json: { name } });
                   setRuns((rs) => rs && rs.map((x) => (x.id === r.id ? { ...x, name } : x)));
                 }} />
-              {/* On a phone, what the hidden columns say. */}
-              <div className="space-y-1 md:hidden">
-                <p className="text-xs text-muted-foreground">
-                  {when(r.started_at)} · {r.row_count.toLocaleString("en-GB")} row{r.row_count === 1 ? "" : "s"}{s?.pass || s?.warn ? ` · ${s.pass} pass, ${s.warn} warn` : ""}{s?.suppliers.length ? ` · ${s.suppliers.join(", ")}` : ""}
-                </p>
-                {s && <VerdictBar counts={s} legend={false} className="max-w-56" />}
-                {!done && (
-                  <p className="text-xs">
-                    {r.status === "error" ? <Badge variant="fail">Error</Badge>
-                      : r.paused_at ? <Badge variant="muted">Paused at {(r.row_count - pending).toLocaleString("en-GB")} of {r.row_count.toLocaleString("en-GB")}</Badge>
-                      : <Badge variant="brand">Screening · {Math.round(pctDone)}%</Badge>}
-                  </p>
-                )}
-              </div>
-              <div className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-meta font-normal text-muted-foreground">
                 {r.name && r.name !== r.source && <span className="truncate">{r.source}</span>}
-                {r.archived_at && <Badge variant="muted">archived</Badge>}
-                {isStale(r) && <Badge variant="warn" title={`Newest Keepa data ${when(r.summary!.newestKeepa!)}; over 7 days old`}>stale</Badge>}
-                {!!opts.count && (
-                  <button className="inline-flex items-center gap-0.5 font-medium text-brand hover:underline" aria-expanded={groupOpen}
-                    onClick={() => setOpenGroups((g) => { const n = new Set(g); if (n.has(opts.groupKey!)) n.delete(opts.groupKey!); else n.add(opts.groupKey!); return n; })}>
+                {r.archived_at && <StatusChip tone="neutral" icon={false}>Archived</StatusChip>}
+                {isStale(r) && <StatusChip tone="warn" title={`Newest Keepa data ${when(r.summary!.newestKeepa!)}; over 7 days old`}>Stale</StatusChip>}
+                {!!count && (
+                  <button className="inline-flex cursor-pointer items-center gap-0.5 font-medium text-primary hover:underline" aria-expanded={groupOpen}
+                    onClick={() => setOpenGroups((g) => { const n = new Set(g); if (n.has(groupKey)) n.delete(groupKey); else n.add(groupKey); return n; })}>
                     <ChevronRightIcon className={cn("size-3 transition-transform", groupOpen && "rotate-90")} />
-                    ×{opts.count + 1}: {opts.count} earlier upload{opts.count === 1 ? "" : "s"}
+                    ×{count + 1}: {count} earlier upload{count === 1 ? "" : "s"}
                   </button>
                 )}
               </div>
             </div>
           </div>
-        </TableCell>
-        <TableCell className="hidden text-sm md:table-cell">{s?.suppliers.length ? s.suppliers.join(", ") : <span className="text-muted-foreground">—</span>}</TableCell>
-        <TableCell className="hidden text-sm text-muted-foreground md:table-cell">{when(r.started_at)}</TableCell>
-        <TableCell className="num hidden text-right md:table-cell">{r.row_count.toLocaleString("en-GB")}</TableCell>
-        <TableCell className="hidden w-52 min-w-36 md:table-cell">
-          {/* The same bar as Home: pass / warn / fail (and errors, rows still to screen), with counts. */}
-          {s ? <VerdictBar counts={s} /> : <Skeleton className="h-2" />}
-        </TableCell>
-        <TableCell className="hidden w-44 md:table-cell">
-          {done ? <Badge variant="pass">Done</Badge> : r.status === "error" ? <Badge variant="fail">Error</Badge> : r.paused_at ? (
-            <div className="space-y-1">
-              <Badge variant="muted">Paused</Badge>
-              <p className="num text-xs text-muted-foreground">at {(r.row_count - pending).toLocaleString("en-GB")} of {r.row_count.toLocaleString("en-GB")}</p>
-            </div>
-          ) : (
-            <div className="space-y-1">
-              <div className="flex flex-wrap gap-1">
-                <Badge variant="brand">Screening</Badge>
-                {keepaQueue[0] === r.id && <Badge variant="pass" title="This run is the one spending Keepa tokens">Using Keepa</Badge>}
-                {keepaQueue.includes(r.id) && keepaQueue[0] !== r.id && <Badge variant="muted" title="Another run is using Keepa; this one waits its turn">Waiting for Keepa</Badge>}
-              </div>
-              <div className="flex items-center gap-2">
-                <Progress value={pctDone} className="h-1.5 w-20" aria-label="Screened" />
-                <span className="num text-xs text-muted-foreground">{Math.round(pctDone)}%</span>
-              </div>
-            </div>
-          )}
-        </TableCell>
-        <TableCell className="w-12 pr-3 text-right">{menu(r)}</TableCell>
-      </TableRow>
-    );
-  };
-
-  const allChecked = visibleIds.length > 0 && visibleIds.every((id) => selected.has(id));
-  const someChecked = visibleIds.some((id) => selected.has(id));
-  const sel = [...selected];
+        );
+      },
+    },
+    { id: "supplier", header: "Supplier", sortValue: (l) => byGroup(l.lead.summary?.suppliers[0], l), cell: ({ r }) => (r.summary?.suppliers.length ? r.summary.suppliers.join(", ") : <span className="text-muted-foreground">—</span>) },
+    { id: "started", header: "Started", sortValue: (l) => byGroup(l.lead.started_at, l), cell: ({ r }) => <span className="whitespace-nowrap text-muted-foreground">{when(r.started_at)}</span> },
+    { id: "rows", header: "Rows", numeric: true, sortValue: (l) => numByGroup(l.lead.row_count, l), cell: ({ r }) => r.row_count.toLocaleString("en-GB") },
+    {
+      id: "results", header: "Results", mobile: 1, className: "w-52 min-w-36", sortValue: (l) => numByGroup(l.lead.summary?.pass, l),
+      // The same bar as Home: pass / warn / fail (and errors, rows still to screen), with counts.
+      cell: ({ r }) => (r.summary ? <VerdictBar counts={r.summary} /> : <Skeleton className="h-2" />),
+    },
+    { id: "status", header: "Status", mobile: 2, className: "w-44", sortValue: (l) => byGroup(statusWord(l.lead), l), cell: ({ r }) => <RunStatus r={r} keepaQueue={keepaQueue} /> },
+    { id: "act", header: <span className="sr-only">Actions</span>, mobile: 3, className: "w-12 text-right", cell: ({ r }) => menu(r) },
+  ];
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="page-title">Runs</h1>
-          <p className="text-sm text-muted-foreground">Every price list you&apos;ve screened. Repeat uploads of the same file are grouped.</p>
-        </div>
-        <div className="flex items-center gap-2">
-        <Button asChild><Link href="/new-run"><PlusIcon /> New run</Link></Button>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild><Button variant="outline" size="icon" aria-label="More actions"><MoreHorizontalIcon /></Button></DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onSelect={() => { dgRun.current = null; dgPick(); }}><UploadIcon /> Import DG report…</DropdownMenuItem>
-            <ImageBackfillItem />
-          </DropdownMenuContent>
-        </DropdownMenu>
-        </div>
-        {dgInput}
-      </div>
+      <PageHeader
+        title="Runs"
+        crumbs={[{ label: "Wholesale", href: "/runs" }, { label: "Runs" }]}
+        subtitle="Every price list you've screened. Repeat uploads of the same file are grouped."
+        actions={<>
+          <Button asChild><Link href="/new-run"><PlusIcon /> New run</Link></Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild><Button variant="secondary" size="icon" aria-label="More actions"><MoreHorizontalIcon /></Button></DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={() => { dgRun.current = null; dgPick(); }}><UploadIcon /> Import DG report…</DropdownMenuItem>
+              <ImageBackfillItem />
+            </DropdownMenuContent>
+          </DropdownMenu>
+          {dgInput}
+        </>}
+      />
 
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative w-72 max-w-full">
@@ -324,10 +297,10 @@ export default function RunsPage() {
           <Switch checked={archived} onCheckedChange={setArchived} /> Show archived
         </label>
         {sel.length > 0 && (
-          <div className="ml-auto flex items-center gap-2" role="toolbar" aria-label="Actions on selected runs">
+          <div className="ml-auto flex flex-wrap items-center gap-2" role="toolbar" aria-label="Actions on selected runs">
             <span className="text-sm font-medium"><span className="num">{sel.length}</span> selected</span>
-            <Button variant="outline" size="sm" onClick={() => archive(sel, true)}><ArchiveIcon /> Archive</Button>
-            <Button variant="outline" size="sm" className="text-fail hover:text-fail" onClick={() => remove(sel, "")}><Trash2Icon /> Delete…</Button>
+            <Button variant="secondary" size="sm" onClick={() => archive(sel, true)}><ArchiveIcon /> Archive</Button>
+            <Button variant="danger" size="sm" onClick={() => remove(sel, "")}><Trash2Icon /> Delete…</Button>
             <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())}>Clear</Button>
           </div>
         )}
@@ -341,37 +314,45 @@ export default function RunsPage() {
         <EmptyState icon={<ListChecksIcon />} title={archived ? "No runs" : "No runs yet"} action={<Button asChild><Link href="/new-run"><PlusIcon /> New run</Link></Button>}>
           Upload a supplier price list, or pull from Qogita, to screen it against Amazon UK.
         </EmptyState>
-      ) : !groups.length ? (
-        <EmptyState icon={<SearchIcon />} title="No runs match">Nothing matches “{q}”.</EmptyState>
       ) : (
-        <div className="panel overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-10 pl-4">
-                  <Checkbox aria-label={allChecked ? "Clear selection" : "Select all shown"} checked={allChecked ? true : someChecked ? "indeterminate" : false}
-                    onCheckedChange={() => setSelected(allChecked ? new Set() : new Set(visibleIds))} />
-                </TableHead>
-                <SortTableHead {...sorting.th("name")}>Run</SortTableHead>
-                <SortTableHead {...sorting.th("supplier")} className="hidden md:table-cell">Supplier</SortTableHead>
-                <SortTableHead {...sorting.th("started")} className="hidden md:table-cell">Started</SortTableHead>
-                <SortTableHead {...sorting.th("rows")} numeric className="hidden md:table-cell">Rows</SortTableHead>
-                <SortTableHead {...sorting.th("results")} className="hidden md:table-cell" title="Sorts by how many passed">Results</SortTableHead>
-                <SortTableHead {...sorting.th("status")} className="hidden md:table-cell">Status</SortTableHead>
-                <TableHead className="pr-3"><span className="sr-only">Actions</span></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {sortedGroups.map((g) => (
-                <Fragment key={g.key}>
-                  {row(g.lead, { count: g.older.length, groupKey: g.key })}
-                  {openGroups.has(g.key) && g.older.map((r) => row(r, { older: true }))}
-                </Fragment>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+        <DataTable
+          rows={lines}
+          columns={columns}
+          getRowId={(l) => l.r.id}
+          storageKey="wholesale.runs"
+          caption="Runs"
+          initialSort={{ id: "started", desc: true }}
+          rowClassName={(l) => cn(selected.has(l.r.id) && "bg-primary-soft/60", l.older && "bg-subtle/50")}
+          empty={{ icon: <SearchIcon />, title: "No runs match", description: `Nothing matches “${q}”.` }}
+        />
       )}
+    </div>
+  );
+}
+
+/** Done, error, paused (and how far), or screening with its progress and its place in the Keepa queue. */
+function RunStatus({ r, keepaQueue }: { r: Run; keepaQueue: string[] }) {
+  const pending = r.summary?.pending ?? Math.max(0, r.row_count - r.processed_count);
+  const pctDone = r.row_count ? Math.min(100, ((r.row_count - pending) / r.row_count) * 100) : 0;
+  if (r.status === "done") return <StatusChip tone="good">Done</StatusChip>;
+  if (r.status === "error") return <StatusChip tone="bad">Error</StatusChip>;
+  if (r.paused_at) return (
+    <div className="space-y-1">
+      <StatusChip tone="neutral">Paused</StatusChip>
+      <p className="num text-xs text-muted-foreground">at {(r.row_count - pending).toLocaleString("en-GB")} of {r.row_count.toLocaleString("en-GB")}</p>
+    </div>
+  );
+  return (
+    <div className="space-y-1">
+      <div className="flex flex-wrap gap-1">
+        <StatusChip tone="info">Screening</StatusChip>
+        {keepaQueue[0] === r.id && <StatusChip tone="good" title="This run is the one spending Keepa tokens">Using Keepa</StatusChip>}
+        {keepaQueue.includes(r.id) && keepaQueue[0] !== r.id && <StatusChip tone="neutral" title="Another run is using Keepa; this one waits its turn">Waiting for Keepa</StatusChip>}
+      </div>
+      <div className="flex items-center gap-2">
+        <Progress value={pctDone} className="h-1.5 w-20" aria-label="Screened" />
+        <span className="num text-xs text-muted-foreground">{Math.round(pctDone)}%</span>
+      </div>
     </div>
   );
 }

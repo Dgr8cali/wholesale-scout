@@ -34,7 +34,7 @@ Anything unknown scores in the middle. A brand on your IP-risk list at **high** 
 |---|---|
 | **Find a brand or supplier** | Filters by brand name, or by the name of a supplier that carries it. |
 | **All** / **Can list** / **Approval needed** / **Approved** / **Blocked** | Filters by gating. **Can list** shows Open and Approved brands. **Approval needed** shows brands that need approval, whether or not you've applied. |
-| **Has passing ASINs** | Shows only brands with at least one product that passes or warns. |
+| **Has Buy or Check ASINs** | Shows only brands with at least one product that passes or warns. |
 
 The count next to the filters says how many brands are shown, for example "42 of 380 brands". The list shows 200 at a time. **Show N more** adds the next 200.
 
@@ -47,7 +47,7 @@ Click any column heading except Gating and Carried by to sort by it. Click it ag
 | **Brand** | Links to the brand's page. |
 | **Score** | The wholesale-friendly score. |
 | **ASINs** | Distinct ASINs seen in any run. |
-| **Pass / warn** | Products whose verdict is **Buy** or **Check** on your default profile. Only products that have a price are counted. |
+| **Buy / Check** | Products whose verdict is **Buy** or **Check** on your default profile. Only products that have a price are counted. |
 | **Sellers** | Average number of FBA sellers. |
 | **Amazon** | The share of its listings that Amazon sells or has sold. It shows in red at 50% or more. |
 | **Buy Box** | Average Buy Box. |
@@ -70,7 +70,7 @@ Click a brand to open its page.
 
 ### Stats
 
-**ASINs**, **Pass / warn**, **Avg sellers**, **Amazon**, **Avg Buy Box**, **Median max landed** and **IP risk**. They mean the same as the columns in the list. Hover over one for its explanation.
+**ASINs**, **Buy / Check**, **Avg sellers**, **Amazon**, **Avg Buy Box**, **Median max landed** and **IP risk**. They mean the same as the columns in the list. Hover over one for its explanation.
 
 ### Your approval
 

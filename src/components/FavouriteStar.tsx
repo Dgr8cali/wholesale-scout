@@ -8,7 +8,7 @@ export function FavouriteStar({ starred, onToggle, busy = false }: { starred: bo
     <button type="button" disabled={busy} aria-pressed={starred} aria-label={starred ? "Remove from favourites" : "Add to favourites"}
       title={starred ? "Favourite: click to remove" : "Add to favourites"}
       onClick={(e) => { e.stopPropagation(); onToggle(); }}
-      className={`-m-1 flex-none rounded p-1 disabled:opacity-50 ${starred ? "text-warn" : "text-muted-foreground hover:text-warn"}`}>
+      className={`-m-1 flex-none rounded p-1 disabled:opacity-50 ${starred ? "text-warn-ink" : "text-muted-foreground hover:text-warn-ink"}`}>
       <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
         <path d="M12 2.8l2.8 5.8 6.3.9-4.6 4.4 1.1 6.3L12 17.2l-5.6 3 1.1-6.3-4.6-4.4 6.3-.9L12 2.8z"
           fill={starred ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
@@ -34,7 +34,7 @@ export function FavouriteNote({ note, onSave, starred = true }: { note: string |
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
   return (
     <label className="block space-y-1 text-xs" onClick={(e) => e.stopPropagation()}>
-      <span className="font-semibold uppercase tracking-wide text-muted-foreground">Favourite note{starred ? "" : " (adding one stars the product)"}</span>
+      <span className="eyebrow">Favourite note{starred ? "" : " (adding one stars the product)"}</span>
       <Textarea className="h-14" maxLength={500} defaultValue={note ?? ""} placeholder="Why it's a favourite, what to check next…"
         onChange={(e) => {
           const v = e.target.value;

@@ -10,10 +10,10 @@ import type { Sparks } from "@/lib/sparkline";
 import { RestrictionLink } from "@/lib/ui/RestrictionLink";
 import { gbp, pct } from "@/lib/ui/client";
 import { brandOf, dormantOf } from "@/lib/ui/resultRows";
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { Sparkline } from "./Sparkline";
 import { titleOf, type Result } from "./types";
+import { StatusChip } from "@/components/ui/status-chip";
 
 /**
  * A result's details in a panel on the right, beside the table rather than over a backdrop.
@@ -48,7 +48,7 @@ export function DetailDrawer({ r, index, count, sparks, onStep, onClose, childre
   }, [onStep, onClose]);
 
   const money = (label: string, v: ReactNode, cls?: string) => (
-    <div className="rounded-lg bg-muted/60 px-2.5 py-1.5">
+    <div className="rounded-lg bg-subtle/60 px-2.5 py-1.5">
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className={cn("num text-sm font-semibold", cls)}>{v}</p>
     </div>
@@ -68,16 +68,16 @@ export function DetailDrawer({ r, index, count, sparks, onStep, onClose, childre
           <ProductThumb url={r.product?.image_url} asin={r.product?.asin} title={titleOf(r)} brand={brandOf(r)} size={72} />
           <div className="min-w-0">
             <h2 className="section-title leading-snug">
-              {r.product?.asin ? <Link className="hover:text-brand hover:underline" href={`/products/${r.product.asin}`}>{titleOf(r)}</Link> : titleOf(r)}
+              {r.product?.asin ? <Link className="hover:text-primary hover:underline" href={`/products/${r.product.asin}`}>{titleOf(r)}</Link> : titleOf(r)}
             </h2>
             <p className="num mt-0.5 text-xs text-muted-foreground">
               {[brandOf(r), r.product?.ean].filter(Boolean).join(" · ")}
-              {r.product?.asin && <> · <a className="text-brand hover:underline" href={`https://www.amazon.co.uk/dp/${r.product.asin}`} target="_blank" rel="noreferrer">{r.product.asin}</a></>}
+              {r.product?.asin && <> · <a className="text-primary hover:underline" href={`https://www.amazon.co.uk/dp/${r.product.asin}`} target="_blank" rel="noreferrer">{r.product.asin}</a></>}
             </p>
             {r.offer?.supplier && <p className="text-xs text-muted-foreground">{r.offer.supplier.name}</p>}
             <div className="mt-1.5 flex items-center gap-2">
               <VerdictBadge verdict={r.verdict} error={r.status === "error"} />
-              {dormantOf(r) && <Badge variant="muted">dormant</Badge>}
+              {dormantOf(r) && <StatusChip tone="neutral">Dormant</StatusChip>}
               {r.score != null && <span className="num text-xs text-muted-foreground">score {Math.round(r.score)}{r.band ? ` · ${r.band}` : ""}</span>}
             </div>
           </div>
@@ -85,7 +85,7 @@ export function DetailDrawer({ r, index, count, sparks, onStep, onClose, childre
 
         <div className="grid grid-cols-4 gap-2">
           {money("Sell", gbp(r.sell_price))}
-          {money("Profit", gbp(r.profit), r.profit != null && r.profit < 0 ? "text-fail" : undefined)}
+          {money("Profit", gbp(r.profit), r.profit != null && r.profit < 0 ? "text-danger" : undefined)}
           {money("ROI", pct(r.roi))}
           {money("Margin", pct(r.margin))}
         </div>
@@ -93,11 +93,11 @@ export function DetailDrawer({ r, index, count, sparks, onStep, onClose, childre
         <div className="grid grid-cols-2 gap-3">
           <div>
             <p className="eyebrow mb-1">Sales rank, 90 days</p>
-            {sparks === undefined ? <div className="h-9 animate-pulse rounded bg-muted" /> : <Sparkline values={sparks?.rank} invert width={190} height={36} label="Sales rank over 90 days; up is a better rank" />}
+            {sparks === undefined ? <div className="h-9 animate-pulse rounded bg-subtle" /> : <Sparkline values={sparks?.rank} invert width={190} height={36} label="Sales rank over 90 days; up is a better rank" />}
           </div>
           <div>
             <p className="eyebrow mb-1">Buy Box, 90 days</p>
-            {sparks === undefined ? <div className="h-9 animate-pulse rounded bg-muted" /> : <Sparkline values={sparks?.buyBox} width={190} height={36} label="Buy Box price over 90 days" />}
+            {sparks === undefined ? <div className="h-9 animate-pulse rounded bg-subtle" /> : <Sparkline values={sparks?.buyBox} width={190} height={36} label="Buy Box price over 90 days" />}
           </div>
         </div>
 

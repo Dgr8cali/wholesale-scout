@@ -1,6 +1,6 @@
 "use client";
 
-import { LoaderIcon, PlusIcon } from "lucide-react";
+import { PlusIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -16,7 +16,7 @@ type Hit = { asin: string; ean: string; title: string | null; brand: string | nu
  * "Record a purchase" from anywhere: find the product by ASIN, Amazon link, EAN or name and open
  * its page with the purchase form ready. A product the app hasn't seen is checked first.
  */
-export function RecordPurchaseDialog({ variant = "default" }: { variant?: "default" | "outline" }) {
+export function RecordPurchaseDialog({ variant = "default" }: { variant?: "default" | "outline" | "primary" | "secondary" }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
@@ -64,19 +64,19 @@ export function RecordPurchaseDialog({ variant = "default" }: { variant?: "defau
           </DialogHeader>
           <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); void find(); }}>
             <Input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="ASIN, Amazon link, EAN or name" aria-label="Product" />
-            <Button type="submit" disabled={busy || !q.trim()}>{busy ? <LoaderIcon className="animate-spin" /> : "Find"}</Button>
+            <Button type="submit" disabled={!q.trim()} loading={busy}>Find</Button>
           </form>
           {unknown && (
-            <div className="space-y-2 rounded-lg bg-muted/60 p-3 text-sm">
+            <div className="space-y-2 rounded-lg bg-subtle p-3 text-sm">
               <p><b className="num">{unknown}</b> isn&apos;t in the app yet. Check it first (a few Keepa tokens, and it appears in Runs as an ASIN check); its page then opens with the purchase form.</p>
-              <Button size="sm" disabled={busy} onClick={() => checkFirst(unknown)}>{busy ? <LoaderIcon className="animate-spin" /> : null} Check {unknown} and record</Button>
+              <Button size="sm" loading={busy} onClick={() => checkFirst(unknown)}>Check {unknown} and record</Button>
             </div>
           )}
           {hits && !unknown && (hits.length ? (
-            <ul className="max-h-72 divide-y overflow-y-auto">
+            <ul className="max-h-72 divide-y divide-divider overflow-y-auto">
               {hits.map((h) => (
                 <li key={h.asin}>
-                  <button type="button" className="w-full px-1 py-2 text-left hover:bg-muted" onClick={() => go(h.asin)}>
+                  <button type="button" className="w-full cursor-pointer rounded-md px-1 py-2 text-left hover:bg-subtle" onClick={() => go(h.asin)}>
                     <span className="line-clamp-1 text-sm">{h.title ?? h.asin}</span>
                     <span className="num text-xs text-muted-foreground">{h.asin}{h.brand ? ` · ${h.brand}` : ""}</span>
                   </button>

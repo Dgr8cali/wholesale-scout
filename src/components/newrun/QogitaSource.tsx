@@ -7,9 +7,9 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { useDialogs } from "@/components/Dialogs";
 import { EmptyState } from "@/components/States";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { SectionTitle } from "@/components/ui/info-tip";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
@@ -170,16 +170,16 @@ export function QogitaSource() {
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5 sm:col-span-2">
               <Label className="field-label">Category</Label>
-              {catError ? <p className="text-sm text-fail">Couldn&apos;t load categories: {catError}</p>
+              {catError ? <p className="text-sm text-danger">Couldn&apos;t load categories: {catError}</p>
                 : !cats ? <Skeleton className="h-9" />
                 : <CategoryPicker cats={cats} value={filters.category} onChange={(category) => set({ category, leaves: null })} />}
               <p className="text-xs text-muted-foreground">Any level: a parent pulls every category under it.</p>
               {leaves.length > 1 && (
-                <fieldset className="mt-2 space-y-1.5 rounded-md border p-3">
+                <fieldset className="mt-2 space-y-1.5 rounded-lg border border-border p-3">
                   <legend className="px-1 text-xs text-muted-foreground">
                     {filters.leaves ? `${filters.leaves.length} of ${leaves.length}` : `All ${leaves.length}`} categories under it
-                    {" · "}<button type="button" className="text-brand hover:underline" onClick={() => set({ leaves: null })}>all</button>
-                    {" · "}<button type="button" className="text-brand hover:underline" onClick={() => set({ leaves: [] })}>none</button>
+                    {" · "}<button type="button" className="cursor-pointer text-primary hover:underline" onClick={() => set({ leaves: null })}>all</button>
+                    {" · "}<button type="button" className="cursor-pointer text-primary hover:underline" onClick={() => set({ leaves: [] })}>none</button>
                   </legend>
                   <div className="grid max-h-48 gap-x-4 gap-y-1 overflow-auto sm:grid-cols-2 lg:grid-cols-3">
                     {leaves.map((leaf) => (
@@ -206,7 +206,7 @@ export function QogitaSource() {
             <NumberField id="skipDays" label="Skip EANs screened in the last N days" value={filters.skipScreenedDays ?? 7} step={1} onChange={(skipScreenedDays) => set({ skipScreenedDays })}
               hint="Those reuse their recent result (re-checked at the new price, no API calls). 0 screens everything." />
           </div>
-          <div className="grid gap-4 border-t pt-5 sm:grid-cols-2">
+          <div className="grid gap-4 border-t border-divider pt-5 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label className="field-label" htmlFor="name">Save as</Label>
               <Input id="name" placeholder={`e.g. K-beauty masks under ${cur}10`} value={name} onChange={(e) => setName(e.target.value)} />
@@ -222,7 +222,7 @@ export function QogitaSource() {
             {canEstimate && (
               <p className="mr-auto text-sm" aria-live="polite">
                 {!est ? <span className="text-muted-foreground">Estimating…</span>
-                  : est.error ? <span className="text-fail">Couldn&apos;t estimate: {est.error}</span>
+                  : est.error ? <span className="text-danger">Couldn&apos;t estimate: {est.error}</span>
                   : est.value && (
                     <>
                       About <span className="num font-semibold">{est.value.products.toLocaleString("en-GB")}</span> products
@@ -235,35 +235,35 @@ export function QogitaSource() {
               </p>
             )}
             {!canPull && <span className="text-sm text-muted-foreground">Choose a category or a brand, and name the pull.</span>}
-            <Button size="lg" disabled={!canPull || !!busy}
+            <Button size="lg" disabled={!canPull || (!!busy && busy !== "new")} loading={busy === "new"}
               onClick={() => pull(() => api("/api/qogita/pull", { method: "POST", json: { name, filters, profileId } }), "new")}>
-              <DownloadCloudIcon /> {busy === "new" ? "Pulling…" : "Pull and screen"}
+              {busy === "new" ? "Pulling" : <><DownloadCloudIcon /> Pull and screen</>}
             </Button>
           </div>
         </section>
 
         <aside className="space-y-3">
-          <h2 className="section-label">Saved pulls</h2>
-          {presetNote && <p className="rounded-md bg-warn-soft px-3 py-2 text-sm text-warn">{presetNote}</p>}
+          <SectionTitle title="Saved pulls">Each pull is saved by name: load its filters, run it again, or re-pull it every night.</SectionTitle>
+          {presetNote && <p className="rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn-ink">{presetNote}</p>}
           {!presets ? <Skeleton className="h-32 rounded-lg" />
-            : !presets.length ? <p className="rounded-lg border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">Each pull is saved here by name, to run again or re-pull nightly.</p>
+            : !presets.length ? <p className="rounded-xl border border-dashed border-border-strong px-4 py-6 text-center text-sm text-muted-foreground">Each pull is saved here by name, to run again or re-pull nightly.</p>
             : presets.map((p) => (
               <div key={p.id} className="panel space-y-2 p-3">
                 <div className="flex items-start gap-2">
-                  <button className="min-w-0 flex-1 text-left" onClick={() => { setFilters({ ...EMPTY, ...p.filters }); setName(p.name); if (p.profile_id) setProfileId(p.profile_id); }} title="Load these filters">
+                  <button className="min-w-0 flex-1 cursor-pointer text-left" onClick={() => { setFilters({ ...EMPTY, ...p.filters }); setName(p.name); if (p.profile_id) setProfileId(p.profile_id); }} title="Load these filters">
                     <p className="truncate font-medium hover:underline">{p.name}</p>
                     <p className="text-xs text-muted-foreground">{describeFilters(p.filters, cur).join(" · ")}</p>
                   </button>
-                  <Button variant="ghost" size="icon-xs" className="text-muted-foreground hover:text-fail" aria-label={`Delete ${p.name}`}
+                  <Button variant="danger" size="sm" aria-label={`Delete ${p.name}`}
                     onClick={async () => {
                       if (!(await confirm({ title: `Delete “${p.name}”?`, description: "Its runs are kept.", confirmLabel: "Delete", destructive: true }))) return;
                       await api(`/api/qogita/presets/${p.id}`, { method: "DELETE" }).then(loadPresets, (e) => toast.error(e.message));
-                    }}><Trash2Icon /></Button>
+                    }}><Trash2Icon /> Delete</Button>
                 </div>
                 {p.lastPull && (
                   <p className="text-xs text-muted-foreground">
                     {when(p.lastPull.started_at)}{p.lastPull.kind === "nightly" ? " (nightly)" : ""}: {p.lastPull.stats.screened ?? p.lastPull.stats.kept} screened
-                    {p.lastPull.run_id && <> · <Link className="text-brand hover:underline" href={`/runs/${p.lastPull.run_id}`}>run</Link></>}
+                    {p.lastPull.run_id && <> · <Link className="text-primary hover:underline" href={`/runs/${p.lastPull.run_id}`}>run</Link></>}
                   </p>
                 )}
                 <div className="flex items-center justify-between gap-2">
@@ -271,8 +271,8 @@ export function QogitaSource() {
                     <Switch checked={p.nightly} onCheckedChange={(nightly) => api(`/api/qogita/presets/${p.id}`, { method: "PATCH", json: { nightly } }).then(loadPresets, (e) => toast.error(e.message))} />
                     Re-pull nightly
                   </label>
-                  <Button variant="outline" size="sm" disabled={!!busy} onClick={() => pull(() => api(`/api/qogita/presets/${p.id}/run`, { method: "POST" }), p.id)}>
-                    <PlayIcon /> {busy === p.id ? "Pulling…" : "Run again"}
+                  <Button variant="secondary" size="sm" disabled={!!busy && busy !== p.id} loading={busy === p.id} onClick={() => pull(() => api(`/api/qogita/presets/${p.id}/run`, { method: "POST" }), p.id)}>
+                    {busy === p.id ? "Pulling" : <><PlayIcon /> Run again</>}
                   </Button>
                 </div>
               </div>
@@ -303,7 +303,7 @@ function CategoryPicker({ cats, value, onChange }: { cats: Category[]; value: Fi
     <div className="flex gap-2">
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <Button variant="outline" className="min-w-0 flex-1 justify-between font-normal">
+          <Button variant="secondary" className="min-w-0 flex-1 justify-between font-normal">
             <span className={cn("truncate", !value && "text-muted-foreground")}>{value ? value.path.slice(1).join(" › ") || value.name : "All categories"}</span>
             <ChevronRightIcon className="rotate-90 text-muted-foreground" />
           </Button>
@@ -319,11 +319,11 @@ function CategoryPicker({ cats, value, onChange }: { cats: Category[]; value: Fi
               return (
                 <li key={n.path.join("›")}>
                   <button role="option" aria-selected={selected} onClick={() => { onChange({ name: n.name, path: n.path }); setOpen(false); }}
-                    className={cn("flex w-full items-center gap-2 rounded-md py-1 pr-2 text-left text-sm hover:bg-muted", selected && "bg-brand-soft")}
+                    className={cn("flex w-full cursor-pointer items-center gap-2 rounded-md py-1 pr-2 text-left text-sm hover:bg-subtle", selected && "bg-primary-soft")}
                     style={{ paddingLeft: q ? 8 : 8 + (n.path.length - 1) * 14 }}>
                     <span className="min-w-0 flex-1 truncate">{q ? n.path.slice(1).join(" › ") || n.name : n.name}</span>
                     {n.path.length < 4 && n.leaves > 1 && <span className="num text-xs text-muted-foreground">{n.leaves}</span>}
-                    {selected && <CheckIcon className="size-3.5 text-brand" />}
+                    {selected && <CheckIcon className="size-3.5 text-primary" />}
                   </button>
                 </li>
               );
@@ -361,14 +361,13 @@ function BrandInput({ value, onChange }: { value: string[]; onChange: (b: string
       <div className="flex gap-2">
         <Input id="brand" placeholder="Type a brand and press Enter" value={text} onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } }} />
-        <Button variant="outline" disabled={!text.trim() || checking} onClick={add}>{checking ? "Checking…" : "Add"}</Button>
+        <Button variant="secondary" disabled={!text.trim()} loading={checking} onClick={add}>{checking ? "Checking" : "Add"}</Button>
       </div>
       {value.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {value.map((b) => (
-            <Badge key={b} variant="brand" asChild>
-              <button onClick={() => onChange(value.filter((x) => x !== b))} aria-label={`Remove ${b}`} className="cursor-pointer">{b} <XIcon /></button>
-            </Badge>
+            <button key={b} type="button" onClick={() => onChange(value.filter((x) => x !== b))} aria-label={`Remove ${b}`}
+              className="inline-flex h-6 cursor-pointer items-center gap-1 rounded-full bg-primary-soft px-2.5 text-xs font-medium text-primary-ink hover:bg-primary-soft/70">{b} <XIcon className="size-3" /></button>
           ))}
         </div>
       )}

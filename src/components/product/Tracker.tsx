@@ -7,6 +7,7 @@ import { PlusIcon } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { SectionTitle } from "@/components/ui/info-tip";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import type { Purchase } from "@/lib/server/purchases";
@@ -71,12 +72,12 @@ export function Tracker({ asin, suppliers, defaultLanded, openForm = false }: { 
   return (
     <section id="purchases" className="panel min-w-0 scroll-mt-16 space-y-3 p-4" aria-label="Your purchases">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="section-label">Your purchases <span>· the prediction is frozen when you record one, to compare with what happens</span></h2>
-        {!adding && <Button variant="outline" size="sm" onClick={() => setAdding(true)}><PlusIcon /> Record a purchase</Button>}
+        <SectionTitle title="Your purchases">The prediction is frozen when you record a purchase, to compare with what happens: Amazon&apos;s real sales, price and fees.</SectionTitle>
+        {!adding && <Button variant="secondary" size="sm" onClick={() => setAdding(true)}><PlusIcon /> Record a purchase</Button>}
       </div>
 
       {adding && (
-        <div className="grid gap-2 rounded-lg bg-muted/60 p-3 sm:grid-cols-6">
+        <div className="grid gap-2 rounded-lg bg-subtle/60 p-3 sm:grid-cols-6">
           <label className="space-y-1"><span className="field-label">Units</span>
             <Input className="num" type="number" min={1} value={form.units} onChange={(e) => setForm({ ...form, units: e.target.value })} autoFocus /></label>
           <label className="space-y-1"><span className="field-label">Landed per unit (£)</span>
@@ -97,7 +98,7 @@ export function Tracker({ asin, suppliers, defaultLanded, openForm = false }: { 
           <label className="space-y-1 sm:col-span-5"><span className="field-label">Note (optional)</span>
             <Input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="e.g. PO 1043, test order" /></label>
           <div className="flex items-end gap-2">
-            <Button disabled={busy || !(Number(form.units) > 0) || !(Number(form.landed.replace(",", ".")) >= 0) || form.landed === ""} onClick={save}>Save purchase</Button>
+            <Button disabled={!(Number(form.units) > 0) || !(Number(form.landed.replace(",", ".")) >= 0) || form.landed === ""} loading={busy} onClick={save}>Save purchase</Button>
             <Button variant="ghost" onClick={() => setAdding(false)}>Cancel</Button>
           </div>
         </div>
@@ -108,12 +109,12 @@ export function Tracker({ asin, suppliers, defaultLanded, openForm = false }: { 
       ) : (
         <ul className="space-y-3">
           {rows.map((p) => (
-            <li key={p.id} className="rounded-lg border p-3">
+            <li key={p.id} className="rounded-lg border border-border p-3">
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
                 {(p.stock || p.product) && (
                   <span className="flex min-w-0 items-center gap-2">
                     <ProductThumb url={p.stock?.image_url || p.product?.image_url || null} asin={p.asin} title={p.stock?.name ?? p.product?.title ?? p.asin} brand={p.stock?.brand ?? p.product?.brand ?? null} size={28} />
-                    {p.stock_item_id ? <Link className="num text-xs text-brand hover:underline" href={`/stock/levels?item=${p.stock_item_id}`} title={p.stock?.name ?? ""}>{p.stock?.sku ?? "Stock item"}</Link> : null}
+                    {p.stock_item_id ? <Link className="num text-xs text-primary hover:underline" href={`/stock/levels?item=${p.stock_item_id}`} title={p.stock?.name ?? ""}>{p.stock?.sku ?? "Stock item"}</Link> : null}
                   </span>
                 )}
                 <span className="num font-medium">{p.units} units × {gbp(p.landed_gbp)}</span>

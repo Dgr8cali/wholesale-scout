@@ -44,7 +44,7 @@ export function EditableName({ value, onSave, display, className = "", inputClas
         <span className="min-w-0 break-words">{display ?? value}</span>
         <button type="button" aria-label="Rename" title="Rename"
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); setDraft(value); setEditing(true); }}
-          className="text-muted-foreground opacity-60 hover:text-brand hover:opacity-100 group-hover:opacity-100">
+          className="text-muted-foreground opacity-60 hover:text-primary hover:opacity-100 group-hover:opacity-100">
           <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M11.5 2.5l2 2L6 12H4v-2l7.5-7.5z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" /></svg>
         </button>
       </span>
@@ -63,7 +63,7 @@ export function EditableName({ value, onSave, display, className = "", inputClas
             setError(null);
           }
         }} />
-      {error && <span className="text-xs text-fail">{error}</span>}
+      {error && <span className="text-xs text-danger">{error}</span>}
     </span>
   );
 }

@@ -1,11 +1,12 @@
 "use client";
 
-import { CrosshairIcon, LoaderIcon } from "lucide-react";
+import { CrosshairIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { ErrorState } from "@/components/States";
 import { Button } from "@/components/ui/button";
+import { InfoTip, SectionTitle } from "@/components/ui/info-tip";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -29,7 +30,6 @@ function Num({ label, value, onChange, step, hint }: { label: string; value: num
   );
 }
 
-/** Hunt: Keepa's Product Finder with the default profile's shape, screened as a run with no cost. */
 /** New run → Hunt: Keepa Product Finder matches for a profile, screened as a run with no cost. */
 export function HuntSource() {
   const router = useRouter();
@@ -100,8 +100,8 @@ export function HuntSource() {
             </NativeSelect>
           </label>
           {!start.categories.length && (
-            <Button variant="outline" onClick={loadCategories} disabled={!!busy || !start.keepa}>
-              {busy === "cats" && <LoaderIcon className="animate-spin" />} Load categories (1 token)
+            <Button variant="secondary" onClick={loadCategories} disabled={(!!busy && busy !== "cats") || !start.keepa} loading={busy === "cats"}>
+              Load categories (1 token)
             </Button>
           )}
         </div>
@@ -123,37 +123,39 @@ export function HuntSource() {
             <Switch checked={shape.noAmazon} onCheckedChange={(v) => set({ noAmazon: v })} /> No Amazon offer
           </label>
         </div>
-        <button type="button" className="text-xs font-medium text-brand hover:underline" onClick={() => setShape({ ...start.shape, category: shape.category, maxRank: rankFor(shape.category?.name ?? null) })}>
-          Reset to {start.profile}
-        </button>
-        <p className="text-xs text-muted-foreground">
-          Sellers here are Keepa&apos;s count of new offers (FBA and merchant); the run&apos;s Competition gate then checks FBA sellers.
-        </p>
+        <div className="flex items-center gap-1">
+          <button type="button" className="cursor-pointer text-meta font-medium text-primary hover:underline" onClick={() => setShape({ ...start.shape, category: shape.category, maxRank: rankFor(shape.category?.name ?? null) })}>
+            Reset to {start.profile}
+          </button>
+          <InfoTip label="About sellers">
+            <p>Sellers here are Keepa&apos;s count of new offers (FBA and merchant); the run&apos;s Competition gate then checks FBA sellers.</p>
+          </InfoTip>
+        </div>
       </section>
 
       <section className="panel space-y-3 p-4" aria-label="Cost">
-        <p className="section-label">Cost before you run it</p>
+        <SectionTitle title="Cost before you run it" />
         <ul className="space-y-1 text-sm">
           <li><b className="num">{finder}</b> tokens for the Product Finder (10, plus 1 per 100 results).</li>
           <li>
             Then screening the matches: up to <b className="num">{shape.results}</b> more for their history (1 each; history under the profile&apos;s max age is free),
             and 3 each for the Buy Box data of those that pass everything else.
           </li>
-          <li className={short ? "font-medium text-fail" : "text-muted-foreground"}>
+          <li className={short ? "font-medium text-danger" : "text-muted-foreground"}>
             Keepa balance: {start.tokensLeft == null ? "unknown" : `${start.tokensLeft.toLocaleString("en-GB")} tokens`}{short ? ": not enough for the finder yet" : ""}.
           </li>
         </ul>
         <details className="text-xs">
           <summary className="cursor-pointer text-muted-foreground">Keepa query</summary>
-          <pre className="num mt-1 overflow-x-auto rounded-md bg-muted p-2">{JSON.stringify(selection, null, 2)}</pre>
+          <pre className="num mt-1 overflow-x-auto rounded-lg bg-subtle p-2">{JSON.stringify(selection, null, 2)}</pre>
         </details>
         <div className="flex flex-wrap items-center gap-3">
-          <Button onClick={hunt} disabled={!!busy || !start.keepa || short}>
-            {busy === "hunt" ? <LoaderIcon className="animate-spin" /> : <CrosshairIcon />} Hunt
+          <Button onClick={hunt} disabled={(!!busy && busy !== "hunt") || !start.keepa || short} loading={busy === "hunt"}>
+            {busy === "hunt" ? "Hunting" : <><CrosshairIcon /> Hunt</>}
           </Button>
           <span className="text-xs text-muted-foreground">{huntName(shape)}</span>
         </div>
-        {!start.keepa && <p className="text-xs text-fail">Keepa isn&apos;t set up: set KEEPA_API_KEY.</p>}
+        {!start.keepa && <p className="text-xs text-danger">Keepa isn&apos;t set up: set KEEPA_API_KEY.</p>}
       </section>
     </div>
   );

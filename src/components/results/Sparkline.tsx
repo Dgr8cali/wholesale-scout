@@ -32,7 +32,7 @@ export function Sparkline({ values, invert = false, width = 80, height = 22, cla
   const last = [...values].reverse().find((v) => v != null)!;
   const lastI = values.lastIndexOf(last);
   return (
-    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} role="img" aria-label={label} className={cn("overflow-visible text-brand", className)}>
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} role="img" aria-label={label} className={cn("overflow-visible text-primary", className)}>
       <title>{label}</title>
       <path d={d} fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
       <circle cx={x(lastI)} cy={y(last)} r={1.8} fill="currentColor" />

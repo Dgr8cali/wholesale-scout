@@ -33,7 +33,7 @@ export function Checked({ at, recheck }: { at: string | null | undefined; rechec
       {at && <span title={stamp(at)}>Checked {ago(at)}</span>}
       {at && recheck && " · "}
       {recheck && (
-        <button type="button" className="font-medium text-brand hover:underline disabled:opacity-50" disabled={busy} onClick={(e) => { e.stopPropagation(); void go(); }}>
+        <button type="button" className="font-medium text-primary hover:underline disabled:opacity-50" disabled={busy} onClick={(e) => { e.stopPropagation(); void go(); }}>
           {busy ? "Checking…" : "Re-check"}
         </button>
       )}

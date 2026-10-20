@@ -5,11 +5,12 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { ProductDecision, StatusChip } from "@/components/ui/status-chip";
+import { SectionTitle } from "@/components/ui/info-tip";
 import { Textarea } from "@/components/ui/textarea";
 import { parseCheckInput } from "@/lib/check/parse";
 import type { VerdictCard as Card } from "@/lib/server/check";
@@ -88,7 +89,7 @@ export function CheckSource() {
             {parsed.lines.length
               ? `${parsed.lines.length} to check: ${asins} ASIN${asins === 1 ? "" : "s"}, ${parsed.lines.length - asins} EAN${parsed.lines.length - asins === 1 ? "" : "s"}; ${withCost} with a cost.`
               : "Landed cost = what one unit costs you delivered to Amazon, all in. \"ASIN, cost\" or \"ASIN cost\" per line."}
-            {parsed.errors.length > 0 && <span className="text-warn"> {parsed.errors.join("; ")}</span>}
+            {parsed.errors.length > 0 && <span className="text-warn-ink"> {parsed.errors.join("; ")}</span>}
           </p>
         </div>
         <div className="grid gap-4 sm:grid-cols-3">
@@ -103,19 +104,19 @@ export function CheckSource() {
             </NativeSelect>
           </div>
           <div className="flex items-end">
-            <Button type="submit" className="w-full" disabled={busy || !parsed.lines.length}>
-              <ScanSearchIcon /> {busy ? (parsed.lines.length === 1 ? "Checking… a few seconds" : "Starting…") : `Check ${parsed.lines.length || ""}`.trim()}
+            <Button type="submit" className="w-full" disabled={!parsed.lines.length} loading={busy}>
+              {busy ? (parsed.lines.length === 1 ? "Checking, a few seconds" : "Starting") : <><ScanSearchIcon /> {`Check ${parsed.lines.length || ""}`.trim()}</>}
             </Button>
           </div>
         </div>
       </form>
 
       <section className="space-y-2">
-        <h2 className="section-label">Recent checks</h2>
-        {recent == null ? <p className="text-sm text-muted-foreground">Loading…</p> : !recent.length ? (
-          <p className="text-sm text-muted-foreground">Your last 20 checks will be here to re-run.</p>
+        <SectionTitle title="Recent checks">Your last 20 checks, newest first. Re-run checks one again with fresh data.</SectionTitle>
+        {recent == null ? <p className="panel px-4 py-3 text-sm text-muted-foreground">Loading…</p> : !recent.length ? (
+          <p className="panel px-4 py-3 text-sm text-muted-foreground">Your last 20 checks will be here to re-run.</p>
         ) : (
-          <ul className="panel divide-y">
+          <ul className="panel divide-y divide-divider">
             {recent.map((c) => {
               const s = c.summary;
               const one = c.rows === 1 && s;
@@ -124,15 +125,15 @@ export function CheckSource() {
                 <li key={c.id} className="flex flex-wrap items-center gap-3 px-4 py-2.5">
                   <div className="min-w-0 flex-1">
                     <Link href={`/runs/${c.id}`} className="block truncate text-sm font-medium underline-offset-2 hover:underline">{c.codes.join(", ")}</Link>
-                    <p className="truncate text-xs text-muted-foreground">
+                    <p className="truncate text-meta text-muted-foreground">
                       {when(c.startedAt)} · {c.supplier}
                       {c.input.includes(",") || /\s\d/.test(c.input) ? " · with cost" : ""}
                     </p>
                   </div>
-                  {s?.pending ? <Badge variant="muted">Screening</Badge>
-                    : v ? <Badge variant={v} className="uppercase">{v}{s?.score != null ? ` · ${Math.round(s.score)}` : ""}</Badge>
-                    : s ? <span className="num text-xs text-muted-foreground">{s.pass} pass · {s.warn} warn · {s.fail} fail</span> : null}
-                  <Button size="sm" variant="outline" disabled={busy} onClick={() => { setText(c.input); setSupplier(c.supplier === "Manual" ? "" : c.supplier); check(c.input, c.supplier === "Manual" ? "" : c.supplier); }}
+                  {s?.pending ? <StatusChip tone="info">Screening</StatusChip>
+                    : v ? <ProductDecision verdict={v}>{s?.score != null ? <span className="num"> · {Math.round(s.score)}</span> : null}</ProductDecision>
+                    : s ? <span className="num text-xs text-muted-foreground">{s.pass} Buy · {s.warn} Check · {s.fail} Skip</span> : null}
+                  <Button size="sm" variant="ghost" disabled={busy} onClick={() => { setText(c.input); setSupplier(c.supplier === "Manual" ? "" : c.supplier); check(c.input, c.supplier === "Manual" ? "" : c.supplier); }}
                     title="Check again with fresh data">
                     <RotateCcwIcon /> Re-run
                   </Button>

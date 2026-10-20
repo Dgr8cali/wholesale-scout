@@ -8,7 +8,6 @@ import { VerdictCard } from "@/components/check/VerdictCard";
 import type { VerdictCard as VerdictCardData } from "@/lib/server/check";
 import { toast } from "sonner";
 import { BulkBar } from "@/components/BulkBar";
-import { usePageCrumbs } from "@/components/Crumbs";
 import { useDialogs } from "@/components/Dialogs";
 import { EditableName } from "@/components/EditableName";
 import { FilterBar, type FilterOptions } from "@/components/FilterBar";
@@ -21,6 +20,7 @@ import { downloadXlsx, exportRows } from "@/components/results/exportXlsx";
 import { compareResults, loadResultSort, nextResultSort, saveResultSort } from "@/components/results/sort";
 import { ErrorState } from "@/components/States";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import Link from "next/link";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
@@ -43,7 +43,6 @@ export default function RunPage() {
   const [run, setRun] = useState<Run | null>(null);
   // An ASIN check of one item: its verdict card, above the row.
   const [card, setCard] = useState<VerdictCardData | null>(null);
-  usePageCrumbs([{ label: "Runs", href: "/runs" }, { label: run ? run.name || run.source : "…" }]);
   const [results, setResults] = useState<Result[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<Progress | null>(null);
@@ -376,53 +375,55 @@ export default function RunPage() {
 
   return (
     <div className={cn("space-y-4 transition-[margin]", active && "xl:mr-[27rem]")}>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="page-title">
-            <EditableName value={run.name || run.source} inputClassName="text-lg font-semibold"
-              onSave={async (name) => {
-                await api(`/api/runs/${id}`, { method: "PATCH", json: { name } });
-                setRun((r) => r && { ...r, name });
-              }} />
-          </h1>
-          {run.name && run.name !== run.source && <p className="text-xs text-muted-foreground">{run.source}</p>}
-          {run.stats?.scan && (
-            <p className="text-xs text-muted-foreground">
-              Storefront of{" "}
-              <a className="font-medium text-brand hover:underline" href={storefrontUrl(run.stats.scan.sellerId)} target="_blank" rel="noreferrer">{run.stats.scan.sellerName ?? run.stats.scan.sellerId}</a>
-              : {run.stats.scan.asins.toLocaleString("en-GB")} ASINs screened with no cost
-              {run.stats.scan.more > 0 ? `; ${run.stats.scan.more.toLocaleString("en-GB")} more on the storefront not scanned` : ""}
-              {" · "}{results.filter((x) => x.inputs?.market?.buyBoxSellerId === run.stats?.scan?.sellerId).length} where it holds the Buy Box now
-              {" · "}<Link className="text-brand hover:underline" href="/sellers">Sellers</Link>
-            </p>
-          )}
-          <p className="text-sm text-muted-foreground">
-            {run.profile?.name ?? "Profile"}{profileVersion(run)} · started {when(run.started_at)} · {products.length || total} products ({total} listings) · {run.token_cost.toLocaleString("en-GB")} Keepa tokens{tokenStages(run)}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
+      <PageHeader
+        crumbs={[{ label: "Wholesale", href: "/runs" }, { label: "Runs", href: "/runs" }, { label: run.name || run.source }]}
+        title={
+          <EditableName value={run.name || run.source} inputClassName="text-lg font-semibold"
+            onSave={async (name) => {
+              await api(`/api/runs/${id}`, { method: "PATCH", json: { name } });
+              setRun((r) => r && { ...r, name });
+            }} />
+        }
+        subtitle={<>{run.profile?.name ?? "Profile"} · started {when(run.started_at)} · <span className="num">{(products.length || total).toLocaleString("en-GB")}</span> products (<span className="num">{total.toLocaleString("en-GB")}</span> listings) · <span className="num">{run.token_cost.toLocaleString("en-GB")}</span> Keepa tokens</>}
+        info={<>
+          {run.name && run.name !== run.source && <p>Source: {run.source}</p>}
+          <p>Profile: {run.profile?.name ?? "Profile"}{profileVersion(run)}.</p>
+          <p>Keepa tokens: {run.token_cost.toLocaleString("en-GB")}{tokenStages(run)}.</p>
+          <p>Re-screen re-runs the gates and score with the profile&apos;s current settings, using the data already fetched: no re-upload, and only rows that now need data they never had are looked up (which can spend Keepa tokens).</p>
+        </>}
+        actions={<>
           <NativeSelect className="w-60" value={rescreenProfile} onChange={(e) => setRescreenProfile(e.target.value)} aria-label="Profile to re-screen with">
             <NativeSelectOption value="">{run.profile?.name ?? "This run's profile"} (as saved now)</NativeSelectOption>
             {profiles.filter((p) => p.name !== run.profile?.name).map((p) => <NativeSelectOption key={p.id} value={p.id}>{p.name}</NativeSelectOption>)}
           </NativeSelect>
-          <Button variant="outline" onClick={rescreen} disabled={rescreening || processing}
+          <Button variant="secondary" onClick={rescreen} disabled={processing} loading={rescreening}
             title="Re-run gates and score with the profile's current settings, using the data already fetched. No re-upload; only rows that now need data they never had are looked up (which can spend Keepa tokens).">
-            {rescreening ? "Re-screening…" : "Re-screen"}
+            {rescreening ? "Re-screening" : "Re-screen"}
           </Button>
           {processing && (progress?.paused
             ? <Button onClick={() => control("resume")}><PlayIcon /> Resume</Button>
-            : <Button variant="outline" onClick={() => control("pause")} title="Stop after the current batch. Everything done so far is kept; no Keepa tokens are spent while paused.">
+            : <Button variant="secondary" onClick={() => control("pause")} title="Stop after the current batch. Everything done so far is kept; no Keepa tokens are spent while paused.">
                 <PauseIcon /> Pause
               </Button>)}
-          <Button variant="outline" onClick={() => exportXlsx()} disabled={!rows.length}>Export {rows.length} products to xlsx</Button>
-          <Button variant="destructive" onClick={async () => {
-            if (!(await confirm({ title: "Delete this run?", description: "The run and its results are removed. Products, favourites and waivers are kept.", confirmLabel: "Delete", destructive: true }))) return;
+          <Button variant="secondary" onClick={() => exportXlsx()} disabled={!rows.length}>Export {rows.length} products to xlsx</Button>
+          <Button variant="danger" onClick={async () => {
+            if (!(await confirm({ title: `Delete “${run.name || run.source}”?`, description: "The run and its results are removed. Products, favourites and waivers are kept.", confirmLabel: "Delete", destructive: true }))) return;
             cancel.current();
             await api(`/api/runs/${id}`, { method: "DELETE" }).catch(() => {});
             router.push("/runs");
           }}>Delete</Button>
-        </div>
-      </div>
+        </>}
+      />
+      {run.stats?.scan && (
+        <p className="-mt-2 text-meta text-muted-foreground">
+          Storefront of{" "}
+          <a className="font-medium text-primary hover:underline" href={storefrontUrl(run.stats.scan.sellerId)} target="_blank" rel="noreferrer">{run.stats.scan.sellerName ?? run.stats.scan.sellerId}</a>
+          : {run.stats.scan.asins.toLocaleString("en-GB")} ASINs screened with no cost
+          {run.stats.scan.more > 0 ? `; ${run.stats.scan.more.toLocaleString("en-GB")} more on the storefront not scanned` : ""}
+          {" · "}{results.filter((x) => x.inputs?.market?.buyBoxSellerId === run.stats?.scan?.sellerId).length} where it holds the Buy Box now
+          {" · "}<Link className="text-primary hover:underline" href="/sellers">Sellers</Link>
+        </p>
+      )}
 
       {card && <VerdictCard card={card} onFetchAnyway={async () => {
         try {
@@ -442,12 +443,12 @@ export default function RunPage() {
             </span>
             <span className="text-muted-foreground">
               {progress.paused
-                ? <>Nothing runs and no Keepa tokens are spent until you <button className="font-medium text-brand underline-offset-2 hover:underline" onClick={() => control("resume")}>resume</button>.</>
+                ? <>Nothing runs and no Keepa tokens are spent until you <button className="cursor-pointer font-medium text-primary underline-offset-2 hover:underline" onClick={() => control("resume")}>resume</button>.</>
                 : progress.working ? "Working in the background: you can close this page." : "Resuming…"}
             </span>
           </div>
-          <div className="h-2 overflow-hidden rounded-full bg-muted">
-            <div className="h-full bg-brand transition-all" style={{ width: `${progress.total ? ((progress.rescreen?.left ? progress.total - progress.rescreen.left : progress.processed) / progress.total) * 100 : 0}%` }} />
+          <div className="h-2 overflow-hidden rounded-full bg-subtle">
+            <div className="h-full bg-primary transition-all" style={{ width: `${progress.total ? ((progress.rescreen?.left ? progress.total - progress.rescreen.left : progress.processed) / progress.total) * 100 : 0}%` }} />
           </div>
           {progress.eta && !progress.paused && <p className="text-sm font-medium" aria-live="polite">{etaLabel(progress.eta)[0].toUpperCase() + etaLabel(progress.eta).slice(1)}</p>}
           <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
@@ -467,7 +468,7 @@ export default function RunPage() {
                 </Link>
                 ; this run waits its turn (one run uses Keepa at a time).
               </span>
-              <Button size="xs" variant="outline" onClick={() => control("keepaFirst")}><ChevronsUpIcon /> Go first</Button>
+              <Button size="sm" variant="secondary" onClick={() => control("keepaFirst")}><ChevronsUpIcon /> Go first</Button>
             </p>
           )}
           {!progress.paused && progress.keepaTurn?.mine && progress.waiting.keepa > 0 && (
@@ -475,7 +476,7 @@ export default function RunPage() {
           )}
         </div>
       )}
-      {error && <p className="rounded-md bg-fail-soft px-3 py-2 text-sm text-fail">{error}</p>}
+      {error && <p className="rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p>}
 
       <BulkBar count={selected.size} stashed={stash?.size ?? 0}
         onReselect={() => { if (stash) setSelected(new Set([...stash].filter((x) => results.some((r) => r.id === x)))); setStash(null); }}

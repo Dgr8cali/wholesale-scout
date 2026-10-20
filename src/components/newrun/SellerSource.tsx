@@ -5,11 +5,11 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { StatusChip } from "@/components/ui/status-chip";
 import { SCAN_CAP, sellerIdFrom, storefrontUrl } from "@/lib/check/seller";
 import type { ScanPreview } from "@/lib/server/sellerScan";
 import { api, when } from "@/lib/ui/client";
@@ -83,7 +83,7 @@ export function SellerSource() {
         <div className="space-y-1.5">
           <Label htmlFor="seller">Seller ID or storefront link</Label>
           <Input id="seller" placeholder="A30PLPOC3L6XYK or https://www.amazon.co.uk/s?me=…" value={input} onChange={(e) => { setInput(e.target.value); setPreview(null); setNeedsLookup(false); }} />
-          {input && !sellerId && <p className="text-xs text-warn">That isn&apos;t a seller ID (A…) or a link with one (?seller=, ?me=).</p>}
+          {input && !sellerId && <p className="text-xs text-warn-ink">That isn&apos;t a seller ID (A…) or a link with one (?seller=, ?me=).</p>}
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="scan-profile">Profile</Label>
@@ -92,9 +92,9 @@ export function SellerSource() {
           </NativeSelect>
         </div>
         <div className="flex items-end">
-          <Button type="submit" variant="outline" disabled={!sellerId || !needsLookup || busy != null}
+          <Button type="submit" variant="secondary" disabled={!sellerId || !needsLookup || busy === "start"} loading={busy === "lookup"}
             title="Keepa charges 10 tokens for a storefront; a list looked up in the last 7 days is reused for free">
-            <SearchIcon /> {busy === "lookup" ? "Looking up…" : "Look up · 10 tokens"}
+            {busy === "lookup" ? "Looking up" : <><SearchIcon /> Look up · 10 tokens</>}
           </Button>
         </div>
         {needsLookup && sellerId && (
@@ -111,38 +111,38 @@ export function SellerSource() {
               <h2 className="flex items-center gap-2 text-base font-semibold">
                 <StoreIcon className="size-4 text-muted-foreground" />
                 {p.seller.name ?? p.seller.sellerId}
-                <a className="text-brand" href={storefrontUrl(p.seller.sellerId)} target="_blank" rel="noreferrer" aria-label="Storefront on Amazon"><ExternalLinkIcon className="size-3.5" /></a>
+                <a className="text-primary" href={storefrontUrl(p.seller.sellerId)} target="_blank" rel="noreferrer" aria-label="Storefront on Amazon"><ExternalLinkIcon className="size-3.5" /></a>
               </h2>
               <p className="text-xs text-muted-foreground">
                 {p.seller.businessName && p.seller.businessName !== p.seller.name ? `${p.seller.businessName} · ` : ""}
                 {p.seller.ratingPct != null ? `${p.seller.ratingPct}% positive of ${n(p.seller.ratingCount ?? 0)} ratings` : "No rating"}
                 {p.seller.buyBoxOwnershipPct != null ? ` · holds the Buy Box on ${p.seller.buyBoxOwnershipPct}% of its listings` : ""}
-                {p.seller.lastScan && <> · <Link className="text-brand hover:underline" href={`/runs/${p.seller.lastScan.runId}`}>last scanned {when(p.seller.lastScan.at)}</Link></>}
+                {p.seller.lastScan && <> · <Link className="text-primary hover:underline" href={`/runs/${p.seller.lastScan.runId}`}>last scanned {when(p.seller.lastScan.at)}</Link></>}
               </p>
             </div>
-            <Badge variant="muted" title={p.seller.fetchedAt ? `Storefront list from Keepa, ${when(p.seller.fetchedAt)}` : undefined}>
-              {t.storefront > 0 ? `looked up · ${t.storefront} tokens` : "cached list · free"}
-            </Badge>
+            <StatusChip tone="neutral" icon={false} title={p.seller.fetchedAt ? `Storefront list from Keepa, ${when(p.seller.fetchedAt)}` : undefined}>
+              {t.storefront > 0 ? `Looked up · ${t.storefront} tokens` : "Cached list · free"}
+            </StatusChip>
           </div>
 
           {p.seller.brands.length > 0 && (
             <div className="flex flex-wrap gap-1.5" aria-label="Brand mix">
-              {p.seller.brands.slice(0, 8).map((b) => <Badge key={b.brand} variant="outline" className="font-normal">{b.brand} <span className="num text-muted-foreground">{n(b.count)}</span></Badge>)}
+              {p.seller.brands.slice(0, 8).map((b) => <StatusChip key={b.brand} tone="neutral" icon={false} className="font-normal">{b.brand} <span className="num opacity-80">{n(b.count)}</span></StatusChip>)}
             </div>
           )}
 
           <div className="grid gap-3 text-sm sm:grid-cols-2">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">ASINs</p>
+              <p className="section-label">ASINs</p>
               <p><span className="num font-semibold">{n(p.asins.scanned)}</span> to screen
-                {p.asins.more > 0 && <span className="text-warn"> · {n(p.asins.more)} more on the storefront, over the {n(SCAN_CAP)} cap, not scanned</span>}
+                {p.asins.more > 0 && <span className="text-warn-ink"> · {n(p.asins.more)} more on the storefront, over the {n(SCAN_CAP)} cap, not scanned</span>}
               </p>
               <p className="text-xs text-muted-foreground">Storefront size per Keepa: {p.seller.storefrontSize != null ? n(p.seller.storefrontSize) : "—"}</p>
             </div>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Keepa tokens</p>
+              <p className="section-label">Keepa tokens</p>
               <p><span className="num font-semibold">{n(total)}</span> to start
-                {p.tokensLeft != null && <span className={total > p.tokensLeft ? "text-warn" : "text-muted-foreground"}> · {n(p.tokensLeft)} left now</span>}
+                {p.tokensLeft != null && <span className={total > p.tokensLeft ? "text-warn-ink" : "text-muted-foreground"}> · {n(p.tokensLeft)} left now</span>}
               </p>
               <p className="text-xs text-muted-foreground">
                 {t.storefront > 0 ? `${n(t.storefront)} for the storefront lookup + ` : ""}
@@ -153,8 +153,8 @@ export function SellerSource() {
           </div>
 
           <div className="flex justify-end">
-            <Button onClick={start} disabled={busy != null || !p.asins.scanned}>
-              {busy === "start" ? "Starting…" : `Start scan of ${n(p.asins.scanned)} ASINs`}
+            <Button onClick={start} disabled={busy === "lookup" || !p.asins.scanned} loading={busy === "start"}>
+              {busy === "start" ? "Starting" : `Start scan of ${n(p.asins.scanned)} ASINs`}
             </Button>
           </div>
         </section>

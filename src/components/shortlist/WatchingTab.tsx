@@ -5,15 +5,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { EmptyState, ErrorState } from "@/components/States";
-import { Badge } from "@/components/ui/badge";
+import { ErrorState } from "@/components/States";
 import { Button } from "@/components/ui/button";
+import { DataTable } from "@/components/ui/data-table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { SortTableHead, useSortable } from "@/components/SortableTable";
-import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
+import { decisionLabel, PRODUCT_DECISION, ProductDecision, StatusChip, type Tone } from "@/components/ui/status-chip";
 import type { LastCheck, WatchAlert } from "@/lib/server/watchlist";
 import { api, gbp, when } from "@/lib/ui/client";
-import { cn } from "@/lib/utils";
 import { conditionLabel, type WatchCondition } from "@/lib/watch";
 
 interface Item {
@@ -23,10 +21,10 @@ interface Item {
   checkedAt: string | null;
 }
 
-const KIND: Record<WatchAlert["kind"], { label: string; variant: "pass" | "brand" | "warn" }> = {
-  passes: { label: "Now passes", variant: "pass" },
-  condition: { label: "Condition met", variant: "brand" },
-  supplier: { label: "Supplier found", variant: "warn" },
+const KIND: Record<WatchAlert["kind"], { label: string; tone: Tone }> = {
+  passes: { label: "Now a buy", tone: "good" },
+  condition: { label: "Condition met", tone: "info" },
+  supplier: { label: "Supplier found", tone: "warn" },
 };
 
 /** Shortlist → Watching: the same starred products, with what would make each a buy, the weekly re-check and its alerts. */
@@ -35,15 +33,6 @@ export function WatchingTab() {
   const [data, setData] = useState<{ items: Item[]; alerts: WatchAlert[]; email: boolean } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const sorting = useSortable("wholesale.watchlist", data?.items ?? [], {
-    product: { value: (i) => i.latest?.product?.title ?? i.favourite.asin ?? i.favourite.ean, kind: "text" },
-    condition: { value: (i) => conditionLabel(i.favourite.condition), kind: "text" },
-    lastCheck: { value: (i) => i.lastCheck?.at ?? null, kind: "date" },
-    buyBox: { value: (i) => i.lastCheck?.buyBox ?? null, kind: "number" },
-    maxLanded: { value: (i) => i.lastCheck?.maxLanded ?? null, kind: "number" },
-    latest: { value: (i) => (i.latest?.verdict ? `${{ pass: 1, warn: 2, fail: 3 }[i.latest.verdict]} ${i.latest.verdict}` : null), kind: "text" },
-  });
-
   const load = useCallback(() => {
     api<{ items: Item[]; alerts: WatchAlert[]; email: boolean }>("/api/watchlist").then(setData).catch((e) => setError(e.message));
   }, []);
@@ -72,44 +61,44 @@ export function WatchingTab() {
 
   const header = (
     <div className="flex flex-wrap items-start justify-between gap-3">
-      <p className="text-sm text-muted-foreground">Re-checked every Sunday; anything that now passes or meets its condition is listed here and emailed.</p>
-      <Button variant="outline" onClick={recheck} disabled={busy}><RefreshCwIcon className={cn(busy && "animate-spin")} /> Re-check now</Button>
+      <p className="text-sm text-muted-foreground">Re-checked every Sunday; anything that is now a buy or meets its condition is listed here and emailed.</p>
+      <Button variant="secondary" onClick={recheck} loading={busy}>{busy ? "Re-checking" : <><RefreshCwIcon /> Re-check now</>}</Button>
     </div>
   );
   if (error) return <div className="space-y-5">{header}<ErrorState title="Couldn't load the watchlist" message={error} onRetry={load} /></div>;
-  if (!data) return <div className="space-y-5">{header}<Skeleton className="h-40 rounded-lg" /><Skeleton className="h-64 rounded-lg" /></div>;
+  if (!data) return <div className="space-y-5">{header}<Skeleton className="h-40 rounded-xl" /><Skeleton className="h-64 rounded-xl" /></div>;
 
   return (
     <div className="space-y-6">
       {header}
       {!data.email && (
-        <p className="flex items-center gap-2 rounded-md bg-warn-soft px-3 py-2 text-sm text-warn">
+        <p className="flex items-center gap-2 rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn-ink">
           <MailWarningIcon className="size-4 flex-none" /> Email alerts are off: set RESEND_API_KEY and ALERT_EMAIL_TO in the server&apos;s .env. Alerts still show here.
         </p>
       )}
 
-      <section className="space-y-2" aria-label="Now passes">
+      <section className="space-y-2" aria-label="Now a buy">
         <div className="flex items-center justify-between">
-          <h2 className="flex items-center gap-2 text-sm font-semibold"><BellIcon className="size-4" /> Now passes <span className="num font-normal text-muted-foreground">{data.alerts.length}</span></h2>
+          <h2 className="flex items-center gap-2 text-sm font-semibold"><BellIcon className="size-4" /> Now a buy <span className="num font-normal text-muted-foreground">{data.alerts.length}</span></h2>
           {data.alerts.length > 1 && <Button size="sm" variant="ghost" onClick={() => dismiss()}>Dismiss all</Button>}
         </div>
         {!data.alerts.length ? (
-          <p className="panel px-4 py-6 text-center text-sm text-muted-foreground">Nothing new. Items that pass, meet their condition or find a supplier appear here.</p>
+          <p className="panel px-4 py-6 text-center text-sm text-muted-foreground">Nothing new. Items that become a buy, meet their condition or find a supplier appear here.</p>
         ) : (
-          <ul className="panel divide-y">
+          <ul className="panel divide-y divide-divider">
             {data.alerts.map((a) => (
               <li key={a.id} className="flex flex-wrap items-center gap-3 px-4 py-2.5">
-                <Badge variant={KIND[a.kind].variant}>{KIND[a.kind].label}</Badge>
+                <StatusChip tone={KIND[a.kind].tone}>{KIND[a.kind].label}</StatusChip>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{a.title ?? a.asin ?? a.ean}</p>
                   <p className="text-xs text-muted-foreground">
                     {a.detail}
-                    {a.asin && <> · <a className="text-brand hover:underline" href={`https://www.amazon.co.uk/dp/${a.asin}`} target="_blank" rel="noreferrer">{a.asin}</a></>}
-                    {a.run_id && <> · <Link className="text-brand hover:underline" href={`/runs/${a.run_id}`}>open run</Link></>}
+                    {a.asin && <> · <a className="text-primary hover:underline" href={`https://www.amazon.co.uk/dp/${a.asin}`} target="_blank" rel="noreferrer">{a.asin}</a></>}
+                    {a.run_id && <> · <Link className="text-primary hover:underline" href={`/runs/${a.run_id}`}>open run</Link></>}
                     {" · "}{when(a.created_at)}{a.emailed_at ? " · emailed" : ""}
                   </p>
                 </div>
-                <Button size="icon" variant="ghost" aria-label="Dismiss" onClick={() => dismiss(a.id)}><XIcon /></Button>
+                <Button size="icon-sm" variant="ghost" aria-label="Dismiss" onClick={() => dismiss(a.id)}><XIcon /></Button>
               </li>
             ))}
           </ul>
@@ -118,65 +107,50 @@ export function WatchingTab() {
 
       <section className="space-y-2" aria-label="Watching">
         <h2 className="flex items-center gap-2 text-sm font-semibold"><EyeIcon className="size-4" /> Watching <span className="num font-normal text-muted-foreground">{data.items.length}</span></h2>
-        {!data.items.length ? (
-          <EmptyState icon={<EyeIcon />} title="Nothing on the watchlist">
-            Open a warn or near-miss row in a run and choose Watch: the condition is suggested from what blocked it.
-          </EmptyState>
-        ) : (
-          <div className="panel overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <SortTableHead {...sorting.th("product")} className="pl-4">Product</SortTableHead>
-                  <SortTableHead {...sorting.th("condition")}>Waiting for</SortTableHead>
-                  <SortTableHead {...sorting.th("lastCheck")}>Last check</SortTableHead>
-                  <SortTableHead {...sorting.th("buyBox")} numeric>Buy Box</SortTableHead>
-                  <SortTableHead {...sorting.th("maxLanded")} numeric>Max landed</SortTableHead>
-                  <SortTableHead {...sorting.th("latest")} className="pr-4" title="Sorts by verdict: pass, warn, fail">Latest result</SortTableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {sorting.rows.map((i) => {
-                  const c = i.lastCheck;
-                  const f = i.favourite;
-                  return (
-                    <TableRow key={f.id} data-verdict={i.latest?.verdict ?? "empty"}>
-                      <TableCell className="max-w-96 pl-4 whitespace-normal">
-                        <p className="line-clamp-2 text-sm">{f.asin ? <Link className="hover:text-brand hover:underline" href={`/products/${f.asin}`}>{i.latest?.product?.title ?? f.asin}</Link> : i.latest?.product?.title ?? f.ean}</p>
-                        <p className="num text-xs text-muted-foreground">
-                          {f.ean}{f.asin && <> · <a className="text-brand hover:underline" href={`https://www.amazon.co.uk/dp/${f.asin}`} target="_blank" rel="noreferrer">{f.asin}</a></>}
-                          {f.note && <span className="font-sans"> · {f.note}</span>}
-                        </p>
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        {conditionLabel(f.condition)}
-                        {f.no_supplier && <Badge variant="muted" className="ml-1.5">no supplier</Badge>}
-                      </TableCell>
-                      <TableCell className="text-xs">
-                        {c ? (
-                          <span className="space-x-1.5">
-                            {c.verdict && <Badge variant={c.verdict}>{c.verdict}</Badge>}
-                            <span className={c.met ? "font-medium text-pass" : "text-muted-foreground"}>{c.met ? "met · " : ""}{c.detail}</span>
-                            <span className="text-muted-foreground">· {when(c.at)}</span>
-                          </span>
-                        ) : <span className="text-muted-foreground">Not re-checked yet</span>}
-                      </TableCell>
-                      <TableCell className="num text-right">{gbp(c?.buyBox)}</TableCell>
-                      <TableCell className="num text-right">{gbp(c?.maxLanded)}</TableCell>
-                      <TableCell className="pr-4 text-xs">
-                        {i.latest ? (
-                          <Link className="text-brand hover:underline" href={`/runs/${i.latest.run_id}`}>
-                            {i.latest.verdict ?? "—"} · {i.latest.run?.name ?? "run"}
-                          </Link>
-                        ) : <span className="text-muted-foreground">never screened</span>}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
-        )}
+        <DataTable
+          rows={data.items}
+          getRowId={(i) => i.favourite.id}
+          caption="Watching"
+          storageKey="wholesale.watchlist"
+          rowAttrs={(i) => ({ "data-verdict": i.latest?.verdict ?? "empty" })}
+          empty={{ icon: <EyeIcon />, title: "Nothing on the watchlist", description: "Open a Check or near-miss row in a run and choose Watch: the condition is suggested from what blocked it." }}
+          columns={[
+            {
+              id: "product", header: "Product", mobile: "title", className: "max-w-96 min-w-[14rem]", sortValue: (i) => i.latest?.product?.title ?? i.favourite.asin ?? i.favourite.ean,
+              cell: ({ favourite: f, latest }) => <>
+                <p className="line-clamp-2 text-sm">{f.asin ? <Link className="hover:text-primary hover:underline" href={`/products/${f.asin}`}>{latest?.product?.title ?? f.asin}</Link> : latest?.product?.title ?? f.ean}</p>
+                <p className="num text-xs font-normal text-muted-foreground">
+                  {f.ean}{f.asin && <> · <a className="text-primary hover:underline" href={`https://www.amazon.co.uk/dp/${f.asin}`} target="_blank" rel="noreferrer">{f.asin}</a></>}
+                  {f.note && <span className="font-sans"> · {f.note}</span>}
+                </p>
+              </>,
+            },
+            {
+              id: "condition", header: "Waiting for", mobile: 1, sortValue: (i) => conditionLabel(i.favourite.condition),
+              cell: ({ favourite: f }) => <span className="inline-flex flex-wrap items-center gap-1.5">{conditionLabel(f.condition)}{f.no_supplier && <StatusChip tone="neutral" icon={false} className="h-5 px-2">No supplier</StatusChip>}</span>,
+            },
+            {
+              id: "lastCheck", header: "Last check", mobile: 2, sortValue: (i) => i.lastCheck?.at ?? null,
+              cell: ({ lastCheck: c }) => (c ? (
+                <span className="inline-flex flex-wrap items-center gap-1.5 text-meta">
+                  {c.verdict && <ProductDecision verdict={c.verdict} />}
+                  <span className={c.met ? "font-medium text-success" : "text-muted-foreground"}>{c.met ? "met · " : ""}{c.detail}</span>
+                  <span className="text-muted-foreground">· {when(c.at)}</span>
+                </span>
+              ) : <span className="text-meta text-muted-foreground">Not re-checked yet</span>),
+            },
+            { id: "buyBox", header: "Buy Box", numeric: true, sortValue: (i) => i.lastCheck?.buyBox ?? null, cell: (i) => gbp(i.lastCheck?.buyBox) },
+            { id: "maxLanded", header: "Max landed", numeric: true, sortValue: (i) => i.lastCheck?.maxLanded ?? null, cell: (i) => gbp(i.lastCheck?.maxLanded) },
+            {
+              id: "latest", header: <span title="Sorts by verdict: Buy, Check, Skip">Latest result</span>, mobile: 3, sortValue: (i) => (i.latest?.verdict ? { pass: 1, warn: 2, fail: 3 }[i.latest.verdict] ?? 4 : null),
+              cell: ({ latest }) => (latest ? (
+                <Link className="text-meta text-primary hover:underline" href={`/runs/${latest.run_id}`}>
+                  {latest.verdict ? decisionLabel(PRODUCT_DECISION, latest.verdict) : "—"} · {latest.run?.name ?? "run"}
+                </Link>
+              ) : <span className="text-meta text-muted-foreground">never screened</span>),
+            },
+          ]}
+        />
       </section>
     </div>
   );

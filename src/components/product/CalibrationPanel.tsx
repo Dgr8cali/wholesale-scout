@@ -3,10 +3,10 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useDialogs } from "@/components/Dialogs";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { MIN_DAYS_LIVE, MIN_FOR_SUGGESTION, SOLID_AT, type Calibration, type Measure } from "@/lib/calibration";
 import { api } from "@/lib/ui/client";
+import { StatusChip } from "@/components/ui/status-chip";
 
 type Data = { calibration: Calibration; profile: { id: string; name: string; shareFactor: number; basedOn: number | null; appliedAt: string | null } };
 
@@ -44,7 +44,7 @@ export function CalibrationPanel({ nonce = 0 }: { nonce?: number }) {
           <thead className="text-xs text-muted-foreground"><tr><th className="text-left font-normal">Figure</th><th className="text-right font-normal">Median off</th><th className="text-right font-normal">Middle half</th><th className="text-right font-normal">Purchases</th></tr></thead>
           <tbody>
             {rows.map(([label, m]) => (
-              <tr key={label} className="border-t">
+              <tr key={label} className="border-t border-divider">
                 <td className="py-1">{label}</td>
                 <td className="num text-right">{off(m)}</td>
                 <td className="num text-right text-xs text-muted-foreground">{range(m)}</td>
@@ -58,11 +58,11 @@ export function CalibrationPanel({ nonce = 0 }: { nonce?: number }) {
       <div className="flex flex-wrap items-center gap-2">
         {c.suggestedFactor != null && c.suggestedFactor !== p.shareFactor && (
           <>
-            <Badge variant={c.strength === "solid" ? "pass" : "warn"}>{c.strength === "solid" ? `solid: ${c.share.n} purchases` : `early: ${c.share.n} of ${SOLID_AT}`}</Badge>
+            <StatusChip tone={c.strength === "solid" ? "good" : "warn"}>{c.strength === "solid" ? `Solid: ${c.share.n} purchases` : `Early: ${c.share.n} of ${SOLID_AT}`}</StatusChip>
             <Button size="sm" onClick={() => act("apply")}>Apply × {c.suggestedFactor} to {p.name}</Button>
           </>
         )}
-        {p.shareFactor !== 1 && <Button size="sm" variant="outline" onClick={() => act("reset")}>Reset to × 1</Button>}
+        {p.shareFactor !== 1 && <Button size="sm" variant="secondary" onClick={() => act("reset")}>Reset to × 1</Button>}
         {c.suggestedFactor == null && <span className="text-xs text-muted-foreground">A correction is suggested once {MIN_FOR_SUGGESTION} purchases count (solid from {SOLID_AT}).</span>}
       </div>
     </section>

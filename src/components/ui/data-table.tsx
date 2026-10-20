@@ -61,12 +61,14 @@ const readSize = (key: string | undefined, fallback: number) => {
  * no rows, and on a phone each row as a card with its 3–4 key fields and "Details" for the rest.
  */
 export function DataTable<T extends RowData>({
-  rows, columns, getRowId, pageSize = 50, storageKey, initialSort, empty, onRowClick, rowClassName, rowAttrs, caption, className,
+  rows, columns, getRowId, pageSize = 50, paged = true, storageKey, initialSort, empty, onRowClick, rowClassName, rowAttrs, caption, className,
 }: {
   rows: T[]
   columns: DataColumn<T>[]
   getRowId: (row: T) => string
   pageSize?: number
+  /** false: every row on one page and no pager (rows a server already paged). */
+  paged?: boolean
   /** Remembers the page size in this browser. */
   storageKey?: string
   initialSort?: { id: string; desc?: boolean }
@@ -79,7 +81,7 @@ export function DataTable<T extends RowData>({
   className?: string
 }) {
   const [sorting, setSorting] = useState<SortingState>(initialSort ? [{ id: initialSort.id, desc: !!initialSort.desc }] : [])
-  const [pagination, setPagination] = useState<PaginationState>(() => ({ pageIndex: 0, pageSize: readSize(storageKey, pageSize) }))
+  const [pagination, setPagination] = useState<PaginationState>(() => ({ pageIndex: 0, pageSize: paged ? readSize(storageKey, pageSize) : Number.MAX_SAFE_INTEGER }))
   const helper = useMemo(() => createColumnHelper<typeof features, T>(), [])
   const defs = useMemo(() => helper.columns(columns.map((c) => helper.accessor((r: T) => (c.sortValue ? c.sortValue(r) ?? undefined : null), {
     id: c.id,
@@ -160,7 +162,7 @@ export function DataTable<T extends RowData>({
         {shown.map((r) => <MobileRow key={r.id} row={r.original} title={titleCol} keys={keyCols} details={detailCols} onClick={onRowClick} attrs={rowAttrs?.(r.original)} />)}
       </ul>
 
-      {total > PAGE_SIZES[0] && (
+      {paged && total > PAGE_SIZES[0] && (
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-3 py-2 text-meta text-muted-foreground">
           <span className="num">{from.toLocaleString("en-GB")}–{to.toLocaleString("en-GB")} of {total.toLocaleString("en-GB")}</span>
           <div className="flex items-center gap-2">

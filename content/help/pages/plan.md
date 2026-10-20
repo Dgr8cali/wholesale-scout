@@ -1,11 +1,11 @@
 ---
-title: Order plan
+title: Plan
 summary: The order planner picks which products to buy, how many and from whom to make the most profit a month within your budget.
 synonyms: [order planner, purchase order, basket, budget, optimise, buy list, qogita cart]
 route: /plan
 order: 11
 ---
-The Order plan page turns your passing products into an order. It picks the products and quantities that make the most profit a month within your budget, grouped into one order per supplier. You can pin, exclude and change quantities, and the plan recomputes as you go.
+The Plan page turns your passing products into an order. It picks the products and quantities that make the most profit a month within your budget, grouped into one order per supplier. You can pin, exclude and change quantities, and the plan recomputes as you go.
 
 ## What it plans from
 
@@ -44,7 +44,7 @@ It's a good heuristic rather than a guaranteed best answer. A month's profit for
 
 | Control | What it does |
 |---|---|
-| **Include warns** | Adds products that warn (verdict **Check**), as well as those that pass (**Buy**). Off by default. |
+| **Include Check** | Adds products whose verdict is **Check** (verdict **Check**), as well as those that pass (**Buy**). Off by default. |
 | **Reset** | Clears all your pins, exclusions and quantities. It only appears once you've made a change. |
 | **Add N to Qogita cart** | Adds every Qogita line in the plan to your Qogita cart, at the planned quantity, and opens the cart. It then tells you "N of M Qogita lines added". It only appears when Qogita is set up and the plan has Qogita lines. See [Qogita](/help/pages/qogita). |
 | **Export xlsx** | Downloads `wholesale-scout-plan-<date>.xlsx` with three sheets. **Plan** has one row per line: supplier, product, brand, EAN, ASIN, qty, unit cost ex VAT, landed and profit per unit, sell price, your share, months to sell, line total, profit a month, verdict (pass or warn, the stored values), pinned, notes. **Suppliers** has goods ex VAT, MOV, whether the MOV is met, and the landed total. **Summary** has the profile, budget, line cap, months limit, plan total, profit a month and payback. |
@@ -100,6 +100,6 @@ Open this to see every candidate left out, and why:
 
 ## When it's empty
 
-- "No product passes on <profile> with a costed offer. Switch on “Include warns” to plan from products that warn."
+- "No product passes on <profile> with a costed offer. Switch on “Include Check” to plan from products that warn."
 - "No product passes or warns with a costed offer." (with warns included)
 - "No candidate fits: see why below." Check **Not in the plan**.

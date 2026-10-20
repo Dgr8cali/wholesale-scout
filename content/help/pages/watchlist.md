@@ -55,18 +55,18 @@ Every Sunday at 06:00 (UTC) a run named "Watchlist re-check <date>" screens ever
 
 When the run finishes, each item's check is recorded and an alert is raised if:
 
-- it now **passes** and didn't last time ("Now passes (was warn) · Buy Box £21.40"), or
+- it now **passes** and didn't last time ("Now passes (was warn) · Buy Box £21.40", the alert's own wording), or
 - its condition is **met** and wasn't last time ("Buy Box ≥ £20.00: Buy Box £21.40").
 
 An item that stays passing, or stays met, doesn't alert again.
 
 **Re-check now** runs the same check straight away, even if one ran this week, and takes you to the run. With nothing to check you'll see "Nothing to re-check: nothing on the watchlist".
 
-## Now passes
+## Now a buy
 
 These are the alerts you haven't dismissed, newest first. Each has a badge:
 
-- **Now passes**: the product passes now.
+- **Now a buy**: the product passes every gate now (**Buy**).
 - **Condition met**: its condition is met.
 - **Supplier found**: a new upload or Qogita pull offers a "No supplier yet" product at or under its max landed cost, for example "Acme Ltd offers it at £6.20 landed (max £7.10)". The same offer won't alert twice in a week.
 

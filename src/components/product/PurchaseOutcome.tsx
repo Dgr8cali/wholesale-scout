@@ -2,6 +2,7 @@
 
 import type { Actuals } from "@/lib/actuals";
 import type { Purchase } from "@/lib/server/purchases";
+import { decisionLabel, PRODUCT_DECISION } from "@/components/ui/status-chip";
 import { gbp } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
 
@@ -10,7 +11,7 @@ function Diff({ predicted, actual, higherIsGood = true }: { predicted: number | 
   if (predicted == null || actual == null || predicted === 0) return null;
   const pc = Math.round(((actual - predicted) / Math.abs(predicted)) * 100);
   const good = higherIsGood ? pc >= 0 : pc <= 0;
-  return <span className={cn("num text-xs", Math.abs(pc) < 10 ? "text-muted-foreground" : good ? "text-pass" : "text-fail")}>{pc > 0 ? "+" : ""}{pc}%</span>;
+  return <span className={cn("num text-xs", Math.abs(pc) < 10 ? "text-muted-foreground" : good ? "text-success" : "text-danger")}>{pc > 0 ? "+" : ""}{pc}%</span>;
 }
 
 /** A purchase's prediction (frozen when recorded), and beside it what happened once Amazon's reports are in. */
@@ -28,12 +29,12 @@ export function PurchaseOutcome({ p, actuals }: { p: Purchase; actuals: Actuals 
       <table className="w-full text-xs">
         <thead className="text-muted-foreground">
           <tr><th className="py-1 text-left font-normal">
-            Predicted {new Date(f.capturedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })} · {f.decision ?? "—"} · {f.confidence ?? "?"} confidence{f.profile ? ` · ${f.profile}` : ""}
+            Predicted {new Date(f.capturedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })} · {f.decision ? decisionLabel(PRODUCT_DECISION, f.decision) : "—"} · {f.confidence ?? "?"} confidence{f.profile ? ` · ${f.profile}` : ""}
           </th><th className="text-right font-normal">Predicted</th>{actuals && <><th className="pl-3 text-right font-normal">Actual</th><th className="pl-2 text-right font-normal" /></>}</tr>
         </thead>
         <tbody>
           {rows.map((r) => (
-            <tr key={r.label} className="border-t">
+            <tr key={r.label} className="border-t border-divider">
               <td className="py-1">{r.label}</td>
               <td className="num text-right">{r.predicted}</td>
               {actuals && <><td className="num pl-3 text-right">{r.actual}</td><td className="pl-2 text-right">{r.diff}</td></>}

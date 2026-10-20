@@ -35,7 +35,7 @@ export function ApplyKit({ brand, supplierId, applyUrl, compact = false }: { bra
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline" size={compact ? "xs" : "default"} onClick={(e) => e.stopPropagation()}>
+        <Button variant="secondary" size={compact ? "xs" : "default"} onClick={(e) => e.stopPropagation()}>
           <FolderOpenIcon /> Apply kit
         </Button>
       </PopoverTrigger>

@@ -13,7 +13,7 @@ export function amazonImage(url: string, px: number): string {
 
 function Placeholder({ size }: { size: number }) {
   return (
-    <span className="flex items-center justify-center rounded border border-border bg-muted text-muted-foreground" style={{ width: size, height: size }} aria-hidden="true">
+    <span className="flex items-center justify-center rounded border border-border bg-subtle text-muted-foreground" style={{ width: size, height: size }} aria-hidden="true">
       <svg width={size * 0.5} height={size * 0.5} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round">
         <path d="M3 7.5L12 3l9 4.5v9L12 21l-9-4.5v-9z" />
         <path d="M3 7.5L12 12l9-4.5M12 12v9" />

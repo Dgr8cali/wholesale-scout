@@ -1,6 +1,6 @@
 "use client";
 
-import { LoaderIcon, RefreshCwIcon } from "lucide-react";
+import { RefreshCwIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -37,7 +37,7 @@ export function SyncStatus({ onSynced }: { onSynced?: () => void }) {
         <TooltipTrigger asChild>
           <span tabIndex={0}>
             {s.stage !== "idle" ? "Syncing with Amazon…" : s.finishedAt ? `Amazon's figures read ${ago(s.finishedAt)}` : "Not synced with Amazon yet"}
-            {s.error && <span className="text-fail"> · last sync failed</span>}
+            {s.error && <span className="text-danger"> · last sync failed</span>}
           </span>
         </TooltipTrigger>
         <TooltipContent className="max-w-80">
@@ -45,8 +45,8 @@ export function SyncStatus({ onSynced }: { onSynced?: () => void }) {
           {s.error ? ` Last error: ${s.error}.` : ""} Not available with this app&apos;s permissions: {s.missing.join("; ")}.
         </TooltipContent>
       </Tooltip>
-      <Button variant="outline" size="sm" disabled={busy || s.stage !== "idle"} onClick={sync}>
-        {busy ? <LoaderIcon className="animate-spin" /> : <RefreshCwIcon />} Sync now
+      <Button variant="secondary" size="sm" disabled={s.stage !== "idle"} loading={busy} onClick={sync}>
+        {busy ? "Syncing" : <><RefreshCwIcon /> Sync now</>}
       </Button>
     </div>
   );

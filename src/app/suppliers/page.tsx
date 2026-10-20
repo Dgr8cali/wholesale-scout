@@ -1,15 +1,14 @@
 "use client";
 
-import { ExternalLinkIcon, SearchIcon, TruckIcon } from "lucide-react";
+import { ExternalLinkIcon, SearchIcon, TruckIcon, UploadIcon } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { usePageCrumbs } from "@/components/Crumbs";
 import { EmptyState, ErrorState } from "@/components/States";
-import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { DataTable, type DataColumn } from "@/components/ui/data-table";
 import { Input } from "@/components/ui/input";
+import { PageHeader } from "@/components/ui/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
-import { SortTableHead, useSortable } from "@/components/SortableTable";
-import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import type { SupplierRecord, SupplierStats } from "@/lib/server/suppliers";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { SUPPLIER_KIND_LABEL, SUPPLIER_KINDS } from "@/lib/stock/orders";
@@ -24,7 +23,6 @@ const yn = (b: boolean | null) => (b == null ? "—" : b ? "yes" : "no");
 
 /** The supplier ledger: one record per supplier, with how its products screen. */
 export default function SuppliersPage() {
-  usePageCrumbs([{ label: "Suppliers" }]);
   const [rows, setRows] = useState<Row[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState("");
@@ -38,41 +36,68 @@ export default function SuppliersPage() {
     return (rows ?? []).filter((s) => (!n || s.name.toLowerCase().includes(n) || (s.marketplace ?? "").toLowerCase().includes(n) || s.stats.brands.some((b) => b.brand.toLowerCase().includes(n)))
       && (!kind || (kind === "none" ? !s.kind : s.kind === kind)) && (!onlyStock || stockOnly(s)));
   }, [rows, q, kind, onlyStock]);
-  const sorting = useSortable("wholesale.suppliers", filtered, {
-    supplier: { value: (s) => s.name, kind: "text" },
-    type: { value: (s) => (s.kind ? `${SUPPLIER_KIND_LABEL[s.kind]} ${s.marketplace ?? ""}` : null), kind: "text" },
-    stock: { value: (s) => s.stock.items * 1000 + s.stock.purchases, kind: "number" },
-    runs: { value: (s) => s.stats.runs, kind: "number" },
-    products: { value: (s) => s.stats.products, kind: "number" },
-    passing: { value: (s) => s.stats.pass * 1000 + s.stats.warn, kind: "number" },
-    brands: { value: (s) => s.stats.brands[0]?.brand ?? null, kind: "text" },
-    terms: { value: (s) => s.mov, kind: "number" },
-    paperwork: { value: (s) => (s.importer_of_record ? 1 : 0) + (s.invoice_accepted_for_approval ? 1 : 0), kind: "number" },
-    rating: { value: (s) => s.rating || null, kind: "number" },
-  });
-  const shown = sorting.rows;
 
   const header = (
-    <div>
-      <h1 className="page-title">Suppliers</h1>
-      <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-        One record per supplier: terms, paperwork and how their products screen on your default profile. A supplier&apos;s MOV counts in the
-        budget gate for lines with no MOQ of their own. Suppliers added from Stock (an item, an order, a receipt) have no price lists: <b>Stock only</b> shows them.
-      </p>
-    </div>
+    <PageHeader
+      title="Suppliers"
+      crumbs={[{ label: "Wholesale", href: "/runs" }, { label: "Suppliers" }]}
+      subtitle="One record per supplier: terms, paperwork and how their products screen on your default profile."
+      info={<>
+        <p>A supplier&apos;s MOV counts in the budget gate for lines with no MOQ of their own.</p>
+        <p>Suppliers added from Stock (an item, an order, a receipt) have no price lists: <b>Stock only</b> shows them.</p>
+      </>}
+    />
   );
+  const columns: DataColumn<Row>[] = [
+    {
+      id: "supplier", header: "Supplier", mobile: "title", sortValue: (s) => s.name,
+      cell: (s) => <>
+        <Link className="font-medium hover:underline" href={`/suppliers/${s.id}`}>{s.name}</Link>
+        {s.website && <a className="ml-1 inline-block text-muted-foreground" href={s.website} target="_blank" rel="noreferrer" aria-label="Website"><ExternalLinkIcon className="size-3" /></a>}
+        <p className="text-xs font-normal text-muted-foreground">{SOURCE[s.source_type]}{s.stats.lastSeen ? ` · last offer ${when(s.stats.lastSeen)}` : ""}</p>
+      </>,
+    },
+    { id: "type", header: "Type", mobile: 3, sortValue: (s) => (s.kind ? `${SUPPLIER_KIND_LABEL[s.kind]} ${s.marketplace ?? ""}` : null), cell: (s) => <span className="text-meta">{s.kind ? <>{SUPPLIER_KIND_LABEL[s.kind]}{s.marketplace ? <span className="text-muted-foreground"> · {s.marketplace}</span> : null}</> : <span className="text-muted-foreground">—</span>}</span> },
+    { id: "stock", header: <span title="Stock items · purchases">Stock</span>, numeric: true, sortValue: (s) => s.stock.items * 1000 + s.stock.purchases, cell: (s) => (s.stock.items || s.stock.purchases ? `${s.stock.items} · ${s.stock.purchases}` : <span className="text-muted-foreground">—</span>) },
+    { id: "runs", header: "Runs", numeric: true, sortValue: (s) => s.stats.runs, cell: (s) => s.stats.runs },
+    { id: "products", header: "Products", numeric: true, mobile: 1, sortValue: (s) => s.stats.products, cell: (s) => s.stats.products.toLocaleString("en-GB") },
+    {
+      id: "passing", header: <span title="On your default profile">Buy / Check</span>, numeric: true, mobile: 2, sortValue: (s) => s.stats.pass * 1000 + s.stats.warn,
+      cell: (s) => <>
+        <span className={s.stats.pass ? "font-semibold text-success" : "text-muted-foreground"}>{s.stats.pass}</span>
+        <span className="text-muted-foreground"> / </span>
+        <span className={s.stats.warn ? "text-warn-ink" : "text-muted-foreground"}>{s.stats.warn}</span>
+      </>,
+    },
+    {
+      id: "brands", header: "Brands", className: "max-w-72", sortValue: (s) => s.stats.brands[0]?.brand ?? null,
+      cell: (s) => <span className="text-meta text-muted-foreground">{s.stats.brands.slice(0, 3).map((b) => b.brand).join(", ") || "—"}{s.stats.brands.length > 3 && ` +${s.stats.brands.length - 3}`}</span>,
+    },
+    {
+      id: "terms", header: "Terms", sortValue: (s) => s.mov,
+      cell: (s) => <span className="text-meta text-muted-foreground">{s.currency} · {s.vat_basis === "inc_vat" ? "inc VAT" : "ex VAT"}{s.mov != null && ` · MOV ${s.mov.toLocaleString("en-GB")}`}{s.delivery_days != null && ` · ${s.delivery_days} days`}</span>,
+    },
+    {
+      id: "paperwork", header: <span title="Importer of record · labelling · invoice accepted for brand approval">Paperwork</span>, sortValue: (s) => (s.importer_of_record ? 1 : 0) + (s.invoice_accepted_for_approval ? 1 : 0),
+      cell: (s) => <span className="text-meta text-muted-foreground">IoR {yn(s.importer_of_record)} · {s.labelling ?? "—"} · invoice {yn(s.invoice_accepted_for_approval)}</span>,
+    },
+    { id: "rating", header: "Rating", numeric: true, sortValue: (s) => s.rating || null, cell: (s) => (s.rating ? <span className="text-warn-ink" aria-label={`${s.rating} of 5`}>{"★".repeat(s.rating)}</span> : <span className="text-muted-foreground">—</span>) },
+  ];
+
   if (error) return <div className="space-y-5">{header}<ErrorState title="Couldn't load suppliers" message={error} onRetry={() => window.location.reload()} /></div>;
-  if (!rows) return <div className="space-y-5">{header}<Skeleton className="h-64 rounded-lg" /></div>;
+  if (!rows) return <div className="space-y-5">{header}<Skeleton className="h-64 rounded-xl" /></div>;
 
   return (
     <div className="space-y-5">
       {header}
       {!rows.length ? (
-        <EmptyState icon={<TruckIcon />} title="No suppliers yet">Suppliers appear with your first upload or Qogita pull, or add one from Stock (+ New supplier on an item or an order).</EmptyState>
+        <EmptyState icon={<TruckIcon />} title="No suppliers yet" action={<Button asChild><Link href="/new-run"><UploadIcon /> Upload a price list</Link></Button>}>
+          Suppliers appear with your first upload or Qogita pull, or add one from Stock.
+        </EmptyState>
       ) : (
         <>
           <div className="flex flex-wrap items-center gap-2">
-            <div className="relative w-72">
+            <div className="relative w-72 max-w-full">
               <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input className="pl-8" placeholder="Find a supplier or brand" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Find a supplier or brand" />
             </div>
@@ -82,62 +107,19 @@ export default function SuppliersPage() {
               <NativeSelectOption value="none">Type not set</NativeSelectOption>
             </NativeSelect>
             <button type="button" aria-pressed={onlyStock} onClick={() => setOnlyStock((v) => !v)}
-              className={cn("rounded-full border px-3 py-1 text-xs font-medium", onlyStock ? "border-brand bg-brand-soft text-brand" : "text-muted-foreground hover:text-foreground")}>
+              className={cn("h-8 cursor-pointer rounded-full border px-3 text-meta font-medium", onlyStock ? "border-primary bg-primary-soft text-primary-ink" : "border-border-strong text-muted-foreground hover:text-foreground")}>
               Stock only · {rows.filter(stockOnly).length}
             </button>
-            <span className="text-xs text-muted-foreground">{filtered.length} of {rows.length}</span>
+            <span className="num text-meta text-muted-foreground">{filtered.length} of {rows.length}</span>
           </div>
-          <div className="panel overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <SortTableHead {...sorting.th("supplier")} className="pl-4">Supplier</SortTableHead>
-                  <SortTableHead {...sorting.th("type")}>Type</SortTableHead>
-                  <SortTableHead {...sorting.th("stock")} numeric title="Stock items · purchases">Stock</SortTableHead>
-                  <SortTableHead {...sorting.th("runs")} numeric>Runs</SortTableHead>
-                  <SortTableHead {...sorting.th("products")} numeric>Products</SortTableHead>
-                  <SortTableHead {...sorting.th("passing")} numeric title="On your default profile">Pass / warn</SortTableHead>
-                  <SortTableHead {...sorting.th("brands")} title="Sorts by the top brand">Brands</SortTableHead>
-                  <SortTableHead {...sorting.th("terms")} title="Sorts by the minimum order value">Terms</SortTableHead>
-                  <SortTableHead {...sorting.th("paperwork")} title="Importer of record · labelling · invoice accepted for brand approval. Sorts by how many of importer of record and invoice accepted are yes">Paperwork</SortTableHead>
-                  <SortTableHead {...sorting.th("rating")} numeric className="pr-4">Rating</SortTableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {shown.map((s) => (
-                  <TableRow key={s.id}>
-                    <TableCell className="pl-4">
-                      <Link className="font-medium hover:underline" href={`/suppliers/${s.id}`}>{s.name}</Link>
-                      {s.website && <a className="ml-1 inline-block text-muted-foreground" href={s.website} target="_blank" rel="noreferrer" aria-label="Website"><ExternalLinkIcon className="size-3" /></a>}
-                      <p className="text-xs text-muted-foreground">{SOURCE[s.source_type]}{s.stats.lastSeen ? ` · last offer ${when(s.stats.lastSeen)}` : ""}</p>
-                    </TableCell>
-                    <TableCell className="text-xs">{s.kind ? <>{SUPPLIER_KIND_LABEL[s.kind]}{s.marketplace ? <span className="text-muted-foreground"> · {s.marketplace}</span> : null}</> : <span className="text-muted-foreground">—</span>}</TableCell>
-                    <TableCell className="num text-right text-xs">{s.stock.items || s.stock.purchases ? `${s.stock.items} · ${s.stock.purchases}` : <span className="text-muted-foreground">—</span>}</TableCell>
-                    <TableCell className="num text-right">{s.stats.runs}</TableCell>
-                    <TableCell className="num text-right">{s.stats.products.toLocaleString("en-GB")}</TableCell>
-                    <TableCell className="num text-right">
-                      <span className={s.stats.pass ? "font-semibold text-pass" : "text-muted-foreground"}>{s.stats.pass}</span>
-                      <span className="text-muted-foreground"> / </span>
-                      <span className={s.stats.warn ? "text-warn" : "text-muted-foreground"}>{s.stats.warn}</span>
-                    </TableCell>
-                    <TableCell className="max-w-72 text-xs whitespace-normal text-muted-foreground">
-                      {s.stats.brands.slice(0, 3).map((b) => b.brand).join(", ") || "—"}
-                      {s.stats.brands.length > 3 && ` +${s.stats.brands.length - 3}`}
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {s.currency} · {s.vat_basis === "inc_vat" ? "inc VAT" : "ex VAT"}
-                      {s.mov != null && ` · MOV ${s.mov.toLocaleString("en-GB")}`}
-                      {s.delivery_days != null && ` · ${s.delivery_days} days`}
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      IoR {yn(s.importer_of_record)} · {s.labelling ?? "—"} · invoice {yn(s.invoice_accepted_for_approval)}
-                    </TableCell>
-                    <TableCell className="pr-4 text-right">{s.rating ? <Badge variant="outline" className="num">{"★".repeat(s.rating)}</Badge> : <span className="text-muted-foreground">—</span>}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+          <DataTable
+            rows={filtered}
+            columns={columns}
+            getRowId={(s) => s.id}
+            storageKey="wholesale.suppliers"
+            caption="Suppliers"
+            empty={{ icon: <SearchIcon />, title: "No suppliers match", description: "Try another name or brand, or clear the filters." }}
+          />
         </>
       )}
     </div>

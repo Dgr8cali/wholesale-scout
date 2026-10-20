@@ -18,6 +18,7 @@ import type { QogitaOffers } from "@/lib/qogita/offers";
 import { quantityForBudget } from "@/lib/qogita/cart";
 import { useQogitaCart } from "@/components/QogitaCart";
 import { Button } from "@/components/ui/button";
+import { GateResult, StatusChip } from "@/components/ui/status-chip";
 import { Input } from "@/components/ui/input";
 import { ShoppingCartIcon } from "lucide-react";
 import { useState } from "react";
@@ -32,8 +33,11 @@ import { useHelp } from "@/components/help/HelpPanel";
 import { amazonLastSeen, isStale, stamp } from "@/lib/ui/when";
 import type { WatchCondition } from "@/lib/watch";
 
-const STATUS_ICON: Record<string, string> = { pass: "✓", warn: "!", fail: "✕", skipped: "–", off: "·" };
-const STATUS_STYLE: Record<string, string> = { pass: "bg-pass", warn: "bg-highlight", fail: "bg-fail", skipped: "bg-muted-foreground/40", off: "bg-border" };
+/** A gate's result as a chip: Pass / Check / Fail, or Skipped / Off (neutral). Fixed width so the gates line up. */
+const GATE_CHIP = "h-5 w-[4.75rem] px-2";
+const GateChip = ({ status }: { status: string }) => (status === "pass" || status === "warn" || status === "fail"
+  ? <GateResult status={status} className={GATE_CHIP} />
+  : <StatusChip tone="neutral" className={GATE_CHIP}>{status === "off" ? "Off" : "Skipped"}</StatusChip>);
 
 /** Referral and FBA fee from each source, ex-VAT and ex-DSF, at the scoring price. */
 function FeeCompare({ c, dimsSource }: { c: NonNullable<NonNullable<Result["fees"]>["compare"]>; dimsSource?: string | null }) {
@@ -44,7 +48,7 @@ function FeeCompare({ c, dimsSource }: { c: NonNullable<NonNullable<Result["fees
   ];
   return (
     <div className="mt-3">
-      <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Fees by source (ex-VAT)</p>
+      <p className="mb-1 eyebrow">Fees by source (ex-VAT)</p>
       <table className="num w-full text-xs">
         <thead className="text-muted-foreground"><tr><th className="text-left font-normal">Source</th><th className="pl-3 text-right font-normal">Referral</th><th className="pl-3 text-right font-normal">FBA</th></tr></thead>
         <tbody>
@@ -67,19 +71,19 @@ function Sellers({ sellers, flaggedText }: { sellers: Seller[]; flaggedText: str
   const flagged = (s: Seller) => flaggedText.includes(`likely brand distributor: ${s.name ?? s.sellerId} `);
   return (
     <div className="mt-3">
-      <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Top Buy Box sellers (365 days)</p>
+      <p className="mb-1 eyebrow">Top Buy Box sellers (365 days)</p>
       <ul className="space-y-1 text-xs">
         {sellers.map((s) => (
           <li key={s.sellerId}>
-            <a className="font-medium text-brand hover:underline" href={`https://www.amazon.co.uk/sp?seller=${s.sellerId}`} target="_blank" rel="noreferrer">{s.name ?? s.sellerId}</a>
+            <a className="font-medium text-primary hover:underline" href={`https://www.amazon.co.uk/sp?seller=${s.sellerId}`} target="_blank" rel="noreferrer">{s.name ?? s.sellerId}</a>
             <span className="text-muted-foreground"> · {s.sharePct}% of Buy Box</span>
             {s.ratingPct != null && <span className="text-muted-foreground"> · {s.ratingPct}% of {s.ratingCount?.toLocaleString("en-GB")} ratings</span>}
             {s.storefrontSize != null && <span className="text-muted-foreground"> · {Math.max(s.storefrontSize, s.brandCount ?? 0).toLocaleString("en-GB")} listings</span>}
             {s.brandSharePct != null && (
-              <span className={flagged(s) ? "font-semibold text-warn" : "text-muted-foreground"}> · {s.brandCount != null ? `${s.brandCount.toLocaleString("en-GB")} (${Math.round(s.brandSharePct)}%)` : `${Math.round(Math.min(100, s.brandSharePct))}%`} this brand{flagged(s) ? " (likely distributor)" : ""}</span>
+              <span className={flagged(s) ? "font-semibold text-warn-ink" : "text-muted-foreground"}> · {s.brandCount != null ? `${s.brandCount.toLocaleString("en-GB")} (${Math.round(s.brandSharePct)}%)` : `${Math.round(Math.min(100, s.brandSharePct))}%`} this brand{flagged(s) ? " (likely distributor)" : ""}</span>
             )}
             <span className="text-muted-foreground"> · </span>
-            <Link className="font-medium text-brand hover:underline" href={`/new-run?tab=seller&seller=${s.sellerId}`} onClick={(e) => e.stopPropagation()}>Scan this seller</Link>
+            <Link className="font-medium text-primary hover:underline" href={`/new-run?tab=seller&seller=${s.sellerId}`} onClick={(e) => e.stopPropagation()}>Scan this seller</Link>
           </li>
         ))}
       </ul>
@@ -96,10 +100,10 @@ function FromExtension({ r }: { r: Result }) {
   const stale = stock ? isStale(stock.at) : false;
   return (
     <div className="mt-3 space-y-1 text-xs">
-      <p className="font-semibold uppercase tracking-wide text-muted-foreground">From the extension</p>
+      <p className="eyebrow">From the extension</p>
       {dg && (
         <p>
-          Seller Central DG: <span className={dg.status === "hazmat" ? "font-semibold text-fail" : dg.status === "not_hazmat" ? "text-pass" : "text-muted-foreground"}>
+          Seller Central DG: <span className={dg.status === "hazmat" ? "font-semibold text-danger" : dg.status === "not_hazmat" ? "text-success" : "text-muted-foreground"}>
             {dg.status === "hazmat" ? "hazmat" : dg.status === "not_hazmat" ? "not hazmat" : "unknown"}</span>
           {dg.detail && <span className="text-muted-foreground"> · {dg.detail}</span>}
           <span className="text-muted-foreground"> · {day(dg.at)}</span>
@@ -108,7 +112,7 @@ function FromExtension({ r }: { r: Result }) {
       {stock && (
         <div>
           <p className="text-muted-foreground">
-            Competitors&apos; stock{stale && <span className="font-medium text-warn"> · stale (over 7 days old): read it again in the extension</span>}
+            Competitors&apos; stock{stale && <span className="font-medium text-warn-ink"> · stale (over 7 days old): read it again in the extension</span>}
           </p>
           <ul className="space-y-0.5">
             {stock.sellers.map((s) => {
@@ -117,7 +121,7 @@ function FromExtension({ r }: { r: Result }) {
                 <li key={s.sellerId}>
                   {s.name ?? s.sellerId}{s.fba ? " (FBA)" : ""}: <span className="num font-medium">{s.stock == null ? "?" : s.stock.toLocaleString("en-GB")}</span>
                   {s.limited && <span className="text-muted-foreground"> (a per-customer limit, not stock)</span>}
-                  <span className={isStale(at) ? "text-warn" : "text-muted-foreground"}> · read {stamp(at)}{isStale(at) ? " (stale)" : ""}</span>
+                  <span className={isStale(at) ? "text-warn-ink" : "text-muted-foreground"}> · read {stamp(at)}{isStale(at) ? " (stale)" : ""}</span>
                   {s.source && <span className="text-muted-foreground"> · from {s.source}</span>}
                 </li>
               );
@@ -154,21 +158,21 @@ export function Detail({ r, fav, onNote, onWaive, onWatch, onCost, stacked = fal
     {(r.status === "done" || asin) && (
       <div className="flex flex-wrap items-center gap-x-3">
         {r.status === "done" && <Checked at={r.updated_at} recheck={recheck} />}
-        {asin && <Link className="text-xs font-medium text-brand hover:underline" href={`/products/${asin}`} onClick={(e) => e.stopPropagation()}>Product page →</Link>}
+        {asin && <Link className="text-xs font-medium text-primary hover:underline" href={`/products/${asin}`} onClick={(e) => e.stopPropagation()}>Product page →</Link>}
       </div>
     )}
     <div className={cn("grid gap-4", !stacked && "lg:grid-cols-[2fr_1fr_1fr]")}>
       <div>
-        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Gates</p>
+        <p className="mb-1 eyebrow">Gates</p>
         <ul className="space-y-1">
           {r.gate_outcomes.map((g) => (
-            <li key={g.gate} className="flex gap-2 text-xs">
-              <span className={`flex h-4 w-4 flex-none items-center justify-center rounded-full text-xs font-bold text-white ${STATUS_STYLE[g.status]}`}>{STATUS_ICON[g.status]}</span>
+            <li key={g.gate} className="flex items-start gap-2 text-xs">
+              <GateChip status={g.status} />
               <button type="button" title={`What ${g.label} checks`} onClick={(e) => { e.stopPropagation(); help.open(`gates/${g.gate}`); }}
-                className={cn("flex-none text-left font-medium underline decoration-dotted decoration-muted-foreground/50 underline-offset-2 hover:text-brand", stacked ? "w-32" : "w-40")}>
+                className={cn("flex-none cursor-pointer pt-0.5 text-left font-medium underline decoration-dotted decoration-muted-foreground/50 underline-offset-2 hover:text-primary", stacked ? "w-32" : "w-40")}>
                 {g.label}
               </button>
-              <span className="min-w-0 text-muted-foreground">
+              <span className="min-w-0 pt-0.5 text-muted-foreground">
                 {g.detail}{g.gate === "gating" && <RestrictionLink outcomes={r.gate_outcomes} asin={r.product?.asin} />}
                 {g.gate === "gating" && r.product?.asin && g.tags?.some((t) => t === "APPROVAL" || t === "BLOCKED") && (
                   <span className="ml-2 inline-block align-middle">
@@ -193,7 +197,7 @@ export function Detail({ r, fav, onNote, onWaive, onWatch, onCost, stacked = fal
             </summary>
             <ul className="num mt-1 space-y-0.5">
               {r.inputs.lookup.attempts.map((a, i) => (
-                <li key={i}>{a.identifiersType} {a.code}: {a.error ? <span className="text-fail">{a.error}</span> : `${a.items} item${a.items === 1 ? "" : "s"}${a.total != null ? ` of ${a.total} results` : ""}`}</li>
+                <li key={i}>{a.identifiersType} {a.code}: {a.error ? <span className="text-danger">{a.error}</span> : `${a.items} item${a.items === 1 ? "" : "s"}${a.total != null ? ` of ${a.total} results` : ""}`}</li>
               ))}
             </ul>
             {r.inputs.lookup.raw && <pre className="num mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-all rounded bg-card p-2">{r.inputs.lookup.raw}</pre>}
@@ -203,7 +207,7 @@ export function Detail({ r, fav, onNote, onWaive, onWatch, onCost, stacked = fal
       <div>
         <SellerGap r={r} />
         <AmazonSeen r={r} />
-        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Per unit at {gbp(r.sell_price)}</p>
+        <p className="mb-1 eyebrow">Per unit at {gbp(r.sell_price)}</p>
         {r.fees ? (
           <dl className="num grid grid-cols-[1fr_auto] gap-x-3 gap-y-0.5 text-xs">
             <dt>Referral ({r.fees.referralPct}%, {r.fees.referralCategory})</dt><dd className="text-right">{gbp(r.fees.referral)}</dd>
@@ -231,7 +235,7 @@ export function Detail({ r, fav, onNote, onWaive, onWatch, onCost, stacked = fal
           <p className="mt-2 text-xs">
             <span className="text-muted-foreground">Source: </span>
             {r.offer.supplier.id
-              ? <Link className="font-medium text-brand hover:underline" href={`/suppliers/${r.offer.supplier.id}`} onClick={(e) => e.stopPropagation()}>{r.offer.supplier.name}</Link>
+              ? <Link className="font-medium text-primary hover:underline" href={`/suppliers/${r.offer.supplier.id}`} onClick={(e) => e.stopPropagation()}>{r.offer.supplier.name}</Link>
               : <span className="font-medium">{r.offer.supplier.name}</span>}
           </p>
         )}
@@ -244,14 +248,14 @@ export function Detail({ r, fav, onNote, onWaive, onWatch, onCost, stacked = fal
           <CostOverrideControl override={r.cost_override} onSet={(c) => onCost(r, c)} onClear={() => onCost(r, null)} />
         )}
         {r.inputs?.pack && (
-          <p className="mt-1 text-xs font-medium text-warn">
+          <p className="mt-1 text-xs font-medium text-warn-ink">
             Listing is a {r.inputs.pack.listing === 1 ? "single" : `${r.inputs.pack.listing}-pack`}
             {r.inputs.pack.supplier > 1 ? `, the supplier's item a ${r.inputs.pack.supplier}-pack` : ""}: costs are for {+r.inputs.pack.ratio.toFixed(2)} of the supplier&apos;s items per listing.
           </p>
         )}
       </div>
       <div>
-        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Score groups</p>
+        <p className="mb-1 eyebrow">Score groups</p>
         {r.group_scores ? (
           <ul className="space-y-1">
             {(Object.keys(GROUP_LABELS) as GroupId[]).map((g) => {
@@ -260,7 +264,7 @@ export function Detail({ r, fav, onNote, onWaive, onWatch, onCost, stacked = fal
                 <li key={g} className="flex items-center gap-2 text-xs">
                   <span className="w-20">{GROUP_LABELS[g]}</span>
                   <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-foreground/10">
-                    {v != null && <span className="block h-full rounded-full bg-brand" style={{ width: `${v}%` }} />}
+                    {v != null && <span className="block h-full rounded-full bg-primary" style={{ width: `${v}%` }} />}
                   </span>
                   <span className="num w-7 text-right">{v ?? "—"}</span>
                 </li>
@@ -296,7 +300,7 @@ function AmazonSeen({ r }: { r: Result }) {
   return (
     <p className="mb-2 text-xs">
       <span className="text-muted-foreground">Amazon: </span>
-      <span className={now ? "font-medium text-fail" : undefined}>{text}</span>
+      <span className={now ? "font-medium text-danger" : undefined}>{text}</span>
     </p>
   );
 }
@@ -309,7 +313,7 @@ function SellerGap({ r }: { r: Result }) {
   const days = m.lastOfferDaysAgo ?? (now ? 0 : null);
   const dormant = dormantOf(r);
   return (
-    <dl className={cn("mb-3 grid grid-cols-[max-content_1fr] gap-x-4 gap-y-0.5 rounded-md px-2.5 py-1.5 text-xs", dormant ? "bg-warn-soft" : "bg-muted/60")}>
+    <dl className={cn("mb-3 grid grid-cols-[max-content_1fr] gap-x-4 gap-y-0.5 rounded-md px-2.5 py-1.5 text-xs", dormant ? "bg-warn-soft" : "bg-subtle/60")}>
       <dt>Days without a seller</dt>
       <dd className="num text-right font-semibold">{days == null ? (dormant ? "no offer in the history" : "—") : days === 0 ? "0 (selling now)" : days.toLocaleString("en-GB")}</dd>
       {dormant && m.lastBuyBox12m != null && (
@@ -339,7 +343,7 @@ function QogitaOfferList({ q, stacked }: { q: QogitaOffers; stacked: boolean }) 
   return (
     <div className="space-y-1.5">
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Qogita offers ({q.offers.length})</p>
+        <p className="eyebrow">Qogita offers ({q.offers.length})</p>
         <p className="text-xs text-muted-foreground">
           {q.reason}{q.excluded ? ` · ${q.excluded} left out by the ${q.movLimit != null ? `${m(q.movLimit)} MOV` : "MOV or delivery"} limit` : ""} · checked {new Date(q.fetchedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
         </p>
@@ -363,10 +367,10 @@ function QogitaOfferList({ q, stacked }: { q: QogitaOffers; stacked: boolean }) 
               {sorted.map((o) => {
                 const chosen = o.qid === q.chosen;
                 return (
-                  <tr key={o.qid} className={cn("border-b last:border-0", chosen && "bg-pass-soft")}>
+                  <tr key={o.qid} className={cn("border-b last:border-0", chosen && "bg-success-soft")}>
                     <td className="px-2 py-1.5 font-sans">
                       <span className={cn(chosen && "font-semibold")}>{o.seller}</span>
-                      {chosen && <span className="ml-1.5 rounded bg-pass px-1 py-px text-xs font-semibold text-white">fits the budget</span>}
+                      {chosen && <span className="ml-1.5 rounded bg-success px-1 py-px text-xs font-semibold text-white">fits the budget</span>}
                     </td>
                     <td className="px-2 py-1.5 text-right">{m(o.basePrice)}</td>
                     <td className="px-2 py-1.5 text-right text-muted-foreground">{gbp(o.basePrice * q.fxRate)}</td>
@@ -409,10 +413,10 @@ function AddToCart({ r, budgetGbp }: { r: Result; budgetGbp?: number }) {
         ≈ {currencySymbol(q!.currency)}{cost.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} from {offer.seller}
         {budgetGbp ? <> · {suggested.toLocaleString("en-GB")} is the most your {gbp(budgetGbp)} line budget buys</> : null}
       </p>
-      <Button size="sm" variant="outline" className="ml-auto" disabled={bad || busy} onClick={async () => { setBusy(true); await cart.add(offer.qid, n, offer.unit, r.product?.title ?? offer.seller); setBusy(false); }}>
+      <Button size="sm" variant="secondary" className="ml-auto" disabled={bad || busy} onClick={async () => { setBusy(true); await cart.add(offer.qid, n, offer.unit, r.product?.title ?? offer.seller); setBusy(false); }}>
         <ShoppingCartIcon /> {busy ? "Adding…" : "Add to Qogita cart"}
       </Button>
-      {bad && <p className="w-full text-xs text-warn">Order whole cases of {offer.unit}.</p>}
+      {bad && <p className="w-full text-xs text-warn-ink">Order whole cases of {offer.unit}.</p>}
     </div>
   );
 }
@@ -429,10 +433,10 @@ function PriceCompare({ at, basis, spike }: { at: NonNullable<NonNullable<Result
     <>
       {line(at.current, "current Buy Box")}
       {line(at.median90, at.median90?.label ?? "90-day median")}
-      {!at.current && <dt className="col-span-2 text-warn">No current Buy Box (suppressed or no offers): the 90-day median is used.</dt>}
+      {!at.current && <dt className="col-span-2 text-warn-ink">No current Buy Box (suppressed or no offers): the 90-day median is used.</dt>}
       <dt className="col-span-2 flex flex-wrap items-center gap-1.5 text-muted-foreground">
         Gates use: <b className="text-foreground">{PRICE_BASIS_SHORT[basis ?? "lower"]}</b>
-        {spike && <span className="rounded-full bg-warn-soft px-1.5 py-px text-xs font-semibold text-warn uppercase" title="The current Buy Box is more than 15% over its 90-day median">Price spike</span>}
+        {spike && <StatusChip tone="warn" className="h-5 px-2" title="The current Buy Box is more than 15% over its 90-day median">Price spike</StatusChip>}
       </dt>
     </>
   );

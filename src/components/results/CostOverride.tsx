@@ -94,9 +94,9 @@ export function CostOverrideDialog({ open, onOpenChange, count = 1, initial, onS
             <Input inputMode="numeric" placeholder="MOQ (optional, units)" value={moq} onChange={(e) => setMoq(e.target.value)} aria-label="Minimum order quantity" />
             <Input inputMode="decimal" placeholder="MOV (optional, £)" value={mov} onChange={(e) => setMov(e.target.value)} aria-label="Minimum order value (£)" />
           </div>
-          {error && <p className="text-xs text-fail">{error}</p>}
+          {error && <p className="text-xs text-danger">{error}</p>}
           <DialogFooter className="gap-2">
-            {onClear && <Button type="button" variant="outline" className="mr-auto text-fail hover:text-fail" disabled={busy} onClick={() => run(onClear)}>Clear override</Button>}
+            {onClear && <Button type="button" variant="danger" className="mr-auto" disabled={busy} onClick={() => run(onClear)}>Clear override</Button>}
             <Button type="submit" disabled={busy}>{busy ? "Saving…" : "Save cost"}</Button>
           </DialogFooter>
         </form>
@@ -126,18 +126,18 @@ export function CostOverrideControl({ override, onSet, onClear }: {
       {override ? (
         <>
           {override.active
-            ? <span className="cursor-help rounded bg-brand-soft px-1 font-semibold text-brand" title={overrideTitle(override)}>cost overridden</span>
+            ? <span className="cursor-help rounded bg-primary-soft px-1 font-semibold text-primary" title={overrideTitle(override)}>cost overridden</span>
             : <span className="cursor-help text-muted-foreground" title={overrideTitle(override)}>Your cost isn&apos;t cheaper than the sheet&apos;s; the sheet&apos;s is scored</span>}
           {override.supplier && <span className="text-muted-foreground"> · {override.supplier}</span>}
-          <button type="button" className="ml-2 font-medium text-brand hover:underline" onClick={(e) => { stop(e); setOpen(true); }}>Edit</button>
-          <button type="button" className="ml-2 font-medium text-brand hover:underline disabled:opacity-50" disabled={clearing} onClick={clear}>{clearing ? "Clearing…" : "Clear"}</button>
+          <button type="button" className="ml-2 font-medium text-primary hover:underline" onClick={(e) => { stop(e); setOpen(true); }}>Edit</button>
+          <button type="button" className="ml-2 font-medium text-primary hover:underline disabled:opacity-50" disabled={clearing} onClick={clear}>{clearing ? "Clearing…" : "Clear"}</button>
         </>
       ) : (
-        <button type="button" className="font-medium text-brand hover:underline" title="Your own cost for this product: it competes with the sheet's price in every run" onClick={(e) => { stop(e); setOpen(true); }}>
+        <button type="button" className="font-medium text-primary hover:underline" title="Your own cost for this product: it competes with the sheet's price in every run" onClick={(e) => { stop(e); setOpen(true); }}>
           Set your cost
         </button>
       )}
-      {error && <span className="ml-2 text-fail">{error}</span>}
+      {error && <span className="ml-2 text-danger">{error}</span>}
       {open && <CostOverrideDialog open={open} onOpenChange={setOpen} initial={override} onSave={onSet} onClear={override ? onClear : undefined} />}
     </p>
   );

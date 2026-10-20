@@ -3,13 +3,13 @@
 import { ExternalLinkIcon, ScanSearchIcon, StoreIcon } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { usePageCrumbs } from "@/components/Crumbs";
-import { EmptyState, ErrorState } from "@/components/States";
+import { ErrorState } from "@/components/States";
 import { VerdictBar } from "@/components/VerdictBar";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { SortTableHead, useSortable } from "@/components/SortableTable";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { DataTable, type DataColumn } from "@/components/ui/data-table";
+import { PageHeader } from "@/components/ui/page-header";
+import { Skeleton } from "@/components/ui/skeleton";
+import { StatusChip } from "@/components/ui/status-chip";
 import { storefrontUrl } from "@/lib/check/seller";
 import type { ScannedSeller } from "@/lib/server/sellerScan";
 import { api, when } from "@/lib/ui/client";
@@ -17,104 +17,91 @@ import { api, when } from "@/lib/ui/client";
 const n = (x: number) => x.toLocaleString("en-GB");
 
 export default function SellersPage() {
-  usePageCrumbs([{ label: "Sellers" }]);
   const [sellers, setSellers] = useState<ScannedSeller[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const sorting = useSortable("wholesale.sellers", sellers ?? [], {
-    seller: { value: (s) => s.name ?? s.sellerId, kind: "text" },
-    rating: { value: (s) => s.ratingPct, kind: "number" },
-    storefront: { value: (s) => s.storefrontSize, kind: "number" },
-    brands: { value: (s) => s.brands[0]?.brand ?? null, kind: "text" },
-    lastScan: { value: (s) => s.lastScan?.at ?? null, kind: "date" },
-  });
 
   useEffect(() => {
     api<{ sellers: ScannedSeller[] }>("/api/sellers").then((r) => setSellers(r.sellers)).catch((e) => setError(e.message));
   }, []);
 
+  const columns: DataColumn<ScannedSeller>[] = [
+    {
+      id: "seller", header: "Seller", mobile: "title", className: "max-w-64", sortValue: (s) => s.name ?? s.sellerId,
+      cell: (s) => <>
+        <a className="inline-flex items-center gap-1 font-medium hover:underline" href={storefrontUrl(s.sellerId)} target="_blank" rel="noreferrer">
+          {s.name ?? s.sellerId} <ExternalLinkIcon className="size-3 text-muted-foreground" />
+        </a>
+        <p className="text-xs font-normal text-muted-foreground">{s.businessName && s.businessName !== s.name ? `${s.businessName} · ` : ""}{s.sellerId}</p>
+      </>,
+    },
+    {
+      id: "rating", header: "Rating", numeric: true, mobile: 2, sortValue: (s) => s.ratingPct,
+      cell: (s) => <>{s.ratingPct != null ? `${s.ratingPct}%` : "—"}<p className="text-xs text-muted-foreground">{s.ratingCount != null ? `${n(s.ratingCount)} ratings` : ""}</p></>,
+    },
+    {
+      id: "storefront", header: "Storefront", numeric: true, sortValue: (s) => s.storefrontSize,
+      cell: (s) => <>{s.storefrontSize != null ? n(s.storefrontSize) : "—"}<p className="text-xs text-muted-foreground">{s.buyBoxOwnershipPct != null ? `holds ${s.buyBoxOwnershipPct}% of its Buy Boxes` : ""}</p></>,
+    },
+    {
+      id: "brands", header: "Brand mix", className: "max-w-80", sortValue: (s) => s.brands[0]?.brand ?? null,
+      cell: (s) => (
+        <div className="flex flex-wrap gap-1">
+          {s.brands.slice(0, 5).map((b) => <StatusChip key={b.brand} tone="neutral" icon={false} className="font-normal">{b.brand} <span className="num opacity-80">{n(b.count)}</span></StatusChip>)}
+          {!s.brands.length && <span className="text-xs text-muted-foreground">—</span>}
+        </div>
+      ),
+    },
+    {
+      id: "lastScan", header: "Last scan", mobile: 1, className: "min-w-56", sortValue: (s) => s.lastScan?.at ?? null,
+      cell: (s) => {
+        const r = s.results;
+        const screened = r ? r.pass + r.warn + r.fail : 0;
+        return s.lastScan ? (
+          <div className="space-y-1">
+            <Link className="text-sm text-primary hover:underline" href={`/runs/${s.lastScan.runId}`}>{when(s.lastScan.at)}</Link>
+            {r && (screened > 0 || r.pending > 0) && (
+              <>
+                <VerdictBar counts={{ pass: r.pass, warn: r.warn, fail: r.fail, error: 0, pending: r.pending }} legend={false} />
+                <p className="num text-xs text-muted-foreground">
+                  {r.pass} Buy · {r.warn} Check · {r.fail} Skip{r.pending ? ` · ${n(r.pending)} to go` : ""}
+                  {` · holds Buy Box on ${n(r.holdsBuyBox)}`}
+                </p>
+              </>
+            )}
+          </div>
+        ) : <span className="text-xs text-muted-foreground">Looked up, not scanned</span>;
+      },
+    },
+    {
+      id: "act", header: <span className="sr-only">Actions</span>, mobile: 3, className: "text-right",
+      cell: (s) => <Button size="sm" variant="secondary" asChild><Link href={`/new-run?tab=seller&seller=${s.sellerId}`}>{s.lastScan ? "Re-scan" : "Scan"}</Link></Button>,
+    },
+  ];
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="page-title">Sellers</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Storefronts you&apos;ve scanned: who they are, what they sell, and how their listings screened.</p>
-        </div>
-        <Button asChild><Link href="/new-run?tab=seller"><ScanSearchIcon /> Scan a seller</Link></Button>
-      </div>
+      <PageHeader
+        title="Sellers"
+        crumbs={[{ label: "Wholesale", href: "/runs" }, { label: "Sellers" }]}
+        subtitle="Storefronts you've scanned: who they are, what they sell, and how their listings screened."
+        actions={<Button asChild><Link href="/new-run?tab=seller"><ScanSearchIcon /> Scan a seller</Link></Button>}
+      />
 
       {error ? <ErrorState title="Couldn't load sellers" message={error} onRetry={() => window.location.reload()} />
-        : sellers == null ? <p className="text-sm text-muted-foreground">Loading…</p>
-        : !sellers.length ? (
-          <EmptyState icon={<StoreIcon />} title="No sellers scanned yet"
-            action={<Button variant="outline" asChild><Link href="/new-run?tab=seller">Scan a seller</Link></Button>}>
-            Paste a seller ID or storefront link, or use “Scan this seller” on a row&apos;s Buy Box sellers.
-          </EmptyState>
-        ) : (
-          <div className="panel overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <SortTableHead {...sorting.th("seller")} className="pl-4">Seller</SortTableHead>
-                  <SortTableHead {...sorting.th("rating")} numeric>Rating</SortTableHead>
-                  <SortTableHead {...sorting.th("storefront")} numeric>Storefront</SortTableHead>
-                  <SortTableHead {...sorting.th("brands")} title="Sorts by the top brand">Brand mix</SortTableHead>
-                  <SortTableHead {...sorting.th("lastScan")}>Last scan</SortTableHead>
-                  <TableHead className="pr-4" />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {sorting.rows.map((s) => {
-                  const r = s.results;
-                  const screened = r ? r.pass + r.warn + r.fail : 0;
-                  return (
-                    <TableRow key={s.sellerId}>
-                      <TableCell className="max-w-64 whitespace-normal pl-4">
-                        <a className="inline-flex items-center gap-1 font-medium hover:underline" href={storefrontUrl(s.sellerId)} target="_blank" rel="noreferrer">
-                          {s.name ?? s.sellerId} <ExternalLinkIcon className="size-3 text-muted-foreground" />
-                        </a>
-                        <p className="text-xs text-muted-foreground">{s.businessName && s.businessName !== s.name ? `${s.businessName} · ` : ""}{s.sellerId}</p>
-                      </TableCell>
-                      <TableCell className="num text-right">
-                        {s.ratingPct != null ? `${s.ratingPct}%` : "—"}
-                        <p className="text-xs text-muted-foreground">{s.ratingCount != null ? `${n(s.ratingCount)} ratings` : ""}</p>
-                      </TableCell>
-                      <TableCell className="num text-right">
-                        {s.storefrontSize != null ? n(s.storefrontSize) : "—"}
-                        <p className="text-xs text-muted-foreground">
-                          {s.buyBoxOwnershipPct != null ? `holds ${s.buyBoxOwnershipPct}% of its Buy Boxes` : ""}
-                        </p>
-                      </TableCell>
-                      <TableCell className="max-w-80 whitespace-normal">
-                        <div className="flex flex-wrap gap-1">
-                          {s.brands.slice(0, 5).map((b) => <Badge key={b.brand} variant="outline" className="font-normal">{b.brand} <span className="num text-muted-foreground">{n(b.count)}</span></Badge>)}
-                          {!s.brands.length && <span className="text-xs text-muted-foreground">—</span>}
-                        </div>
-                      </TableCell>
-                      <TableCell className="min-w-56">
-                        {s.lastScan ? (
-                          <div className="space-y-1">
-                            <Link className="text-sm text-brand hover:underline" href={`/runs/${s.lastScan.runId}`}>{when(s.lastScan.at)}</Link>
-                            {r && (screened > 0 || r.pending > 0) && (
-                              <>
-                                <VerdictBar counts={{ pass: r.pass, warn: r.warn, fail: r.fail, error: 0, pending: r.pending }} legend={false} />
-                                <p className="num text-xs text-muted-foreground">
-                                  {r.pass} pass · {r.warn} warn · {r.fail} fail{r.pending ? ` · ${n(r.pending)} to go` : ""}
-                                  {` · holds Buy Box on ${n(r.holdsBuyBox)}`}
-                                </p>
-                              </>
-                            )}
-                          </div>
-                        ) : <span className="text-xs text-muted-foreground">Looked up, not scanned</span>}
-                      </TableCell>
-                      <TableCell className="pr-4 text-right">
-                        <Button size="sm" variant="outline" asChild><Link href={`/new-run?tab=seller&seller=${s.sellerId}`}>{s.lastScan ? "Re-scan" : "Scan"}</Link></Button>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
+        : sellers == null ? <Skeleton className="h-64 rounded-xl" />
+        : (
+          <DataTable
+            rows={sellers}
+            columns={columns}
+            getRowId={(s) => s.sellerId}
+            storageKey="wholesale.sellers"
+            caption="Sellers"
+            empty={{
+              icon: <StoreIcon />, title: "No sellers scanned yet",
+              description: "Paste a seller ID or storefront link, or use “Scan this seller” on a row's Buy Box sellers.",
+              action: <Button variant="secondary" asChild><Link href="/new-run?tab=seller">Scan a seller</Link></Button>,
+            }}
+          />
         )}
     </div>
   );

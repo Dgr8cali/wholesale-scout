@@ -3,7 +3,7 @@
 import { ExternalLinkIcon, LoaderIcon } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { ProductThumb } from "@/components/ProductThumb";
-import { Badge } from "@/components/ui/badge";
+import { ProductDecision, StatusChip } from "@/components/ui/status-chip";
 import { Button } from "@/components/ui/button";
 import type { VerdictCard as Card } from "@/lib/server/check";
 import { monthsLabel } from "@/lib/screening/order";
@@ -23,7 +23,7 @@ const GATING: Record<string, { label: string; variant: "pass" | "warn" | "fail" 
 function Stat({ label, children, note, text }: { label: string; children: ReactNode; note?: ReactNode; text?: boolean }) {
   return (
     <div className="min-w-0">
-      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="eyebrow">{label}</p>
       <p className={cn("truncate", text ? "text-sm" : "stat-value")}>{children}</p>
       {note && <p className="line-clamp-2 text-xs text-muted-foreground">{note}</p>}
     </div>
@@ -44,13 +44,13 @@ export function VerdictCard({ card, onFetchAnyway }: { card: Card; onFetchAnyway
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             {verdict
-              ? <Badge variant={verdict} className="text-sm uppercase">{verdict}</Badge>
-              : <Badge variant="muted"><LoaderIcon className="animate-spin" /> Screening</Badge>}
+              ? <ProductDecision verdict={verdict} className="text-sm" />
+              : <StatusChip tone="info" icon={false}><LoaderIcon className="size-3.5 animate-spin" /> Screening</StatusChip>}
             {card.score != null && (
-              <Badge variant={card.band === "green" ? "pass" : card.band === "amber" ? "warn" : "muted"} title="Win score">Score {Math.round(card.score)}</Badge>
+              <StatusChip tone={card.band === "green" ? "good" : card.band === "amber" ? "warn" : "neutral"} icon={false} title="Win score">Score {Math.round(card.score)}</StatusChip>
             )}
-            {card.pending && card.verdict && <Badge variant="muted" title="More data is still coming in"><LoaderIcon className="animate-spin" /> updating</Badge>}
-            {!card.keepaHistory && !card.pending && <Badge variant="muted" title="Sales, history and Amazon presence need Keepa">no Keepa history</Badge>}
+            {card.pending && card.verdict && <StatusChip tone="neutral" icon={false} title="More data is still coming in"><LoaderIcon className="size-3.5 animate-spin" /> Updating</StatusChip>}
+            {!card.keepaHistory && !card.pending && <StatusChip tone="neutral" title="Sales, history and Amazon presence need Keepa">No Keepa history</StatusChip>}
           </div>
           <p className="mt-1 line-clamp-2 text-sm font-medium">{card.title ?? card.asin}</p>
           <p className="text-xs text-muted-foreground">
@@ -62,7 +62,7 @@ export function VerdictCard({ card, onFetchAnyway }: { card: Card; onFetchAnyway
         {card.gating?.applyUrl && (
           <div className="flex items-center gap-2">
             <ApplyKit brand={card.brand} applyUrl={card.gating.applyUrl} compact />
-            <Button asChild size="sm" variant="outline">
+            <Button asChild size="sm" variant="secondary">
               <a href={card.gating.applyUrl} target="_blank" rel="noreferrer">Apply to sell <ExternalLinkIcon /></a>
             </Button>
           </div>
@@ -85,22 +85,22 @@ export function VerdictCard({ card, onFetchAnyway }: { card: Card; onFetchAnyway
           {card.monthsToSell != null ? monthsLabel(card.monthsToSell) : "—"}
         </Stat>
         <Stat label="Amazon" text note={seen?.label}>
-          {!card.amazon ? "—" : card.amazon.sellingNow ? <span className="text-fail">selling now</span> : card.amazon.lastSeenDays == null && card.keepaHistory ? "never" : "not now"}
+          {!card.amazon ? "—" : card.amazon.sellingNow ? <span className="text-danger">selling now</span> : card.amazon.lastSeenDays == null && card.keepaHistory ? "never" : "not now"}
         </Stat>
         <Stat label="Gating" text note={card.fees?.total != null ? `fees ${gbp(card.fees.total)}` : undefined}>
-          {g ? <span className={cn(g.variant === "pass" && "text-pass", g.variant === "warn" && "text-warn", g.variant === "fail" && "text-fail")}>{g.label}</span> : "—"}
+          {g ? <span className={cn(g.variant === "pass" && "text-success", g.variant === "warn" && "text-warn-ink", g.variant === "fail" && "text-danger")}>{g.label}</span> : "—"}
         </Stat>
       </div>
       {card.why && <p className="text-xs text-muted-foreground">{card.why}</p>}
       {card.notFetched && (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted/60 px-3 py-2 text-xs">
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-subtle/60 px-3 py-2 text-xs">
           <span>
             Stopped at <b>{card.notFetched.label}</b> before Keepa: Buy Box, offers and Amazon are from Amazon&apos;s current offers (free); sales,
             your share and history weren&apos;t fetched.
           </span>
           {onFetchAnyway && (
-            <Button size="sm" variant="outline" disabled={fetching} onClick={async () => { setFetching(true); try { await onFetchAnyway(); } finally { setFetching(false); } }}>
-              {fetching ? "Fetching…" : "Fetch anyway"}
+            <Button size="sm" variant="secondary" loading={fetching} onClick={async () => { setFetching(true); try { await onFetchAnyway(); } finally { setFetching(false); } }}>
+              {fetching ? "Fetching" : "Fetch anyway"}
             </Button>
           )}
         </div>

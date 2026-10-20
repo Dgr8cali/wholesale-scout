@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckIcon, FileSpreadsheetIcon, Trash2Icon } from "lucide-react";
+import { CheckIcon, FileSpreadsheetIcon, XIcon } from "lucide-react";
 import { FileDrop } from "@/components/ui/file-drop";
 import { useRouter } from "next/navigation";
 import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
@@ -25,7 +25,6 @@ import {
 import { api, gbp } from "@/lib/ui/client";
 import { isQogitaCatalog, parseQogitaCatalog } from "@/lib/qogita/catalogFile";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -33,6 +32,9 @@ import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+import { DataTable } from "@/components/ui/data-table";
+import { SectionTitle } from "@/components/ui/info-tip";
+import { StatusChip } from "@/components/ui/status-chip";
 
 const STEPS = ["Drop", "Map", "Review", "Screen"] as const;
 type Step = 0 | 1 | 2 | 3;
@@ -321,13 +323,13 @@ export function UploadSource() {
           const reachable = canReach(s);
           return (
             <Fragment key={label}>
-              {i > 0 && <li aria-hidden="true" className={cn("h-px flex-1", s <= step ? "bg-brand" : "bg-border")} />}
+              {i > 0 && <li aria-hidden="true" className={cn("h-px flex-1", s <= step ? "bg-primary" : "bg-border")} />}
               <li>
                 <button type="button" disabled={!reachable} onClick={() => setStep(s)} aria-current={s === step ? "step" : undefined}
                   className={cn("flex items-center gap-2 rounded-full py-1 pr-3 pl-1 text-sm transition-colors disabled:cursor-not-allowed",
-                    s === step ? "bg-brand-soft font-semibold text-brand" : reachable ? "text-foreground hover:bg-muted" : "text-muted-foreground")}>
+                    s === step ? "bg-primary-soft font-semibold text-primary" : reachable ? "text-foreground hover:bg-subtle" : "text-muted-foreground")}>
                   <span className={cn("flex size-6 items-center justify-center rounded-full text-xs font-semibold",
-                    s === step ? "bg-brand text-brand-foreground" : done ? "bg-brand/15 text-brand" : "bg-muted text-muted-foreground")}>
+                    s === step ? "bg-primary text-primary-foreground" : done ? "bg-primary/15 text-primary" : "bg-subtle text-muted-foreground")}>
                     {done ? <CheckIcon className="size-3.5" /> : i + 1}
                   </span>
                   {/* Phones: only the current step's name, so the four fit. */}
@@ -339,29 +341,29 @@ export function UploadSource() {
         })}
       </ol>
 
-      {error && <p className="rounded-md bg-fail-soft px-3 py-2 text-sm text-fail">{error}</p>}
+      {error && <p className="rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p>}
 
       {step === 0 && (
         <div className="space-y-4">
           <FileDrop onFiles={(f) => addFiles(f)} multiple accept=".xlsx,.xls,.csv,.tsv,.txt" title="Drop price lists here, or choose files"
             hint={<>.xlsx, .xls, .csv · up to {MAX_FILE_BYTES / 1024 / 1024} MB each, {MAX_ROWS.toLocaleString("en-GB")} rows per upload</>} />
           {files.length > 0 && (
-            <ul className="panel divide-y">
+            <ul className="panel divide-y divide-divider">
               {files.map((f) => (
                 <li key={f.key} className="flex flex-wrap items-center gap-3 px-4 py-3">
                   <FileSpreadsheetIcon className="size-4 text-muted-foreground" />
                   <span className="min-w-0 flex-1 truncate text-sm font-medium">{f.fileName}</span>
                   <span className="num text-xs text-muted-foreground">{(previews[f.key]?.rows.length ?? 0).toLocaleString("en-GB")} rows</span>
-                  {f.remembered ? <Badge variant="pass">Layout remembered: {f.remembered}</Badge> : <Badge variant="warn">New layout</Badge>}
-                  <Button variant="ghost" size="icon-sm" aria-label={`Remove ${f.fileName}`} onClick={() => setFiles((fs) => fs.filter((x) => x.key !== f.key))}><Trash2Icon /></Button>
+                  {f.remembered ? <StatusChip tone="good">Layout remembered: {f.remembered}</StatusChip> : <StatusChip tone="warn">New layout</StatusChip>}
+                  <Button variant="ghost" size="sm" aria-label={`Remove ${f.fileName}`} onClick={() => setFiles((fs) => fs.filter((x) => x.key !== f.key))}><XIcon /> Remove</Button>
                 </li>
               ))}
             </ul>
           )}
           <StepNav>
             {allRemembered && <span className="text-sm text-muted-foreground">Every layout is remembered: you can go straight to Review.</span>}
-            <Button variant={allRemembered ? "outline" : "default"} disabled={!canReach(1)} onClick={() => next(1)}>Map columns</Button>
-            {allRemembered && <Button variant="outline" onClick={() => next(2)}>Review</Button>}
+            <Button variant={allRemembered ? "secondary" : "primary"} disabled={!canReach(1)} onClick={() => next(1)}>Map columns</Button>
+            {allRemembered && <Button onClick={() => next(2)}>Review</Button>}
           </StepNav>
         </div>
       )}
@@ -374,7 +376,7 @@ export function UploadSource() {
                 {files.map((f) => (
                   <TabsTrigger key={f.key} value={f.key} className="max-w-56">
                     <span className="truncate">{f.fileName}</span>
-                    {mapProblems(f).length ? <span className="size-1.5 flex-none rounded-full bg-highlight" aria-label="needs attention" /> : <CheckIcon className="text-pass" />}
+                    {mapProblems(f).length ? <span className="size-1.5 flex-none rounded-full bg-highlight" aria-label="needs attention" /> : <CheckIcon className="text-success" />}
                   </TabsTrigger>
                 ))}
               </TabsList>
@@ -393,7 +395,7 @@ export function UploadSource() {
             ))}
           </Tabs>
           <StepNav back={() => setStep(0)}>
-            {!mapped && <span className="text-sm text-warn">{problems.filter((p) => !p.includes("-row limit"))[0]}</span>}
+            {!mapped && <span className="text-sm text-warn-ink">{problems.filter((p) => !p.includes("-row limit"))[0]}</span>}
             <Button disabled={!canReach(2)} onClick={() => next(2)}>Review rows</Button>
           </StepNav>
         </div>
@@ -409,33 +411,23 @@ export function UploadSource() {
                   <h2 className="section-title min-w-0 truncate">{f.fileName}</h2>
                   <span className="text-sm text-muted-foreground">· {f.supplier.name} · {f.supplier.vatBasis === "ex_vat" ? "ex-VAT" : "inc-VAT"} · {f.supplier.currency}</span>
                 </div>
-                {!pv ? <p className="text-sm text-warn">Enter an FX rate to preview.</p> : (
+                {!pv ? <p className="text-sm text-warn-ink">Enter an FX rate to preview.</p> : (
                   <>
                     <div className="flex flex-wrap gap-2 text-sm">
-                      <Badge variant="pass"><span className="num">{pv.rows.length.toLocaleString("en-GB")}</span> rows ready</Badge>
-                      {pv.rejected.length > 0 && <Badge variant="warn"><span className="num">{pv.rejected.length}</span> set aside for manual matching</Badge>}
-                      {pv.rows.some((r) => !r.eanValid) && <Badge variant="warn"><span className="num">{pv.rows.filter((r) => !r.eanValid).length}</span> with a bad check digit</Badge>}
+                      <StatusChip tone="good"><span className="num">{pv.rows.length.toLocaleString("en-GB")}</span> rows ready</StatusChip>
+                      {pv.rejected.length > 0 && <StatusChip tone="warn"><span className="num">{pv.rejected.length}</span> set aside for manual matching</StatusChip>}
+                      {pv.rows.some((r) => !r.eanValid) && <StatusChip tone="warn"><span className="num">{pv.rows.filter((r) => !r.eanValid).length}</span> with a bad check digit</StatusChip>}
                     </div>
-                    <div className="overflow-x-auto rounded-lg border">
-                      <table className="w-full text-xs">
-                        <thead className="bg-muted/50 text-left text-muted-foreground">
-                          <tr><th className="px-3 py-2 font-medium">Row</th><th className="px-3 font-medium">EAN</th><th className="px-3 font-medium">Name</th><th className="px-3 text-right font-medium">Quoted / unit</th><th className="px-3 text-right font-medium">GBP ex-VAT / unit</th><th className="px-3 text-right font-medium">Pack</th><th className="px-3 text-right font-medium">MOQ</th></tr>
-                        </thead>
-                        <tbody>
-                          {pv.rows.slice(0, 8).map((r) => (
-                            <tr key={r.sourceRow} className="border-t">
-                              <td className="num px-3 py-1.5">{r.sourceRow}</td>
-                              <td className={cn("num px-3", !r.eanValid && "text-warn")}>{r.ean}</td>
-                              <td className="max-w-[320px] truncate px-3">{r.title}</td>
-                              <td className="num px-3 text-right">{r.unitCost.toFixed(2)} {f.supplier.currency}</td>
-                              <td className="num px-3 text-right">{gbp(r.unitCostGbp)}</td>
-                              <td className="num px-3 text-right">{r.packUnits}</td>
-                              <td className="num px-3 text-right">{r.moq ?? "—"}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                    <DataTable rows={pv.rows.slice(0, 8)} getRowId={(r) => String(r.sourceRow)} caption={`First rows of ${f.fileName}`} className="shadow-none"
+                      columns={[
+                        { id: "row", header: "Row", numeric: true, cell: (r) => r.sourceRow },
+                        { id: "ean", header: "EAN", mobile: 1, cell: (r) => <span className={cn("num", !r.eanValid && "text-warn-ink")}>{r.ean}</span> },
+                        { id: "name", header: "Name", mobile: "title", className: "max-w-[20rem] truncate", cell: (r) => r.title },
+                        { id: "quoted", header: "Quoted / unit", numeric: true, cell: (r) => `${r.unitCost.toFixed(2)} ${f.supplier.currency}` },
+                        { id: "gbp", header: "GBP ex-VAT / unit", numeric: true, mobile: 2, cell: (r) => gbp(r.unitCostGbp) },
+                        { id: "pack", header: "Pack", numeric: true, mobile: 3, cell: (r) => r.packUnits },
+                        { id: "moq", header: "MOQ", numeric: true, cell: (r) => r.moq ?? "—" },
+                      ]} />
                     {pv.rows.length > 8 && <p className="text-xs text-muted-foreground">and {(pv.rows.length - 8).toLocaleString("en-GB")} more rows</p>}
                     {pv.rejected.length > 0 && (
                       <details className="text-xs">
@@ -451,7 +443,7 @@ export function UploadSource() {
             );
           })}
           <StepNav back={() => setStep(1)}>
-            {totalRows > MAX_ROWS && <span className="text-sm text-warn">{totalRows.toLocaleString("en-GB")} rows is over the {MAX_ROWS.toLocaleString("en-GB")}-row limit per upload: remove a file or split it</span>}
+            {totalRows > MAX_ROWS && <span className="text-sm text-warn-ink">{totalRows.toLocaleString("en-GB")} rows is over the {MAX_ROWS.toLocaleString("en-GB")}-row limit per upload: remove a file or split it</span>}
             <Button disabled={!canReach(3)} onClick={() => next(3)}>Continue</Button>
           </StepNav>
         </div>
@@ -460,10 +452,11 @@ export function UploadSource() {
       {step === 3 && (
         <div className="space-y-4">
           <section className="panel space-y-4 p-5">
-            <h2 className="section-label">Screen against Amazon UK</h2>
+            <SectionTitle title="Screen against Amazon UK">
+              <p>The same EAN across files becomes one product; the cheapest offer is scored. Screening runs in the background: you can leave the page.</p>
+            </SectionTitle>
             <p className="text-sm text-muted-foreground">
               <span className="num font-medium text-foreground">{totalRows.toLocaleString("en-GB")}</span> rows from {files.length} file{files.length > 1 ? "s" : ""}.
-              The same EAN across files becomes one product; the cheapest offer is scored. Screening runs in the background: you can leave the page.
             </p>
             <div className="max-w-xs space-y-1.5">
               <Label htmlFor="profile" className="field-label">Profile</Label>
@@ -473,8 +466,8 @@ export function UploadSource() {
             </div>
           </section>
           <StepNav back={() => setStep(2)}>
-            <Button size="lg" disabled={busy || problems.length > 0 || totalRows === 0} onClick={submit}>
-              {busy ? "Starting…" : `Screen ${totalRows.toLocaleString("en-GB")} rows`}
+            <Button size="lg" disabled={problems.length > 0 || totalRows === 0} loading={busy} onClick={submit}>
+              {busy ? "Starting" : `Screen ${totalRows.toLocaleString("en-GB")} rows`}
             </Button>
           </StepNav>
         </div>
@@ -487,7 +480,7 @@ export function UploadSource() {
 
 function StepNav({ back, children }: { back?: () => void; children: ReactNode }) {
   return (
-    <div className="flex flex-wrap items-center justify-end gap-3 border-t pt-4">
+    <div className="flex flex-wrap items-center justify-end gap-3 border-t border-divider pt-4">
       {back && <Button variant="ghost" className="mr-auto" onClick={back}>Back</Button>}
       {children}
     </div>
@@ -513,8 +506,11 @@ function MapFile({ f, suppliers, problems, onUpdate, onCurrency, onSupplier, onS
     <div className="space-y-4">
       <section className="panel space-y-3 p-4">
         <div className="flex flex-wrap items-center gap-2">
-          <h2 className="section-label">Supplier</h2>
-          {f.remembered ? <Badge variant="pass">Layout remembered: {f.remembered}</Badge> : <Badge variant="warn">New layout: check the mapping</Badge>}
+          <SectionTitle title="Supplier">
+            <p>VAT basis and currency are saved with the supplier and applied to every future file from them. Costs are stored in GBP ex-VAT.</p>
+            {f.qogita && <p>{f.qogita.products.toLocaleString("en-GB")} products. The price is per item; Unit is the case size (the order multiple, stored as the MOQ). Imported as supplier <b>{f.supplier.name}</b>: products already known by GTIN aren&apos;t duplicated{f.qogita.region === "UK" ? ", and Qogita EU offers for them are archived" : ""}.</p>}
+          </SectionTitle>
+          {f.remembered ? <StatusChip tone="good">Layout remembered: {f.remembered}</StatusChip> : <StatusChip tone="warn">New layout: check the mapping</StatusChip>}
           {f.sheetNames.length > 1 && (
             <NativeSelect size="sm" className="ml-auto w-auto" aria-label="Sheet" value={f.sheet} onChange={(e) => onSheet(e.target.value)}>
               {f.sheetNames.map((s) => <NativeSelectOption key={s}>{s}</NativeSelectOption>)}
@@ -523,7 +519,7 @@ function MapFile({ f, suppliers, problems, onUpdate, onCurrency, onSupplier, onS
         </div>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <div className="space-y-1.5 lg:col-span-2">
-            <Label className="field-label" htmlFor={`name-${f.key}`}>Name {known && <span className="font-normal text-pass">· saved supplier</span>}</Label>
+            <Label className="field-label" htmlFor={`name-${f.key}`}>Name {known && <span className="font-normal text-success">· saved supplier</span>}</Label>
             <Input id={`name-${f.key}`} list="suppliers" value={f.supplier.name} onChange={(e) => onSupplier(e.target.value)} />
           </div>
           <div className="space-y-1.5">
@@ -548,18 +544,16 @@ function MapFile({ f, suppliers, problems, onUpdate, onCurrency, onSupplier, onS
               <Label className="field-label" htmlFor={`fx-${f.key}`}>GBP per 1 {f.supplier.currency}{f.fx.source && f.fx.source !== "fixed" ? ` (${f.fx.source}, ${f.fx.date})` : ""}</Label>
               <Input id={`fx-${f.key}`} className="num" type="number" step="any" value={f.fx.rate}
                 onChange={(e) => onUpdate((x) => ({ ...x, fx: { rate: Number(e.target.value), date: today(), source: "entered by hand" } }))} />
-              {f.fxError && <p className="text-xs text-fail">{f.fxError}</p>}
+              {f.fxError && <p className="text-xs text-danger">{f.fxError}</p>}
             </div>
           )}
         </div>
-        {f.currencyHint && !f.fxError && <p className="text-xs text-brand">{f.currencyHint}</p>}
-        {f.qogita && <p className="text-xs text-muted-foreground">{f.qogita.products.toLocaleString("en-GB")} products. The price is per item; Unit is the case size (the order multiple, stored as the MOQ). Imported as supplier <b>{f.supplier.name}</b>: products already known by GTIN aren&apos;t duplicated{f.qogita.region === "UK" ? ", and Qogita EU offers for them are archived" : ""}.</p>}
-        {f.qogita?.warning && <p className="text-xs font-medium text-warn">{f.qogita.warning}</p>}
-        <p className="text-xs text-muted-foreground">VAT basis and currency are saved with the supplier and applied to every future file from them. Costs are stored in GBP ex-VAT.</p>
+        {f.currencyHint && !f.fxError && <p className="text-xs text-primary">{f.currencyHint}</p>}
+        {f.qogita?.warning && <p className="text-xs font-medium text-warn-ink">{f.qogita.warning}</p>}
       </section>
 
       <section className="panel overflow-hidden">
-        <div className="flex flex-wrap items-center gap-3 border-b px-4 py-3">
+        <div className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-3">
           <h2 className="section-label">Columns</h2>
           <div className="ml-auto flex items-center gap-2">
             <Label htmlFor={`hdr-${f.key}`} className="field-label">Header row</Label>
@@ -568,8 +562,8 @@ function MapFile({ f, suppliers, problems, onUpdate, onCurrency, onSupplier, onS
           </div>
         </div>
         <div className="grid grid-cols-[minmax(9rem,14rem)_1fr] text-sm">
-          <div className="eyebrow border-b bg-muted/40 px-4 py-2">Wholesale Scout field</div>
-          <div className="eyebrow border-b bg-muted/40 px-4 py-2">Column in {f.fileName}</div>
+          <div className="eyebrow border-b border-border bg-subtle/40 px-4 py-2">Wholesale Scout field</div>
+          <div className="eyebrow border-b border-border bg-subtle/40 px-4 py-2">Column in {f.fileName}</div>
           {MAPPABLE_FIELDS.map((fd) => {
             const value = f.mapping.columns[fd.key];
             const sample = sampleOf(f.rows, f.mapping.headerRow, value);
@@ -577,12 +571,12 @@ function MapFile({ f, suppliers, problems, onUpdate, onCurrency, onSupplier, onS
             const askPer = fd.key === "unitPrice" && !!f.mapping.columns.packUnits;
             return (
               <Fragment key={fd.key}>
-                <div className="flex items-start border-b px-4 py-3">
-                  <Label htmlFor={`col-${f.key}-${fd.key}`} className={cn("pt-1.5", missing && "text-warn")}>
+                <div className="flex items-start border-b border-divider px-4 py-3">
+                  <Label htmlFor={`col-${f.key}-${fd.key}`} className={cn("pt-1.5", missing && "text-warn-ink")}>
                     {fd.label}{fd.required && <span className="text-muted-foreground"> *</span>}
                   </Label>
                 </div>
-                <div className="flex flex-wrap items-start gap-x-4 gap-y-2 border-b px-4 py-3">
+                <div className="flex flex-wrap items-start gap-x-4 gap-y-2 border-b border-divider px-4 py-3">
                   <div className="min-w-0 flex-1 basis-56 space-y-1">
                     <NativeSelect id={`col-${f.key}-${fd.key}`} className={cn("w-full", missing && "[&_select]:border-warn")} value={value ?? ""}
                       onChange={(e) => { const v = e.target.value || undefined; setCol(fd.key, v); if (fd.key === "unitPrice") onPriceColumn(v); }}>
@@ -592,9 +586,9 @@ function MapFile({ f, suppliers, problems, onUpdate, onCurrency, onSupplier, onS
                     {sample && <p className="num truncate text-xs text-muted-foreground" title={sample}>e.g. {sample}</p>}
                   </div>
                   {askPer && (
-                    <fieldset className="flex-none rounded-md bg-warn-soft px-3 py-1.5">
+                    <fieldset className="flex-none rounded-lg bg-warn-soft px-3 py-1.5">
                       <legend className="sr-only">Is the price per piece or per pack?</legend>
-                      <p className="text-xs font-medium text-warn">Price is per…</p>
+                      <p className="text-xs font-medium text-warn-ink">Price is per…</p>
                       <RadioGroup className="mt-1 flex gap-4" value={f.mapping.pricePer ?? ""}
                         onValueChange={(v) => onUpdate((x) => ({ ...x, mapping: { ...x.mapping, pricePer: v as "unit" | "pack" } }))}>
                         {(["unit", "pack"] as const).map((v) => (
@@ -612,7 +606,7 @@ function MapFile({ f, suppliers, problems, onUpdate, onCurrency, onSupplier, onS
           })}
         </div>
       </section>
-      {problems.length > 0 && <ul className="space-y-0.5 text-sm text-warn">{problems.map((p) => <li key={p}>{p.replace(`${f.fileName}: `, "")}</li>)}</ul>}
+      {problems.length > 0 && <ul className="space-y-0.5 text-sm text-warn-ink">{problems.map((p) => <li key={p}>{p.replace(`${f.fileName}: `, "")}</li>)}</ul>}
     </div>
   );
 }

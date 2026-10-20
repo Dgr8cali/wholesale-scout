@@ -3,21 +3,22 @@
 import { VatTag } from "@/components/VatTag";
 import { DownloadIcon, PinIcon, PinOffIcon, RotateCcwIcon, ShoppingCartIcon, XIcon } from "lucide-react";
 import Link from "next/link";
-import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useDialogs } from "@/components/Dialogs";
 import * as XLSX from "xlsx";
-import { usePageCrumbs } from "@/components/Crumbs";
 import { useQogitaCart } from "@/components/QogitaCart";
 import { EmptyState, ErrorState } from "@/components/States";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { DataTable, type DataColumn } from "@/components/ui/data-table";
+import { SectionTitle } from "@/components/ui/info-tip";
 import { Input } from "@/components/ui/input";
+import { Kpi } from "@/components/ui/kpi";
 import { Label } from "@/components/ui/label";
+import { PageHeader } from "@/components/ui/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
+import { StatusChip } from "@/components/ui/status-chip";
 import { Switch } from "@/components/ui/switch";
-import { SortTableHead, useSortable } from "@/components/SortableTable";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { GATE_LABELS, type GateId } from "@/lib/screening/config";
 import { monthsLabel } from "@/lib/screening/order";
 import { planOrder, type NoOffer, type PlanCandidate, type PlanLimits, type PlanLine } from "@/lib/plan";
@@ -49,7 +50,6 @@ export default function PlanPage() {
     }
     if (ok) toast.success(`${ok} line${ok === 1 ? "" : "s"} recorded: see Tracker`);
   }
-  usePageCrumbs([{ label: "Plan" }]);
   const cart = useQogitaCart();
   const [warns, setWarns] = useState(false);
   const [data, setData] = useState<Data | null>(null);
@@ -85,21 +85,6 @@ export default function PlanPage() {
 
   const plan = useMemo(() => (data ? planOrder(data.candidates, data.limits, { pinned, excluded, qty }) : null), [data, pinned, excluded, qty]);
   const approval = useMemo(() => (data?.candidates ?? []).filter((c) => c.approvalOnly), [data]);
-  // Lines sort within their supplier (each supplier is one order); the suppliers keep their order.
-  const allLines = useMemo(() => plan?.groups.flatMap((g) => g.lines) ?? [], [plan]);
-  const sorting = useSortable("wholesale.plan", allLines, {
-    product: { value: (x) => x.c.title ?? x.c.ean, kind: "text" },
-    qty: { value: (x) => qty.get(x.c.key) ?? x.qty, kind: "number" },
-    landed: { value: (x) => x.c.landedGbp, kind: "number" },
-    profit: { value: (x) => x.c.profitUnit, kind: "number" },
-    share: { value: (x) => x.c.shareMonth, kind: "number" },
-    months: { value: (x) => x.months, kind: "number" },
-    total: { value: (x) => x.lineTotal, kind: "number" },
-    profitMo: { value: (x) => x.profitMonth, kind: "number" },
-  });
-  const lineOrder = new Map(sorting.rows.map((x, i) => [x.c.key, i]));
-  const ordered = (lines: PlanLine[]) => (sorting.sort ? [...lines].sort((a, b) => (lineOrder.get(a.c.key) ?? 0) - (lineOrder.get(b.c.key) ?? 0)) : lines);
-
   const toggle = (set: Set<string>, setter: (s: Set<string>) => void, key: string) => {
     const n = new Set(set);
     if (n.has(key)) n.delete(key); else n.add(key);
@@ -148,29 +133,30 @@ export default function PlanPage() {
   }
 
   const header = (
-    <div className="flex flex-wrap items-start justify-between gap-3">
-      <div>
-        <h1 className="page-title">Order plan</h1>
-        <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-          The products and quantities that make the most profit a month{data ? ` on ${data.profile}` : ""}: each line within the line cap and selling within
-          the months limit at your share, MOQs and case sizes kept, and a supplier only if its lines reach its MOV. Pin or exclude products and change
-          quantities: the plan recomputes. Figures come from each product&apos;s latest result on your default profile{data?.updatedAt ? ` (as of ${when(data.updatedAt)})` : ""}.
-          {data?.updating && <span className="ml-1 font-medium text-warn">Some results changed since: the figures are updating, reload in a minute.</span>}
-        </p>
-      </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="flex items-center gap-2">
-          <Switch id="plan-warns" checked={warns} onCheckedChange={setWarns} />
-          <Label htmlFor="plan-warns" className="text-sm font-normal">Include warns</Label>
-        </div>
-        {data && (pinned.size > 0 || excluded.size > 0 || qty.size > 0) && <Button variant="ghost" size="sm" onClick={reset}><RotateCcwIcon /> Reset</Button>}
-        {cart && qogitaLines.length > 0 && <Button variant="outline" onClick={addAll} disabled={adding}><ShoppingCartIcon /> {adding ? "Adding…" : `Add ${qogitaLines.length} to Qogita cart`}</Button>}
-        <Button variant="outline" onClick={exportXlsx} disabled={!plan?.groups.length}><DownloadIcon /> Export xlsx</Button>
-      </div>
+    <div className="space-y-2">
+      <PageHeader
+        title="Plan"
+        crumbs={[{ label: "Wholesale", href: "/runs" }, { label: "Plan" }]}
+        subtitle={`The products and quantities that make the most profit a month${data ? ` on ${data.profile}` : ""}.`}
+        info={<>
+          <p>Each line stays within the line cap and sells within the months limit at your share, MOQs and case sizes kept, and a supplier is used only if its lines reach its MOV.</p>
+          <p>Pin or exclude products and change quantities: the plan recomputes. Figures come from each product&apos;s latest result on your default profile{data?.updatedAt ? ` (as of ${when(data.updatedAt)})` : ""}.</p>
+        </>}
+        actions={<>
+          <div className="flex items-center gap-2">
+            <Switch id="plan-warns" checked={warns} onCheckedChange={setWarns} />
+            <Label htmlFor="plan-warns" className="text-sm font-normal">Include Check</Label>
+          </div>
+          {data && (pinned.size > 0 || excluded.size > 0 || qty.size > 0) && <Button variant="ghost" size="sm" onClick={reset}><RotateCcwIcon /> Reset</Button>}
+          {cart && qogitaLines.length > 0 && <Button variant="secondary" onClick={addAll} loading={adding}>{adding ? "Adding" : <><ShoppingCartIcon /> Add {qogitaLines.length} to Qogita cart</>}</Button>}
+          <Button variant="secondary" onClick={exportXlsx} disabled={!plan?.groups.length}><DownloadIcon /> Export xlsx</Button>
+        </>}
+      />
+      {data?.updating && <p className="text-sm font-medium text-warn-ink" role="status">Some results changed since: the figures are updating, reload in a minute.</p>}
     </div>
   );
   if (error) return <div className="space-y-5">{header}<ErrorState title="Couldn't build the plan" message={error} onRetry={() => window.location.reload()} /></div>;
-  if (!data || !plan) return <div className="space-y-5">{header}<Skeleton className="h-24 rounded-lg" /><Skeleton className="h-72 rounded-lg" /></div>;
+  if (!data || !plan) return <div className="space-y-5">{header}<Skeleton className="h-24 rounded-xl" /><Skeleton className="h-72 rounded-xl" /></div>;
 
   const l = data.limits;
   const over = plan.total > l.budget + 0.005;
@@ -178,12 +164,12 @@ export default function PlanPage() {
     <div className="space-y-5">
       {header}
 
-      <section className="panel grid grid-cols-2 gap-4 p-4 sm:grid-cols-5" aria-label="Totals">
-        <Total label="Plan total" value={gbp(plan.total)} note={`of ${gbp(l.budget)} budget${over ? " · over" : ` · ${gbp(plan.left)} left`}`} bad={over} />
-        <Total label={<>Profit / month <VatTag registered={data.vatRegistered} /></>} value={gbp(plan.profitMonth)} note="at your share of sales" good />
-        <Total label="Payback" value={plan.paybackMonths == null ? "—" : monthsLabel(plan.paybackMonths)} note="until sales bring the outlay back" />
-        <Total label="Lines" value={String(plan.groups.reduce((a, g) => a + g.lines.length, 0))} note={`${plan.groups.length} supplier order${plan.groups.length === 1 ? "" : "s"}`} />
-        <Total label="Limits" value={`${gbp(l.lineCap)} / line`} note={`sell within ${l.maxMonths} months`} />
+      <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5" aria-label="Totals">
+        <Kpi label="Plan total" value={<span className={cn("num", over && "text-danger")}>{gbp(plan.total)}</span>} hint={`of ${gbp(l.budget)} budget${over ? " · over" : ` · ${gbp(plan.left)} left`}`} />
+        <Kpi label={<>Profit / month <VatTag registered={data.vatRegistered} /></>} value={<span className="num text-success">{gbp(plan.profitMonth)}</span>} hint="at your share of sales" />
+        <Kpi label="Payback" value={plan.paybackMonths == null ? "—" : monthsLabel(plan.paybackMonths)} hint="until sales bring the outlay back" />
+        <Kpi label="Lines" value={String(plan.groups.reduce((a, g) => a + g.lines.length, 0))} hint={`${plan.groups.length} supplier order${plan.groups.length === 1 ? "" : "s"}`} />
+        <Kpi label="Limits" value={<span className="num">{gbp(l.lineCap)} / line</span>} hint={`sell within ${l.maxMonths} months`} />
       </section>
 
       {(() => {
@@ -202,77 +188,60 @@ export default function PlanPage() {
       })()}
 
       {!plan.groups.length ? (
-        <EmptyState title="Nothing to plan">
+        <EmptyState title="Nothing to plan" action={!warns && !data.candidates.filter((c) => !c.approvalOnly).length ? <Button variant="secondary" onClick={() => setWarns(true)}>Include Check</Button> : undefined}>
           {data.candidates.filter((c) => !c.approvalOnly).length
             ? "No candidate fits: see why below."
-            : warns ? "No product passes or warns with a costed offer." : `No product passes on ${data.profile} with a costed offer. Switch on “Include warns” to plan from products that warn.`}
+            : warns ? "No product is a Buy or Check with a costed offer." : `No product is a Buy on ${data.profile} with a costed offer. Include Check to plan from products to check.`}
         </EmptyState>
       ) : (
-        <div className="panel overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <SortTableHead {...sorting.th("product")} className="pl-4" title="Sorts within each supplier">Product</SortTableHead>
-                <SortTableHead {...sorting.th("qty")} numeric>Qty</SortTableHead>
-                <SortTableHead {...sorting.th("landed")} numeric>Landed / unit</SortTableHead>
-                <SortTableHead {...sorting.th("profit")} numeric>Profit / unit</SortTableHead>
-                <SortTableHead {...sorting.th("share")} numeric>Your share</SortTableHead>
-                <SortTableHead {...sorting.th("months")} numeric>Months to sell</SortTableHead>
-                <SortTableHead {...sorting.th("total")} numeric>Line total</SortTableHead>
-                <SortTableHead {...sorting.th("profitMo")} numeric>Profit / mo</SortTableHead>
-                <TableHead className="w-20 pr-4" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {plan.groups.map((g) => (
-                <Fragment key={g.supplierKey}>
-                  <TableRow className="bg-muted/40 hover:bg-muted/40">
-                    <TableCell colSpan={9} className="pl-4">
-                      <div className="flex flex-wrap items-baseline justify-between gap-2">
-                        <span className="font-semibold">
-                          {g.supplierId ? <Link className="hover:underline" href={`/suppliers/${g.supplierId}`}>{g.name}</Link> : g.name}
-                        </span>
-                        <Button size="xs" variant="outline" onClick={() => recordGroup(g)} title="After ordering: record these lines in the tracker, with the app's prediction for each">Record as bought</Button>
-                        <span className="num ml-auto text-xs">
-                          goods {gbp(g.goods)}
-                          {g.movGbp != null && <span className={g.movMet ? "text-pass" : "text-fail"}> · MOV {gbp(g.movGbp)} {g.movMet ? "met" : "not met"}</span>}
-                          <span className="text-muted-foreground"> · landed {gbp(g.landed)}</span>
-                        </span>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                  {ordered(g.lines).map((x) => <Line key={x.c.key} x={x} lineCap={l.lineCap}
-                    onPin={() => toggle(pinned, setPinned, x.c.key)} onExclude={() => toggle(excluded, setExcluded, x.c.key)}
-                    ownQty={qty.get(x.c.key)} onQty={(v) => setLineQty(x.c.key, v)} />)}
-                </Fragment>
-              ))}
-              <TableRow className="font-semibold">
-                <TableCell className="pl-4" colSpan={6}>Total</TableCell>
-                <TableCell className={cn("num text-right", over && "text-fail")}>{gbp(plan.total)}</TableCell>
-                <TableCell className="num text-right text-pass">{gbp(plan.profitMonth)}</TableCell>
-                <TableCell />
-              </TableRow>
-            </TableBody>
-          </Table>
+        // One table per supplier: each supplier is one order, and its lines sort within it.
+        <div className="space-y-5">
+          {plan.groups.map((g) => (
+            <section key={g.supplierKey} className="space-y-2" aria-label={g.name}>
+              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                <h2 className="section-title">
+                  {g.supplierId ? <Link className="hover:underline" href={`/suppliers/${g.supplierId}`}>{g.name}</Link> : g.name}
+                </h2>
+                <span className="num text-meta">
+                  goods {gbp(g.goods)}
+                  {g.movGbp != null && <span className={g.movMet ? "text-success" : "text-danger"}> · MOV {gbp(g.movGbp)} {g.movMet ? "met" : "not met"}</span>}
+                  <span className="text-muted-foreground"> · landed {gbp(g.landed)}</span>
+                </span>
+                <Button size="sm" variant="secondary" className="ml-auto" onClick={() => recordGroup(g)} title="After ordering: record these lines in the tracker, with the app's prediction for each">Record as bought</Button>
+              </div>
+              <DataTable
+                rows={g.lines}
+                getRowId={(x) => x.c.key}
+                caption={`Plan lines from ${g.name}`}
+                storageKey="wholesale.plan"
+                rowClassName={(x) => cn(x.notes.length > 0 && "bg-warn-soft/40")}
+                columns={lineColumns({
+                  lineCap: l.lineCap, qty,
+                  onPin: (x) => toggle(pinned, setPinned, x.c.key), onExclude: (x) => toggle(excluded, setExcluded, x.c.key),
+                  onQty: (x, v) => setLineQty(x.c.key, v),
+                })}
+              />
+            </section>
+          ))}
         </div>
       )}
 
       {approval.length > 0 && (
         <section className="space-y-2" aria-label="Approval needed">
-          <h2 className="section-label">If approved <span className="font-normal text-muted-foreground">· warn only for brand approval; pin one to plan it</span></h2>
+          <SectionTitle title={<>If approved <span>· Check only for brand approval; pin one to plan it</span></>} />
           <CandidateList items={approval} pinned={pinned} onPin={(k) => toggle(pinned, setPinned, k)} />
         </section>
       )}
 
       {(plan.skipped.length > 0 || (data.noOffer?.length ?? 0) > 0) && (
         <details className="panel p-4">
-          <summary className="cursor-pointer text-sm font-semibold">Not in the plan <span className="font-normal text-muted-foreground">{plan.skipped.length + (data.noOffer?.length ?? 0)}</span></summary>
+          <summary className="cursor-pointer text-sm font-semibold">Not in the plan <span className="num font-normal text-muted-foreground">{plan.skipped.length + (data.noOffer?.length ?? 0)}</span></summary>
           <ul className="mt-3 space-y-1.5 text-sm">
             {(data.noOffer ?? []).map((n) => (
               <li key={`no-offer:${n.productId}`} className="flex flex-wrap items-center justify-between gap-2">
                 <span className="min-w-0">
                   <span className="font-medium">{n.title ?? n.ean}</span>
-                  <span className="text-xs text-muted-foreground"> · <span className="font-semibold text-warn">no supplier offer</span>{n.maxLandedGbp != null ? ` · clears the floors up to ${gbp(n.maxLandedGbp)} landed` : ""}</span>
+                  <span className="text-xs text-muted-foreground"> · <span className="font-semibold text-warn-ink">no supplier offer</span>{n.maxLandedGbp != null ? ` · clears the floors up to ${gbp(n.maxLandedGbp)} landed` : ""}</span>
                 </span>
                 <Button size="sm" variant="ghost" disabled={!n.resultId} onClick={() => setCostFor(n)}>Set cost &amp; plan</Button>
               </li>
@@ -302,61 +271,64 @@ export default function PlanPage() {
   );
 }
 
-function Total({ label, value, note, good, bad }: { label: ReactNode; value: string; note: string; good?: boolean; bad?: boolean }) {
-  return (
-    <div>
-      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className={cn("stat-value", good && "text-pass", bad && "text-fail")}>{value}</p>
-      <p className="text-xs text-muted-foreground">{note}</p>
-    </div>
-  );
-}
-
-function Line({ x, lineCap, onPin, onExclude, ownQty, onQty }: { x: PlanLine; lineCap: number; onPin: () => void; onExclude: () => void; ownQty?: number; onQty: (v: string) => void }) {
-  const c = x.c;
-  return (
-    <TableRow className={cn(x.notes.length > 0 && "bg-warn-soft/40")}>
-      <TableCell className="max-w-96 pl-4 whitespace-normal">
-        <p className="line-clamp-2 text-sm">{c.asin ? <Link className="hover:text-brand hover:underline" href={`/products/${c.asin}`}>{c.title ?? c.ean}</Link> : c.title ?? c.ean}</p>
-        <p className="num text-xs text-muted-foreground">
-          {c.brand} · {c.asin ? <a className="text-brand hover:underline" href={`https://www.amazon.co.uk/dp/${c.asin}`} target="_blank" rel="noreferrer">{c.asin}</a> : c.ean}
-          {c.verdict === "warn" && <span className="font-sans text-warn" title={gates(c.warnGates)}> · warns: {gates(c.warnGates) || "yes"}</span>}
-          {c.moq ? ` · MOQ ${c.moq}` : ""}{c.step > 1 ? ` · cases of ${c.step}` : ""}
-        </p>
-        {x.notes.length > 0 && <p className="text-xs text-warn">{x.notes.join("; ")}</p>}
-      </TableCell>
-      <TableCell className="text-right">
-        <Input className="num ml-auto h-7 w-20 text-right" type="number" min={1} step={Math.max(1, c.step)} value={ownQty ?? x.qty}
-          aria-label={`Quantity of ${c.title ?? c.ean}`} title={`Up to ${Math.floor(lineCap / c.landedGbp)} fit the line cap`} onChange={(e) => onQty(e.target.value)} />
-      </TableCell>
-      <TableCell className="num text-right">{gbp(c.landedGbp)}</TableCell>
-      <TableCell className="num text-right">{gbp(c.profitUnit)}</TableCell>
-      <TableCell className="num text-right">{c.shareMonth ?? "—"}<span className="text-xs text-muted-foreground">/mo</span></TableCell>
-      <TableCell className="num text-right">{x.months == null ? "—" : monthsLabel(x.months)}</TableCell>
-      <TableCell className="num text-right">{gbp(x.lineTotal)}</TableCell>
-      <TableCell className="num text-right text-pass">{gbp(x.profitMonth)}</TableCell>
-      <TableCell className="pr-4">
+/** The plan's columns, one product line each: quantity to type, the figures, and pin / exclude. */
+function lineColumns({ lineCap, qty, onPin, onExclude, onQty }: {
+  lineCap: number; qty: Map<string, number>;
+  onPin: (x: PlanLine) => void; onExclude: (x: PlanLine) => void; onQty: (x: PlanLine, v: string) => void;
+}): DataColumn<PlanLine>[] {
+  return [
+    {
+      id: "product", header: "Product", mobile: "title", className: "max-w-96 min-w-[16rem]", sortValue: (x) => x.c.title ?? x.c.ean,
+      cell: (x) => {
+        const c = x.c;
+        return <>
+          <p className="line-clamp-2 text-sm">{c.asin ? <Link className="hover:text-primary hover:underline" href={`/products/${c.asin}`}>{c.title ?? c.ean}</Link> : c.title ?? c.ean}</p>
+          <p className="num text-xs font-normal text-muted-foreground">
+            {c.brand} · {c.asin ? <a className="text-primary hover:underline" href={`https://www.amazon.co.uk/dp/${c.asin}`} target="_blank" rel="noreferrer">{c.asin}</a> : c.ean}
+            {c.verdict === "warn" && <span className="font-sans text-warn-ink" title={gates(c.warnGates)}> · Check: {gates(c.warnGates) || "yes"}</span>}
+            {c.moq ? ` · MOQ ${c.moq}` : ""}{c.step > 1 ? ` · cases of ${c.step}` : ""}
+          </p>
+          {x.notes.length > 0 && <p className="text-xs font-normal text-warn-ink">{x.notes.join("; ")}</p>}
+        </>;
+      },
+    },
+    {
+      id: "qty", header: "Qty", numeric: true, mobile: 1, sortValue: (x) => qty.get(x.c.key) ?? x.qty,
+      cell: (x) => (
+        <Input className="num ml-auto h-8 w-20 text-right" type="number" min={1} step={Math.max(1, x.c.step)} value={qty.get(x.c.key) ?? x.qty}
+          aria-label={`Quantity of ${x.c.title ?? x.c.ean}`} title={`Up to ${Math.floor(lineCap / x.c.landedGbp)} fit the line cap`} onChange={(e) => onQty(x, e.target.value)} />
+      ),
+    },
+    { id: "landed", header: "Landed / unit", numeric: true, sortValue: (x) => x.c.landedGbp, cell: (x) => gbp(x.c.landedGbp) },
+    { id: "profit", header: "Profit / unit", numeric: true, sortValue: (x) => x.c.profitUnit, cell: (x) => gbp(x.c.profitUnit) },
+    { id: "share", header: "Your share", numeric: true, sortValue: (x) => x.c.shareMonth, cell: (x) => <>{x.c.shareMonth ?? "—"}<span className="text-xs text-muted-foreground">/mo</span></> },
+    { id: "months", header: "Months to sell", numeric: true, sortValue: (x) => x.months, cell: (x) => (x.months == null ? "—" : monthsLabel(x.months)) },
+    { id: "total", header: "Line total", numeric: true, mobile: 2, sortValue: (x) => x.lineTotal, cell: (x) => gbp(x.lineTotal) },
+    { id: "profitMo", header: "Profit / mo", numeric: true, mobile: 3, sortValue: (x) => x.profitMonth, cell: (x) => <span className="text-success">{gbp(x.profitMonth)}</span> },
+    {
+      id: "act", header: <span className="sr-only">Pin or exclude</span>, className: "w-20",
+      cell: (x) => (
         <div className="flex justify-end gap-0.5">
-          <Button size="icon" variant="ghost" className={cn(x.pinned && "text-brand")} onClick={onPin} aria-label={x.pinned ? "Unpin" : "Pin"} title={x.pinned ? "Unpin" : "Pin: always in the plan"}>
+          <Button size="icon-sm" variant="ghost" className={cn(x.pinned && "text-primary")} onClick={() => onPin(x)} aria-label={x.pinned ? "Unpin" : "Pin"} title={x.pinned ? "Unpin" : "Pin: always in the plan"}>
             {x.pinned ? <PinOffIcon /> : <PinIcon />}
           </Button>
-          <Button size="icon" variant="ghost" onClick={onExclude} aria-label="Exclude" title="Exclude from the plan"><XIcon /></Button>
+          <Button size="icon-sm" variant="ghost" onClick={() => onExclude(x)} aria-label="Exclude" title="Exclude from the plan"><XIcon /></Button>
         </div>
-      </TableCell>
-    </TableRow>
-  );
+      ),
+    },
+  ];
 }
 
 function CandidateList({ items, pinned, onPin }: { items: PlanCandidate[]; pinned: Set<string>; onPin: (key: string) => void }) {
   return (
-    <ul className="panel divide-y">
+    <ul className="panel divide-y divide-divider">
       {items.map((c) => (
         <li key={c.key} className="flex flex-wrap items-center gap-3 px-4 py-2">
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm">{c.title ?? c.ean}</p>
             <p className="num text-xs text-muted-foreground">{c.brand} · {c.supplierName} · landed {gbp(c.landedGbp)} · profit {gbp(c.profitUnit)} · share {c.shareMonth ?? "—"}/mo</p>
           </div>
-          <Badge variant="warn">approval needed</Badge>
+          <StatusChip tone="warn">Approval needed</StatusChip>
           <Button size="sm" variant="ghost" onClick={() => onPin(c.key)}>{pinned.has(c.key) ? <><PinOffIcon /> Unpin</> : <><PinIcon /> Pin</>}</Button>
         </li>
       ))}

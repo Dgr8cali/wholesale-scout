@@ -85,7 +85,7 @@ const columns = helper.columns(COLS.map((c) => helper.display({
   enableHiding: !c.fixed && c.id !== "product",
 })));
 
-const BAND_STYLE = { green: "bg-pass text-white", amber: "bg-highlight text-white", grey: "bg-muted text-muted-foreground" } as const;
+const BAND_STYLE = { green: "bg-success text-white", amber: "bg-highlight text-white", grey: "bg-subtle text-muted-foreground" } as const;
 const VERDICT_EDGE = { pass: "var(--pass)", warn: "var(--highlight)", fail: "var(--fail)" } as const;
 
 export interface ResultsTableProps {
@@ -273,7 +273,7 @@ export function ResultsTable(props: ResultsTableProps) {
                   </tr>
                   {isOpen && (
                     <tr className="rt-detail">
-                      <td colSpan={cells.length} className="border-b bg-muted/50 p-0">
+                      <td colSpan={cells.length} className="border-b bg-subtle/50 p-0">
                         {/* Pinned to the card's visible width, so it reads without scrolling sideways. */}
                         <div className="sticky left-0 px-4 py-3" style={{ width: boxW || undefined }}>{props.renderDetail(r)}</div>
                       </td>
@@ -332,14 +332,14 @@ function HeaderCell({ header, spec, sort, onSort, style, edge, children, draggin
               {label}{sorted ? (sort.dir === -1 ? " ↓" : " ↑") : ""}
             </button>
           ) : <span className="uppercase tracking-wide">{label}</span>}
-          {vatBasis === "mixed" ? <span className="ml-0.5 rounded bg-warn-soft px-1 py-px text-xs font-semibold text-warn normal-case" title="Rows on different VAT bases: Settings → Business → Recalculate all">mixed</span> : vatBasis != null ? <VatTag registered={vatBasis} className="ml-0.5" /> : null}
+          {vatBasis === "mixed" ? <span className="ml-0.5 rounded bg-warn-soft px-1 py-px text-xs font-semibold text-warn-ink normal-case" title="Rows on different VAT bases: Settings → Business → Recalculate all">mixed</span> : vatBasis != null ? <VatTag registered={vatBasis} className="ml-0.5" /> : null}
         </span>
       )}
       {col.getCanResize() && (
         <div role="separator" aria-orientation="vertical" aria-label={`Resize ${spec.label}`}
           onMouseDown={header.getResizeHandler()} onTouchStart={header.getResizeHandler()} onDoubleClick={() => col.resetSize()}
           onClick={(e) => e.stopPropagation()} draggable={false} onDragStart={(e) => { e.preventDefault(); e.stopPropagation(); }}
-          className={cn("absolute top-0 right-0 z-10 h-full w-1.5 cursor-col-resize touch-none select-none hover:bg-brand/60", col.getIsResizing() && "bg-brand")} />
+          className={cn("absolute top-0 right-0 z-10 h-full w-1.5 cursor-col-resize touch-none select-none hover:bg-primary/60", col.getIsResizing() && "bg-primary")} />
       )}
     </th>
   );
@@ -373,17 +373,17 @@ function Cell({ id, d, props, compact, isOpen }: { id: string; d: DisplayRow; pr
             </div>
             <div className="num truncate text-xs text-muted-foreground">
               {r.product?.ean}
-              {r.product?.asin && <> · <a className="text-brand hover:underline" href={`https://www.amazon.co.uk/dp/${r.product.asin}`} target="_blank" rel="noreferrer" onClick={stop}>{r.product.asin}</a></>}
+              {r.product?.asin && <> · <a className="text-primary hover:underline" href={`https://www.amazon.co.uk/dp/${r.product.asin}`} target="_blank" rel="noreferrer" onClick={stop}>{r.product.asin}</a></>}
               {r.offer?.supplier && <> · {r.offer.supplier.name}{r.offer_count > 1 ? ` (+${r.offer_count - 1})` : ""}</>}
             </div>
             {props.rowNote?.(r)}
             {props.scanSellerId && r.inputs?.market?.buyBoxSellerId != null && (
               r.inputs.market.buyBoxSellerId === props.scanSellerId
-                ? <span className="mt-0.5 inline-block rounded bg-brand-soft px-1 text-xs font-semibold text-brand" title="This seller holds the Buy Box now">Holds Buy Box</span>
+                ? <span className="mt-0.5 inline-block rounded bg-primary-soft px-1 text-xs font-semibold text-primary" title="This seller holds the Buy Box now">Holds Buy Box</span>
                 : <span className="mt-0.5 inline-block text-xs text-muted-foreground" title={`Buy Box held by ${r.inputs.market.buyBoxSellerId}`}>Buy Box: another seller</span>
             )}
             {!alt && d.others > 0 && (
-              <button className="text-xs font-medium text-brand hover:underline" onClick={(e) => { stop(e); props.onToggleGroup(d.groupKey); }}>
+              <button className="text-xs font-medium text-primary hover:underline" onClick={(e) => { stop(e); props.onToggleGroup(d.groupKey); }}>
                 {props.expandedGroups.has(d.groupKey) ? "▾ Hide" : "▸"} {d.others} other ASIN{d.others > 1 ? "s" : ""} for this EAN
               </button>
             )}
@@ -399,9 +399,9 @@ function Cell({ id, d, props, compact, isOpen }: { id: string; d: DisplayRow; pr
               : <span className="w-4 flex-none" />}
             <VerdictBadge verdict={r.verdict} error={r.status === "error"} />
           </div>
-          {dormantOf(r) && <Badge variant="muted" className="mt-1 ml-[22px]" title="Nobody sells this listing now; judged on its Keepa history">dormant</Badge>}
-          {isWaived(r) && <Badge variant="brand" className="mt-1 ml-[22px]" title="A gate on this row is waived by you">waived</Badge>}
-          {isCostOverridden(r) && <Badge variant="brand" className="mt-1 ml-[22px]" title={overrideTitle(r.cost_override!)}>cost overridden</Badge>}
+          {dormantOf(r) && <Badge variant="muted" className="mt-1 ml-[22px]" title="Nobody sells this listing now; judged on its Keepa history">Dormant</Badge>}
+          {isWaived(r) && <Badge variant="brand" className="mt-1 ml-[22px]" title="A gate on this row is waived by you">Waived</Badge>}
+          {isCostOverridden(r) && <Badge variant="brand" className="mt-1 ml-[22px]" title={overrideTitle(r.cost_override!)}>Cost overridden</Badge>}
         </div>
       );
     case "score":
@@ -423,20 +423,20 @@ function Cell({ id, d, props, compact, isOpen }: { id: string; d: DisplayRow; pr
         return (
           <span className={num} title={f.qty.note}>
             {f.qty.value == null ? <span className="text-muted-foreground">—</span> : f.qty.value.toLocaleString("en-GB")}
-            {f.qty.moqOverCap && <span className="ml-1 rounded bg-warn-soft px-1 text-xs font-semibold text-warn">MOQ</span>}
+            {f.qty.moqOverCap && <span className="ml-1 rounded bg-warn-soft px-1 text-xs font-semibold text-warn-ink">MOQ</span>}
           </span>
         );
       }
       const v = f.months.value;
       return (
-        <span className={cn(num, v != null && v > props.maxMonths && "text-fail")} title={f.months.note}>
+        <span className={cn(num, v != null && v > props.maxMonths && "text-danger")} title={f.months.note}>
           {v == null ? <span className="text-muted-foreground">—</span> : !Number.isFinite(v) ? "∞" : v.toLocaleString("en-GB", { maximumFractionDigits: 1 })}
         </span>
       );
     }
     case "profitMo": {
       const f = figure(r, "profitMo");
-      return <FigureCell f={f} className={cn(num, f.value != null && f.value < 0 && "text-fail")} money />;
+      return <FigureCell f={f} className={cn(num, f.value != null && f.value < 0 && "text-danger")} money />;
     }
     case "buybox": return <FigureCell f={figure(r, "buybox")} className={num} money />;
     case "rank90":
@@ -446,7 +446,7 @@ function Cell({ id, d, props, compact, isOpen }: { id: string; d: DisplayRow; pr
       return (
         <div ref={props.observeSparks(r.product?.asin)} className={cn("flex items-center", compact ? "px-2 py-1" : "px-2 py-2.5")}>
           {!r.product?.asin ? <span className="text-muted-foreground">—</span>
-            : s === undefined ? <span className="h-[22px] w-20 animate-pulse rounded bg-muted" aria-label="Loading" />
+            : s === undefined ? <span className="h-[22px] w-20 animate-pulse rounded bg-subtle" aria-label="Loading" />
             : <Sparkline values={values} invert={id === "rank90"} height={compact ? 16 : 22}
                 label={id === "rank90" ? sparkLabel("Sales rank", values, (v) => `#${Math.round(v).toLocaleString("en-GB")}`) : sparkLabel("Buy Box", values, (v) => gbp(v))} />}
         </div>
@@ -459,7 +459,7 @@ function Cell({ id, d, props, compact, isOpen }: { id: string; d: DisplayRow; pr
       }
       return <span className={num}>{gbp(r.landed_cost)}</span>;
     case "sell": return <span className={num}>{gbp(r.sell_price)}</span>;
-    case "profit": return <span className={cn(num, r.profit != null && r.profit < 0 && "text-fail")}>{gbp(r.profit)}</span>;
+    case "profit": return <span className={cn(num, r.profit != null && r.profit < 0 && "text-danger")}>{gbp(r.profit)}</span>;
     case "roi": return <span className={num}>{pct(r.roi)}</span>;
     case "margin": return <span className={num}>{pct(r.margin)}</span>;
     case "hurdle": return <span className={num}>{gbp(r.hurdle_price)}</span>;
@@ -526,7 +526,7 @@ function ColumnsMenu({ prefs, setPrefs }: { prefs: TablePrefs; setPrefs: (f: (p:
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="sm"><Columns3Icon /> Columns{hidden ? <span className="text-muted-foreground"> · {hidden} hidden</span> : null}</Button>
+        <Button variant="secondary" size="sm"><Columns3Icon /> Columns{hidden ? <span className="text-muted-foreground"> · {hidden} hidden</span> : null}</Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-72 gap-1 p-2">
         <p className="eyebrow px-1.5 pb-1">Show and order columns</p>
@@ -535,7 +535,7 @@ function ColumnsMenu({ prefs, setPrefs }: { prefs: TablePrefs; setPrefs: (f: (p:
             const s = SPEC[id];
             const canHide = !s.fixed && id !== "product";
             return (
-              <li key={id} className="flex items-center gap-2 rounded-md px-1.5 py-1 hover:bg-muted">
+              <li key={id} className="flex items-center gap-2 rounded-md px-1.5 py-1 hover:bg-subtle">
                 <Checkbox id={`col-${id}`} checked={prefs.visibility[id] !== false} disabled={!canHide}
                   onCheckedChange={(v) => setPrefs((p) => ({ ...p, visibility: { ...p.visibility, [id]: !!v } }))} />
                 <label htmlFor={`col-${id}`} className="min-w-0 flex-1 truncate text-sm">{s.label}</label>

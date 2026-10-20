@@ -56,7 +56,7 @@ export function BulkBar({ count, stashed, onReselect, onClear, onStar, onUnstar,
     return stashed ? (
       <div className="panel flex flex-wrap items-center gap-2 px-3 py-2 text-sm">
         <span className="text-muted-foreground">Selection of {stashed} cleared because the filters changed.</span>
-        <Button variant="link" size="sm" className="h-auto p-0 text-brand" onClick={onReselect}>Reselect {stashed}</Button>
+        <Button variant="link" size="sm" className="h-auto p-0 text-primary" onClick={onReselect}>Reselect {stashed}</Button>
       </div>
     ) : null;
   }
@@ -72,43 +72,43 @@ export function BulkBar({ count, stashed, onReselect, onClear, onStar, onUnstar,
     if (ok && onRemove) await act("remove", onRemove, `Removed ${count}`);
   };
   return (
-    <div className="panel sticky top-14 z-20 flex flex-wrap items-center gap-2 border-brand px-3 py-2" role="toolbar" aria-label="Actions on selected rows">
+    <div className="panel sticky top-14 z-20 flex flex-wrap items-center gap-2 border-primary px-3 py-2" role="toolbar" aria-label="Actions on selected rows">
       <span className="text-sm font-semibold"><span className="num">{count}</span> selected</span>
       {sep}
-      {onStar && <Button variant="outline" size="xs" disabled={!!busy} onClick={() => act("star", onStar, `Starred ${count}`)}><StarIcon /> Star</Button>}
-      {onUnstar && <Button variant="outline" size="xs" disabled={!!busy} onClick={() => act("unstar", onUnstar, `Un-starred ${count}`)}><StarOffIcon /> Unstar</Button>}
+      {onStar && <Button variant="secondary" size="sm" disabled={!!busy} onClick={() => act("star", onStar, `Starred ${count}`)}><StarIcon /> Star</Button>}
+      {onUnstar && <Button variant="secondary" size="sm" disabled={!!busy} onClick={() => act("unstar", onUnstar, `Un-starred ${count}`)}><StarOffIcon /> Unstar</Button>}
       {(onStar || onUnstar) && sep}
       {onWaive && onUnwaive && <>
       <NativeSelect size="sm" className="w-44" value={gate} onChange={(e) => setGate(e.target.value as GateId)} aria-label="Gate to waive or un-waive">
         {GATE_ORDER.map((g) => <NativeSelectOption key={g} value={g}>{GATE_LABELS[g]}</NativeSelectOption>)}
       </NativeSelect>
-      <Input className="h-7 w-44 text-xs" placeholder="Reason for all (optional)" value={reason} maxLength={300}
+      <Input className="h-8 w-44 text-meta" placeholder="Reason for all (optional)" value={reason} maxLength={300}
         onChange={(e) => setReason(e.target.value)} aria-label="Reason for waiving" />
-      <Button variant="outline" size="xs" disabled={!!busy} onClick={() => act("waive", () => onWaive(gate, reason), `Waived ${GATE_LABELS[gate]} for ${count}`)}>
+      <Button variant="secondary" size="sm" disabled={!!busy} onClick={() => act("waive", () => onWaive(gate, reason), `Waived ${GATE_LABELS[gate]} for ${count}`)}>
         {busy === "waive" ? "Waiving…" : "Waive"}
       </Button>
-      <Button variant="outline" size="xs" disabled={!!busy} onClick={() => act("unwaive", () => onUnwaive(gate), `Un-waived ${GATE_LABELS[gate]} for ${count}`)}>
+      <Button variant="secondary" size="sm" disabled={!!busy} onClick={() => act("unwaive", () => onUnwaive(gate), `Un-waived ${GATE_LABELS[gate]} for ${count}`)}>
         {busy === "unwaive" ? "…" : "Un-waive"}
       </Button>
       {sep}
       </>}
       {onSetCost && onClearCost && <>
-      <Button variant="outline" size="xs" disabled={!!busy} onClick={() => setCostOpen(true)}>Set cost…</Button>
-      <Button variant="outline" size="xs" disabled={!!busy} onClick={() => act("clearCost", onClearCost, `Cleared the cost override for ${count}`)}>
+      <Button variant="secondary" size="sm" disabled={!!busy} onClick={() => setCostOpen(true)}>Set cost…</Button>
+      <Button variant="secondary" size="sm" disabled={!!busy} onClick={() => act("clearCost", onClearCost, `Cleared the cost override for ${count}`)}>
         {busy === "clearCost" ? "Clearing…" : "Clear cost"}
       </Button>
       {costOpen && <CostOverrideDialog open={costOpen} onOpenChange={setCostOpen} count={count}
         onSave={async (c) => { await onSetCost(c); toast.success(`Cost set for ${count}`); }} />}
       {sep}
       </>}
-      {onRescreen && <Button variant="outline" size="xs" disabled={!!busy} onClick={() => act("rescreen", onRescreen)}>{busy === "rescreen" ? "Starting…" : "Re-screen selected"}</Button>}
-      {onExport && <Button variant="outline" size="xs" disabled={!!busy} onClick={onExport}>Export selected</Button>}
+      {onRescreen && <Button variant="secondary" size="sm" disabled={!!busy} onClick={() => act("rescreen", onRescreen)}>{busy === "rescreen" ? "Starting…" : "Re-screen selected"}</Button>}
+      {onExport && <Button variant="secondary" size="sm" disabled={!!busy} onClick={onExport}>Export selected</Button>}
       {onRemove && (
-        <Button variant="outline" size="xs" className="text-fail hover:text-fail" disabled={!!busy} onClick={remove}>
+        <Button variant="danger" size="sm" disabled={!!busy} onClick={remove}>
           Remove from run
         </Button>
       )}
-      <Button variant="ghost" size="xs" className="ml-auto text-muted-foreground" onClick={onClear}><XIcon /> Clear selection</Button>
+      <Button variant="ghost" size="sm" className="ml-auto text-muted-foreground" onClick={onClear}><XIcon /> Clear selection</Button>
     </div>
   );
 }

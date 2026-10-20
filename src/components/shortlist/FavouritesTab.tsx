@@ -16,10 +16,10 @@ import { compareResults, loadResultSort, nextResultSort, saveResultSort } from "
 import type { Fav, Result, SortKey } from "@/components/results/types";
 import { useSparks } from "@/components/results/useSparks";
 import { EmptyState, ErrorState } from "@/components/States";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { StatusChip } from "@/components/ui/status-chip";
 import { EMPTY_FILTERS, matches, normalizeFilters, type FilterSet } from "@/lib/filters";
 import { GATE_LABELS, withDefaults, type GateId, type ProfileConfig } from "@/lib/screening/config";
 import { api, when } from "@/lib/ui/client";
@@ -207,7 +207,7 @@ export function FavouritesTab() {
       <div>
         <p className="text-sm text-muted-foreground">
           {all.length} product{all.length === 1 ? "" : "s"}, each with its latest result from any run
-          {all.some((x) => x.item.outdated) && <> · <span className="text-warn">{all.filter((x) => x.item.outdated).length} outdated</span> (over 7 days old)</>}
+          {all.some((x) => x.item.outdated) && <> · <span className="text-warn-ink">{all.filter((x) => x.item.outdated).length} outdated</span> (over 7 days old)</>}
         </p>
       </div>
       <div className="flex flex-wrap items-center gap-2">
@@ -215,23 +215,23 @@ export function FavouritesTab() {
           <NativeSelectOption value="">Default profile</NativeSelectOption>
           {profiles.map((p) => <NativeSelectOption key={p.id} value={p.id}>{p.name}</NativeSelectOption>)}
         </NativeSelect>
-        <Button onClick={() => rescreen()} disabled={busy || !all.length} title="New run with only these favourites, named 'Favourites <date>'">
-          {busy ? "Starting…" : "Re-screen favourites"}
+        <Button onClick={() => rescreen()} disabled={!all.length} loading={busy} title="New run with only these favourites, named 'Favourites <date>'">
+          {busy ? "Starting" : "Re-screen favourites"}
         </Button>
-        <Button variant="outline" onClick={() => exportXlsx()} disabled={!shown.length}>Export {shown.length} to xlsx</Button>
+        <Button variant="secondary" onClick={() => exportXlsx()} disabled={!shown.length}>Export {shown.length} to xlsx</Button>
       </div>
     </div>
   );
 
   if (error && !items) return <div className="space-y-4">{header}<ErrorState title="Couldn't load favourites" message={error} onRetry={load} /></div>;
-  if (!items) return <div className="space-y-4">{header}<Skeleton className="h-24 rounded-lg" /><Skeleton className="h-72 rounded-lg" /></div>;
+  if (!items) return <div className="space-y-4">{header}<Skeleton className="h-24 rounded-xl" /><Skeleton className="h-72 rounded-xl" /></div>;
 
   return (
     <div className="space-y-4">
       {header}
-      {note && <p className="rounded-md bg-warn-soft px-3 py-2 text-sm text-warn">{note}</p>}
+      {note && <p className="rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn-ink">{note}</p>}
       {!all.length ? (
-        <EmptyState icon={<StarIcon />} title="No favourites yet" action={<Button variant="outline" asChild><Link href="/runs">Go to runs</Link></Button>}>
+        <EmptyState icon={<StarIcon />} title="No favourites yet" action={<Button variant="secondary" asChild><Link href="/runs">Go to runs</Link></Button>}>
           Star a product on any run&apos;s results to keep it here, with its latest result and your notes.
         </EmptyState>
       ) : (
@@ -262,8 +262,8 @@ export function FavouritesTab() {
               if (!i) return null;
               return (
                 <div className="text-xs text-muted-foreground">
-                  {i.latest ? <>Screened {when(i.latest.updated_at)}{i.latest.run && <> · <Link className="text-brand hover:underline" href={`/runs/${i.latest.run.id}`} onClick={(e) => e.stopPropagation()}>{i.latest.run.name}</Link></>}</> : <span className="text-warn">Not screened yet</span>}
-                  {i.outdated && i.latest && <Badge variant="warn" className="ml-1.5">outdated</Badge>}
+                  {i.latest ? <>Screened {when(i.latest.updated_at)}{i.latest.run && <> · <Link className="text-primary hover:underline" href={`/runs/${i.latest.run.id}`} onClick={(e) => e.stopPropagation()}>{i.latest.run.name}</Link></>}</> : <span className="text-warn-ink">Not screened yet</span>}
+                  {i.outdated && i.latest && <StatusChip tone="warn" className="ml-1.5 h-5 px-2">Outdated</StatusChip>}
                   {i.favourite.note && <span className="italic"> · {i.favourite.note}</span>}
                 </div>
               );
