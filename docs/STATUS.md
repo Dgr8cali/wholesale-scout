@@ -283,7 +283,15 @@ Sophia $90 plate + $55 cards + $15 shrink wrap ($1,610 EXW), production 25 and t
 40–45), $2.85 at 1,000, samples received, spec; her currency corrected GBP → USD (the FX of 1.27 already treated it as dollars,
 so her landed cost is unchanged). The extras moved out of each quote's calc "other", so both landed costs are unchanged
 (£2.73, £3.67).
-**Per-candidate score labels** (migration 20261020000600, additive: `pl_candidates.sample_criteria`, `spec_fields`, each
+**Freight options** (migration 20261020000700, additive: `pl_quotes.freight_options` jsonb): up to six per quote, each { mode,
+ddp (true / false / null = not said), cost, currency (the quote's or GBP), transit_days, used }; exactly one used (the server
+keeps it so). The used option's cost (÷ the quote's FX) is the landed cost's freight (`landedInputs`, `usedFreight`, `freightGbp`),
+its transit sets the arrival date, and `freight_mode` / `ddp` / `transit_days` follow it on save. No options: the single fields as
+before. The quote form's Freight options editor (Add, Use for landed cost, Remove; using a DDP option turns duty and import VAT
+off, a non-DDP one warns). Compare: "Used for landed cost", "Freight cost (used)", and a row per mode any quote offers (cost in its
+currency and £, transit, DDP, ★ used), lowest cost marked. Filled: Sophia sea DDP $720 / 45 days (used), rail $830 / 35 days (the
+upper end of 30–35), air $2,830 (no transit or DDP in her notes, so "not said"); Tina sea DDP $596 (used). Landed costs unchanged.
+ (migration 20261020000600, additive: `pl_candidates.sample_criteria`, `spec_fields`, each
 [{ k, label }]): the six sample-score criteria and four spec labels are the candidate's own, edited from **Score labels** in the
 Quotes header (a dialog: labels above inputs, "Give it a name" inline, Save waits for a change, Reset to the generic set). Null is
 the generic set (build quality / finish, works as described, materials / feel, size / fit, packaging, durability; product size,

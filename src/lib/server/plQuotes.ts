@@ -14,13 +14,13 @@ const numOrNull = (v: unknown) => (v === "" || v == null ? null : Number.isFinit
 
 /* ===================== quotes ===================== */
 
-const QUOTE_COLS = "id, candidate_id, supplier_name, source, contact, unit_price, currency, moq, lead_time_days, sample_cost, sample_lead_days, notes, status, calc, freight_mode, ddp, transit_days, next_tier_qty, next_tier_price, extras, sample_status, sample_received_on, sample_scores, spec, created_at, updated_at";
+const QUOTE_COLS = "id, candidate_id, supplier_name, source, contact, unit_price, currency, moq, lead_time_days, sample_cost, sample_lead_days, notes, status, calc, freight_options, freight_mode, ddp, transit_days, next_tier_qty, next_tier_price, extras, sample_status, sample_received_on, sample_scores, spec, created_at, updated_at";
 const toQuote = (r: Record<string, unknown>): Quote => ({
   ...(r as unknown as Quote),
   unit_price: numOrNull(r.unit_price), moq: numOrNull(r.moq), lead_time_days: numOrNull(r.lead_time_days),
   sample_cost: numOrNull(r.sample_cost), sample_lead_days: numOrNull(r.sample_lead_days), calc: (r.calc as Quote["calc"]) ?? {},
   transit_days: numOrNull(r.transit_days), next_tier_qty: numOrNull(r.next_tier_qty), next_tier_price: numOrNull(r.next_tier_price),
-  extras: (r.extras as Quote["extras"]) ?? {}, sample_scores: (r.sample_scores as Quote["sample_scores"]) ?? {}, spec: (r.spec as Quote["spec"]) ?? {},
+  extras: (r.extras as Quote["extras"]) ?? {}, freight_options: (r.freight_options as Quote["freight_options"]) ?? [], sample_scores: (r.sample_scores as Quote["sample_scores"]) ?? {}, spec: (r.spec as Quote["spec"]) ?? {},
 });
 
 export async function listQuotes(candidateId?: string): Promise<Quote[]> {
@@ -72,6 +72,25 @@ function quotePatch(x: Record<string, unknown>): Record<string, unknown> {
     for (const k of ["units", "fx", "freight", "dutyPct", "inspection", "other"] as const) { const v = numOrNull(c[k]); if (v != null && v >= 0) calc[k] = v; }
     if (typeof c.vat === "boolean") calc.vat = c.vat;
     out.calc = calc;
+  }
+  if (x.freight_options !== undefined) {
+    const list = Array.isArray(x.freight_options) ? x.freight_options : [];
+    if (list.length > 6) throw new Error("Six freight options at most");
+    const opts = list.map((raw, i) => {
+      const o = (raw ?? {}) as Record<string, unknown>;
+      if (!FREIGHT_MODES.includes(o.mode as never)) throw new Error(`Freight option ${i + 1}: ${FREIGHT_MODES.join(", ")}`);
+      if (!CURRENCIES.includes(o.currency as never)) throw new Error(`Freight option ${i + 1}: currency ${CURRENCIES.join(", ")}`);
+      const cost = numOrNull(o.cost);
+      if (cost != null && cost < 0) throw new Error(`Freight option ${i + 1}: the cost can't be negative`);
+      const t = numOrNull(o.transit_days);
+      return { id: typeof o.id === "string" && /^[\w-]{1,40}$/.test(o.id) ? o.id : `f${Date.now().toString(36)}${i}`, mode: o.mode, ddp: o.ddp == null ? null : !!o.ddp, cost, currency: o.currency, transit_days: t == null ? null : Math.max(0, Math.round(t)), used: o.used === true };
+    });
+    // Exactly one used: the first marked, else the first.
+    const u = Math.max(0, opts.findIndex((o) => o.used));
+    opts.forEach((o, i) => { o.used = i === u; });
+    out.freight_options = opts;
+    // Last, so the single fields follow the used option and every reader agrees.
+    if (opts.length) Object.assign(out, { freight_mode: opts[u].mode, ddp: opts[u].ddp, transit_days: opts[u].transit_days });
   }
   return out;
 }

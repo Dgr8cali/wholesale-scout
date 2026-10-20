@@ -109,6 +109,8 @@ export interface Quote {
   sample_cost: number | null; sample_lead_days: number | null; notes: string | null; status: QuoteStatus;
   /** The landed-cost calculator's inputs (blank ones take the defaults). */
   calc: Partial<LandedInputs> | null;
+  /** Several ways to ship it, one `used` for the landed cost (empty: the single fields below apply). */
+  freight_options?: FreightOption[] | null;
   freight_mode?: FreightMode | null;
   /** Delivered duty paid: the freight price includes duty and import VAT. */
   ddp?: boolean | null;
@@ -124,6 +126,40 @@ export interface Quote {
   /** Free text under each of the candidate's spec labels' keys. */
   spec?: Record<string, string> | null;
   created_at: string; updated_at: string;
+}
+
+/** One way to ship a quote: a mode, whether it's DDP, its cost and the days in transit. */
+export interface FreightOption {
+  id: string; mode: FreightMode;
+  /** Delivered duty paid; null when the supplier didn't say. */
+  ddp: boolean | null;
+  /** The total for the shipment, in `currency` (the quote's, or GBP). */
+  cost: number | null; currency: Currency;
+  /** Factory to FBA, days (the longest quoted). */
+  transit_days: number | null;
+  /** The one the landed cost uses. */
+  used: boolean;
+}
+
+/** The freight the landed cost uses: the option marked used (else the first), or the quote's single fields. */
+export function usedFreight(q: Pick<Quote, "currency" | "calc"> & Partial<Pick<Quote, "freight_options" | "freight_mode" | "ddp" | "transit_days">>):
+  { mode: FreightMode | null; ddp: boolean | null; costGbp: number | null; transit_days: number | null; option: FreightOption | null } {
+  const opts = q.freight_options ?? [];
+  if (opts.length) {
+    const o = opts.find((x) => x.used) ?? opts[0];
+    return { mode: o.mode, ddp: o.ddp, costGbp: freightGbp(o, q), transit_days: o.transit_days, option: o };
+  }
+  return { mode: q.freight_mode ?? null, ddp: q.ddp ?? null, costGbp: typeof q.calc?.freight === "number" ? q.calc.freight : null, transit_days: q.transit_days ?? null, option: null };
+}
+
+/** An option's cost in £, at the quote's FX when it's in the quote's currency. */
+export function freightGbp(o: Pick<FreightOption, "cost" | "currency">, q: Pick<Quote, "currency" | "calc">): number | null {
+  if (o.cost == null) return null;
+  if (o.currency === "GBP") return o.cost;
+  const c = q.calc ?? {};
+  const fx = typeof c.fx === "number" && c.fx > 0 ? c.fx : DEFAULT_FX[o.currency] ?? 1;
+  // An option in the quote's currency converts at the quote's FX; another currency at its default rate.
+  return o.cost / (o.currency === q.currency ? fx : DEFAULT_FX[o.currency]);
 }
 
 export interface LandedInputs {
@@ -143,12 +179,16 @@ export interface LandedInputs {
   other: number;
 }
 
-/** The calculator's inputs: what was saved, else the defaults (units = MOQ, FX = DEFAULT_FX, VAT on). */
-export function landedInputs(q: Pick<Quote, "moq" | "currency" | "calc">): LandedInputs {
+/**
+ * The calculator's inputs: what was saved, else the defaults (units = MOQ, FX = DEFAULT_FX, VAT on).
+ * Freight is the used freight option's, in £, when the quote has options.
+ */
+export function landedInputs(q: Pick<Quote, "moq" | "currency" | "calc"> & Partial<Pick<Quote, "freight_options">>): LandedInputs {
   const c = q.calc ?? {};
   const n = (v: unknown, d: number) => (typeof v === "number" && Number.isFinite(v) ? v : d);
+  const opt = q.freight_options?.length ? usedFreight({ currency: q.currency, calc: q.calc, freight_options: q.freight_options }).costGbp : null;
   return {
-    units: n(c.units, q.moq ?? 0), fx: n(c.fx, DEFAULT_FX[q.currency] ?? 1), freight: n(c.freight, 0), dutyPct: n(c.dutyPct, 0),
+    units: n(c.units, q.moq ?? 0), fx: n(c.fx, DEFAULT_FX[q.currency] ?? 1), freight: opt ?? n(c.freight, 0), dutyPct: n(c.dutyPct, 0),
     vat: c.vat !== false, inspection: n(c.inspection, 0), other: n(c.other, 0),
   };
 }
@@ -176,7 +216,7 @@ export function extrasTotal(q: Pick<Quote, "extras">): number {
 }
 
 /** The ex-works invoice in the quote's currency: unit price × units + the extras. */
-export function exwTotal(q: Pick<Quote, "unit_price" | "moq" | "currency" | "calc" | "extras">): number | null {
+export function exwTotal(q: Pick<Quote, "unit_price" | "moq" | "currency" | "calc" | "extras"> & Partial<Pick<Quote, "freight_options">>): number | null {
   const i = landedInputs(q);
   return q.unit_price == null || !(i.units > 0) ? null : q.unit_price * i.units + extrasTotal(q);
 }
@@ -185,7 +225,7 @@ export function exwTotal(q: Pick<Quote, "unit_price" | "moq" | "currency" | "cal
  * A quote's landed cost: goods + the invoice's extras + freight + duty (on goods, extras and freight)
  * + import VAT (on all of those) + inspection + other.
  */
-export function landedCost(q: Pick<Quote, "unit_price" | "moq" | "currency" | "calc"> & Partial<Pick<Quote, "extras">>, override?: Partial<LandedInputs>): Landed | null {
+export function landedCost(q: Pick<Quote, "unit_price" | "moq" | "currency" | "calc"> & Partial<Pick<Quote, "extras" | "freight_options">>, override?: Partial<LandedInputs>): Landed | null {
   const i = { ...landedInputs(q), ...(override ?? {}) };
   if (q.unit_price == null || !(i.units > 0) || !(i.fx > 0)) return null;
   const goods = (q.unit_price * i.units) / i.fx;
@@ -220,9 +260,11 @@ export function sampleStatusOf(q: Partial<Pick<Quote, "sample_status" | "sample_
 }
 
 /** Production + transit, and the day it would reach FBA if ordered on `from`; null without both. */
-export function arrival(q: Pick<Quote, "lead_time_days" | "transit_days">, from: Date = new Date()): { days: number; date: Date } | null {
-  if (q.lead_time_days == null || q.transit_days == null) return null;
-  const days = q.lead_time_days + q.transit_days;
+export function arrival(q: Pick<Quote, "lead_time_days" | "transit_days"> & Partial<Pick<Quote, "freight_options" | "currency" | "calc">>, from: Date = new Date()): { days: number; date: Date } | null {
+  // The used freight option's transit when there are options.
+  const used = q.freight_options?.length ? (q.freight_options.find((o) => o.used) ?? q.freight_options[0]).transit_days : q.transit_days;
+  if (q.lead_time_days == null || used == null) return null;
+  const days = q.lead_time_days + used;
   const date = new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate() + days));
   return { days, date };
 }

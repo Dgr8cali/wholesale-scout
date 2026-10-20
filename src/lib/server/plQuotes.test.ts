@@ -52,4 +52,21 @@ describe("choosing a quote (FakeDb)", () => {
     expect(x.quotes[0].sample_scores).toMatchObject({ smell: 4 });
     expect((await saveQuoteLabels(c.id, { reset: true })).criteria).toEqual(GENERIC_CRITERIA);
   });
+
+  it("freight options: one used, the single fields follow it, and the landed cost uses it", async () => {
+    const c = await createCandidate({ name: "Lens cleaning wipes", asins: [] });
+    const q = await createQuote(c.id, {
+      supplier_name: "Sophia", unit_price: 2.9, moq: 500, currency: "USD", extras: { plate: 90, cards: 55, shrink: 15 }, calc: { fx: 1.27, vat: false },
+      freight_options: [
+        { mode: "sea", ddp: true, cost: 720, currency: "USD", transit_days: 45, used: true },
+        { mode: "rail", ddp: null, cost: 830, currency: "USD", transit_days: 35, used: true },
+        { mode: "air", ddp: null, cost: 2830, currency: "USD", transit_days: null },
+      ],
+    });
+    expect(q.freight_options!.map((o) => o.used)).toEqual([true, false, false]);
+    expect(q).toMatchObject({ freight_mode: "sea", ddp: true, transit_days: 45 });
+    const r = await applyQuote(q.id, "gate0");
+    expect(r.perUnit).toBe(3.67);
+    await expect(createQuote(c.id, { freight_options: [{ mode: "boat", currency: "USD" }] })).rejects.toThrow(/Freight option 1/);
+  });
 });

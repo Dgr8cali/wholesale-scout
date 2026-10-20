@@ -21,6 +21,10 @@ order: 3
 
 **Score labels** (in the Quotes header) names the six criteria and the four spec labels for this candidate. A new candidate starts with a generic set: build quality / finish, works as described, materials / feel, size / fit, packaging, durability; and product size, materials, box size / weight, shelf life / warranty. Lens cleaning wipes has its own (moisture / stays wet, cleaning / no streaks, smell, sachet opens easily, wipe size / feel, box quality; wipe size, sachet size / material, box size / weight, shelf life). Renaming a label keeps the scores and notes already given under it. **Reset to the generic set** puts the generic names back.
 
+## Freight options
+
+A quote can hold up to six ways to ship it under **Freight options**: each has a **mode** (sea, rail, air, express), **DDP** (yes, no or not said: delivered duty paid, so the price includes duty and import VAT), the **cost** for the shipment (in the quote's currency or £) and the **transit** days to FBA (the longest quoted). One is **Used for landed cost**: its cost (in £ at the quote's FX) is the landed cost's freight, and its transit days set the arrival date. **Use for landed cost** on another switches to it. Using a DDP option sets duty to 0% and import VAT off; using one that isn't marked DDP warns you to check them. With no options, the quote's single **Freight to the UK** (£) and transit days apply, as before; **Add freight option** starts the first from them.
+
 ## Landed cost
 
 Under each quote, every input has a default you can change:
@@ -29,7 +33,6 @@ Under each quote, every input has a default you can change:
 |---|---|
 | Units ordered | the MOQ |
 | FX rate | quote currency per £1: USD 1.27, EUR 1.17, CNY 9.2. Check today's rate on xe.com (linked) |
-| Freight | the mode (sea, rail, air, express) and **DDP** (delivered duty paid: the price includes duty and import VAT, so turning it on sets duty to 0% and import VAT off) |
 | Freight to the UK | £0 (the total for the shipment) |
 | Duty | 0%. Find the rate for the product's commodity code in the UK Trade Tariff (linked). Duty is charged on goods + freight |
 | Import VAT | on: 20% of goods + freight + duty |
@@ -47,9 +50,9 @@ For example: $1.80 a unit, MOQ 500, FX 1.27, freight £180, duty 6.5%: goods £7
 
 - **Price**: unit price (its currency and £), MOQ, the next tier.
 - **Extras**: plate / setup, cards, shrink wrap, other, and the EXW total.
-- **Freight**: mode, DDP, the freight cost in £.
+- **Freight**: the option used for the landed cost and its cost in £, then one row for each mode any quote offers (sea, rail, air, express): its cost, transit days and DDP, ★ on the one used.
 - **Cost and profit**: landed per unit (ex import VAT once you're VAT-registered, as Gate 0 takes it), total cash required, the price multiple at Gate 0's sell price, and the **profit per unit after fees** (the sell price less referral, FBA, storage, inbound, prep and returns from Gate 6's fee figures, and the landed cost; before ads).
-- **Lead time**: production, transit, and the day it would **arrive at FBA if ordered today** (production + transit; it needs both).
+- **Lead time**: production, transit (the freight used), and the day it would **arrive at FBA if ordered today** (production + transit; it needs both).
 - **Samples**: status, cost, the day received.
 - **Sample scores**: the candidate's six scores, editable here, their **average** and a note.
 - **Spec**: the four spec notes, under the candidate's labels.

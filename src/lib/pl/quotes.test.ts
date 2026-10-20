@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { GENERIC_CRITERIA, LENS_CRITERIA, LENS_SPEC, arrival, bestOf, certificationsFor, checkLabels, labelsOf, exwTotal, landedCost, landedInputs, priceMultiple, rfqText, sampleAverage, sampleStatusOf } from "./quotes";
+import { freightGbp, usedFreight, GENERIC_CRITERIA, LENS_CRITERIA, LENS_SPEC, arrival, bestOf, certificationsFor, checkLabels, labelsOf, exwTotal, landedCost, landedInputs, priceMultiple, rfqText, sampleAverage, sampleStatusOf } from "./quotes";
 
 const q = { unit_price: 1.8, moq: 500, currency: "USD" as const, calc: { fx: 1.27, freight: 180, dutyPct: 6.5 } };
 
@@ -84,5 +84,25 @@ describe("per-candidate labels", () => {
     expect(() => checkLabels({ criteria: LENS_CRITERIA.slice(0, 5) }, cur)).toThrow(/exactly 6/);
     expect(() => checkLabels({ spec: ["a", "", "c", "d"].map((label) => ({ label })) }, cur)).toThrow(/Spec label 2: give it a name/);
     expect(() => checkLabels({ criteria: LENS_CRITERIA.map((l) => ({ ...l, k: "same" })) }, cur)).toThrow(/share a key/);
+  });
+});
+
+describe("freight options", () => {
+  const sea = { id: "a", mode: "sea" as const, ddp: true, cost: 720, currency: "USD" as const, transit_days: 45, used: true };
+  const rail = { id: "b", mode: "rail" as const, ddp: null, cost: 830, currency: "USD" as const, transit_days: 35, used: false };
+  const air = { id: "c", mode: "air" as const, ddp: null, cost: 2830, currency: "USD" as const, transit_days: null, used: false };
+  const sophia = { unit_price: 2.9, moq: 500, currency: "USD" as const, extras: { plate: 90, cards: 55, shrink: 15 }, calc: { fx: 1.27, freight: 1, vat: false }, lead_time_days: 25, freight_options: [sea, rail, air] };
+  it("the used option sets the landed cost's freight (in £ at the quote's FX) and the arrival", () => {
+    expect(usedFreight(sophia)).toMatchObject({ mode: "sea", ddp: true, transit_days: 45 });
+    expect(landedCost(sophia)!.freight).toBeCloseTo(566.93, 2);
+    expect(landedCost(sophia)!.perUnit).toBe(3.67);
+    expect(arrival(sophia, new Date("2026-10-20T00:00:00Z"))!.days).toBe(70);
+    const byRail = { ...sophia, freight_options: [{ ...sea, used: false }, { ...rail, used: true }, air] };
+    expect(landedCost(byRail)!.freight).toBeCloseTo(653.54, 2);
+    expect(arrival(byRail)!.days).toBe(60);
+  });
+  it("a £ option isn't converted; no options: the single fields", () => {
+    expect(freightGbp({ cost: 400, currency: "GBP" }, sophia)).toBe(400);
+    expect(usedFreight({ currency: "USD", calc: { freight: 469.29 }, freight_mode: "sea", ddp: true })).toMatchObject({ mode: "sea", costGbp: 469.29, option: null });
   });
 });

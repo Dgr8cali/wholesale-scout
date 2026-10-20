@@ -15,7 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   CURRENCIES, DEFAULT_FX, EXTRAS, FREIGHT_MODES, GENERIC_CRITERIA, GENERIC_SPEC, QUOTE_SOURCES, QUOTE_STATUSES, SAMPLE_STATUSES,
-  exwTotal, landedCost, landedInputs, priceMultiple, rfqText, sampleStatusOf, type Label, type LandedInputs, type Quote, type QuoteLabels,
+  exwTotal, landedCost, landedInputs, priceMultiple, rfqText, sampleStatusOf, usedFreight, type FreightOption, type Label, type LandedInputs, type Quote, type QuoteLabels,
 } from "@/lib/pl/quotes";
 import { api } from "@/lib/ui/client";
 import { cn } from "@/lib/utils";
@@ -186,7 +186,7 @@ function QuoteCard({ q, labels, sell, chosen, others, onChanged, onFieldsChanged
         {field(`Next tier price (${d.currency})`, <NumIn value={d.next_tier_price} onChange={(v) => set({ next_tier_price: v })} step="0.01" />)}
         {field("Next tier quantity", <NumIn value={d.next_tier_qty} onChange={(v) => set({ next_tier_qty: v })} step="1" />, d.next_tier_price != null && !d.next_tier_qty ? <span className="text-danger">Enter the quantity this price is for</span> : null)}
         {field("Production (days)", <NumIn value={d.lead_time_days} onChange={(v) => set({ lead_time_days: v })} step="1" />, "The longest quoted")}
-        {field("Transit to FBA (days)", <NumIn value={d.transit_days} onChange={(v) => set({ transit_days: v })} step="1" />, "The longest quoted")}
+        {!d.freight_options?.length && field("Transit to FBA (days)", <NumIn value={d.transit_days} onChange={(v) => set({ transit_days: v })} step="1" />, "The longest quoted")}
         <div className="col-span-2">{field("Notes", <Input className="h-8" value={d.notes ?? ""} onChange={(e) => set({ notes: e.target.value })} />)}</div>
       </div>
 
@@ -222,15 +222,16 @@ function QuoteCard({ q, labels, sell, chosen, others, onChanged, onFieldsChanged
         </div>
       </div>
 
+      <FreightOptions d={d} set={set} />
+
       <div className="space-y-2 rounded-lg bg-subtle p-2.5">
         <h3 className="section-label">Landed cost</h3>
         <div className="grid grid-cols-2 gap-2">
-          {field("Freight", <NativeSelect className="h-8 w-full" value={d.freight_mode ?? ""} onChange={(e) => set({ freight_mode: (e.target.value || null) as Quote["freight_mode"] })}>
-            <NativeSelectOption value="">Not set</NativeSelectOption>{FREIGHT_MODES.map((m) => <NativeSelectOption key={m} value={m}>{m}</NativeSelectOption>)}</NativeSelect>)}
-          <div className="flex items-end pb-1.5"><label className="flex items-center gap-2 text-meta"><Switch checked={!!d.ddp} onCheckedChange={(v) => set({ ddp: v, ...(v ? { calc: { vat: false, dutyPct: 0 } } : {}) })} aria-label="DDP: duty and import VAT paid by the supplier" /> DDP (duty and VAT paid)</label></div>
           {field("Units ordered", <NumIn value={d.calc.units ?? null} onChange={(v) => set({ calc: { units: v ?? undefined } })} step="1" />, `Default: the MOQ (${d.moq ?? "—"})`)}
           {field(`FX: ${d.currency} per £1`, <NumIn value={d.calc.fx ?? null} onChange={(v) => set({ calc: { fx: v ?? undefined } })} step="0.01" />, <>Default {DEFAULT_FX[d.currency]}: check today&apos;s rate on <a className="link" href={`https://www.xe.com/currencyconverter/convert/?Amount=1&From=GBP&To=${d.currency}`} target="_blank" rel="noreferrer">xe.com</a></>)}
-          {field("Freight to the UK (£, total)", <NumIn value={d.calc.freight ?? null} onChange={(v) => set({ calc: { freight: v ?? undefined } })} step="1" />)}
+          {d.freight_options?.length
+            ? field("Freight to the UK (£, total)", <p className="num flex h-8 items-center">{l ? `£${l.freight.toFixed(2)}` : "—"}</p>, "From the freight option used, above")
+            : field("Freight to the UK (£, total)", <NumIn value={d.calc.freight ?? null} onChange={(v) => set({ calc: { freight: v ?? undefined } })} step="1" />)}
           {field("Duty (%)", <NumIn value={d.calc.dutyPct ?? null} onChange={(v) => set({ calc: { dutyPct: v ?? undefined } })} step="0.1" />, <>On goods + freight. The rate for the commodity code: <a className="link" href={TARIFF_URL} target="_blank" rel="noreferrer">UK Trade Tariff</a></>)}
           {field("Inspection (£)", <NumIn value={d.calc.inspection ?? null} onChange={(v) => set({ calc: { inspection: v ?? undefined } })} step="1" />)}
           {field("Other (£)", <NumIn value={d.calc.other ?? null} onChange={(v) => set({ calc: { other: v ?? undefined } })} step="1" />)}
@@ -271,6 +272,55 @@ function QuoteCard({ q, labels, sell, chosen, others, onChanged, onFieldsChanged
           {others > 0 && <label className="flex items-center gap-1.5 text-meta"><input type="checkbox" checked={rejectOthers} onChange={(e) => setRejectOthers(e.target.checked)} /> mark the others rejected</label>}
         </div>
       )}
+    </div>
+  );
+}
+
+const newOption = (d: Draft, used: boolean): FreightOption => {
+  const u = usedFreight(d);
+  // The first option starts from the quote's single freight fields (cost in £).
+  return { id: `f${Date.now().toString(36)}`, mode: (used && u.mode) || "sea", ddp: used ? u.ddp : null, cost: used ? u.costGbp : null, currency: used && u.costGbp != null ? "GBP" : d.currency, transit_days: used ? u.transit_days : null, used };
+};
+
+/** Ways to ship it (sea, rail, air, express), each with DDP, cost and transit days; one is used for the landed cost. */
+function FreightOptions({ d, set }: { d: Draft; set: (p: Partial<Draft>) => void }) {
+  const opts = d.freight_options ?? [];
+  const put = (next: FreightOption[]) => {
+    const used = next.find((o) => o.used);
+    // A DDP option used: duty and import VAT are in its price.
+    set({ freight_options: next, ...(used?.ddp ? { calc: { vat: false, dutyPct: 0 } } : {}) });
+  };
+  const edit = (i: number, p: Partial<FreightOption>) => put(opts.map((o, j) => (j === i ? { ...o, ...p } : p.used ? { ...o, used: false } : o)));
+  const remove = (i: number) => { const next = opts.filter((_, j) => j !== i); if (next.length && !next.some((o) => o.used)) next[0] = { ...next[0], used: true }; put(next); };
+  const used = opts.find((o) => o.used);
+  return (
+    <div className="space-y-2">
+      <h3 className="section-label">Freight options</h3>
+      {opts.length === 0 && <p className="text-xs text-muted-foreground">One way to ship it so far{d.freight_mode ? ` (${d.freight_mode}${d.ddp ? ", DDP" : ""})` : ""}. Add the options the supplier quoted to compare them.</p>}
+      {opts.map((o, i) => (
+        <fieldset key={o.id} className={cn("space-y-2 rounded-lg border border-border p-2", o.used && "border-primary")}>
+          <legend className="sr-only">Freight option {i + 1}</legend>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="block space-y-0.5"><span className="field-label">Mode</span>
+              <NativeSelect className="h-8 w-full" value={o.mode} onChange={(e) => edit(i, { mode: e.target.value as FreightOption["mode"] })}>{FREIGHT_MODES.map((m) => <NativeSelectOption key={m} value={m}>{m}</NativeSelectOption>)}</NativeSelect></label>
+            <label className="block space-y-0.5"><span className="field-label">DDP</span>
+              <NativeSelect className="h-8 w-full" value={o.ddp == null ? "" : o.ddp ? "yes" : "no"} onChange={(e) => edit(i, { ddp: e.target.value === "" ? null : e.target.value === "yes" })}>
+                <NativeSelectOption value="">Not said</NativeSelectOption><NativeSelectOption value="yes">Yes</NativeSelectOption><NativeSelectOption value="no">No</NativeSelectOption></NativeSelect></label>
+            <label className="col-span-2 block space-y-0.5"><span className="field-label">Cost (total)</span>
+              <div className="flex gap-1"><NumIn value={o.cost} onChange={(v) => edit(i, { cost: v })} step="0.01" />
+                <NativeSelect className="h-8 w-20 shrink-0" aria-label="Currency" value={o.currency} onChange={(e) => edit(i, { currency: e.target.value as FreightOption["currency"] })}>
+                  {[...new Set([d.currency, "GBP"])].map((c) => <NativeSelectOption key={c} value={c}>{c}</NativeSelectOption>)}</NativeSelect></div></label>
+            <label className="block space-y-0.5"><span className="field-label">Transit (days)</span><NumIn value={o.transit_days} onChange={(v) => edit(i, { transit_days: v })} step="1" /></label>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {o.used ? <StatusChip tone="info">Used for landed cost</StatusChip>
+              : <Button size="sm" variant="secondary" onClick={() => edit(i, { used: true })}>Use for landed cost</Button>}
+            <Button size="sm" variant="ghost" className="ml-auto" onClick={() => remove(i)} aria-label={`Remove the ${o.mode} option`}><Trash2Icon /> Remove</Button>
+          </div>
+        </fieldset>
+      ))}
+      {used && used.ddp !== true && <p className="text-xs text-warn-ink">The option used isn&apos;t marked DDP: check the duty and import VAT below.</p>}
+      <Button size="sm" variant="secondary" disabled={opts.length >= 6} onClick={() => put(opts.length ? [...opts, newOption(d, false)] : [newOption(d, true)])}><PlusIcon /> Add freight option</Button>
     </div>
   );
 }

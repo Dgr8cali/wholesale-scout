@@ -13,7 +13,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { RateCard } from "@/lib/fees/rateCard";
 import { econ, type Settings } from "@/lib/pl/gatekeeper";
 import {
-  EXTRAS, arrival, bestOf, exwTotal, landedCost, landedInputs, priceMultiple, sampleAverage, sampleStatusOf,
+  EXTRAS, FREIGHT_MODES, arrival, freightGbp, usedFreight, bestOf, exwTotal, landedCost, landedInputs, priceMultiple, sampleAverage, sampleStatusOf,
   type Quote, type QuoteLabels, type SampleScores,
 } from "@/lib/pl/quotes";
 import { api } from "@/lib/ui/client";
@@ -24,6 +24,7 @@ const gbp = (v: number | null | undefined) => (v == null ? "—" : `£${v.toLoca
 const money = (v: number | null | undefined, cur: string) => (v == null ? "—" : v.toLocaleString("en-GB", { style: "currency", currency: cur, maximumFractionDigits: 2 }));
 const n0 = (v: number | null | undefined) => (v == null ? "—" : v.toLocaleString("en-GB"));
 const day = (d: Date | string | null | undefined) => (d ? new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }) : "—");
+const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
 const MULT_TONE: Record<"pass" | "warn" | "fail", Tone> = { pass: "good", warn: "warn", fail: "bad" };
 const STATUS_TONE: Record<string, Tone> = { chosen: "good", rejected: "bad", requested: "neutral", received: "info", "samples ordered": "warn", "samples received": "info" };
 /** "Tina - Shenzhen Benliju Bio-Tech Co., Ltd." → "Tina", for the phone's switch. */
@@ -107,9 +108,24 @@ export function QuoteCompare({ quotes, chosenQuote, ctx, onChanged, onFieldsChan
     },
     {
       title: "Freight", rows: [
-        row("Mode", per.map((p) => (p.q.freight_mode ? p.q.freight_mode[0].toUpperCase() + p.q.freight_mode.slice(1) : "—"))),
-        row("DDP (duty and VAT paid)", per.map((p) => (p.q.ddp == null ? "—" : p.q.ddp ? "Yes" : "No"))),
-        row("Freight cost", per.map((p) => (p.q.calc?.freight == null ? "—" : gbp(p.q.calc.freight))), per.map((p) => p.q.calc?.freight), "low", "lowest"),
+        row("Used for landed cost", per.map((p) => { const u = usedFreight(p.q); return u.mode ? `${cap(u.mode)}${u.ddp ? ", DDP" : u.ddp === false ? ", not DDP" : ""}` : "—"; })),
+        row("Freight cost (used)", per.map((p) => gbp(usedFreight(p.q).costGbp)), per.map((p) => usedFreight(p.q).costGbp), "low", "lowest"),
+        // One row a mode any quote offers: its cost, transit and DDP, the used one starred.
+        ...FREIGHT_MODES.filter((m) => per.some((p) => p.q.freight_options?.some((o) => o.mode === m))).map((m) => {
+          const optOf = (p: (typeof per)[number]) => p.q.freight_options?.find((o) => o.mode === m) ?? null;
+          return row(`${cap(m)} option`, per.map((p) => {
+            const o = optOf(p);
+            if (!o) return "—";
+            const g = freightGbp(o, p.q);
+            return (
+              <span key={m} className="inline-flex flex-wrap items-center gap-x-1.5">
+                {o.used && <StarIcon className="size-3.5 fill-highlight text-highlight" aria-label="Used for landed cost" />}
+                <span>{o.currency === "GBP" ? gbp(o.cost) : <>{money(o.cost, o.currency)} <span className="text-muted-foreground">· {gbp(g)}</span></>}</span>
+                <span className="text-muted-foreground">· {o.transit_days == null ? "transit not said" : `${o.transit_days} days`} · {o.ddp == null ? "DDP not said" : o.ddp ? "DDP" : "not DDP"}</span>
+              </span>
+            );
+          }), per.map((p) => { const o = optOf(p); return o ? freightGbp(o, p.q) : null; }), "low", "lowest");
+        }),
       ],
     },
     {
@@ -124,7 +140,7 @@ export function QuoteCompare({ quotes, chosenQuote, ctx, onChanged, onFieldsChan
     {
       title: "Lead time", rows: [
         row("Production", per.map((p) => (p.q.lead_time_days == null ? "—" : `${p.q.lead_time_days} days`)), per.map((p) => p.q.lead_time_days), "low", "shortest"),
-        row("Transit", per.map((p) => (p.q.transit_days == null ? "—" : `${p.q.transit_days} days`)), per.map((p) => p.q.transit_days), "low", "shortest"),
+        row("Transit (used freight)", per.map((p) => { const t = usedFreight(p.q).transit_days; return t == null ? "—" : `${t} days`; }), per.map((p) => usedFreight(p.q).transit_days), "low", "shortest"),
         row("Arrives at FBA if ordered today", per.map((p) => (p.arrive ? <>{day(p.arrive.date)} <span className="text-muted-foreground">({p.arrive.days} days)</span></> : <span key="a" className="text-xs text-muted-foreground">needs production and transit days</span>)),
           per.map((p) => p.arrive?.days), "low", "soonest"),
       ],
@@ -200,7 +216,7 @@ export function QuoteCompare({ quotes, chosenQuote, ctx, onChanged, onFieldsChan
               {s.rows.map((r) => (
                 <tr key={r.label} className="border-t border-divider align-top">
                   <th scope="row" className="sticky left-0 z-10 bg-card px-3 py-2 text-left font-normal text-muted-foreground">{r.label}</th>
-                  {per.map((p, n) => <td key={p.q.id} className={cn("num px-3 py-2", r.best?.has(n) && "bg-success-soft")}>{cell(r, n)}</td>)}
+                  {per.map((p, n) => <td key={p.q.id} className={cn("num max-w-80 px-3 py-2", r.best?.has(n) && "bg-success-soft")}>{cell(r, n)}</td>)}
                 </tr>
               ))}
             </tbody>
