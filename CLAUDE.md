@@ -8,7 +8,7 @@
 - After every commit in this repo, run `git push origin main` immediately, then `make deploy` (builds and restarts the app on the Netcup server; Vercel is no longer used). In the report confirm the push succeeded with the commit hash and "pushed", and that the deploy ended with "==> up".
 - If the push is rejected, run `git pull --rebase origin main`, re-run the tests (`npm test`), and push again.
 - When the commit includes a migration (`supabase/migrations/`), run `make migrate` before pushing (applies it to the server's database over an SSH tunnel; `npm run migrate` alone will not reach it).
-- Never push with failing tests or a failing build (`npm test`, `npm run build`).
+- Never push with failing tests or a failing build (`npm test`, `npm run build`); after UI changes also `npm run test:a11y` (axe and the phone checks on every route, against the build; stop the dev server first).
 - Never commit `.env.local` (or any other env file holding secrets).
 - Never print credentials in command output: no `curl -v`, `-i`, `-D -` or `-L` output on requests that carry Basic auth or a bearer token, and no echoing of `.env` values. Check with `curl -s -o /dev/null -w '%{http_code} %{redirect_url}'` and strip any userinfo from the URL before it's shown (`| sed -E 's#//[^/@]*@#//#'`): curl puts the `-u` user and password into `%{redirect_url}`.
 

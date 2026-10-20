@@ -45,3 +45,8 @@ scripts/.b.mjs
 
 # UI redesign after-screenshots (local only)
 docs/ui-audit/after/
+
+# Playwright (npm run test:a11y) and the final UI screenshots (local only)
+/test-results/
+/playwright-report/
+docs/ui-audit/final/
