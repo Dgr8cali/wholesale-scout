@@ -7,7 +7,7 @@ import { CategoryRanks } from "@/components/settings/CategoryRanks";
 import { BusinessSettingsTab } from "@/components/settings/BusinessSettingsTab";
 import { PlSettingsTab } from "@/components/settings/PlSettingsTab";
 import { StockSettingsTab } from "@/components/settings/StockSettingsTab";
-import { ArrowUpRightIcon, BoxesIcon, BuildingIcon, FilterIcon, GaugeIcon, MegaphoneIcon, PaletteIcon, ReceiptIcon, ShieldAlertIcon, ShieldCheckIcon, SlidersHorizontalIcon, TagIcon, Trash2Icon, UndoIcon } from "lucide-react";
+import { ArrowUpRightIcon, BoxesIcon, ChevronRightIcon, PlusIcon, BuildingIcon, FilterIcon, GaugeIcon, MegaphoneIcon, PaletteIcon, ReceiptIcon, ShieldAlertIcon, ShieldCheckIcon, SlidersHorizontalIcon, TagIcon, Trash2Icon, UndoIcon } from "lucide-react";
 import { Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { activeChips, normalizeFilters, type FilterSet } from "@/lib/filters";
 import type { RateCard } from "@/lib/fees/rateCard";
@@ -36,9 +36,10 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useDialogs } from "@/components/Dialogs";
-import { EmptyState, ErrorState } from "@/components/States";
+import { ErrorState } from "@/components/States";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { DataTable } from "@/components/ui/data-table";
+import { StatusChip } from "@/components/ui/status-chip";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SectionTitle } from "@/components/ui/info-tip";
 import { PageHeader } from "@/components/ui/page-header";
@@ -69,6 +70,8 @@ const GATE_NEEDS: Record<GateId, string> = {
 };
 
 const MODES: GateMode[] = ["off", "warn", "fail"];
+// A gate's mode is a setting (what the gate does), not a result: its own words, sentence case.
+const MODE_LABEL: Record<GateMode, string> = { off: "Off", warn: "Warn", fail: "Fail" };
 
 function NumberField({ label, unit, value, step, onChange }: { label: string; unit?: string; value: number; step?: number; onChange: (n: number) => void }) {
   return (
@@ -80,10 +83,10 @@ function NumberField({ label, unit, value, step, onChange }: { label: string; un
 }
 
 function ModeSelect({ value, onChange, allowOff = true }: { value: GateMode; onChange: (m: GateMode) => void; allowOff?: boolean }) {
-  const cls = value === "fail" ? "text-fail" : value === "warn" ? "text-warn" : "text-muted-foreground";
+  const cls = value === "fail" ? "text-danger" : value === "warn" ? "text-warn-ink" : "text-muted-foreground";
   return (
     <NativeSelect className={`w-24 font-medium ${cls}`} value={value} onChange={(e) => onChange(e.target.value as GateMode)}>
-      {MODES.filter((m) => allowOff || m !== "off").map((m) => <NativeSelectOption key={m} value={m}>{m}</NativeSelectOption>)}
+      {MODES.filter((m) => allowOff || m !== "off").map((m) => <NativeSelectOption key={m} value={m}>{MODE_LABEL[m]}</NativeSelectOption>)}
     </NativeSelect>
   );
 }
@@ -280,11 +283,11 @@ function ProfileBar({ editor: e, manage }: { editor: Editor; manage: boolean }) 
       <NativeSelect className="w-56" aria-label="Profile" value={e.id} onChange={(ev) => e.select(ev.target.value)}>
         {e.profiles.map((p) => <NativeSelectOption key={p.id} value={p.id}>{p.name}{p.is_default ? " (default)" : ""}</NativeSelectOption>)}
       </NativeSelect>
-      {e.dirty ? <Badge variant="warn">Unsaved changes</Badge> : <span className="text-xs text-muted-foreground">Saved</span>}
-      {!e.weightsOk && <Badge variant="fail">Score weights total {e.weightSum}, not 100</Badge>}
+      {e.dirty ? <StatusChip tone="warn">Unsaved changes</StatusChip> : <span className="text-meta text-muted-foreground">Saved</span>}
+      {!e.weightsOk && <StatusChip tone="bad">Score weights total {e.weightSum}, not 100</StatusChip>}
       <div className="ml-auto flex flex-wrap gap-2">
         {e.dirty && <Button variant="ghost" onClick={e.discard}>Discard</Button>}
-        {manage && <Button variant="outline" onClick={e.saveAsNew} disabled={!e.weightsOk}>Save as new profile</Button>}
+        {manage && <Button variant="secondary" onClick={e.saveAsNew} disabled={!e.weightsOk}>Save as new profile</Button>}
         <Button disabled={!e.dirty || !e.weightsOk} onClick={e.save}>Save</Button>
       </div>
     </div>
@@ -297,12 +300,12 @@ function GatesTab({ editor: e }: { editor: Editor }) {
   const ruleKeys = [...new Set([...rules.map((r) => r.key), ...COMPLIANCE_RULE_KEYS])];
   return (
     <>
-      <Section title="Gates" note="Run in this order. Fail drops the row and records why; warn keeps it and lowers the Risk group; off skips the gate.">
-        <div className="grid gap-3 lg:grid-cols-2">
+      <Section title="Gates" note="Run in this order. Fail drops the row and records why; Warn keeps it and lowers the Risk group; Off skips the gate.">
+        <div className="gap-3 lg:columns-2 [&>*]:mb-3 [&>*]:break-inside-avoid">
           {GATE_ORDER.map((g, i) => (
-            <div key={g} className="space-y-3 rounded-lg border p-4">
+            <div key={g} className="space-y-3 rounded-lg border border-border bg-card p-4">
               <div className="flex items-center gap-3">
-                <span className="num flex size-7 flex-none items-center justify-center rounded-md bg-muted text-xs font-semibold">{i + 1}</span>
+                <span className="num flex size-7 flex-none items-center justify-center rounded-lg bg-subtle text-xs font-semibold">{i + 1}</span>
                 <div className="min-w-0 flex-1">
                   <p className="font-medium">{GATE_LABELS[g]}</p>
                   <p className="text-xs text-muted-foreground">Needs: {GATE_NEEDS[g]}</p>
@@ -365,12 +368,12 @@ function ScoreTab({ editor: e }: { editor: Editor }) {
       <Section title="Scoring price" note="The sell price fees, profit and the score are worked out at.">
         <p className="text-sm">
           <b>{PRICE_BASIS_LABEL[draft.scoringPrice]}</b> <span className="text-muted-foreground">· the price basis for every profile, set in </span>
-          <a className="text-brand underline" href="/settings?tab=business">Settings → Business</a>
+          <Link className="text-primary underline" href="/settings?tab=business">Settings → Business</Link>
         </p>
       </Section>
 
       <Section title="Score weights" note="How much each group counts towards the 0–100 score. They must total 100."
-        actions={<span className={cn("num text-sm font-medium", weightsOk ? "text-muted-foreground" : "text-fail")}>Total {weightSum} / 100</span>}>
+        actions={<span className={cn("num text-sm font-medium", weightsOk ? "text-muted-foreground" : "text-danger")}>Total {weightSum} / 100</span>}>
         <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
           {(Object.keys(GROUP_LABELS) as GroupId[]).map((g) => (
             <div key={g} className="space-y-1.5">
@@ -384,7 +387,7 @@ function ScoreTab({ editor: e }: { editor: Editor }) {
             </div>
           ))}
         </div>
-        <div className="grid gap-3 border-t pt-4 sm:grid-cols-3">
+        <div className="grid gap-3 border-t border-divider pt-4 sm:grid-cols-3">
           <NumberField label="Green (order a test) from" value={draft.score.bands.green} onChange={(n) => setDraft({ ...draft, score: { ...draft.score, bands: { ...draft.score.bands, green: n } } })} />
           <NumberField label="Amber (needs one thing to move) from" value={draft.score.bands.amber} onChange={(n) => setDraft({ ...draft, score: { ...draft.score, bands: { ...draft.score.bands, amber: n } } })} />
         </div>
@@ -394,13 +397,13 @@ function ScoreTab({ editor: e }: { editor: Editor }) {
         <div className="space-y-5">
           {(Object.keys(GROUP_LABELS) as GroupId[]).map((g) => (
             <div key={g} className="space-y-2">
-              <p className="eyebrow">{GROUP_LABELS[g]}</p>
+              <p className="section-label">{GROUP_LABELS[g]}</p>
               <div className="grid gap-3 lg:grid-cols-2">
                 {Object.entries(SCALE_DEFS).filter(([, d]) => d.group === g).map(([k, d]) => {
                   const sc = draft.score.scales[k];
                   const setScale = (patch: Partial<typeof sc>) => setDraft({ ...draft, score: { ...draft.score, scales: { ...draft.score.scales, [k]: { ...sc, ...patch } } } });
                   return (
-                    <div key={k} className="space-y-2 rounded-lg border bg-muted/30 p-3">
+                    <div key={k} className="space-y-2 rounded-lg border border-border bg-subtle/50 p-3">
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-sm font-medium">{d.label}</span>
                         <label className="flex items-center gap-1.5 text-xs text-muted-foreground">weight
@@ -409,18 +412,18 @@ function ScoreTab({ editor: e }: { editor: Editor }) {
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
                         {sc.points.map(([x, y], i) => (
-                          <div key={i} className="flex items-center gap-1 rounded-md border bg-card px-1.5 py-1">
+                          <div key={i} className="flex items-center gap-1 rounded-lg border border-border bg-card px-1.5 py-1">
                             <input className="num w-16 bg-transparent text-right text-xs outline-none" type="number" step="any" value={x} aria-label={`${d.label} value ${i + 1} (${d.unit})`}
                               onChange={(ev) => setScale({ points: sc.points.map((p, j) => (j === i ? [Number(ev.target.value), p[1]] : p)) as [number, number][] })} />
                             <span className="text-xs text-muted-foreground">{d.unit} →</span>
                             <input className="num w-10 bg-transparent text-right text-xs outline-none" type="number" min={0} max={100} value={y} aria-label={`${d.label} score ${i + 1}`}
                               onChange={(ev) => setScale({ points: sc.points.map((p, j) => (j === i ? [p[0], Number(ev.target.value)] : p)) as [number, number][] })} />
                             {sc.points.length > 2 && (
-                              <button className="px-1 text-xs text-muted-foreground hover:text-fail" aria-label="Remove point" onClick={() => setScale({ points: sc.points.filter((_, j) => j !== i) })}>×</button>
+                              <button type="button" className="cursor-pointer px-1 text-xs text-muted-foreground hover:text-danger" aria-label="Remove point" onClick={() => setScale({ points: sc.points.filter((_, j) => j !== i) })}>×</button>
                             )}
                           </div>
                         ))}
-                        <Button variant="outline" size="xs" onClick={() => {
+                        <Button variant="secondary" size="xs" onClick={() => {
                           const last = sc.points[sc.points.length - 1];
                           setScale({ points: [...sc.points, [last[0] * 2 || 1, last[1]]] });
                         }}>+ point</Button>
@@ -443,9 +446,9 @@ function FeesTab({ editor: e }: { editor: Editor }) {
     <>
       <Section title="Fees and landed cost" note="How this profile turns a supplier price into a landed cost and Amazon's fees into profit.">
         <p className="flex flex-wrap items-center gap-2 text-sm">
-          <span className={cn("rounded px-1.5 py-px text-xs font-semibold", draft.fees.vatRegistered ? "bg-brand-soft text-brand" : "bg-surface-2 text-ink-2")}>{draft.fees.vatRegistered ? "VAT reg." : "Non-VAT"}</span>
+          <StatusChip tone={draft.fees.vatRegistered ? "info" : "neutral"} icon={false}>{draft.fees.vatRegistered ? "VAT reg." : "Non-VAT"}</StatusChip>
           {draft.fees.vatRegistered ? `VAT registered at ${draft.fees.vatRatePct}%: output VAT comes off the sale price; fees and goods count ex-VAT.` : `Not VAT registered: VAT on fees and goods is a cost (${draft.fees.vatRatePct}%).`}
-          <a className="text-brand underline" href="/settings?tab=business">Set in Settings → Business</a>
+          <Link className="text-primary underline" href="/settings?tab=business">Set in Settings → Business</Link>
         </p>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <NumberField label="Digital services fee" unit="%" value={draft.fees.dsfPct} step={0.1} onChange={(n) => setDraft({ ...draft, fees: { ...draft.fees, dsfPct: n } })} />
@@ -481,33 +484,36 @@ function ProfilesTab({ editor: e }: { editor: Editor }) {
   return (
     <>
       <Section title="Profiles" note="A run keeps its own copy of the profile it was screened with; re-screen a run to apply changes.">
-        <div className="overflow-hidden rounded-lg border">
-          <Table>
-            <TableHeader>
-              <TableRow><TableHead>Name</TableHead><TableHead className="text-right">Budget</TableHead><TableHead className="text-right">Actions</TableHead></TableRow>
-            </TableHeader>
-            <TableBody>
-              {e.profiles.map((p) => (
-                <TableRow key={p.id} data-state={p.id === e.id ? "selected" : undefined}>
-                  <TableCell className="font-medium">
-                    <button className="hover:underline" onClick={() => e.select(p.id)}>{p.name}</button>
-                    {p.is_default && <Badge variant="brand" className="ml-2">default</Badge>}
-                    {p.id === e.id && <span className="ml-2 text-xs text-muted-foreground">editing</span>}
-                  </TableCell>
-                  <TableCell className="num text-right">£{Number(p.config.budget).toLocaleString("en-GB")}</TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-1">
-                      <Button variant="ghost" size="xs" onClick={() => e.rename(p)}>Rename</Button>
-                      <Button variant="ghost" size="xs" onClick={() => e.duplicate(p)}>Duplicate</Button>
-                      <Button variant="ghost" size="xs" disabled={p.is_default} onClick={() => e.makeDefault(p)}>Make default</Button>
-                      <Button variant="ghost" size="xs" className="text-fail hover:text-fail" disabled={p.is_default} aria-label={`Delete ${p.name}`} onClick={() => e.remove(p)}><Trash2Icon /></Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+        <DataTable
+          rows={e.profiles}
+          getRowId={(p) => p.id}
+          caption="Screening profiles"
+          rowClassName={(p) => (p.id === e.id ? "bg-primary-soft/40" : undefined)}
+          columns={[
+            {
+              id: "name", header: "Name", mobile: "title", sortValue: (p) => p.name,
+              cell: (p) => (
+                <span className="inline-flex flex-wrap items-center gap-2 font-medium">
+                  <button type="button" className="cursor-pointer hover:underline" onClick={() => e.select(p.id)}>{p.name}</button>
+                  {p.is_default && <StatusChip tone="info" icon={false}>Default</StatusChip>}
+                  {p.id === e.id && <span className="text-xs font-normal text-muted-foreground">editing</span>}
+                </span>
+              ),
+            },
+            { id: "budget", header: "Budget", numeric: true, mobile: 1, sortValue: (p) => Number(p.config.budget), cell: (p) => `£${Number(p.config.budget).toLocaleString("en-GB")}` },
+            {
+              id: "actions", header: "", className: "text-right",
+              cell: (p) => (
+                <div className="flex flex-wrap justify-end gap-1">
+                  <Button variant="ghost" size="sm" onClick={() => e.rename(p)}>Rename</Button>
+                  <Button variant="ghost" size="sm" onClick={() => e.duplicate(p)}>Duplicate</Button>
+                  <Button variant="ghost" size="sm" disabled={p.is_default} onClick={() => e.makeDefault(p)}>Make default</Button>
+                  <Button variant="danger" size="sm" disabled={p.is_default} aria-label={`Delete ${p.name}`} onClick={() => e.remove(p)}><Trash2Icon /> Delete</Button>
+                </div>
+              ),
+            },
+          ]}
+        />
       </Section>
 
       <Section title="Budget" note="The first order across a run; the budget-fit gate keeps any one line within its share.">
@@ -559,40 +565,33 @@ function FilterSets() {
   };
   return (
     <Section title="Filter sets" note="Saved from a run's filter bar with “Save current filters…”, and applied from Saved filters on any run or on Favourites.">
-      {note && <p className="rounded-md bg-warn-soft px-3 py-2 text-sm text-warn">{note}</p>}
-      {!sets.length ? (
-        <EmptyState icon={<FilterIcon />} title="No saved filter sets" className="border-dashed shadow-none">
-          Set some filters on a run, then choose Saved filters → Save current filters.
-        </EmptyState>
-      ) : (
-        <div className="overflow-hidden rounded-lg border">
-          <Table>
-            <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Filters</TableHead><TableHead /></TableRow></TableHeader>
-            <TableBody>
-              {sets.map((s) => {
-                const chips = activeChips(normalizeFilters(s.filters), GATE_LABELS);
-                return (
-                  <TableRow key={s.id}>
-                    <TableCell className="font-medium">{s.name}</TableCell>
-                    <TableCell className="whitespace-normal">
-                      <div className="flex flex-wrap gap-1">
-                        {chips.length ? chips.map((c) => <Badge key={c.id} variant="muted">{c.label}</Badge>) : <span className="text-muted-foreground">No filters</span>}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right"><Button variant="ghost" size="icon-xs" className="text-muted-foreground hover:text-fail" aria-label={`Delete ${s.name}`} onClick={() => remove(s)}><Trash2Icon /></Button></TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
-      )}
+      {note && <p className="rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn-ink">{note}</p>}
+      <DataTable
+        rows={sets}
+        getRowId={(x) => x.id}
+        caption="Saved filter sets"
+        empty={{ icon: <FilterIcon />, title: "No saved filter sets", description: "Set some filters on a run, then choose Saved filters → Save current filters.", action: <Button variant="secondary" asChild><Link href="/runs">Go to runs</Link></Button> }}
+        columns={[
+          { id: "name", header: "Name", mobile: "title", sortValue: (x) => x.name, cell: (x) => <span className="font-medium">{x.name}</span> },
+          {
+            id: "filters", header: "Filters", mobile: 1, className: "whitespace-normal",
+            cell: (x) => {
+              const chips = activeChips(normalizeFilters(x.filters), GATE_LABELS);
+              return <div className="flex flex-wrap gap-1">{chips.length ? chips.map((c) => <Badge key={c.id} variant="muted">{c.label}</Badge>) : <span className="text-muted-foreground">No filters</span>}</div>;
+            },
+          },
+          { id: "actions", header: "", className: "text-right", cell: (x) => <Button variant="danger" size="sm" aria-label={`Delete ${x.name}`} onClick={() => remove(x)}><Trash2Icon /> Delete</Button> },
+        ]}
+      />
     </Section>
   );
 }
 
 function Rules() {
   const [rules, setRules] = useState<CategoryRule[] | null>(null);
+  // Each rule is a row; its form opens under it (new rules open).
+  const [open, setOpen] = useState<Set<number>>(new Set());
+  const { confirm } = useDialogs();
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   useEffect(() => {
     api<{ rules: CategoryRule[] }>("/api/rules").then((r) => setRules(r.rules)).catch((e) => setMsg({ ok: false, text: e.message }));
@@ -612,13 +611,25 @@ function Rules() {
 
   return (
     <Section title="Compliance rules" note={<>Shared by every profile; each profile sets each rule to off, warn or fail above. Keywords and exclusion words match whole words or phrases; write /pattern/ for a regular expression. Amazon categories match the display group or any of Amazon&apos;s own signals for the listing (its browse path, item type, product type), by name or /pattern/. Keywords run on the row&apos;s own text before any API call.</>}
-      actions={<Button variant="outline" onClick={save}>Save rules</Button>}>
+      actions={<Button variant="secondary" onClick={save}>Save rules</Button>}>
+      <ul className="divide-y divide-divider rounded-lg border border-border">
       {rules.map((r, i) => (
-        <div key={i} className="grid gap-3 rounded-lg border p-4 lg:grid-cols-2">
+        <li key={i}>
+          <button type="button" aria-expanded={open.has(i)} onClick={() => setOpen((o) => { const n = new Set(o); if (n.has(i)) n.delete(i); else n.add(i); return n; })}
+            className="flex w-full cursor-pointer items-center gap-3 px-4 py-3 text-left hover:bg-subtle/60">
+            <ChevronRightIcon className={cn("size-4 flex-none text-muted-foreground transition-transform", open.has(i) && "rotate-90")} />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-medium">{r.name || "Untitled rule"} <span className="num text-xs font-normal text-muted-foreground">{r.key}</span></span>
+              {r.note && <span className="block truncate text-meta text-muted-foreground">{r.note}</span>}
+            </span>
+            <span className="num hidden flex-none text-xs text-muted-foreground sm:block">{r.keywords.length} keyword{r.keywords.length === 1 ? "" : "s"} · {r.amazon_categories.length} categor{r.amazon_categories.length === 1 ? "y" : "ies"}</span>
+          </button>
+          {open.has(i) && (
+        <div className="grid gap-3 border-t border-divider p-4 lg:grid-cols-2">
           <div className="grid grid-cols-2 gap-3">
-            <label className="space-y-1.5"><span className="field-label">Name</span><Input  value={r.name} onChange={(e) => set(i, { name: e.target.value })} /></label>
+            <label className="space-y-1.5"><span className="field-label">Name</span><Input value={r.name} onChange={(e) => set(i, { name: e.target.value })} /></label>
             <label className="space-y-1.5"><span className="field-label">Key</span><Input className="num" value={r.key} onChange={(e) => set(i, { key: e.target.value.replace(/[^a-zA-Z0-9_]/g, "") })} /></label>
-            <label className="col-span-2 space-y-1.5"><span className="field-label">Why it exists</span><Input  value={r.note ?? ""} onChange={(e) => set(i, { note: e.target.value })} /></label>
+            <label className="col-span-2 space-y-1.5"><span className="field-label">Why it exists</span><Input value={r.note ?? ""} onChange={(e) => set(i, { note: e.target.value })} /></label>
             <label className="col-span-2 space-y-1.5"><span className="field-label">Amazon categories (one per line)</span>
               <Textarea className="h-16" value={r.amazon_categories.join("\n")} onChange={(e) => set(i, { amazon_categories: e.target.value.split("\n").map((x) => x.trim()).filter(Boolean) })} />
             </label>
@@ -633,12 +644,19 @@ function Rules() {
             <label className="space-y-1.5"><span className="field-label">Checklist it triggers (one per line)</span>
               <Textarea className="h-16" value={r.checklist.join("\n")} onChange={(e) => set(i, { checklist: e.target.value.split("\n").map((x) => x.trim()).filter(Boolean) })} />
             </label>
-            <Button variant="ghost" className="justify-self-end text-fail hover:text-fail" onClick={() => setRules(rules.filter((_, j) => j !== i))}><Trash2Icon /> Remove rule</Button>
+            <Button variant="danger" size="sm" className="justify-self-end" onClick={async () => {
+              if (!(await confirm({ title: `Remove the rule “${r.name || r.key}”?`, description: "It goes from the list now and for good once you Save rules.", confirmLabel: "Remove", destructive: true }))) return;
+              setRules(rules.filter((_, j) => j !== i));
+              setOpen(new Set());
+            }}><Trash2Icon /> Remove rule</Button>
           </div>
         </div>
+          )}
+        </li>
       ))}
+      </ul>
       <div className="flex items-center gap-3">
-        <Button variant="outline" onClick={() => setRules([...rules, { key: `rule${rules.length + 1}`, name: "New rule", keywords: [], amazon_categories: [], note: "", checklist: [], sort: rules.length, exclusions: [] }])}>+ Add rule</Button>
+        <Button variant="secondary" onClick={() => { setRules([...rules, { key: `rule${rules.length + 1}`, name: "New rule", keywords: [], amazon_categories: [], note: "", checklist: [], sort: rules.length, exclusions: [] }]); setOpen(new Set([rules.length])); }}><PlusIcon /> Add rule</Button>
       </div>
     </Section>
   );
@@ -678,23 +696,20 @@ function Rates() {
 
   return (
     <Section title="Rate card" note="Shared by every profile. Fee amounts are GBP ex-VAT and ex-DSF. Tiers: max sorted dimensions in cm and [max grams, fee] bands; parcel tiers bill on the greater of actual and L×W×H ÷ divisor. Referral bands apply their rate to the whole price. Saving keeps the previous card for comparison."
-      actions={<Button variant="outline" onClick={save}>Save as new version</Button>}>
+      actions={<Button variant="secondary" onClick={save}>Save as new version</Button>}>
       {!cards ? <Skeleton className="h-24 rounded-lg" /> : (
-        <div className="overflow-hidden rounded-lg border">
-          <Table>
-            <TableHeader><TableRow><TableHead>Card</TableHead><TableHead>Effective</TableHead><TableHead>Saved</TableHead><TableHead /></TableRow></TableHeader>
-            <TableBody>
-              {cards.map((c) => (
-                <TableRow key={c.id}>
-                  <TableCell>{c.name} {c.is_active && <Badge variant="pass" className="ml-1">active</Badge>}</TableCell>
-                  <TableCell className="num">{c.effective_from}</TableCell>
-                  <TableCell>{new Date(c.created_at).toLocaleDateString("en-GB")}</TableCell>
-                  <TableCell className="text-right"><Button variant="outline" size="xs" onClick={() => setText(JSON.stringify(c.card, null, 2))}>Load into editor</Button></TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+        <DataTable
+          rows={cards}
+          getRowId={(c) => c.id}
+          caption="Rate card versions"
+          pageSize={25}
+          columns={[
+            { id: "name", header: "Card", mobile: "title", sortValue: (c) => c.name, cell: (c) => <span className="inline-flex items-center gap-2">{c.name} {c.is_active && <StatusChip tone="good">Active</StatusChip>}</span> },
+            { id: "effective", header: "Effective", mobile: 1, sortValue: (c) => c.effective_from, cell: (c) => <span className="num">{c.effective_from}</span> },
+            { id: "saved", header: "Saved", mobile: 2, sortValue: (c) => c.created_at, cell: (c) => <span className="num">{new Date(c.created_at).toLocaleDateString("en-GB")}</span> },
+            { id: "actions", header: "", className: "text-right", cell: (c) => <Button variant="ghost" size="sm" onClick={() => setText(JSON.stringify(c.card, null, 2))}>Load into editor</Button> },
+          ]}
+        />
       )}
       <Textarea className="num h-[50vh] text-xs" spellCheck={false} value={text} onChange={(e) => setText(e.target.value)} aria-label="Rate card JSON" />
     </Section>
@@ -706,6 +721,7 @@ interface Override { id: string; ean: string; asin: string | null; gate: GateId;
 /** Every gate you've waived, per product; removing one takes effect on the next screen or re-screen. */
 function Waived() {
   const [items, setItems] = useState<Override[] | null>(null);
+  const { confirm } = useDialogs();
   const [msg, setMsg] = useState<string | null>(null);
   useEffect(() => {
     api<{ overrides: Override[]; unavailable?: string }>("/api/overrides")
@@ -717,6 +733,7 @@ function Waived() {
   }, []);
   if (!items) return msg ? <LoadError message={msg} /> : <LoadingBlocks />;
   const remove = async (o: Override) => {
+    if (!(await confirm({ title: `Remove the waiver of ${GATE_LABELS[o.gate] ?? o.gate}${o.title ? ` for “${o.title}”` : ""}?`, description: "The gate counts again for this product: it's re-scored in every current run.", confirmLabel: "Remove", destructive: true }))) return;
     try {
       await api(`/api/overrides?id=${o.id}`, { method: "DELETE" });
       setItems((xs) => xs && xs.filter((x) => x.id !== o.id));
@@ -726,34 +743,25 @@ function Waived() {
   };
   return (
     <Section title="Waived gates" note={<>A waived gate turns that product&apos;s fail into a warning in every run, so later gates, fees and the score still run; a waived warning stops counting, so the row can go green. Waive or un-waive from a result&apos;s details; removing one here re-scores that product in every current run.</>}>
-      {msg && <p className="rounded-md bg-warn-soft px-3 py-2 text-sm text-warn">{msg}</p>}
-      {!items.length ? (
-        <EmptyState icon={<UndoIcon />} title="No gates waived" className="border-dashed shadow-none">
-          Open a result, find a failed or warning gate, and choose Waive to accept it for that product.
-        </EmptyState>
-      ) : (
-        <div className="overflow-hidden rounded-lg border">
-          <Table>
-            <TableHeader>
-              <TableRow><TableHead>Product</TableHead><TableHead>Gate</TableHead><TableHead>Reason</TableHead><TableHead>Since</TableHead><TableHead /></TableRow>
-            </TableHeader>
-            <TableBody>
-              {items.map((o) => (
-                <TableRow key={o.id} className="align-top">
-                  <TableCell className="whitespace-normal">
-                    <div className="font-medium">{o.title ?? "—"}</div>
-                    <div className="num text-xs text-muted-foreground">{o.ean}{o.asin ? ` · ${o.asin}` : " · any ASIN"}</div>
-                  </TableCell>
-                  <TableCell>{GATE_LABELS[o.gate] ?? o.gate}</TableCell>
-                  <TableCell className="whitespace-normal text-muted-foreground">{o.reason ?? "—"}</TableCell>
-                  <TableCell>{new Date(o.created_at).toLocaleDateString("en-GB")}</TableCell>
-                  <TableCell className="text-right"><Button variant="ghost" size="xs" className="text-fail hover:text-fail" onClick={() => remove(o)}>Remove</Button></TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      )}
+      {msg && <p className="rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn-ink">{msg}</p>}
+      <DataTable
+        rows={items}
+        getRowId={(o) => o.id}
+        storageKey="settings.waived"
+        caption="Waived gates"
+        initialSort={{ id: "since", desc: true }}
+        empty={{ icon: <UndoIcon />, title: "No gates waived", description: "Open a result, find a failed or warning gate, and choose Waive to accept it for that product.", action: <Button variant="secondary" asChild><Link href="/products">Go to products</Link></Button> }}
+        columns={[
+          {
+            id: "product", header: "Product", mobile: "title", className: "whitespace-normal", sortValue: (o) => o.title,
+            cell: (o) => <div className="min-w-0"><div className="font-medium">{o.title ?? "—"}</div><div className="num text-xs text-muted-foreground">{o.ean}{o.asin ? ` · ${o.asin}` : " · any ASIN"}</div></div>,
+          },
+          { id: "gate", header: "Gate", mobile: 1, sortValue: (o) => GATE_LABELS[o.gate] ?? o.gate, cell: (o) => GATE_LABELS[o.gate] ?? o.gate },
+          { id: "reason", header: "Reason", mobile: 2, className: "whitespace-normal text-muted-foreground", sortValue: (o) => o.reason, cell: (o) => o.reason ?? "—" },
+          { id: "since", header: "Since", mobile: 3, sortValue: (o) => o.created_at, cell: (o) => <span className="num">{new Date(o.created_at).toLocaleDateString("en-GB")}</span> },
+          { id: "actions", header: "", className: "text-right", cell: (o) => <Button variant="danger" size="sm" onClick={() => remove(o)}>Remove</Button> },
+        ]}
+      />
     </Section>
   );
 }

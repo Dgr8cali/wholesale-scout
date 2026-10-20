@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { InfoTip, SectionTitle } from "@/components/ui/info-tip";
 import { toast } from "sonner";
@@ -39,18 +40,18 @@ export function PlSettingsTab() {
         <div className="space-y-1">
           <SectionTitle title={<>Private label</>}>The budget, cost assumptions and Gate 6 floors used for every Private label candidate. Fees come from the rate card under Fees. Peak rates (October–December) apply automatically by date, as in screening.</SectionTitle>
         </div>
-        <Button variant="outline" onClick={save} disabled={saving || bad.length > 0}>Save</Button>
+        <Button variant="secondary" onClick={save} disabled={saving || bad.length > 0}>Save</Button>
       </div>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {SETTINGS_DEF.map((d) => (
           <label key={d.k} className="space-y-1.5">
             <span className="field-label">{d.label} ({d.unit})</span>
             <Input className="num" type="number" step="any" value={s[d.k]} disabled={d.k === "vat"} onChange={(e) => setS({ ...s, [d.k]: e.target.value })} />
-            <span className="block text-xs text-muted-foreground">{d.k === "vat" ? <>Set in <a className="text-brand underline" href="/settings?tab=business">Settings → Business</a>, with VAT registration</> : `Default ${d.d}`}</span>
+            <span className="block text-xs text-muted-foreground">{d.k === "vat" ? <>Set in <Link className="text-primary underline" href="/settings?tab=business">Settings → Business</Link>, with VAT registration</> : `Default ${d.d}`}</span>
           </label>
         ))}
       </div>
-      {bad.length > 0 && <p className="text-sm text-fail">Needs a number: {bad.join(", ")}</p>}
+      {bad.length > 0 && <p className="text-sm text-danger">Needs a number: {bad.join(", ")}</p>}
       <BrandTermsEditor />
       <OffNicheEditor />
       <RfqTemplateEditor />
@@ -78,17 +79,17 @@ function BrandTermsEditor() {
     }
   };
   return (
-    <div className="space-y-2 border-t pt-4" id="brand-terms">
+    <div className="space-y-2 border-t border-divider pt-4" id="brand-terms">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
           <div className="flex items-center gap-1"><h3 className="text-sm font-semibold">Niche Import: brand terms</h3><InfoTip label="More about Niche Import: brand terms">A niche whose customer need or search terms is or contains one of these (a whole word or phrase) gets the <b>BIG_BRAND</b> flag: shoppers search for the brand, not the product. One a line. Saving re-flags every imported niche.</InfoTip></div>
         </div>
         <span className="flex gap-1.5">
           <Button variant="ghost" size="sm" disabled={busy} onClick={() => save(true)}>Reset to defaults</Button>
-          <Button variant="outline" size="sm" disabled={busy || text === saved} onClick={() => save()}>Save brands</Button>
+          <Button variant="secondary" size="sm" disabled={busy || text === saved} onClick={() => save()}>Save brands</Button>
         </span>
       </div>
-      <textarea className="min-h-40 w-full max-w-xl rounded-md border bg-transparent px-2 py-1.5 font-mono text-xs" value={text} onChange={(e) => setText(e.target.value)} />
+      <textarea className="min-h-40 w-full max-w-xl rounded-lg border border-border bg-transparent px-2 py-1.5 font-mono text-xs" value={text} onChange={(e) => setText(e.target.value)} />
     </div>
   );
 }
@@ -113,17 +114,17 @@ function OffNicheEditor() {
     }
   };
   return (
-    <div className="space-y-2 border-t pt-4" id="off-niche-words">
+    <div className="space-y-2 border-t border-divider pt-4" id="off-niche-words">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
           <div className="flex items-center gap-1"><h3 className="text-sm font-semibold">Niche Import: off-niche words</h3><InfoTip label="More about Niche Import: off-niche words">The incumbent check leaves out a product whose title has one of these (a whole word or phrase): toys, kids&rsquo; and pet products, cards, gifts, parts and spares. A word the search term itself uses doesn&rsquo;t count, pet words don&rsquo;t count for a pet niche, and an accessory for any of the niche&rsquo;s terms (&ldquo;for&rdquo;, &ldquo;fits&rdquo; or &ldquo;compatible with&rdquo; just before one) is always left out. One a line. The next check uses them; rerun a niche to apply.</InfoTip></div>
         </div>
         <span className="flex gap-1.5">
           <Button variant="ghost" size="sm" disabled={busy} onClick={() => save(true)}>Reset to defaults</Button>
-          <Button variant="outline" size="sm" disabled={busy || text === saved} onClick={() => save()}>Save words</Button>
+          <Button variant="secondary" size="sm" disabled={busy || text === saved} onClick={() => save()}>Save words</Button>
         </span>
       </div>
-      <textarea className="min-h-40 w-full max-w-xl rounded-md border bg-transparent px-2 py-1.5 font-mono text-xs" value={text} onChange={(e) => setText(e.target.value)} />
+      <textarea className="min-h-40 w-full max-w-xl rounded-lg border border-border bg-transparent px-2 py-1.5 font-mono text-xs" value={text} onChange={(e) => setText(e.target.value)} />
     </div>
   );
 }
@@ -149,7 +150,7 @@ function RfqTemplateEditor() {
     }
   };
   return (
-    <div className="space-y-2 border-t pt-4" id="rfq-template">
+    <div className="space-y-2 border-t border-divider pt-4" id="rfq-template">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
           <div className="flex items-center gap-1"><h3 className="text-sm font-semibold">Supplier Scout: RFQ template</h3><InfoTip label="More about Supplier Scout: RFQ template">What <b>Copy RFQ</b> on a candidate puts on the clipboard. Placeholders are filled from the candidate; a line with an empty one (no six words yet, no spec) is left out.</InfoTip></div>
@@ -157,10 +158,10 @@ function RfqTemplateEditor() {
         </div>
         <span className="flex gap-1.5">
           <Button variant="ghost" size="sm" disabled={busy} onClick={() => save(true)}>Reset to default</Button>
-          <Button variant="outline" size="sm" disabled={busy || text === saved} onClick={() => save()}>Save template</Button>
+          <Button variant="secondary" size="sm" disabled={busy || text === saved} onClick={() => save()}>Save template</Button>
         </span>
       </div>
-      <textarea className="min-h-72 w-full max-w-3xl rounded-md border bg-transparent px-2 py-1.5 font-mono text-xs" value={text} onChange={(e) => setText(e.target.value)} />
+      <textarea className="min-h-72 w-full max-w-3xl rounded-lg border border-border bg-transparent px-2 py-1.5 font-mono text-xs" value={text} onChange={(e) => setText(e.target.value)} />
     </div>
   );
 }

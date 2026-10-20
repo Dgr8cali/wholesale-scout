@@ -3,6 +3,7 @@
 import { PlusIcon, Trash2Icon } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { InfoTip } from "@/components/ui/info-tip";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { DEFAULT_RANK_BY_CATEGORY, TOP_CATEGORIES } from "@/lib/screening/categories";
@@ -18,13 +19,15 @@ export function CategoryRanks({ value, fallback, onChange }: { value: Record<str
   const set = (name: string, n: number) => onChange({ ...value, [name]: n });
   return (
     <div className="space-y-2">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <p className="field-label">Max rank by category</p>
-        <button type="button" className="text-xs font-medium text-brand hover:underline" onClick={() => onChange({ ...DEFAULT_RANK_BY_CATEGORY })}>Reset to suggested</button>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="flex items-center gap-1">
+          <span className="field-label">Max rank by category</span>
+          <InfoTip label="About max rank by category">
+            Only for products with no sales figure: when sales are known, sales and your share decide and the rank is just shown. Keepa&apos;s top-level category (the one the rank is in); any other category uses the max above ({Number.isFinite(fallback) ? fallback.toLocaleString("en-GB") : "—"}).
+          </InfoTip>
+        </span>
+        <button type="button" className="cursor-pointer text-xs font-medium text-primary hover:underline" onClick={() => onChange({ ...DEFAULT_RANK_BY_CATEGORY })}>Reset to suggested</button>
       </div>
-      <p className="text-xs text-muted-foreground">
-        Only for products with no sales figure: when sales are known, sales and your share decide and the rank is just shown. Keepa&apos;s top-level category (the one the rank is in); any other category uses the max above ({Number.isFinite(fallback) ? fallback.toLocaleString("en-GB") : "—"}).
-      </p>
       {rows.length > 0 && (
         <ul className="grid max-w-md grid-cols-1 gap-y-1.5">
           {rows.map(([name, n]) => (
@@ -46,7 +49,7 @@ export function CategoryRanks({ value, fallback, onChange }: { value: Record<str
             <NativeSelectOption value="">Add a category…</NativeSelectOption>
             {free.map((c) => <NativeSelectOption key={c} value={c}>{c}</NativeSelectOption>)}
           </NativeSelect>
-          <Button variant="outline" size="sm" disabled={!adding} onClick={() => { set(adding, Number.isFinite(fallback) ? fallback : 50_000); setAdding(""); }}>
+          <Button variant="secondary" size="sm" disabled={!adding} onClick={() => { set(adding, Number.isFinite(fallback) ? fallback : 50_000); setAdding(""); }}>
             <PlusIcon /> Add
           </Button>
         </div>

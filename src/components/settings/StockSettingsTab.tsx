@@ -41,7 +41,7 @@ export function StockSettingsTab() {
         <div className="space-y-1">
           <SectionTitle title={<>Stock</>}>How Stock judges levels and reorders. An item&apos;s own low-stock level and lead time win over these.</SectionTitle>
         </div>
-        <Button variant="outline" onClick={save}>Save</Button>
+        <Button variant="secondary" onClick={save}>Save</Button>
       </div>
       <div className="grid gap-4 sm:grid-cols-3">
         {field("lowStockDefault", "Low-stock default (units)", "An item is low at or under this when it has no level of its own. Default 10")}

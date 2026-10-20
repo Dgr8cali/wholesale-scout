@@ -8,6 +8,8 @@ import { toast } from "sonner";
 import { useDialogs } from "@/components/Dialogs";
 import { ErrorState } from "@/components/States";
 import { Button } from "@/components/ui/button";
+import { DataTable } from "@/components/ui/data-table";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Switch } from "@/components/ui/switch";
@@ -52,7 +54,7 @@ export function BusinessSettingsTab() {
   }, []);
 
   if (error) return <ErrorState title="Couldn't load the business settings" message={error} />;
-  if (!b || !saved) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (!b || !saved) return <div className="space-y-4"><Skeleton className="h-40 rounded-xl" /><Skeleton className="h-64 rounded-xl" /></div>;
   const changed = JSON.stringify(b) !== JSON.stringify(saved);
   const basisChanged = b.vatRegistered !== saved.vatRegistered || b.vatRate !== saved.vatRate || b.priceBasis !== saved.priceBasis;
 
@@ -130,7 +132,7 @@ export function BusinessSettingsTab() {
             <NativeSelectOption value="UK">UK (GBP)</NativeSelectOption>
             <NativeSelectOption value="EU">EU (EUR)</NativeSelectOption>
           </NativeSelect></label>
-        <p className="text-xs text-muted-foreground">Each supplier&apos;s <b>Supplier prices are: ex-VAT / inc-VAT</b> is on its page under <Link className="text-brand underline" href="/suppliers">Suppliers</Link>.</p>
+        <p className="text-xs text-muted-foreground">Each supplier&apos;s <b>Supplier prices are: ex-VAT / inc-VAT</b> is on its page under <Link className="text-primary underline" href="/suppliers">Suppliers</Link>.</p>
       </section>
 
       <section className="panel space-y-4 p-4 sm:p-5">
@@ -142,7 +144,7 @@ export function BusinessSettingsTab() {
       </section>
 
       <div className="flex flex-wrap items-center gap-2">
-        <Button disabled={busy || !changed || !(b.launchCapital > 0)} onClick={save}>{busy && <LoaderIcon className="animate-spin" />} Save</Button>
+        <Button loading={busy} disabled={!changed || !(b.launchCapital > 0)} onClick={save}>Save</Button>
         {changed && <span className="text-sm text-muted-foreground">Unsaved changes</span>}
       </div>
 
@@ -151,7 +153,7 @@ export function BusinessSettingsTab() {
           <div className="space-y-1">
             <SectionTitle title={<>Recalculate all</>}>Saved results keep the basis they were screened on until they&apos;re recalculated. This re-screens every finished run from its stored data (no Amazon or Keepa calls) and shows the 20 biggest profit changes.</SectionTitle>
           </div>
-          <Button variant="outline" disabled={busy || changed} onClick={recalc} title={changed ? "Save first" : undefined}><RefreshCwIcon /> Recalculate all</Button>
+          <Button variant="secondary" disabled={busy || changed} onClick={recalc} title={changed ? "Save first" : undefined}><RefreshCwIcon /> Recalculate all</Button>
         </div>
         {status?.job && (
           <div className="space-y-2 text-sm">
@@ -159,21 +161,18 @@ export function BusinessSettingsTab() {
               {new Date(status.job.started_at).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })} · {status.job.basis} · {status.done ? `done: ${status.changed.toLocaleString("en-GB")} result${status.changed === 1 ? "" : "s"} changed` : <><LoaderIcon className="inline size-3.5 animate-spin" /> {status.pending} of {status.runs} runs still re-screening</>}
             </p>
             {status.top.length > 0 && (
-              <div className="overflow-x-auto rounded-lg border">
-                <table className="w-full text-xs">
-                  <thead><tr className="border-b text-left text-xs tracking-wide text-muted-foreground uppercase">
-                    <th className="px-2 py-1.5">Product</th><th className="px-2 py-1.5 text-right">Profit before</th><th className="px-2 py-1.5 text-right">After</th><th className="px-2 py-1.5 text-right">Change</th>
-                  </tr></thead>
-                  <tbody>{status.top.map((c) => (
-                    <tr key={c.id} className="border-b last:border-0">
-                      <td className="max-w-96 truncate px-2 py-1.5"><Link className="text-brand hover:underline" href={`/runs/${c.runId}`}>{c.asin ?? "—"}</Link> <span className="text-muted-foreground">{c.title?.slice(0, 70)}</span></td>
-                      <td className="num px-2 py-1.5 text-right">{gbp(c.before)}</td>
-                      <td className="num px-2 py-1.5 text-right">{gbp(c.after)}</td>
-                      <td className={cn("num px-2 py-1.5 text-right font-semibold", c.change > 0 ? "text-pass" : "text-fail")}>{c.change > 0 ? "+" : ""}{gbp(c.change)}</td>
-                    </tr>
-                  ))}</tbody>
-                </table>
-              </div>
+              <DataTable
+                rows={status.top}
+                getRowId={(c) => c.id}
+                caption="Biggest profit changes"
+                initialSort={{ id: "change", desc: true }}
+                columns={[
+                  { id: "product", header: "Product", mobile: "title", className: "max-w-96 truncate", sortValue: (c) => c.asin, cell: (c) => <><Link className="text-primary hover:underline" href={`/runs/${c.runId}`}>{c.asin ?? "—"}</Link> <span className="text-muted-foreground">{c.title?.slice(0, 70)}</span></> },
+                  { id: "before", header: "Profit before", numeric: true, mobile: 1, sortValue: (c) => c.before, cell: (c) => gbp(c.before) },
+                  { id: "after", header: "After", numeric: true, mobile: 2, sortValue: (c) => c.after, cell: (c) => gbp(c.after) },
+                  { id: "change", header: "Change", numeric: true, mobile: 3, sortValue: (c) => Math.abs(c.change), cell: (c) => <span className={cn("font-semibold", c.change > 0 ? "text-success" : "text-danger")}>{c.change > 0 ? "+" : ""}{gbp(c.change)}</span> },
+                ]}
+              />
             )}
           </div>
         )}

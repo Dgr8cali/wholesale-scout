@@ -67,13 +67,13 @@ export function HelpProvider({ children }: { children: ReactNode }) {
             <SheetTitle>{loading ? "Loading…" : data?.title ?? "Help"}</SheetTitle>
             <SheetDescription className={data?.summary ? undefined : "sr-only"}>{data?.summary || "Help article"}</SheetDescription>
             {top && (
-              <Link href={`/help/${top.slug}${top.hash ? `#${top.hash}` : ""}`} className="inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline" onClick={() => setStack([])}>
+              <Link href={`/help/${top.slug}${top.hash ? `#${top.hash}` : ""}`} className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline" onClick={() => setStack([])}>
                 Open as a page <ExternalLinkIcon className="size-3" />
               </Link>
             )}
           </SheetHeader>
           <div ref={body} className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-            {error ? <p className="text-sm text-fail">{error}</p>
+            {error ? <p className="text-sm text-danger">{error}</p>
               : loading || !data ? <p className="flex items-center gap-2 text-sm text-muted-foreground"><LoaderIcon className="size-4 animate-spin" /> Loading…</p>
               : (
                 <div
