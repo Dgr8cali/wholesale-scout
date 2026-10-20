@@ -38,7 +38,8 @@ export const isCostOverridden = (r: { cost_override?: { active: boolean } | null
 /** A gate on this row was waived by you. */
 export const isWaived = (r: Pick<ResultLike, "gate_outcomes">) => !!r.gate_outcomes?.some((o) => o.tags?.includes("WAIVED"));
 
-function approvalOf(r: ResultLike): Approval | null {
+/** Open to sell, approval needed or blocked (a brand you're approved for counts as open); null when unknown. */
+export function approvalOf(r: Pick<ResultLike, "gate_outcomes" | "inputs">): Approval | null {
   const g = r.gate_outcomes?.find((o) => o.gate === "gating");
   if (g?.tags?.includes("BRAND_APPROVED")) return "open";
   const s = r.inputs?.restriction?.status;
@@ -71,6 +72,7 @@ export function toFilterRow(r: ResultLike, favourites: Set<string>): FilterRow {
       roi: r.roi,
       margin: r.margin,
       sell: r.sell_price,
+      bsr: m?.rankNow ?? null,
     },
     text: [r.product?.title, r.offer?.title, brandOf(r), r.product?.ean, r.product?.asin, r.offer?.supplier?.name, r.why, r.error].filter(Boolean).join(" "),
   };

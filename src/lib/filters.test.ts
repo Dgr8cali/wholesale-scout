@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { activeChips, EMPTY_FILTERS, isEmpty, matches, normalizeFilters, type FilterRow, type FilterSet } from "./filters";
+import { activeChips, EMPTY_FILTERS, filtersFromQuery, filtersToQuery, isEmpty, matches, normalizeFilters, parseRange, type FilterRow, type FilterSet } from "./filters";
 import { favKey, toFilterRow, type ResultLike } from "./ui/resultRows";
 
 const row = (over: Partial<FilterRow> = {}): FilterRow => ({
   verdict: "warn", band: "amber", failedGate: null, brand: "Bioderma", supplier: "Pharmazon", amazon: "no", approval: "open",
-  favourite: false, waived: false, dormant: false, values: { sales: 200, sellers: 5, profit: 6.4, roi: 84, margin: 30, sell: 22.9 }, text: "Bioderma Sebium gel 3401399277092", ...over,
+  favourite: false, waived: false, dormant: false, values: { sales: 200, sellers: 5, profit: 6.4, roi: 84, margin: 30, sell: 22.9, bsr: 12_000 }, text: "Bioderma Sebium gel 3401399277092", ...over,
 });
 const f = (over: Partial<FilterSet>): FilterSet => ({ ...EMPTY_FILTERS, ...over });
 
@@ -67,8 +67,8 @@ describe("chips", () => {
   it("lists one removable chip per active value", () => {
     const set = f({ verdicts: ["pass", "warn"], gates: ["fees"], amazon: "yes", ranges: { roi: { min: 25, max: null }, profit: { min: 2, max: 8 } }, q: "gel" });
     const chips = activeChips(set, { fees: "Fee engine" });
-    expect(chips.map((c) => c.label)).toEqual(["Verdict: pass", "Verdict: warn", "Failed: Fee engine", "Amazon on listing: yes", "Profit £2–£8", "ROI ≥ 25%", "“gel”"]);
-    const after = chips.find((c) => c.label === "Verdict: pass")!.remove(set);
+    expect(chips.map((c) => c.label)).toEqual(["Buy", "Check", "Failed: Fee engine", "Amazon on listing: yes", "Profit £2–£8", "ROI ≥ 25%", "“gel”"]);
+    const after = chips.find((c) => c.label === "Buy")!.remove(set);
     expect(after.verdicts).toEqual(["warn"]);
     expect(chips.find((c) => c.id === "r:roi")!.remove(set).ranges.roi).toBeUndefined();
   });
@@ -91,5 +91,51 @@ describe("result rows", () => {
     const fr = toFilterRow(r, new Set([favKey("3401399277092", "B0060OMXUA")]));
     expect(fr).toMatchObject({ amazon: "yes", approval: "open", favourite: true, supplier: "Pharmazon", brand: "Bioderma" });
     expect(fr.values).toMatchObject({ sales: 200, sellers: 4, sell: 23.55 });
+  });
+});
+
+describe("Not scored, gated and BSR", () => {
+  it("picks rows with no verdict, gated or open, and a BSR ceiling", () => {
+    expect(matches(row({ verdict: null }), f({ verdicts: ["unscored"] }))).toBe(true);
+    expect(matches(row(), f({ verdicts: ["unscored"] }))).toBe(false);
+    expect(matches(row({ verdict: null }), f({ verdicts: ["pass", "unscored"] }))).toBe(true);
+    expect(matches(row({ approval: "approval_required" }), f({ gated: "yes" }))).toBe(true);
+    expect(matches(row({ approval: "blocked" }), f({ gated: "no" }))).toBe(false);
+    expect(matches(row({ approval: "open" }), f({ gated: "no" }))).toBe(true);
+    // Unknown gating drops out either way.
+    expect(matches(row({ approval: null }), f({ gated: "yes" }))).toBe(false);
+    expect(matches(row(), f({ ranges: { bsr: { min: null, max: 10_000 } } }))).toBe(false);
+    expect(matches(row(), f({ ranges: { bsr: { min: null, max: 50_000 } } }))).toBe(true);
+  });
+});
+
+describe("filters in the address", () => {
+  it("reads every filter from the query string", () => {
+    const p = new URLSearchParams("q=gel&verdict=buy,check,none&profit=5&roi=..80&sales=30..200&bsr=..50000&gated=no&supplier=Pharmazon&brand=Nuxe&brand=A%2C%20B&band=green,purple&gate=demand&amazon=yes&approval=open,nope&fav=1&waived=1&tab=products&page=2");
+    expect(filtersFromQuery(p)).toEqual({
+      ...EMPTY_FILTERS, q: "gel", verdicts: ["pass", "warn", "unscored"],
+      ranges: { profit: { min: 5, max: null }, roi: { min: null, max: 80 }, sales: { min: 30, max: 200 }, bsr: { min: null, max: 50000 } },
+      gated: "no", supplier: "Pharmazon", brands: ["Nuxe", "A, B"], bands: ["green"], gates: ["demand"], amazon: "yes", approval: ["open"],
+      favouritesOnly: true, waivedOnly: true,
+    });
+  });
+
+  it("ignores what it can't read", () => {
+    expect(filtersFromQuery(new URLSearchParams("verdict=maybe&profit=abc&gated=perhaps&amazon=1&roi=..&tab=x"))).toEqual(EMPTY_FILTERS);
+    expect(parseRange("..")).toBeUndefined();
+    expect(parseRange("7")).toEqual({ min: 7, max: null });
+    expect(parseRange("1.5..")).toEqual({ min: 1.5, max: null });
+  });
+
+  it("writes only the filters set, keeps other parameters, and reads back the same", () => {
+    expect(filtersToQuery(EMPTY_FILTERS, new URLSearchParams("tab=products&q=old&verdict=buy")).toString()).toBe("tab=products");
+    const set = f({ q: "gel", verdicts: ["fail", "dormant"], ranges: { profit: { min: 2, max: null }, bsr: { min: null, max: 9000 }, sell: { min: 10, max: 20 } }, gated: "yes", brands: ["A, B", "C"], supplier: "Qogita", waivedOnly: true });
+    const q = filtersToQuery(set, new URLSearchParams("tab=products"));
+    expect(q.get("tab")).toBe("products");
+    expect(q.get("verdict")).toBe("skip,dormant");
+    expect(q.get("bsr")).toBe("..9000");
+    expect(q.get("sell")).toBe("10..20");
+    expect(q.getAll("brand")).toEqual(["A, B", "C"]);
+    expect(filtersFromQuery(q)).toEqual(set);
   });
 });

@@ -13,7 +13,7 @@ import { EditableName } from "@/components/EditableName";
 import { FilterBar, type FilterOptions } from "@/components/FilterBar";
 import { Detail } from "@/components/results/Detail";
 import { DetailDrawer } from "@/components/results/DetailDrawer";
-import { ResultsTable, type DisplayRow } from "@/components/results/ResultsTable";
+import { ResultsTable, type DisplayRow } from "@/components/results/LegacyResultsTable";
 import { eanOf, type Fav, type Progress, type Result, type Run, type SortKey } from "@/components/results/types";
 import { useSparks } from "@/components/results/useSparks";
 import { downloadXlsx, exportRows } from "@/components/results/exportXlsx";

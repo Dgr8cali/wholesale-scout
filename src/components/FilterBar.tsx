@@ -32,13 +32,14 @@ const PRESSED: Record<Verdict | "brand" | "fav", string> = {
   warn: "data-[state=on]:bg-warn-soft data-[state=on]:text-warn-ink data-[state=on]:ring-1 data-[state=on]:ring-highlight",
   fail: "data-[state=on]:bg-danger-soft data-[state=on]:text-danger data-[state=on]:ring-1 data-[state=on]:ring-fail",
   error: "data-[state=on]:bg-danger-soft data-[state=on]:text-danger data-[state=on]:ring-1 data-[state=on]:ring-fail",
+  unscored: "data-[state=on]:bg-foreground/10 data-[state=on]:text-foreground data-[state=on]:ring-1 data-[state=on]:ring-foreground/40",
   dormant: "data-[state=on]:bg-foreground/10 data-[state=on]:text-foreground data-[state=on]:ring-1 data-[state=on]:ring-foreground/40",
   brand: "data-[state=on]:bg-primary-soft data-[state=on]:text-primary data-[state=on]:ring-1 data-[state=on]:ring-brand",
   fav: "data-[state=on]:bg-warn-soft data-[state=on]:text-warn-ink data-[state=on]:ring-1 data-[state=on]:ring-highlight",
 };
 
 /** The filter chips' words: the product decision for pass / warn / fail. */
-const VERDICT_WORD: Record<string, string> = { pass: "Buy", warn: "Check", fail: "Skip", error: "Error", dormant: "Dormant" };
+const VERDICT_WORD: Record<string, string> = { pass: "Buy", warn: "Check", fail: "Skip", unscored: "Not scored", error: "Error", dormant: "Dormant" };
 
 export interface FilterOptions {
   brands: string[];

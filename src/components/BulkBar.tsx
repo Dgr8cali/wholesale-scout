@@ -75,8 +75,8 @@ export function BulkBar({ count, stashed, onReselect, onClear, onStar, onUnstar,
     <div className="panel sticky top-14 z-20 flex flex-wrap items-center gap-2 border-primary px-3 py-2" role="toolbar" aria-label="Actions on selected rows">
       <span className="text-sm font-semibold"><span className="num">{count}</span> selected</span>
       {sep}
-      {onStar && <Button variant="secondary" size="sm" disabled={!!busy} onClick={() => act("star", onStar, `Starred ${count}`)}><StarIcon /> Star</Button>}
-      {onUnstar && <Button variant="secondary" size="sm" disabled={!!busy} onClick={() => act("unstar", onUnstar, `Un-starred ${count}`)}><StarOffIcon /> Unstar</Button>}
+      {onStar && <Button variant="secondary" size="sm" disabled={!!busy} onClick={() => act("star", onStar, `Added ${count} to the Shortlist`)}><StarIcon /> Add to Shortlist</Button>}
+      {onUnstar && <Button variant="secondary" size="sm" disabled={!!busy} onClick={() => act("unstar", onUnstar, `Removed ${count} from the Shortlist`)}><StarOffIcon /> Remove from Shortlist</Button>}
       {(onStar || onUnstar) && sep}
       {onWaive && onUnwaive && <>
       <NativeSelect size="sm" className="w-44" value={gate} onChange={(e) => setGate(e.target.value as GateId)} aria-label="Gate to waive or un-waive">
@@ -102,7 +102,7 @@ export function BulkBar({ count, stashed, onReselect, onClear, onStar, onUnstar,
       {sep}
       </>}
       {onRescreen && <Button variant="secondary" size="sm" disabled={!!busy} onClick={() => act("rescreen", onRescreen)}>{busy === "rescreen" ? "Starting…" : "Re-screen selected"}</Button>}
-      {onExport && <Button variant="secondary" size="sm" disabled={!!busy} onClick={onExport}>Export selected</Button>}
+      {onExport && <Button variant="secondary" size="sm" disabled={!!busy} onClick={onExport}>Export selected (xlsx)</Button>}
       {onRemove && (
         <Button variant="danger" size="sm" disabled={!!busy} onClick={remove}>
           Remove from run

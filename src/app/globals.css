@@ -310,6 +310,8 @@
 .rt-row > td { background: var(--row-bg); }
 /* The last pinned column's edge, drawn as a shadow because borders don't travel with sticky cells. */
 .rt-edge { box-shadow: inset -1px 0 0 var(--border), 6px 0 8px -6px oklch(0 0 0 / 0.12); }
+/* The row menu pinned at the right edge. */
+.rt-edge-end { box-shadow: inset 1px 0 0 var(--border), -6px 0 8px -6px oklch(0 0 0 / 0.12); }
 
 /* Any table row with data-verdict: a 4px verdict-coloured edge on its first cell. */
 tr[data-verdict] > td:first-child { box-shadow: inset 4px 0 0 var(--empty); }

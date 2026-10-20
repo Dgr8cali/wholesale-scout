@@ -93,7 +93,24 @@ export interface Progress {
 }
 
 
-export type SortKey = "score" | "profit" | "roi" | "margin" | "sell_price" | "landed_cost" | "hurdle_price" | "title" | "verdict" | "sales" | "sellers" | "buybox" | "share" | "profitMo" | "orderQty" | "months" | "rank90" | "bb90" | "why";
+export type SortKey = "score" | "profit" | "roi" | "margin" | "sell_price" | "landed_cost" | "hurdle_price" | "title" | "verdict" | "sales" | "sellers" | "buybox" | "share" | "profitMo" | "orderQty" | "months" | "rank90" | "bb90" | "why" | "buy" | "bsr" | "gated" | "maxLanded" | "screened" | "supplier";
+
+/**
+ * What a page knows about a row beyond its result. Products and Brand detail show the brand map's
+ * verdict (your default profile, null when never priced) and best offer; undefined means "the result's".
+ */
+export interface RowExtras {
+  decision?: Result["verdict"];
+  buy?: number | null;
+  maxLanded?: number | null;
+  screenedAt?: string | null;
+}
+
+/** A unit's buy price: the supplier's ex-VAT cost in GBP, when it was given. */
+export const buyPrice = (r: Result, x?: RowExtras): number | null =>
+  x?.buy !== undefined ? x.buy : r.offer && r.offer.cost_known !== false && r.offer.unit_cost_gbp > 0 ? Number(r.offer.unit_cost_gbp) : null;
+/** The verdict a row shows: the page's (Products, Brand) or the result's. */
+export const decisionOf = (r: Result, x?: RowExtras): Result["verdict"] => (x?.decision !== undefined ? x.decision : r.status === "pending" ? null : r.verdict);
 
 /** Figures computed from the stored market data, for display and sorting. */
 const FIGURES = {

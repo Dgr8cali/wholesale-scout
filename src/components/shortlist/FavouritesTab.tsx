@@ -11,7 +11,7 @@ import { FilterBar, type FilterOptions } from "@/components/FilterBar";
 import { Detail } from "@/components/results/Detail";
 import { DetailDrawer } from "@/components/results/DetailDrawer";
 import { downloadXlsx, exportRows } from "@/components/results/exportXlsx";
-import { ResultsTable, type DisplayRow } from "@/components/results/ResultsTable";
+import { ResultsTable, type DisplayRow } from "@/components/results/LegacyResultsTable";
 import { compareResults, loadResultSort, nextResultSort, saveResultSort } from "@/components/results/sort";
 import type { Fav, Result, SortKey } from "@/components/results/types";
 import { useSparks } from "@/components/results/useSparks";

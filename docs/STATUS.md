@@ -1,7 +1,7 @@
 # Wholesale Scout: status
 
 Read this first in a new session. Keep it current: every commit that changes a feature updates
-it (what's built, the backlog, the rough edges). Last updated: 20 Oct 2026 (UI redesign phase 4b done: Private label pipeline board, tabbed candidate page, one launch flow).
+it (what's built, the backlog, the rough edges). Last updated: 20 Oct 2026 (UI redesign phase 4c: one results table for wholesale products).
 
 Wholesale Scout is a single-user Amazon UK seller's workbench: Next.js 16 (App Router, `proxy.ts`
 password gate), self-hosted Supabase (Postgres, RLS on, service-role access from the server only),
@@ -167,9 +167,23 @@ Private label menu no longer has Launch checklist: `/pl/launch` redirects to the
 on that's launching (samples, launched or a checklist step done), else to the pipeline (today: the pipeline). Help updated
 (getting started, Private label, launch checklist, writing the listing). Screenshots: `docs/ui-audit/after/4b/` (gitignored).
 Phase 4b done.
-To do: phase 4c (one
-shared results table for Run detail / Brand detail / Products) and phase 5 (the remaining polish, including the extension's
-PASS/WARN/FAIL badges in the new verdict words and the Products page's length on phones).
+Phase 4c, one results table for wholesale products (20 Oct 2026; UI only: no schema, scoring, export or stored-value change).
+**ResultsTable** (`src/components/results/ResultsTable.tsx`, TanStack Table + Virtual, DataTable's header look): one default set of
+columns on every page (Product = image, title, ASIN, EAN, supplier; Verdict Buy / Check / Skip / Not scored / Error with Dormant,
+Waived and Cost overridden under it; Buy price; Sell price; Profit; ROI; Sales / mo; BSR; Offers; Gated Open / Approval / Blocked)
+and the rest in a column picker (show, hide, reorder, density, reset; saved per page in `ws.results.columns.<page>`; the pure logic in
+`tablePrefs.ts`, tested). Figures mono and right-aligned; sticky header, checkbox and product column; a pinned "⋯" row menu (Add to /
+Remove from Shortlist, Re-screen, Product page, Open on Amazon, Copy ASIN); a row click opens the page's drawer (the inline chevron
+details are gone). Paging: `virtual` (a run, scrolled in its card), `client` (50 a page) or `server`; on a phone (<640px) every row is
+a card (image, title, verdict, profit, ROI, sales / mo, ⋯, Details) 20 a page. The VAT basis of the profit figures is one tag above
+the table. **ResultsFilterBar** (`src/components/results/ResultsFilterBar.tsx`): search (ASIN, EAN, title, brand), verdict chips Buy /
+Check / Skip / Not scored (multi), Profit ≥, ROI ≥, Sales/mo ≥, BSR ≤, Gated any/yes/no, supplier, and More filters (Error, Dormant,
+bands, On Shortlist, Waived, Amazon on listing, approval, failed gate, brand, every range's min and max, saved filter sets). The
+filters live in the address (`filtersFromQuery` / `filtersToQuery` in `src/lib/filters.ts`, tested; `?verdict=buy,check&profit=3
+&bsr=..50000&gated=no`; old `?verdict=pass` still reads), via `useUrlFilters()`. `useResultActions()` holds the star, note, watch,
+waiver and cost-override calls the pages share. The bulk bar says Add to Shortlist / Remove from Shortlist / Export selected (xlsx).
+To do: phase 4c's pages, then phase 5 (the remaining polish, including the extension's PASS/WARN/FAIL badges in the new verdict
+words).
 
 ## Workspaces
 

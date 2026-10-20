@@ -1,7 +1,8 @@
 import type { Sparks } from "@/lib/sparkline";
 import { firstOrderFigures } from "@/lib/ui/metrics";
 import { parseStoredSort, sortStorageKey } from "@/lib/ui/sort";
-import { figure, listingMoq, titleOf, type Result, type SortKey } from "./types";
+import { approvalOf } from "@/lib/ui/resultRows";
+import { buyPrice, decisionOf, figure, listingMoq, titleOf, type Result, type RowExtras, type SortKey } from "./types";
 
 const mean = (xs: (number | null)[] | null | undefined) => {
   const v = (xs ?? []).filter((x): x is number => x != null && Number.isFinite(x));
@@ -13,9 +14,19 @@ const mean = (xs: (number | null)[] | null | undefined) => {
  * rank and Buy Box are the averages of the row's sparkline once it has loaded (rows load them as
  * they scroll into view); before that, the current rank and Buy Box from the screening stand in.
  */
-function resultSortValue(r: Result, key: SortKey, lineBudget: number, sparks?: Record<string, Sparks | null>): number | string | null {
+function resultSortValue(r: Result, key: SortKey, lineBudget: number, sparks?: Record<string, Sparks | null>, x?: RowExtras): number | string | null {
   if (key === "title") return titleOf(r).toLowerCase();
-  if (key === "verdict") return ({ pass: 0, warn: 1, fail: 2 } as const)[r.verdict ?? "fail"];
+  if (key === "verdict") {
+    // Buy, Check, Skip, then Not scored.
+    const v = decisionOf(r, x);
+    return v == null ? (x?.decision === undefined && r.status !== "pending" ? 2 : 3) : ({ pass: 0, warn: 1, fail: 2 } as const)[v];
+  }
+  if (key === "buy") return buyPrice(r, x);
+  if (key === "bsr") return r.inputs?.market?.rankNow ?? null;
+  if (key === "gated") { const a = approvalOf(r); return a == null ? null : ({ open: 0, approval_required: 1, blocked: 2 } as const)[a]; }
+  if (key === "maxLanded") return x?.maxLanded !== undefined ? x.maxLanded : r.inputs?.maxLandedGbp ?? null;
+  if (key === "screened") return x?.screenedAt ?? r.updated_at ?? null;
+  if (key === "supplier") return r.offer?.supplier?.name?.toLowerCase() ?? null;
   if (key === "why") return r.why?.split(/[;·\n]/)[0]?.trim().toLowerCase() || null;
   if (key === "rank90" || key === "bb90") {
     const s = r.product?.asin ? sparks?.[r.product.asin] : null;
@@ -31,8 +42,14 @@ function resultSortValue(r: Result, key: SortKey, lineBudget: number, sparks?: R
 
 /** A comparator for resultSortValue, nulls last whichever way. */
 export function compareResults(key: SortKey, dir: 1 | -1, lineBudget: number, sparks?: Record<string, Sparks | null>) {
-  return (a: Result, b: Result) => {
-    const x = resultSortValue(a, key, lineBudget, sparks), y = resultSortValue(b, key, lineBudget, sparks);
+  const byRow = compareRows(key, dir, lineBudget, sparks);
+  return (a: Result, b: Result) => byRow({ r: a }, { r: b });
+}
+
+/** The same for table rows that carry a page's extras (the brand map's verdict, best offer). */
+export function compareRows(key: SortKey, dir: 1 | -1, lineBudget: number, sparks?: Record<string, Sparks | null>) {
+  return (a: { r: Result; x?: RowExtras }, b: { r: Result; x?: RowExtras }) => {
+    const x = resultSortValue(a.r, key, lineBudget, sparks, a.x), y = resultSortValue(b.r, key, lineBudget, sparks, b.x);
     if (x == null && y == null) return 0;
     if (x == null) return 1;
     if (y == null) return -1;
@@ -44,13 +61,13 @@ export function compareResults(key: SortKey, dir: 1 | -1, lineBudget: number, sp
  * A column's first-click direction: text A–Z (title, verdict pass first, why), the 90-day rank
  * best first (lowest), every other number highest first.
  */
-export const firstResultDir = (key: SortKey): 1 | -1 => (key === "title" || key === "verdict" || key === "why" || key === "rank90" ? 1 : -1);
+export const firstResultDir = (key: SortKey): 1 | -1 => (["title", "verdict", "why", "rank90", "bsr", "gated", "supplier", "buy"].includes(key) ? 1 : -1);
 
 /** Clicking a results header: a new column starts at its first direction; the same one flips. */
 export const nextResultSort = (cur: { key: SortKey; dir: 1 | -1 }, key: SortKey): { key: SortKey; dir: 1 | -1 } =>
   ({ key, dir: cur.key === key ? (cur.dir === 1 ? -1 : 1) : firstResultDir(key) });
 
-const SORT_KEYS: SortKey[] = ["score", "profit", "roi", "margin", "sell_price", "landed_cost", "hurdle_price", "title", "verdict", "sales", "sellers", "buybox", "share", "profitMo", "orderQty", "months", "rank90", "bb90", "why"];
+const SORT_KEYS: SortKey[] = ["score", "profit", "roi", "margin", "sell_price", "landed_cost", "hurdle_price", "title", "verdict", "sales", "sellers", "buybox", "share", "profitMo", "orderQty", "months", "rank90", "bb90", "why", "buy", "bsr", "gated", "maxLanded", "screened", "supplier"];
 
 /** The results table's remembered sort (per table: "results", "favourites"), as every table stores it. */
 export function loadResultSort(tableId: string): { key: SortKey; dir: 1 | -1 } {

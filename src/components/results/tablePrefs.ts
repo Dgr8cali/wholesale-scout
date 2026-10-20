@@ -58,3 +58,48 @@ export function savePrefs(key: string, prefs: TablePrefs) {
     // Storage blocked: the layout just isn't remembered.
   }
 }
+
+/**
+ * Whether a column shows: your choice in the column picker, else whether it's in the page's
+ * default set. Fixed columns always show.
+ */
+export function isShown(prefs: TablePrefs, id: string, defaults: readonly string[], fixed: readonly string[] = []): boolean {
+  if (fixed.includes(id)) return true;
+  return prefs.visibility[id] ?? defaults.includes(id);
+}
+
+/** Every column's visibility, for the table. */
+export function visibilityOf(prefs: TablePrefs, columns: readonly string[], defaults: readonly string[], fixed: readonly string[] = []): Record<string, boolean> {
+  return Object.fromEntries(columns.map((c) => [c, isShown(prefs, c, defaults, fixed)]));
+}
+
+/** Show or hide one column (fixed columns can't be hidden). */
+export function setShown(prefs: TablePrefs, id: string, shown: boolean, fixed: readonly string[] = []): TablePrefs {
+  if (fixed.includes(id)) return prefs;
+  return { ...prefs, visibility: { ...prefs.visibility, [id]: shown } };
+}
+
+/**
+ * Move a column one place left (-1) or right (1) among the movable ones; fixed columns keep their
+ * places at the front. Out of range: unchanged.
+ */
+export function shiftColumn(prefs: TablePrefs, id: string, by: -1 | 1, fixed: readonly string[] = []): TablePrefs {
+  const head = prefs.order.filter((c) => fixed.includes(c));
+  const list = prefs.order.filter((c) => !fixed.includes(c));
+  const i = list.indexOf(id), j = i + by;
+  if (i < 0 || j < 0 || j >= list.length) return prefs;
+  [list[i], list[j]] = [list[j], list[i]];
+  return { ...prefs, order: [...head, ...list] };
+}
+
+/** How many columns of the default set you've hidden, and how many extra you've shown. */
+export function pickerSummary(prefs: TablePrefs, columns: readonly string[], defaults: readonly string[], fixed: readonly string[] = []) {
+  let hidden = 0, added = 0;
+  for (const c of columns) {
+    if (fixed.includes(c)) continue;
+    const on = isShown(prefs, c, defaults, fixed);
+    if (defaults.includes(c) && !on) hidden++;
+    if (!defaults.includes(c) && on) added++;
+  }
+  return { hidden, added };
+}
