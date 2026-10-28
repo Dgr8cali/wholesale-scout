@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { breakEvenAcos, campaignTotals, chooseRanges, marginBeforeAds, profitAfterAds, ratios, termStatus, type Range } from "./metrics";
+import { breakEvenAcos, campaignTotals, chooseRanges, marginBeforeAds, newestRanges, profitAfterAds, ratios, termStatus, type Range } from "./metrics";
 
 const r = (from: string | null, to: string | null, clicks: number, cost: number, orders: number, sales: number, source: Range["source"] = "campaign"): Range =>
   ({ dateFrom: from, dateTo: to, impressions: clicks * 100, clicks, cost, orders, sales, units: null, source });
@@ -62,5 +62,29 @@ describe("chooseRanges", () => {
       { from: "2026-07-01", to: "2026-07-31", rank: 0 },
     ]);
     expect(r).toEqual([{ from: "2026-08-10", to: "2026-10-02", rank: 1 }, { from: "2026-07-01", to: "2026-07-31", rank: 0 }]);
+  });
+});
+
+describe("newestRanges (the dashboard's figures)", () => {
+  const at = (r: Range, importedAt: string): Range => ({ ...r, importedAt });
+
+  it("a newer import wins over an older, wider one it overlaps; disjoint older periods still add", () => {
+    const old = at(r("2026-09-20", "2026-10-20", 10, 3.9, 0, 0), "2026-10-20T18:00:00Z");
+    const latest = at(r("2026-09-29", "2026-10-28", 11, 4.15, 1, 9.99), "2026-10-28T23:30:00Z");
+    const august = at(r("2026-08-01", "2026-08-31", 7, 2, 0, 0), "2026-09-01T08:00:00Z");
+    expect(campaignTotals({ daily: [], grid: null, terms: null, ranges: [old, latest, august] }))
+      .toMatchObject({ from: "2026-08-01", to: "2026-10-28", totals: { clicks: 18, orders: 1 } });
+  });
+
+  it("the latest end date first, then the latest import; of identical dates one counts (rank, then import)", () => {
+    expect(newestRanges([
+      { from: "2026-10-01", to: "2026-10-28", importedAt: "2026-10-28T10:00:00Z" },
+      { from: "2026-10-21", to: "2026-10-28", importedAt: "2026-10-28T12:00:00Z" },
+    ])).toEqual([{ from: "2026-10-21", to: "2026-10-28", importedAt: "2026-10-28T12:00:00Z" }]);
+    expect(newestRanges([
+      { from: "2026-10-01", to: "2026-10-28", rank: 1, importedAt: "2026-10-28T10:00:00Z" },
+      { from: "2026-10-01", to: "2026-10-28", rank: 0, importedAt: "2026-10-28T12:00:00Z" },
+      { from: "2026-10-01", to: "2026-10-28", rank: 1, importedAt: "2026-10-29T09:00:00Z" },
+    ])).toEqual([{ from: "2026-10-01", to: "2026-10-28", rank: 1, importedAt: "2026-10-29T09:00:00Z" }]);
   });
 });

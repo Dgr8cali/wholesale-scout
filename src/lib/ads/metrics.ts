@@ -40,13 +40,17 @@ export function ratios(t: Totals): Ratios {
 
 /* ===================== a campaign's figures ===================== */
 
-export interface Range extends Totals { dateFrom: string | null; dateTo: string | null; source: "campaign" | "campaign_daily" | "grid" | "search_term" | "bulk" }
+export interface Range extends Totals {
+  dateFrom: string | null; dateTo: string | null; source: "campaign" | "campaign_daily" | "grid" | "search_term" | "bulk";
+  /** When the import that wrote it ran (ISO). */
+  importedAt?: string | null;
+}
 
 /**
  * A campaign's totals from the best source, never adding the same days twice:
  * 1. daily rows, when there are any (each day once);
- * 2. else its dated ranges (campaign reports, bulk exports), widest first, skipping any that overlaps one taken
- *    (re-imports and overlapping exports don't double count);
+ * 2. else its dated ranges (campaign reports, bulk exports), newest first (see newestRanges): an older
+ *    range that overlaps a newer one is left out, so re-imports and overlapping exports don't double count;
  * 3. else the Campaign Manager export's totals ("as exported": their range is unknown);
  * 4. else its search terms summed.
  */
@@ -56,9 +60,8 @@ export function campaignTotals(x: { daily: Range[]; ranges: Range[]; grid: Range
     const days = [...byDay.values()];
     return { totals: days.reduce<Totals>((a, d) => add(a, d), ZERO), source: "campaign_daily", ...span(days) };
   }
-  const dated = x.ranges.filter((r) => r.dateFrom && r.dateTo).sort((a, b) => days(b) - days(a));
-  const taken: Range[] = [];
-  for (const r of dated) if (!taken.some((t) => r.dateFrom! <= t.dateTo! && t.dateFrom! <= r.dateTo!)) taken.push(r);
+  const dated = x.ranges.filter((r) => r.dateFrom && r.dateTo).map((r) => ({ r, from: r.dateFrom!, to: r.dateTo!, importedAt: r.importedAt }));
+  const taken = newestRanges(dated).map((d) => d.r);
   if (taken.length) return { totals: taken.reduce<Totals>((a, r) => add(a, r), ZERO), source: "campaign", ...span(taken) };
   if (x.grid) return { totals: x.grid, source: "grid", from: null, to: x.grid.dateTo };
   if (x.terms) return { totals: x.terms, source: "search_term", from: null, to: null };
@@ -67,8 +70,8 @@ export function campaignTotals(x: { daily: Range[]; ranges: Range[]; grid: Range
 
 /**
  * The date ranges to count, never overlapping: widest first, then (for equal dates) the higher
- * rank, skipping any that overlaps one taken. Search terms use it per campaign so a bulk export and
- * a search term report over overlapping weeks aren't added together.
+ * rank, skipping any that overlaps one taken: the most days, for a keyword's lifetime orders (the
+ * rules). The dashboard's figures take the newest instead (newestRanges).
  */
 export function chooseRanges<T extends { from: string; to: string; rank?: number }>(rs: T[]): T[] {
   const width = (r: T) => Date.parse(r.to) - Date.parse(r.from);
@@ -78,7 +81,26 @@ export function chooseRanges<T extends { from: string; to: string; rank?: number
   return taken;
 }
 
-const days = (r: Range) => (Date.parse(r.dateTo!) - Date.parse(r.dateFrom!)) / 86_400_000;
+/**
+ * The date ranges to count, never overlapping, the newest data first: the latest end date, then the
+ * latest import, then the widest, skipping any that overlaps one taken (a range's totals can't be
+ * split by day, so an older overlapping one goes whole). Of ranges with the same dates, one counts:
+ * the higher rank (search terms: the rows that name the matching keyword), then the latest import.
+ */
+export function newestRanges<T extends { from: string; to: string; rank?: number; importedAt?: string | null }>(rs: T[]): T[] {
+  const width = (r: T) => Date.parse(r.to) - Date.parse(r.from);
+  const at = (r: T) => r.importedAt ?? "";
+  const best = new Map<string, T>();
+  for (const r of rs) {
+    const cur = best.get(`${r.from}|${r.to}`);
+    if (!cur || (r.rank ?? 0) > (cur.rank ?? 0) || ((r.rank ?? 0) === (cur.rank ?? 0) && at(r) > at(cur))) best.set(`${r.from}|${r.to}`, r);
+  }
+  const sorted = [...best.values()].sort((a, b) => b.to.localeCompare(a.to) || at(b).localeCompare(at(a)) || width(b) - width(a));
+  const taken: T[] = [];
+  for (const r of sorted) if (!taken.some((t) => r.from <= t.to && t.from <= r.to)) taken.push(r);
+  return taken;
+}
+
 const span = (rs: Range[]) => ({
   from: rs.map((r) => r.dateFrom).filter((x): x is string => !!x).sort()[0] ?? null,
   to: rs.map((r) => r.dateTo).filter((x): x is string => !!x).sort().at(-1) ?? null,

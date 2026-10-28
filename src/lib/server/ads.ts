@@ -2,7 +2,7 @@ import "server-only";
 import { asinFromName, dateFromFileName, parseReport, placementName, REPORT_LABEL, type AdsRow, type ParsedReport, type ReportType } from "../ads/parse";
 import { parseBulk, type ParsedBulk, type Perf } from "../ads/bulk";
 import { insightsFor, type Insights } from "./adsInsights";
-import { add, breakEvenAcos, campaignTotals, chooseRanges, marginBeforeAds, profitAfterAds, ratios, termStatus, ZERO, type Range, type Totals, type UnitEconomics } from "../ads/metrics";
+import { add, breakEvenAcos, campaignTotals, newestRanges, marginBeforeAds, profitAfterAds, ratios, termStatus, ZERO, type Range, type Totals, type UnitEconomics } from "../ads/metrics";
 import { computeFees, DEFAULT_FEE_ASSUMPTIONS, referralCategoryFor } from "../fees/engine";
 import { getKeepa } from "../keepa/client";
 import { activeRateCard, chunks, db, must, selectAll } from "./db";
@@ -287,16 +287,19 @@ const toTotals = (r: Record<string, unknown>): Totals => ({ impressions: n(r.imp
 export async function loadAll() {
   const d = db();
   // Every row, a page at a time: daily rows and search terms pass a select's 1,000 quickly.
-  const [camps, ranges, daily, terms] = await Promise.all([
+  const [camps, imports, ranges, daily, terms] = await Promise.all([
     d.from("ads_campaigns").select(CAMPAIGN_COLS),
-    selectAll<Record<string, unknown>>("ads_campaign_ranges", "campaign, source, date_from, date_to, impressions, clicks, cost, orders, sales, units", ["id"]),
+    d.from("ads_imports").select("id, imported_at"),
+    selectAll<Record<string, unknown>>("ads_campaign_ranges", "campaign, source, date_from, date_to, impressions, clicks, cost, orders, sales, units, import_id", ["id"]),
     selectAll<Record<string, unknown>>("ads_campaign_daily", "campaign, date, impressions, clicks, cost, orders, sales, units", ["campaign", "date"]),
-    selectAll<Record<string, unknown>>("ads_search_terms", "campaign, ad_group_id, ad_group_name, keyword_id, keyword_text, match_type, term, date_from, date_to, impressions, clicks, cost, orders, sales, units", ["id"]),
+    selectAll<Record<string, unknown>>("ads_search_terms", "campaign, ad_group_id, ad_group_name, keyword_id, keyword_text, match_type, term, date_from, date_to, impressions, clicks, cost, orders, sales, units, import_id", ["id"]),
   ]);
   // Archived campaigns (old tests you don't care about) are left out of everything that reads this.
   const active = (must(camps, "campaigns") as CampaignRow[]).filter((c) => !c.archived);
   const ids = new Set(active.map((c) => c.id));
-  const mine = (rows: Record<string, unknown>[]) => rows.filter((r) => ids.has(r.campaign as string));
+  // Each row carries when its import ran: of overlapping periods, the newer import's figures count.
+  const when = new Map((must(imports, "imports") as { id: string; imported_at: string }[]).map((i) => [i.id, i.imported_at]));
+  const mine = (rows: Record<string, unknown>[]) => rows.filter((r) => ids.has(r.campaign as string)).map((r): Record<string, unknown> => ({ ...r, imported_at: when.get(r.import_id as string) ?? null }));
   return {
     campaigns: active,
     ranges: mine(ranges),
@@ -306,22 +309,23 @@ export async function loadAll() {
 }
 
 /**
- * The search-term rows to count: per campaign, the ranges chosen widest first without overlaps
- * (a bulk export and a search term report over overlapping weeks aren't added), with every row in a
- * chosen range. On equal dates, the rows that name the matching keyword win.
+ * The search-term rows to count: per campaign, the ranges chosen newest first without overlaps
+ * (newestRanges: a bulk export and a search term report over overlapping weeks aren't added), with
+ * every row in a chosen range. On equal dates, the rows that name the matching keyword win.
  */
 function countedTerms(rows: Record<string, unknown>[]) {
   const byCampaign = new Map<string, Record<string, unknown>[]>();
   for (const r of rows) byCampaign.set(r.campaign as string, [...(byCampaign.get(r.campaign as string) ?? []), r]);
   const out: Record<string, unknown>[] = [];
   for (const list of byCampaign.values()) {
-    const ranges = new Map<string, { from: string; to: string; rank: number; key: string }>();
+    const ranges = new Map<string, { from: string; to: string; rank: number; key: string; importedAt: string | null }>();
     for (const r of list) {
       const rank = r.keyword_id ? 1 : 0;
       const key = `${r.date_from}|${r.date_to}|${rank}`;
-      ranges.set(key, { from: r.date_from as string, to: r.date_to as string, rank, key });
+      const at = [ranges.get(key)?.importedAt, r.imported_at as string | null].filter(Boolean).sort().at(-1) ?? null;
+      ranges.set(key, { from: r.date_from as string, to: r.date_to as string, rank, key, importedAt: at });
     }
-    const keep = new Set(chooseRanges([...ranges.values()]).map((r) => r.key));
+    const keep = new Set(newestRanges([...ranges.values()]).map((r) => r.key));
     out.push(...list.filter((r) => keep.has(`${r.date_from}|${r.date_to}|${r.keyword_id ? 1 : 0}`)));
   }
   return out;
@@ -331,7 +335,7 @@ function countedTerms(rows: Record<string, unknown>[]) {
 function campaignFigures(all: Awaited<ReturnType<typeof loadAll>>) {
   return all.campaigns.map((c) => {
     const mine = (rows: Record<string, unknown>[]) => rows.filter((r) => r.campaign === c.id);
-    const ranges: Range[] = mine(all.ranges).filter((r) => r.source === "campaign" || r.source === "bulk").map((r) => ({ ...toTotals(r), dateFrom: r.date_from as string, dateTo: r.date_to as string, source: r.source as Range["source"] }));
+    const ranges: Range[] = mine(all.ranges).filter((r) => r.source === "campaign" || r.source === "bulk").map((r) => ({ ...toTotals(r), dateFrom: r.date_from as string, dateTo: r.date_to as string, source: r.source as Range["source"], importedAt: r.imported_at as string | null }));
     const gridRow = mine(all.ranges).find((r) => r.source === "grid");
     const grid: Range | null = gridRow ? { ...toTotals(gridRow), dateFrom: null, dateTo: gridRow.date_to as string, source: "grid" } : null;
     const daily: Range[] = mine(all.daily).map((r) => ({ ...toTotals(r), dateFrom: r.date as string, dateTo: r.date as string, source: "campaign_daily" }));
