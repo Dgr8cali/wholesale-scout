@@ -86,7 +86,9 @@ export function bulkRangeFromFileName(name: string): { from: string; to: string 
 export const isBulkWorkbook = (wb: XLSX.WorkBook) => wb.SheetNames.includes(BULK_CAMPAIGNS_SHEET);
 
 export function parseBulk(data: ArrayBuffer | Uint8Array, opts: { fileName?: string; dateFrom?: string | null; dateTo?: string | null } = {}): ParsedBulk {
-  const wb = XLSX.read(data, { type: "array" });
+  // nodim: the range comes from the cells, not the sheet's <dimension> tag. Amazon's exporter (Apache
+  // POI) has written "A1:BB1" there (the header row only), which hid every other row (Oct 2026).
+  const wb = XLSX.read(data, { type: "array", nodim: true });
   if (!isBulkWorkbook(wb)) throw new Error(`${opts.fileName || "This file"}: no "${BULK_CAMPAIGNS_SHEET}" sheet, so not an Amazon Ads bulk export`);
   // As text, as shown in the file: IDs stay exact (they're stored as text), money as written.
   const sheet = (name: string): Row[] => (wb.Sheets[name] ? XLSX.utils.sheet_to_json<Row>(wb.Sheets[name], { defval: "", raw: false }) : []);
@@ -99,35 +101,57 @@ export function parseBulk(data: ArrayBuffer | Uint8Array, opts: { fileName?: str
     targeting: s(r, "Targeting type"), state: s(r, "State"), budget: parseNum(r["Daily budget"]), biddingStrategy: s(r, "Bidding strategy"),
     startDate: ymd(s(r, "Start date")), endDate: ymd(s(r, "End date")), portfolioId: s(r, "Portfolio ID"), ...perf(r),
   }));
-  const placements: BulkPlacement[] = of("bidding adjustment").map((r) => ({
+  const allPlacements: BulkPlacement[] = of("bidding adjustment").map((r) => ({
     campaignId: s(r, "Campaign ID")!, placement: (s(r, "Placement") ?? "").replace(/^Placement\s+/i, ""), percentage: parseNum(r.Percentage),
     biddingStrategy: s(r, "Bidding strategy"), ...perf(r),
   }));
-  const adGroups: BulkAdGroup[] = of("ad group").map((r) => ({
+  const allAdGroups: BulkAdGroup[] = of("ad group").map((r) => ({
     campaignId: s(r, "Campaign ID")!, adGroupId: s(r, "Ad group ID")!, name: s(r, "Ad group name") ?? s(r, "Ad group name (Informational only)") ?? "",
     defaultBid: parseNum(r["Ad Group Default Bid"]) ?? parseNum(r["Ad Group Default Bid (Informational only)"]), state: s(r, "State"), ...perf(r),
   }));
-  const productAds: BulkProductAd[] = of("product ad").map((r) => ({
+  const allProductAds: BulkProductAd[] = of("product ad").map((r) => ({
     campaignId: s(r, "Campaign ID")!, adGroupId: s(r, "Ad group ID")!, adId: s(r, "Ad ID")!, sku: s(r, "SKU"),
     asin: s(r, "ASIN (Informational only)")?.toUpperCase() ?? null, state: s(r, "State"), eligibility: s(r, "Eligibility status (Informational only)"), ...perf(r),
   }));
-  const keywords: BulkKeyword[] = of("keyword").map((r) => ({
+  const allKeywords: BulkKeyword[] = of("keyword").map((r) => ({
     campaignId: s(r, "Campaign ID")!, adGroupId: s(r, "Ad group ID")!, keywordId: s(r, "Keyword ID")!, text: s(r, "Keyword text") ?? "",
     matchType: s(r, "Match type") ?? "", bid: parseNum(r.Bid), state: s(r, "State"), ...perf(r),
   }));
-  const negatives: BulkNegative[] = [...of("negative keyword"), ...of("campaign negative keyword")].map((r) => ({
+  const allNegatives: BulkNegative[] = [...of("negative keyword"), ...of("campaign negative keyword")].map((r) => ({
     campaignId: s(r, "Campaign ID")!, adGroupId: s(r, "Ad group ID"), keywordId: s(r, "Keyword ID")!, text: s(r, "Keyword text") ?? "",
     matchType: s(r, "Match type") ?? "", state: s(r, "State"), level: /campaign/i.test(r.Entity) || !s(r, "Ad group ID") ? "campaign" : "ad group",
   }));
-  const targets: BulkTarget[] = of("product targeting").map((r) => ({
+  const allTargets: BulkTarget[] = of("product targeting").map((r) => ({
     campaignId: s(r, "Campaign ID")!, adGroupId: s(r, "Ad group ID")!, targetId: s(r, "Product Targeting ID")!,
     expression: s(r, "Product targeting expression") ?? s(r, "Resolved product targeting expression (Informational only)") ?? "", bid: parseNum(r.Bid), state: s(r, "State"), ...perf(r),
   }));
-  const searchTerms: BulkSearchTerm[] = sheet(BULK_TERMS_SHEET).filter((r) => s(r, "Customer search term")).map((r) => ({
+  const allTerms: BulkSearchTerm[] = sheet(BULK_TERMS_SHEET).filter((r) => s(r, "Customer search term")).map((r) => ({
     campaignId: s(r, "Campaign ID")!, adGroupId: s(r, "Ad group ID") ?? "", campaignName: s(r, "Campaign name (Informational only)"), adGroupName: s(r, "Ad group name (Informational only)"),
     keywordId: s(r, "Keyword ID"), targetId: s(r, "Product Targeting ID"), keywordText: s(r, "Keyword text") ?? s(r, "Product targeting expression"),
     matchType: s(r, "Match type"), term: s(r, "Customer search term")!.toLowerCase(), ...perf(r),
   }));
+
+  // A row whose campaign has no Campaign row in the file can't be stored: skip it and say which.
+  const known = new Set(campaigns.map((c) => c.campaignId));
+  const skipped = new Map<string, Map<string, number>>();
+  const keep = <T extends { campaignId: string }>(list: T[], what: string): T[] => list.filter((x) => {
+    if (known.has(x.campaignId)) return true;
+    const m = skipped.get(x.campaignId ?? "(none)") ?? new Map<string, number>();
+    m.set(what, (m.get(what) ?? 0) + 1);
+    skipped.set(x.campaignId ?? "(none)", m);
+    return false;
+  });
+  const placements = keep(allPlacements, "placement");
+  const adGroups = keep(allAdGroups, "ad group");
+  const productAds = keep(allProductAds, "product ad");
+  const keywords = keep(allKeywords, "keyword");
+  const negatives = keep(allNegatives, "negative keyword");
+  const targets = keep(allTargets, "product targeting row");
+  const searchTerms = keep(allTerms, "search term");
+  for (const [id, m] of skipped) {
+    const n = [...m.values()].reduce((a, b) => a + b, 0);
+    warnings.push(`Skipped ${n} row${n === 1 ? "" : "s"} for campaign ${id}, which has no Campaign row in the file: ${[...m].map(([w, k]) => `${k} ${w}${k === 1 ? "" : "s"}`).join(", ")}`);
+  }
 
   for (const [what, list, key] of [["keyword", keywords, "keywordId"], ["negative keyword", negatives, "keywordId"], ["campaign", campaigns, "campaignId"]] as const) {
     const missing = (list as unknown as Record<string, unknown>[]).filter((x) => !x[key]).length;

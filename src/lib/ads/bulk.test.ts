@@ -72,6 +72,53 @@ describe("parseBulk (the pill box account's bulk export, 10 Aug – 2 Oct)", () 
   });
 });
 
+describe("parseBulk: Amazon's export of 28 Oct (Apache POI, the campaigns sheet's dimension says A1:BB1)", () => {
+  // Trimmed from Report 28_10.xlsx: the two campaigns the import failed on, the original XML otherwise.
+  const poe = parseBulk(new Uint8Array(readFileSync(join(__dirname, "../../../docs/samples/ads/bulk-stale-dimension.xlsx"))), { fileName: "Report 28_10.xlsx", dateFrom: "2026-10-19", dateTo: "2026-10-27" });
+  const SEAT_BELT_AUTO = "231030566148663";
+
+  it("reads every row, not just the header the stale dimension covers", () => {
+    expect(poe.campaigns.map((c) => c.campaignId).sort()).toEqual(["139491851525935", SEAT_BELT_AUTO]);
+    expect(poe.campaigns.find((c) => c.campaignId === SEAT_BELT_AUTO)).toMatchObject({ name: "B0HM8FBX3T Auto - 2026-10-19", targeting: "Auto", state: "enabled" });
+    expect(poe.searchTerms).toHaveLength(11);
+    expect(poe.adGroups.length + poe.productAds.length + poe.placements.length).toBeGreaterThan(0);
+  });
+
+  it("every row belongs to a campaign in the file, so nothing is skipped", () => {
+    const ids = new Set(poe.campaigns.map((c) => c.campaignId));
+    for (const list of [poe.placements, poe.adGroups, poe.productAds, poe.keywords, poe.negatives, poe.targets, poe.searchTerms]) {
+      expect(list.every((x) => ids.has(x.campaignId))).toBe(true);
+    }
+    expect(poe.warnings.filter((w) => /no Campaign row/.test(w))).toEqual([]);
+    expect(poe.campaignAsins.get(SEAT_BELT_AUTO)).toBe("B0HM8FBX3T");
+  });
+});
+
+describe("parseBulk: rows whose campaign isn't in the file", () => {
+  const sheet = (rows: Record<string, string>[]) => XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, sheet([
+    { Product: "Sponsored Products", Entity: "Campaign", "Campaign ID": "111", "Campaign name": "Kept", State: "enabled" },
+    { Product: "Sponsored Products", Entity: "Ad group", "Campaign ID": "111", "Ad group ID": "a1", "Ad group name": "AG", State: "enabled" },
+    { Product: "Sponsored Products", Entity: "Keyword", "Campaign ID": "999", "Ad group ID": "a9", "Keyword ID": "k9", "Keyword text": "orphan", "Match type": "Exact", State: "enabled" },
+    { Product: "Sponsored Products", Entity: "Product ad", "Campaign ID": "999", "Ad group ID": "a9", "Ad ID": "ad9", SKU: "X", State: "enabled" },
+  ]), "Sponsored Products Campaigns");
+  XLSX.utils.book_append_sheet(wb, sheet([
+    { "Campaign ID": "999", "Ad group ID": "a9", "Customer search term": "lost term", Clicks: "1", Spend: "0.5" },
+    { "Campaign ID": "111", "Ad group ID": "a1", "Customer search term": "kept term", Clicks: "2", Spend: "1" },
+  ]), "SP Search Term Report");
+  const b = parseBulk(new Uint8Array(XLSX.write(wb, { type: "array", bookType: "xlsx" })), { dateFrom: "2026-10-01", dateTo: "2026-10-27" });
+
+  it("skips them with a warning naming each campaign and what was skipped, and keeps the rest", () => {
+    expect(b.campaigns.map((c) => c.campaignId)).toEqual(["111"]);
+    expect(b.adGroups).toHaveLength(1);
+    expect(b.keywords).toEqual([]);
+    expect(b.productAds).toEqual([]);
+    expect(b.searchTerms.map((t) => t.term)).toEqual(["kept term"]);
+    expect(b.warnings).toContain("Skipped 3 rows for campaign 999, which has no Campaign row in the file: 1 product ad, 1 keyword, 1 search term");
+  });
+});
+
 describe("writeBulk (Phase 2's upload)", () => {
   const changes = [
     { kind: "keyword_bid", campaignId: AD_READY, adGroupId: "1", keywordId: "2", bid: 0.45 },
