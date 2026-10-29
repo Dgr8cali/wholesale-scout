@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { movedTo } from "@/lib/moved";
-import { db } from "@/lib/server/db";
-import { authBlockedUntil, clientIp, EXTENSION_LIMITS, overLimit, recordAuthFailure } from "@/lib/server/rateLimit";
+import { passwordFallbackOn, safeEqual, SESSION_COOKIE, sessionCookie, sessionFor, tokenFor, isExtensionPath, allowedEmails } from "@/lib/server/auth";
+import { clientIp, EXTENSION_LIMITS, loginAttempt, overLimit } from "@/lib/server/rateLimit";
 
 /** Where the app lives (Netcup) since the 17 Oct 2026 cutover. */
 export const APP_HOME = "https://ws.dgr8cali.co.uk";
@@ -15,87 +15,103 @@ export function vercelRedirect(host: string | null, pathAndQuery: string): strin
   return host && /(^|\.)vercel\.app(:\d+)?$/i.test(host) ? `${APP_HOME}${pathAndQuery}` : null;
 }
 
+/** Open without signing in: the sign-in page and the calls it makes. */
+export const PUBLIC_PATHS = new Set([
+  "/login", "/api/auth/state", "/api/auth/login/options", "/api/auth/login/verify",
+  "/api/auth/email", "/api/auth/email/verify", "/api/auth/password", "/api/auth/logout",
+]);
+
+/** Who the request is, for the routes (whoOf): set here only, never taken from the client. */
+export const AUTH_HEADER = "x-ws-auth";
+
 /**
- * Password gate until Supabase Auth lands. Set APP_PASSWORD in the server's .env; the browser
- * asks once (any username). Without it, production refuses to serve, because the app can
- * call your seller account's SP-API.
+ * The gate, on every page and API route (src/lib/server/auth.ts):
+ * - the session cookie (a passkey, an emailed link, or the app password while no passkey exists);
+ * - an extension API token (Bearer wst_…), on the extension's endpoints only;
+ * - the server's CRON_SECRET (crontab, and the app's own background calls) and WATCHDOG_SECRET (cron only);
+ * - APP_PASSWORD (Bearer, or Basic), only with AUTH_PASSWORD_FALLBACK=1.
+ * Pages without a session go to /login; API calls get a 401 (no browser password prompt).
  */
 export async function proxy(req: NextRequest) {
-  const moved = vercelRedirect(req.headers.get("host"), req.nextUrl.pathname + req.nextUrl.search);
+  const path = req.nextUrl.pathname;
+  const moved = vercelRedirect(req.headers.get("host"), path + req.nextUrl.search);
   if (moved) return NextResponse.redirect(moved, 308);
   // A page merged into another (src/lib/moved.ts): permanently to its new home and tab.
-  const merged = movedTo(req.nextUrl.pathname, req.nextUrl.search);
+  const merged = movedTo(path, req.nextUrl.search);
   if (merged) return NextResponse.redirect(new URL(merged, req.nextUrl), 308);
-  const password = process.env.APP_PASSWORD;
-  if (!password) {
-    if (process.env.NODE_ENV === "production") {
-      return new NextResponse("Set APP_PASSWORD in the server's .env to open Wholesale Scout.", { status: 503 });
-    }
-    return NextResponse.next();
-  }
-  const auth = req.headers.get("authorization") ?? "";
-  // The server's crontab can't send the password; it sends the CRON_SECRET as a bearer token instead.
-  // The watchdog (Supabase pg_cron) uses its own WATCHDOG_SECRET the same way.
-  if (req.nextUrl.pathname.startsWith("/api/cron/")) {
-    for (const secret of [process.env.CRON_SECRET, process.env.WATCHDOG_SECRET]) {
-      if (secret && auth.length === secret.length + 7 && timingSafeEqual(auth, `Bearer ${secret}`)) return NextResponse.next();
-    }
-  }
+
+  const pass = (who: string) => {
+    const headers = new Headers(req.headers);
+    headers.set(AUTH_HEADER, who);
+    return NextResponse.next({ request: { headers } });
+  };
+  // Local development with no allowlist set: open, as before the gate.
+  if (process.env.NODE_ENV !== "production" && !allowedEmails().length) return pass("you (local)");
+  if (PUBLIC_PATHS.has(path)) return pass("signing in");
   // The extension's CORS preflight carries no credentials; the request that follows does.
-  if (req.method === "OPTIONS" && (req.nextUrl.pathname.startsWith("/api/extension/") || req.nextUrl.pathname.startsWith("/api/pl/poe") || req.nextUrl.pathname === "/api/pl/reviews/capture" || req.nextUrl.pathname === "/api/pl/suppliers/capture" || req.nextUrl.pathname === "/api/ads/ranks")) return NextResponse.next();
+  if (req.method === "OPTIONS" && isExtensionPath(path)) return pass("preflight");
 
-  // Too many wrong passwords from this address: refused for a while, even with the right one.
   const ip = clientIp(req.headers);
-  const until = await authBlockedUntil(db, ip);
-  if (until) return tooMany(until, "Too many wrong passwords from this address");
+  const auth = req.headers.get("authorization") ?? "";
+  const [scheme, value] = auth.split(" ");
+  const extensionLimit = () => {
+    if (!isExtensionPath(path)) return null;
+    // Per address: a check can spend Keepa tokens.
+    const isCheck = path === "/api/extension/check";
+    const r = overLimit(`ext:${isCheck ? "check" : "other"}:${ip}`, isCheck ? EXTENSION_LIMITS.check : EXTENSION_LIMITS.other);
+    return r.over ? tooMany(Date.now() + r.retryAfterS * 1000, "Too many requests from the extension") : null;
+  };
 
-  const [scheme, encoded] = auth.split(" ");
-  let ok = false;
-  // Scripts and the extension may send the password as a bearer token.
-  if (scheme === "Bearer" && encoded && encoded.length === password.length && timingSafeEqual(encoded, password)) ok = true;
-  if (!ok && scheme === "Basic" && encoded) {
-    let decoded = "";
-    try { decoded = atob(encoded); } catch { /* not base64: a wrong password */ }
-    const given = decoded.slice(decoded.indexOf(":") + 1);
-    if (given.length === password.length && timingSafeEqual(given, password)) ok = true;
-  }
-  if (ok) {
-    // The extension API, per address: a check can spend Keepa tokens.
-    const path = req.nextUrl.pathname;
-    if (path.startsWith("/api/extension/") || path.startsWith("/api/pl/poe") || path === "/api/pl/reviews/capture" || path === "/api/pl/suppliers/capture" || path === "/api/ads/ranks") {
-      const isCheck = path === "/api/extension/check";
-      const r = overLimit(`ext:${isCheck ? "check" : "other"}:${ip}`, isCheck ? EXTENSION_LIMITS.check : EXTENSION_LIMITS.other);
-      if (r.over) return tooMany(Date.now() + r.retryAfterS * 1000, "Too many requests from the extension");
+  if (scheme === "Bearer" && value) {
+    // The server's crontab and the watchdog; the CRON_SECRET also carries the app's calls to itself.
+    const cron = process.env.CRON_SECRET, dog = process.env.WATCHDOG_SECRET;
+    if (path.startsWith("/api/cron/") && ((cron && safeEqual(value, cron)) || (dog && safeEqual(value, dog)))) return pass("cron");
+    if (path.startsWith("/api/") && !path.startsWith("/api/auth/") && cron && safeEqual(value, cron)) return pass("the app (background)");
+    if (value.startsWith("wst_")) {
+      let token;
+      try { token = await tokenFor(value, path, ip); } catch { return unavailable(); }
+      if (!token) return NextResponse.json({ error: isExtensionPath(path) ? "This token isn't valid: create a new one in Settings → Security." : "An extension token only opens the extension's endpoints." }, { status: 401, headers: CORS });
+      return extensionLimit() ?? pass(`extension token "${token.name}"`);
     }
-    return NextResponse.next();
   }
-  // A password was given and it was wrong (no header at all is just the browser's first ask).
-  if (auth) {
-    const blockedUntil = await recordAuthFailure(db, ip);
-    if (blockedUntil) return tooMany(blockedUntil, "Too many wrong passwords from this address");
+  if (passwordFallbackOn() && (scheme === "Bearer" || scheme === "Basic") && value) {
+    let given = value;
+    if (scheme === "Basic") {
+      try { const d = atob(value); given = d.slice(d.indexOf(":") + 1); } catch { given = ""; }
+    }
+    if (safeEqual(given, process.env.APP_PASSWORD!)) return extensionLimit() ?? pass("app password (fallback)");
+    const r = loginAttempt(ip);
+    if (r.over) return tooMany(Date.now() + r.retryAfterS * 1000, "Too many sign-in attempts from this address");
   }
-  return new NextResponse("Authentication required", {
-    status: 401,
-    headers: { "WWW-Authenticate": 'Basic realm="Wholesale Scout", charset="UTF-8"' },
-  });
+
+  let live;
+  try { live = await sessionFor(req.cookies.get(SESSION_COOKIE)?.value); } catch { return unavailable(); }
+  if (live) {
+    const res = pass(`you (${live.session.method === "passkey" ? "passkey" : live.session.method === "email" ? "email link" : "app password"})`);
+    // Sliding: the cookie's 90 days start again with the session's.
+    if (live.slid) res.cookies.set(sessionCookie(req.cookies.get(SESSION_COOKIE)!.value, req.headers.get("host")));
+    return res;
+  }
+  if (path.startsWith("/api/")) return NextResponse.json({ error: "Sign in to Wholesale Scout first." }, { status: 401, headers: isExtensionPath(path) ? CORS : undefined });
+  if (req.method === "GET" || req.method === "HEAD") {
+    const to = new URL("/login", req.nextUrl);
+    if (path !== "/") to.searchParams.set("next", path + req.nextUrl.search);
+    return NextResponse.redirect(to, 307);
+  }
+  return new NextResponse("Sign in to Wholesale Scout first.", { status: 401 });
 }
+
+const CORS = { "Access-Control-Allow-Origin": "*" };
 
 function tooMany(until: number, why: string) {
   const retry = Math.max(1, Math.ceil((until - Date.now()) / 1000));
   const at = new Date(until).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" });
-  return NextResponse.json({ error: `${why}: try again after ${at}.` }, {
-    status: 429,
-    headers: { "Retry-After": String(retry), "Access-Control-Allow-Origin": "*" },
-  });
+  return NextResponse.json({ error: `${why}: try again after ${at}.` }, { status: 429, headers: { "Retry-After": String(retry), ...CORS } });
 }
 
-function timingSafeEqual(a: string, b: string) {
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
-}
+const unavailable = () => NextResponse.json({ error: "Couldn't check the sign-in (the database didn't answer). Try again in a moment." }, { status: 503 });
 
-// The logo, icons and web manifest are served without the password: browsers fetch the manifest
+// The logo, icons and web manifest are served without signing in: browsers fetch the manifest
 // without credentials, and they're only the public mark.
 export const config = {
   matcher: ["/((?!_next/static|_next/image|favicon.ico|icon\\.svg|apple-icon\\.png|icon-192\\.png|icon-512\\.png|logo\\.svg|manifest\\.webmanifest).*)"],

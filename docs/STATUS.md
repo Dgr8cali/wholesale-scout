@@ -1,17 +1,17 @@
 # Wholesale Scout: status
 
 Read this first in a new session. Keep it current: every commit that changes a feature updates
-it (what's built, the backlog, the rough edges). Last updated: 20 Oct 2026 (UI redesign complete: phase 5, polish, accessibility and speed).
+it (what's built, the backlog, the rough edges). Last updated: 28 Oct 2026 (passkey sign-in replaces the Basic-auth password gate).
 
 Wholesale Scout is a single-user Amazon UK seller's workbench: Next.js 16 (App Router, `proxy.ts`
-password gate), self-hosted Supabase (Postgres, RLS on, service-role access from the server only),
-hosted on the Netcup server at https://ws.dgr8cali.co.uk (`infra/`, `make deploy`), a Chrome extension (`extension/`, 0.8.0), and the Help centre in `content/help`. It has
+sign-in gate: passkeys, email links, extension tokens), self-hosted Supabase (Postgres, RLS on, service-role access from the server only),
+hosted on the Netcup server at https://ws.dgr8cali.co.uk (`infra/`, `make deploy`), a Chrome extension (`extension/`, 0.9.0), and the Help centre in `content/help`. It has
 four workspaces, each a labelled group in one sidebar (main pages, then a collapsible More); Today
 (Home), Settings and Help are shared.
 
 **Hosting cutover, closed out** (19 Oct 2026): the app moved from Vercel + Supabase Cloud to the Netcup server on 17 Oct (cutover dump 06:28:33 BST), but wholesale-scout.vercel.app kept running against Supabase Cloud and was used by mistake on 17 Oct evening. A read-only three-way diff (the cutover dump restored locally vs Cloud vs self-hosted, every table, by primary key and row content) found Cloud-only: two Private label candidates ("Electrolyte sachets", "Women's probiotic") with their ASINs, fields, waivers, review dumps, POE snapshots, niches and hunt ASINs; two AI review summaries (£0.052); the deletion of three draft candidates (tackle box, raised dog bowl, cat water fountain); and the Vercel crons' Qogita nightlies (18, 19 Oct), Watchlist re-check (18 Oct) and an ASIN check. All of it was copied into self-hosted in one transaction (IDs kept, foreign-key order), after a backup (`~/backups/supabase-pre-merge-20261019T145918.dump` on the server); the brand map was rebuilt there, not copied. Kept self-hosted on conflicts: Amazon sync data (same values both sides), one proposal's refresh time. The re-run diff shows Cloud ⊆ self-hosted. All the Ads launch work (B0HM8FBX3T's "2026-10-18 #1", uploaded; "2026-10-02 #3" discarded) was on self-hosted all along. Supabase Cloud is untouched, as the rollback. To stop it recurring: `vercel.json` now 308-redirects every path to https://ws.dgr8cali.co.uk and has no crons, and `proxy.ts` redirects any `*.vercel.app` host as a backstop; the extension's default App URL is the server and a saved vercel.app address is moved to it. The server's crons had failed since the cutover (`.cron.env` held the secret unquoted and still `$$`-escaped): fixed, and both run by hand returned JSON. The server's `.env` has every key the Vercel environment pull had; missing: `RESEND_API_KEY`, `ALERT_EMAIL_TO` (email alerts off) and optionally `ALERT_EMAIL_FROM`.
 
-**Logo** (18 Oct 2026): the master mark is `public/logo.svg` (teal tile, magnifier, amber bars), drawn by `<Logo size>` (`src/components/Logo.tsx`, alt "Wholesale Scout") in the sidebar header, the Help centre header, and as the default mark of an `EmptyState` given no icon. Favicon and app icons by Next's file conventions: `src/app/favicon.ico` (16/32/48), `icon.svg`, `apple-icon.png` (180, full-bleed teal: iOS rounds it), and `manifest.ts` (Wholesale Scout / Scout, theme #2F7F8C, `public/icon-192.png` and `icon-512.png`). The proxy serves those files without the password (a browser fetches the manifest without credentials). The extension (0.6.0 on) uses the same mark: `extension/icons/` 16/32/48/128 for its icon and toolbar button, the popup's heading, and a 16 px mark in every panel heading (built as SVG nodes, so no page's CSP blocks it). There's no login page to put it on: the password is the browser's own Basic-auth dialog.
+**Logo** (18 Oct 2026): the master mark is `public/logo.svg` (teal tile, magnifier, amber bars), drawn by `<Logo size>` (`src/components/Logo.tsx`, alt "Wholesale Scout") in the sidebar header, the Help centre header, and as the default mark of an `EmptyState` given no icon. Favicon and app icons by Next's file conventions: `src/app/favicon.ico` (16/32/48), `icon.svg`, `apple-icon.png` (180, full-bleed teal: iOS rounds it), and `manifest.ts` (Wholesale Scout / Scout, theme #2F7F8C, `public/icon-192.png` and `icon-512.png`). The proxy serves those files without the password (a browser fetches the manifest without credentials). The extension (0.6.0 on) uses the same mark: `extension/icons/` 16/32/48/128 for its icon and toolbar button, the popup's heading, and a 16 px mark in every panel heading (built as SVG nodes, so no page's CSP blocks it). The sign-in page (`/login`, 28 Oct) shows it above the form.
 
 **UI redesign** ("Calm Workbench", from `docs/ui-audit.md`; complete, summary in `docs/ui-redesign-summary.md`). Phase 1, the audit, done (19 Oct 2026). Phase 2, foundations, done (19 Oct 2026):
 tokens in `src/app/globals.css` (one source of truth: the logo teal #2F7F8C as primary with hover/soft/ink, the amber #F2B544 as
@@ -135,8 +135,8 @@ proposal_dismiss (`decide(…, "skip")`, 30 days; nothing to Amazon), shortlist_
 Never (`NEVER_RULES`, `neverAllowed`): approving or exporting Ads changes, Amazon writes, deletes, uploads, purchases, prices or
 costs, settings; such a request gets a "can't" with the page (`cannot` in the answer, the model's or, when it gave none, the
 server's). Confirm (`POST /api/ask/actions`, decision confirm / decline) re-resolves the action, claims the (run, action) row
-(unique) so it runs once, runs it, and logs status, before / after, actor (the Basic-auth user name, never the password; "app
-password" for a bearer token), IP, browser and times; a repeat Confirm returns the first run. Undo (`POST /api/ask/actions/undo`)
+(unique) so it runs once, runs it, and logs status, before / after, actor (how the proxy let the request in: "you
+(passkey)", "you (email link)", never a secret), IP, browser and times; a repeat Confirm returns the first run. Undo (`POST /api/ask/actions/undo`)
 within 2 minutes restores the "before" (the toast shows it for 10 s); open_page has none. `GET /api/ask/actions` is the log, shown
 under Ask Scout ("Action log"). Cards render under the answer in the Today panel, the sheet (phones, narrower screens) and ⌘K's
 Ask Scout…; a confirmed action fires `ask-scout:acted` and Today reloads. The tools now return ids (proposals, leads,
@@ -521,6 +521,21 @@ delete and archive, red "negative" chips where a bucket goes below 0, and an aud
 (`stock_audit`, Movements → Audit log). The pill box account's
 StockPilot data is imported (3 items). Ads days of cover and the stock guard count every bucket.
 
+## Sign-in (28 Oct 2026)
+
+The HTTP Basic `APP_PASSWORD` gate is gone. `src/proxy.ts` is the one gate on every page and API route (a test walks every `page.tsx` and `route.ts`): a page without a session redirects to `/login?next=…`, an API call answers 401 JSON (no `WWW-Authenticate`, so no browser password prompt and no Basic retries).
+
+- **Who**: only `AUTH_ALLOWED_EMAILS` (server: `akin@dgr8cali.co.uk`); no sign-up. A session whose address leaves the list stops working.
+- **Passkeys** (SimpleWebAuthn 14, `src/lib/server/passkeys.ts`): discoverable credentials (nothing typed), RP = `APP_URL`'s host (`ws.dgr8cali.co.uk`; localhost runs use their own origin). Challenges in `auth_challenges` (5 min, used once, id in an httpOnly cookie); keys in `auth_passkeys` (public key, counter, synced flag). Added in Settings → Security; the last one can't be removed. Supabase Auth's passkeys weren't used: a beta needing opt-in, unconfirmed in the self-hosted GoTrue (v2.197.0), and it has no per-device session list.
+- **Email links** (backup): `auth_email_links` (SHA-256 of the token, 15 min, once), sent with Resend; the link opens `/login?link=…` and a **Continue** button POSTs it (a mail scanner opening the link can't use it up). Same answer for any address, so the allowlist can't be probed. Needs `RESEND_API_KEY` (not set yet).
+- **Sessions**: `auth_sessions` (SHA-256 of the cookie token `ws_session`, httpOnly, SameSite=Lax, Secure), 90 days sliding (expiry and cookie move on at most hourly); read through a 60 s cache that signing out clears. Settings → Security lists them (browser, method, passkey, IP, last active) with Sign out per device and Sign out everywhere.
+- **Extension tokens**: `api_tokens` (`wst_…`, SHA-256 stored, prefix shown, shown once, revocable), accepted only on the extension's endpoints (`isExtensionPath`: `/api/extension/*`, `/api/pl/poe*`, `/api/pl/reviews/capture`, `/api/pl/suppliers/capture`, `/api/ads/ranks`). Extension 0.9.0 sends it instead of the password (and deletes a saved password on Save).
+- **Server secrets**: `CRON_SECRET` / `WATCHDOG_SECRET` on `/api/cron/*` as before; `CRON_SECRET` also carries the app's calls to itself (`kick.ts`, a run's next step) on `/api/*` except `/api/auth/*`.
+- **APP_PASSWORD**: emergency fallback, off unless `AUTH_PASSWORD_FALLBACK=1` (then Bearer/Basic and the `/login` form). `/login` also offers it while no passkey exists (to add the first).
+- **Rate limit**: sign-in attempts 10 / 10 min / IP (in memory; passkey verify, email link asked and used, password). The old `auth_failures` IP block is no longer used (table and function kept).
+- **Who did it**: the proxy sets `x-ws-auth` (dropping any the client sent): "you (passkey)", "extension token \"…\"", "the app (background)"; the Ask Scout action log records it.
+- **Tests**: `src/proxy.test.ts` (every route needs auth, token scope, cron, fallback, sliding, allowlist), `src/lib/server/auth.test.ts` (password bootstrap, rate limit, email links, passkey rules with the signature check stubbed, tokens shown once). `E2E_PASSKEY=1 npm run test:a11y` runs the whole flow in Chrome with a virtual authenticator against the build (writes to the database; removes its passkey, signs out only its own sessions). The a11y run starts its server with `AUTH_PASSWORD_FALLBACK=1` and sends the password.
+
 ## External dependencies
 
 | Service | State |
@@ -533,7 +548,8 @@ StockPilot data is imported (3 items). Ads days of cover and the stock guard cou
 | **Netcup server** | Hosting (Docker; `make deploy`, `make migrate`, `make logs`). Crons in its crontab: Qogita nightly 03:00, Watchlist Sunday 06:00, Ads review 1st of the month 06:00 (does nothing unless turned on), secret from `~/wholesale-scout/.cron.env`, output in `cron.log`. Env vars in `~/wholesale-scout/.env`. |
 | **Vercel** | Retired 17 Oct 2026. `wholesale-scout.vercel.app` only redirects (308, every path) to the server; no crons. |
 | **Qogita** | Live: nightly catalogue and offer pull. |
-| **Resend** | Watchlist alert emails, sent only when `RESEND_API_KEY` and `ALERT_EMAIL_TO` are set (not set locally, nor on the server yet). |
+| **Resend** | Watchlist alert emails (need `RESEND_API_KEY` and `ALERT_EMAIL_TO`) and sign-in links (need only `RESEND_API_KEY`; sender `AUTH_EMAIL_FROM`). Not set locally, nor on the server yet: email sign-in says it isn't set up, passkeys work without it. Self-hosted Supabase has no built-in SMTP (its `SMTP_*` are the docker placeholders `supabase-mail:2500`), so email goes through Resend, not GoTrue. |
+| **fail2ban (server)** | `sshd` and KaliStudio's `caddy-kalistudio` / `-slow` jails read one Caddy log for every site. WS's 401s counted and banned the home IP (28 Oct, 01:30 GMT, slow jail: 40 in 6 h → 24 h). Fix: `infra/fail2ban/caddy-kalistudio.local` (ignore `ws.dgr8cali.co.uk`), installed with sudo (`sudo cp … /etc/fail2ban/filter.d/ && sudo fail2ban-client reload`). |
 
 ## Backlog (priority order)
 
@@ -541,7 +557,7 @@ StockPilot data is imported (3 items). Ads days of cover and the stock guard cou
 2. **Ads: keyword and competitor research** (the old Phase 4 idea: feeding the rules and the launcher; the AI layer now covers narrative, targets and the monthly review).
 3. **Stock: TikTok/eBay sales recording in use** (record real sales so demand, cover and reorder points mean something; a faster entry path or imports from TikTok Shop/eBay order exports).
 4. **General: move pg_net out of the public schema** (Supabase advisor: extension in public).
-5. **General: Resend email alerts** configured on the server (`RESEND_API_KEY`, `ALERT_EMAIL_TO` aren't set there yet) and extended beyond the Watchlist (stock low/out, reorder due, stock guard, hunt finished).
+5. **General: Resend email** configured on the server (sign-in links as well as alerts) (`RESEND_API_KEY`, `ALERT_EMAIL_TO` aren't set there yet) and extended beyond the Watchlist (stock low/out, reorder due, stock guard, hunt finished).
 6. **General: data backup workflow** (only the schema is backed up today, to `supabase/schema.sql`; data relies on Supabase's own backups).
 
 ## Known rough edges
@@ -566,7 +582,7 @@ StockPilot data is imported (3 items). Ads days of cover and the stock guard cou
 - **AI prices are assumed defaults** ($3/$15 per M tokens for Sonnet 5.5, $1/$5 Haiku 4.5, $5/$25 Opus 5.5, £0.79 per $): check them against Anthropic's pricing and edit in Settings → Ads.
 - **The monthly review** needs the daily Campaign report for per-month figures and batch before/after verdicts; with range data only it says so. No batch has been uploaded yet, so no verdict has been tested on real data.
 - **The review miner** has no part-of-speech tagger: phrases are content-word pairs and triples after stop words, so a few odd ones ("too easily") show; Ignore hides them. Tested on a fixture of 40 fake reviews; the first real Amazon paste confirms the splitting.
-- **Stock audit** records "you" as the actor: the app has one user behind the password gate, so it doesn't tell people apart.
+- **Stock audit** records "you" as the actor: the app has one user behind the sign-in, so it doesn't tell people apart.
 - **Order currency**: the landed cost per unit is kept in £; editing an order's price in another currency or its rate re-works the £ (and its receipt's unit cost).
 - **Ordered stock shows as "out" on Levels** until it's received (e.g. the Biotene and Lifeproof items made from their product-page purchases).
 - **Rule windows on range data**: search terms and keywords come in import ranges, not days, so a window shorter than an import counts that import in full (the rule says so). Exact windows need imports of about the window's length, or the Ads API.

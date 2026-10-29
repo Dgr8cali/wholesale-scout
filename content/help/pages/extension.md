@@ -16,19 +16,19 @@ Click the extension's icon in the Chrome toolbar to open its settings:
 | Setting | Default | What it does |
 |---|---|---|
 | **App URL** | `https://ws.dgr8cali.co.uk` | Your app's address. "https://" is added if you leave it off. A saved `wholesale-scout.vercel.app` (the old address, which only redirects now) is moved to it automatically. |
-| **APP_PASSWORD** | empty | The password the app asks for. It's stored on this computer only (in Chrome's local extension storage) and sent only to your app. |
+| **API token** | empty | This browser's token, from the app's **Settings → Security → Extension tokens** (it starts `wst_`, and is shown once). It's stored on this computer only (in Chrome's local extension storage), sent only to your app, and opens only the extension's endpoints. |
 | **Seller Central DG page** | `https://sellercentral.amazon.co.uk/product-search/search?q={asin}` | The page **Look up** opens, with `{asin}` replaced. If another Seller Central page shows you the dangerous-goods classification, paste its address here. |
 | **Check product pages automatically** | on | The panel checks each product page as soon as it opens. When it's off, the panel shows a **Check** button instead. |
 | **Show debug** | off | Adds a **Debug** section under the competitor stock list, showing what Amazon sent back at each step of a stock reading. Turn it on when the stock reader needs fixing. It takes effect on open panels straight away. |
 
 - **Save**: stores the settings. The first time (or after changing the App URL) Chrome asks for permission to reach the app's address. Allow it, or you'll see "Allow access to the app's address to connect."
-- **Test connection**: saves, then asks the app. "Connected: the app accepted the password." means it works. "Wrong password" means the password is wrong. "Couldn't reach …" means the URL is wrong, or access wasn't allowed.
+- **Test connection**: saves, then asks the app. "Connected: the app accepted the token." means it works. "The app refused the token" means it was revoked or mistyped: create a new one. "Couldn't reach …" means the URL is wrong, or access wasn't allowed.
 
 ## The product page panel
 
 On any amazon.co.uk product page, a panel sits on the right. The **Wholesale Scout** tab on its edge, or the **×** in the panel, collapses and reopens it. Whether it's open is remembered.
 
-If the extension isn't set up yet, the panel says "Open the extension's popup (its toolbar icon) and set the app URL and password."
+If the extension isn't set up yet, the panel says "Open the extension's popup (its toolbar icon) and set the app URL and API token."
 
 ### Checking a product
 
@@ -132,7 +132,7 @@ On Seller Central's **Product Opportunity Explorer**, the extension can send a n
 
 - **What it reads.** A script watches the responses the page itself receives from Amazon: the niche data (`/ox-api/graphql`, operation `getNiche`) and the growth widget (`/insightswidget-api/growth`). It doesn't read the page's text, click anything, change any request or fetch anything itself. The latest niche is kept in memory in that tab only.
 - **When it sends.** Only when you click **Send to Private label** in the panel at the bottom right. The panel appears only after a niche has loaded. Nothing is sent before you click, and nothing is scheduled or repeated. Closing the tab forgets the capture.
-- **Where it goes.** To your app (`/api/pl/poe`) with the extension's password, like every other call. The niche attaches to the candidate whose niche keyword equals its title. Otherwise the panel lists your candidates to pick from and **Attach** sends it there.
+- **Where it goes.** To your app (`/api/pl/poe`) with the extension's token, like every other call. The niche attaches to the candidate whose niche keyword equals its title. Otherwise the panel lists your candidates to pick from and **Attach** sends it there.
 - **Markets.** sellercentral.amazon.co.uk only, unless you tick **Opportunity Explorer on .com and .de too** in the popup. Chrome then asks for access to those two Seller Central sites.
 
 ## Rank checks (0.3.0)

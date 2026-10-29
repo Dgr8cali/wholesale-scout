@@ -17,6 +17,8 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.131.0",
+    "@simplewebauthn/browser": "14.0.0",
+    "@simplewebauthn/server": "14.0.3",
     "@supabase/supabase-js": "2.109.0",
     "@tanstack/react-table": "9.2.4",
     "@tanstack/react-virtual": "3.14.13",

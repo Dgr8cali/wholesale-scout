@@ -1,0 +1,10 @@
+# /etc/fail2ban/filter.d/caddy-kalistudio.local: read after caddy-kalistudio.conf (KaliStudio's
+# filter, shared by every site in /var/log/caddy/kalistudio.log). Wholesale Scout's refusals
+# (ws.dgr8cali.co.uk: 401s from an old saved password, a signed-out tab polling) no longer count
+# towards a ban; the app rate-limits its own sign-in (10 attempts / 10 min / IP). KaliStudio's
+# refusals and the sshd jail are unchanged. Install (needs sudo):
+#   sudo cp infra/fail2ban/caddy-kalistudio.local /etc/fail2ban/filter.d/ && sudo fail2ban-client reload
+# Check: fail2ban-regex /var/log/caddy/kalistudio.log /etc/fail2ban/filter.d/caddy-kalistudio.conf
+#   (on 28 Oct 2026: 68 matched before, 17 matched + 51 ignored after)
+[Definition]
+ignoreregex = "host":"ws\.dgr8cali\.co\.uk"

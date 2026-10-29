@@ -1,6 +1,6 @@
-// Settings: the app's URL and password (kept in chrome.storage.local on this computer only),
+// Settings: the app's URL and this browser's API token (kept in chrome.storage.local on this computer only),
 // the Seller Central DG page, and a connection test.
-const DEFAULTS = { appUrl: "https://ws.dgr8cali.co.uk", password: "", dgUrl: "https://sellercentral.amazon.co.uk/product-search/search?q={asin}", autoCheck: true, showDebug: false, poeOtherMarkets: false };
+const DEFAULTS = { appUrl: "https://ws.dgr8cali.co.uk", token: "", dgUrl: "https://sellercentral.amazon.co.uk/product-search/search?q={asin}", autoCheck: true, showDebug: false, poeOtherMarkets: false };
 const $ = (id) => document.getElementById(id);
 /**
  * A message to the background, as a promise. It always reads chrome.runtime.lastError, so a
@@ -20,13 +20,13 @@ const bg = (message) => new Promise((resolve) => {
 const msg = (text, ok) => { $("msg").textContent = text; $("msg").className = ok ? "ok" : "err"; };
 
 chrome.storage.local.get(DEFAULTS, (s) => {
-  // The old Vercel address only redirects now (dropping the password): moved to the new one.
+  // The old Vercel address only redirects now (dropping the token): moved to the new one.
   if (/^https?:\/\/wholesale-scout\.vercel\.app\/*$/i.test(String(s.appUrl))) {
     s.appUrl = DEFAULTS.appUrl;
     chrome.storage.local.set({ appUrl: s.appUrl });
   }
   $("appUrl").value = s.appUrl;
-  $("password").value = s.password;
+  $("token").value = s.token;
   $("dgUrl").value = s.dgUrl;
   $("autoCheck").checked = s.autoCheck !== false;
   $("showDebug").checked = !!s.showDebug;
@@ -43,7 +43,11 @@ async function save() {
   const origins = [`${origin}/*`, ...(other ? ["https://sellercentral.amazon.com/*", "https://sellercentral.amazon.de/*"] : [])];
   const granted = await chrome.permissions.request({ origins });
   if (!granted) { msg(other ? "Allow access to the app's address and Seller Central .com/.de, or untick that option." : "Allow access to the app's address to connect."); return false; }
-  await chrome.storage.local.set({ appUrl, password: $("password").value, dgUrl: $("dgUrl").value.trim() || DEFAULTS.dgUrl, autoCheck: $("autoCheck").checked, showDebug: $("showDebug").checked, poeOtherMarkets: other });
+  const token = $("token").value.trim();
+  if (token && !token.startsWith("wst_")) { msg("That isn't an API token: create one in the app's Settings → Security (it starts wst_)."); return false; }
+  // The app password from 0.8 and earlier isn't used any more: it's removed from this computer.
+  await chrome.storage.local.remove("password");
+  await chrome.storage.local.set({ appUrl, token, dgUrl: $("dgUrl").value.trim() || DEFAULTS.dgUrl, autoCheck: $("autoCheck").checked, showDebug: $("showDebug").checked, poeOtherMarkets: other });
   await bg({ type: "poeMarkets" });
   $("appUrl").value = appUrl;
   return true;
@@ -54,7 +58,7 @@ $("test").addEventListener("click", async () => {
   if (!(await save())) return;
   msg("Testing…", true);
   const r = await bg({ type: "api", method: "GET", path: "/api/extension/ping" });
-  if (r?.ok && r.data?.app === "wholesale-scout") msg("Connected: the app accepted the password.", true);
+  if (r?.ok && r.data?.app === "wholesale-scout") msg("Connected: the app accepted the token.", true);
   else msg(r?.error || "No answer.");
 });
 

@@ -16,15 +16,21 @@ export function appUrl(): string {
   return u.replace(/\/$/, "");
 }
 
-export async function sendEmail(msg: { subject: string; html: string; text: string }): Promise<{ sent: boolean; reason?: string }> {
-  if (!emailConfigured()) return { sent: false, reason: "RESEND_API_KEY and ALERT_EMAIL_TO aren't set" };
+/** Sign-in links need only the Resend key (they go to the address signing in). */
+export function signInEmailConfigured(): boolean {
+  return !!process.env.RESEND_API_KEY;
+}
+
+/** `to`: a sign-in link's address; else the alert recipients (ALERT_EMAIL_TO). */
+export async function sendEmail(msg: { subject: string; html: string; text: string; to?: string; from?: string }): Promise<{ sent: boolean; reason?: string }> {
+  if (msg.to ? !signInEmailConfigured() : !emailConfigured()) return { sent: false, reason: msg.to ? "RESEND_API_KEY isn't set" : "RESEND_API_KEY and ALERT_EMAIL_TO aren't set" };
   try {
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { authorization: `Bearer ${process.env.RESEND_API_KEY}`, "content-type": "application/json" },
       body: JSON.stringify({
-        from: process.env.ALERT_EMAIL_FROM || "Wholesale Scout <onboarding@resend.dev>",
-        to: process.env.ALERT_EMAIL_TO!.split(",").map((s) => s.trim()).filter(Boolean),
+        from: msg.from || process.env.ALERT_EMAIL_FROM || "Wholesale Scout <onboarding@resend.dev>",
+        to: msg.to ? [msg.to] : process.env.ALERT_EMAIL_TO!.split(",").map((s) => s.trim()).filter(Boolean),
         subject: msg.subject,
         html: msg.html,
         text: msg.text,

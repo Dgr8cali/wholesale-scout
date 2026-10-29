@@ -19,12 +19,14 @@ Wholesale Scout's verdict on Amazon UK, where you browse:
 4. Pin it: puzzle-piece icon → pin **Wholesale Scout**.
 5. Click its icon, then enter:
    - **App URL**: `https://ws.dgr8cali.co.uk` (or `http://localhost:3000` in development)
-   - **APP_PASSWORD**: the same password the app asks for
+   - **API token**: in the app, Settings → Security → Extension tokens → **Create token**, then copy it (it's shown once; it starts `wst_`)
 6. Click **Save** (Chrome asks to allow access to the app's address: allow it), then **Test connection**. It should say "Connected".
 
 Since 0.8.0 verdicts use the app's words, colours and icons: a product is **Buy / Check / Skip** (or **Not scored**) on the product panel and on each search result, each gate on the panel is **Pass / Check / Fail**, as round chips in the app's colours (green / amber / red / grey) with its icon (no more PASS / WARN / FAIL); links to a Private label candidate open its page (`/pl/candidates/<id>`, on the Suppliers & quotes, Reviews or Gate 3 tab) instead of the old `?c=` redirect. Since 0.7.0 the popup and panels use the app's look: the logo teal (#2F7F8C), IBM Plex Sans (bundled in `fonts/` for the popup; the page panels use it when installed, else the system font). Since 0.6.1 the default App URL is `https://ws.dgr8cali.co.uk`, and a saved `wholesale-scout.vercel.app` is moved to it automatically (the old address only redirects now, and a redirect drops the password). Since 0.6.0 the extension's icon, toolbar button, popup and panel headings carry the Wholesale Scout mark (`icons/`). After pulling a new version of the repo, click the reload arrow on the extension's card in `chrome://extensions`, then refresh any Amazon, Seller Central or Alibaba tabs already open. Until you do, the extension's old scripts in those tabs can no longer reach it: since 0.5.3 they stop quietly (no "Extension context invalidated" errors), hide their panels, and show "Wholesale Scout was updated — refresh this page to use it."
 
-The password is kept in `chrome.storage.local` on this computer only and sent to your app as `Authorization: Bearer …`. Nothing is sent anywhere else.
+The token is kept in `chrome.storage.local` on this computer only and sent to your app as `Authorization: Bearer …`. Nothing is sent anywhere else. It opens only the extension's endpoints (not the app's pages or other APIs); revoke it in Settings → Security and the extension stops at once.
+
+Since 0.9.0 the extension uses a per-browser **API token** instead of the app password (the app moved to passkey sign-in, and the password no longer opens it). After updating, paste a token into the popup and press **Test connection**; the old password is removed from this computer when you save.
 
 ## Settings
 
@@ -53,7 +55,7 @@ Seller Central's pages can't be read reliably, so the bar suggests hazmat / not 
 - **What it keeps**: every GraphQL response on the niche page you're on, by operation name, plus the insights widget's. The page's tabs load their data in separate calls, so they're merged. The niche itself is the exact operation `getNiche` (its `data.niche`); a list operation such as `getNiches` is kept as context but never taken for the niche. Moving to another niche, closing or reloading the tab forgets it. The panel's grey debug line lists the operations seen ("Seen: getNiche, getNiches ×2; insights ×1").
 - **When it sends**: only when you click **Send to Private label** in the panel at the bottom right. The button appears only once `getNiche` has brought the niche; before that the panel says "No niche data yet". Nothing is scheduled and nothing is sent automatically. The panel's **Dismiss** hides it.
 - **What it says back**: how many fields were filled, and which of the eight the app couldn't read (niche title, search volume, growth, products, top-3 click share, conversion, units per product, search terms). A capture with nothing readable says "captured but could not read 8 fields — raw saved", never success. The raw capture is stored either way, so the app can read it again after a parser fix (`POST /api/pl/poe/reparse`).
-- **Where it goes**: `POST /api/pl/poe` on your app with `{ nicheId, title, raw }` and your password, through `background.js` like every other call. The app stores the capture, reads Gate 3 (search volume, growth, products, top-3 click share, conversion, units per product) and Gate 5 (head-term volume, long-tail count) from it, and attaches it to the candidate whose niche keyword is the niche's title. Otherwise the panel lists your candidates and **Attach** sends it to the one you pick (`/api/pl/poe/attach`). The list's first choice, **Niche only (no candidate)** (0.5.1), touches no candidate: `/api/pl/poe/niche` links the capture to the imported niche with that title or alias (best term conversion on Private label → Niches), or says there's no matching niche yet; the capture is kept and links when its category is imported.
+- **Where it goes**: `POST /api/pl/poe` on your app with `{ nicheId, title, raw }` and your token, through `background.js` like every other call. The app stores the capture, reads Gate 3 (search volume, growth, products, top-3 click share, conversion, units per product) and Gate 5 (head-term volume, long-tail count) from it, and attaches it to the candidate whose niche keyword is the niche's title. Otherwise the panel lists your candidates and **Attach** sends it to the one you pick (`/api/pl/poe/attach`). The list's first choice, **Niche only (no candidate)** (0.5.1), touches no candidate: `/api/pl/poe/niche` links the capture to the imported niche with that title or alias (best term conversion on Private label → Niches), or says there's no matching niche yet; the capture is kept and links when its category is imported.
 - **Markets**: `.co.uk` only by default. `.com` and `.de` are optional permissions, registered only while the popup option is on.
 
 ## Rank checks: manual, per click
@@ -61,7 +63,7 @@ Seller Central's pages can't be read reliably, so the bar suggests hazmat / not 
 - **Where**: the popup's **Check ranks**. It lists the app's Ads products with their tracked keywords (`GET /api/ads/ranks`: each product's exact keywords, launch head terms and any added).
 - **What it does**: `ranks.js` (background) opens one amazon.co.uk tab and, for each keyword (at most 30 a run), waits a random 3–6 seconds, opens `/s?k=<keyword>`, and `rankread.js` reads the results: every `[data-component-type="s-search-result"]` with an ASIN, skipping sponsored ones (`AdHolder`, the "Sponsored" label, `/sspa/click` links). The product's position among the organic results is 1–48; not on page 1, it reads pages 2 and 3 (each after its own pause) until 48 organic results have been seen; otherwise "not in top 48".
 - **What you see**: a panel at the bottom right of that tab with each keyword's result and **Stop**. A captcha stops the run and says so.
-- **Where it goes**: at the end or on Stop, `POST /api/ads/ranks` with `{ asin, runId, results: [{ keyword, position, page, checkedAt }] }`, through `background.js` with your password.
+- **Where it goes**: at the end or on Stop, `POST /api/ads/ranks` with `{ asin, runId, results: [{ keyword, position, page, checkedAt }] }`, through `background.js` with your token.
 - **Limits**: one run at a time, started only by your click, never scheduled. Amazon's Conditions of Use prohibit automated data gathering: keep it to a few runs a week.
 
 ## Reviews to Private label: per click
@@ -69,14 +71,14 @@ Seller Central's pages can't be read reliably, so the bar suggests hazmat / not 
 - **Where** (0.5.2): Amazon's review pages, whichever address they use: `/portal/customer-reviews/<ASIN>` (where "See all reviews" goes now), `/product-reviews/<ASIN>` and `/gp/customer-reviews/…`, with or without the product's name before them; and product pages (`/dp/<ASIN>`, `/<name>/dp/<ASIN>`, `/gp/product/<ASIN>`), where the panel shows only when the page has reviews on it (bottom left there, clear of the verdict panel). Before 0.5.2 only `/product-reviews/` matched, so the panel never appeared on `/portal/customer-reviews/` pages.
 - **What it reads**: `reviews-parse.js` reads each review (`[data-hook="review"]`, else `div[id^="customer_review-"]`; title and body from `review-title`/`review-body`, or `reviewTitle`/`reviewText` on product pages since Oct 2026, read from 0.5.6): stars ("1.0 out of 5 stars"), title (the rating Amazon nests in it taken out), body, the "Reviewed in … on …" date and country, Verified Purchase, helpful votes and variant ("Colour Name: … | Number Of Items: …"), with Amazon's review id; each review once. The ASIN comes from the address, else the page's canonical link, else its ASIN field. Every selector is in `REVIEW_SELECTORS` at the top of that file. Every review page you open, or that Amazon loads in place (next page, a star filter, "show more": the panel watches the page and counts again a moment after it changes), is added to the capture for that ASIN, kept in `chrome.storage.local` until you **Clear** it. A note at the bottom says "Captured N reviews (X critical) for <ASIN>", or "No reviews found on this page — open the 'See all reviews' page and try again."
 - **When the panel doesn't show**: the popup's **Capture reviews on this page** runs the same parser on the tab you're on (`activeTab` + `scripting`), adds to the same capture and offers **Send** there, with the same candidate picker.
-- **Where it goes**: only when you click **Send reviews to Private label**: `POST /api/pl/reviews/capture` with `{ asin, reviews }` and your password. The app puts them in the Gate 4 reviews of the candidate with that ASIN among its page-one ASINs; with several (or none), the panel asks which. Sending again adds only new reviews (matched by review id). Reviews you pasted by hand for that ASIN aren't touched until you choose **Add to them** or **Replace them**.
+- **Where it goes**: only when you click **Send reviews to Private label**: `POST /api/pl/reviews/capture` with `{ asin, reviews }` and your token. The app puts them in the Gate 4 reviews of the candidate with that ASIN among its page-one ASINs; with several (or none), the panel asks which. Sending again adds only new reviews (matched by review id). Reviews you pasted by hand for that ASIN aren't touched until you choose **Add to them** or **Replace them**.
 - **What Gate 4 mines**: the 1–3★ ones. 4–5★ reviews, and any whose stars couldn't be read (the panel counts them), are kept but left out of the miner.
 
 ## Alibaba to Supplier Scout: per click
 
 - **Where**: any `www.alibaba.com` page with search result cards. A panel at the bottom right counts them (the extension asks for access to www.alibaba.com when you reload it).
 - **What it reads**: `alibaba-parse.js` reads each product card: title, listing URL, price range and currency, the unit (as shown, else the MOQ's), MOQ and unit, sold count, supplier name and store URL, years and country, rating and review count, badges (Verified, Verified Pro, Alibaba Guaranteed; Trade Assurance when the page's filter is on) and the delivery estimate. Every selector is in `ALIBABA_SELECTORS` at the top of that file: when Alibaba changes its markup, update them there. A card that can't be read is logged in the console and skipped, never fatal. The app's tests run the parser on `docs/samples/alibaba/lens-wipes.html` (60 cards).
-- **Where it goes**: only when you click **Send suppliers to Private label**: `POST /api/pl/suppliers/capture` with `{ candidateId, cards }` and your password. The first time it asks which candidate; it remembers it (**Change candidate** to pick another). Sending each results page adds to the same list: a listing sent before is updated and keeps its status and notes.
+- **Where it goes**: only when you click **Send suppliers to Private label**: `POST /api/pl/suppliers/capture` with `{ candidateId, cards }` and your token. The first time it asks which candidate; it remembers it (**Change candidate** to pick another). Sending each results page adds to the same list: a listing sent before is updated and keeps its status and notes.
 - **Nothing else**: it reads the page you're looking at, in your session; it never opens Alibaba pages or fetches anything from Alibaba itself.
 
 ## Errors in chrome://extensions
@@ -85,14 +87,14 @@ The extension shouldn't put anything in the **Errors** list. From 0.5.6: a rank 
 
 ## Limits
 
-The app allows the extension 60 checks and 120 other requests a minute from one address; past that it answers 429 with the time to try again. Ten wrong passwords in 15 minutes block the address for 15 minutes.
+The app allows the extension 60 checks and 120 other requests a minute from one address; past that it answers 429 with the time to try again. A wrong or revoked token is refused (401) with a message to make a new one.
 
 ## Files
 
 | File | What it does |
 |---|---|
 | `manifest.json` | Manifest V3: Amazon UK and Seller Central content scripts; the app's address is an optional permission granted on Save |
-| `background.js` | Calls the app with the password (content scripts ask it by message) |
+| `background.js` | Calls the app with the API token (content scripts ask it by message) |
 | `product.js` | The product-page panel, competitor stock |
 | `search.js` | Search-results badges |
 | `sellercentral.js` | The DG reading bar on Seller Central |

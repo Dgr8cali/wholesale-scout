@@ -104,7 +104,7 @@
     ]);
     panel.append(top);
     if (!settings.configured) {
-      panel.append(ws.h("p", { class: "err", text: "Open the extension's popup (its toolbar icon) and set the app URL and password." }));
+      panel.append(ws.h("p", { class: "err", text: "Open the extension's popup (its toolbar icon) and set the app URL and API token." }));
       return;
     }
     const unchecked = !card && !message;

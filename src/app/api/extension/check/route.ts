@@ -10,7 +10,7 @@ export const maxDuration = 60;
 /** A check this recent for the same ASIN and cost is answered from, instead of screening again. */
 const REUSE_MS = 12 * 3_600_000;
 
-// The extension calls from its own origin; the password (Basic or Bearer) is the protection.
+// The extension calls from its own origin; its API token (Bearer wst_…, checked by the proxy) is the protection.
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -29,8 +29,8 @@ export function OPTIONS() {
  *   GET /api/extension/check?run=<runId>          (poll a card that was still pending)
  *   GET /api/extension/check?run=<runId>&fetchAll=1 ("Fetch anyway": past the gate that stopped it)
  *
- * `asin` may also be an Amazon product link. Authorization: Basic (any user, APP_PASSWORD) or
- * Bearer APP_PASSWORD. A check of the same ASIN and cost in the last 12 hours is reused unless
+ * `asin` may also be an Amazon product link. Authorization: Bearer <extension API token>
+ * (Settings → Security). A check of the same ASIN and cost in the last 12 hours is reused unless
  * fresh=1. The card has `pending: true` while Keepa or gating are still to come.
  */
 export const GET = handle(async (req: NextRequest) => {

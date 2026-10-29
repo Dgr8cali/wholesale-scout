@@ -162,6 +162,10 @@ Filter sets are saved from the results filter bar with **More filters → Save c
 
 The thresholds and cost assumptions for [Private label](/help/pages/private-label), shared by every candidate. They are VAT rate (set on the **Business** tab, with VAT registration, as is the launch capital), digital services fee, inbound shipping per unit, prep per unit, average months in storage, returns allowance, min price multiple, min launch margin, min steady margin and min profit per unit. Each shows its default. **Save** applies them to every candidate straight away. The fees themselves come from the rate card on the **Fees** tab. There's no peak-rate switch here: Private label uses the peak rates in October–December automatically.
 
+## Security tab
+
+Your passkeys (add one on this device, remove a lost one), the browsers signed in (sign one out, or **Sign out everywhere**), and the Chrome extension's API tokens (create one per browser, shown once; revoke). See [Signing in](/help/pages/sign-in).
+
 ## Ads settings (now on Ads → Rules)
 
 These are on the **Ad settings** tab of **Ads → Rules**, next to the rules that use them; `/settings?tab=ads` opens it.

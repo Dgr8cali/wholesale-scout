@@ -7,7 +7,8 @@ import { CategoryRanks } from "@/components/settings/CategoryRanks";
 import { BusinessSettingsTab } from "@/components/settings/BusinessSettingsTab";
 import { PlSettingsTab } from "@/components/settings/PlSettingsTab";
 import { StockSettingsTab } from "@/components/settings/StockSettingsTab";
-import { ArrowUpRightIcon, BoxesIcon, ChevronRightIcon, PlusIcon, BuildingIcon, FilterIcon, GaugeIcon, MegaphoneIcon, PaletteIcon, ReceiptIcon, ShieldAlertIcon, ShieldCheckIcon, SlidersHorizontalIcon, TagIcon, Trash2Icon, UndoIcon } from "lucide-react";
+import { SecurityTab } from "@/components/settings/SecurityTab";
+import { ArrowUpRightIcon, BoxesIcon, LockKeyholeIcon, ChevronRightIcon, PlusIcon, BuildingIcon, FilterIcon, GaugeIcon, MegaphoneIcon, PaletteIcon, ReceiptIcon, ShieldAlertIcon, ShieldCheckIcon, SlidersHorizontalIcon, TagIcon, Trash2Icon, UndoIcon } from "lucide-react";
 import { Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { activeChips, normalizeFilters, type FilterSet } from "@/lib/filters";
 import type { RateCard } from "@/lib/fees/rateCard";
@@ -96,7 +97,7 @@ function ModeSelect({ value, onChange, allowOff = true, label }: { value: GateMo
 }
 
 type ProfileTab = "gates" | "score" | "fees" | "profiles";
-const TABS: { id: ProfileTab | "business" | "waived" | "filters" | "ip" | "pl" | "stock" | "appearance"; label: string; icon: ReactNode }[] = [
+const TABS: { id: ProfileTab | "business" | "waived" | "filters" | "ip" | "pl" | "stock" | "security" | "appearance"; label: string; icon: ReactNode }[] = [
   { id: "business", label: "Business", icon: <BuildingIcon /> },
   { id: "gates", label: "Gates", icon: <ShieldCheckIcon /> },
   { id: "score", label: "Score", icon: <GaugeIcon /> },
@@ -107,6 +108,7 @@ const TABS: { id: ProfileTab | "business" | "waived" | "filters" | "ip" | "pl" |
   { id: "filters", label: "Filter sets", icon: <FilterIcon /> },
   { id: "pl", label: "Private label", icon: <TagIcon /> },
   { id: "stock", label: "Stock", icon: <BoxesIcon /> },
+  { id: "security", label: "Security", icon: <LockKeyholeIcon /> },
   { id: "appearance", label: "Appearance", icon: <PaletteIcon /> },
 ];
 
@@ -181,6 +183,7 @@ function Settings() {
         <TabsContent value="filters"><FilterSets /></TabsContent>
         <TabsContent value="pl"><PlSettingsTab /></TabsContent>
         <TabsContent value="stock"><StockSettingsTab /></TabsContent>
+        <TabsContent value="security"><SecurityTab /></TabsContent>
         <TabsContent value="appearance">
           <Section title="Appearance" note="System follows your device's light or dark setting; the button in the top bar switches between light and dark.">
             <ThemeChoice />

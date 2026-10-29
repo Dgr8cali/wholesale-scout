@@ -1,12 +1,13 @@
 import "server-only";
 import { after as waitUntil } from "next/server";
 
+// The app's calls to itself carry the server's CRON_SECRET, which the proxy accepts on API routes.
 const auth = (): Record<string, string> =>
-  process.env.APP_PASSWORD ? { authorization: `Basic ${btoa(`worker:${process.env.APP_PASSWORD}`)}` } : {};
+  process.env.CRON_SECRET ? { authorization: `Bearer ${process.env.CRON_SECRET}` } : {};
 
 /**
  * Start (or continue) background processing of a run by calling its process route, without
- * waiting for it to finish. Carries the app password so the proxy lets it through.
+ * waiting for it to finish. Carries the CRON_SECRET so the proxy lets it through.
  */
 async function kickRun(origin: string, runId: string, path: "process" | "rescreen" = "process"): Promise<void> {
   try {

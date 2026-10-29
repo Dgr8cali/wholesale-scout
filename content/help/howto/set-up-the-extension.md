@@ -1,7 +1,7 @@
 ---
 title: Set up the Chrome extension
 summary: Install the Wholesale Scout extension in Chrome, connect it to your app and check that it works.
-synonyms: [install extension, load unpacked, chrome, connect extension, app password, plugin]
+synonyms: [install extension, load unpacked, chrome, connect extension, api token, extension token, plugin]
 order: 6
 workspace: general
 ---
@@ -14,7 +14,7 @@ You need:
 - Google Chrome on a computer.
 - The app's code on that computer. The extension lives in its `extension/` folder.
 - Your app's address, `https://ws.dgr8cali.co.uk` (or `http://localhost:3000` if you're running it locally).
-- The app's password: the value of `APP_PASSWORD`, which is the same password the app asks you for.
+- An API token for this browser: in the app, **Settings → Security → Extension tokens**, name it (e.g. "Chrome on my Mac") and press **Create token**, then **Copy**. It's shown once and starts `wst_`.
 
 ## Install it
 
@@ -27,21 +27,22 @@ You need:
 
 1. Click the Wholesale Scout icon in the toolbar to open its settings.
 2. Enter the **App URL**. If you leave off "https://" it's added for you.
-3. Enter the **APP_PASSWORD**.
+3. Paste the token into **API token**.
 4. Leave **Seller Central DG page**, **Check product pages automatically** (on) and **Show debug** (off) as they are for now.
 5. Click **Save**. Chrome asks to allow access to the app's address. Allow it.
-6. Click **Test connection**. It should say "Connected: the app accepted the password."
+6. Click **Test connection**. It should say "Connected: the app accepted the token."
 
 If it doesn't:
 
 | Message | What to do |
 |---|---|
-| "Wrong password" | Check the password against `APP_PASSWORD`. |
+| "The app refused the token…" | It was revoked or mistyped: create a new one in Settings → Security and paste it. |
+| "That isn't an API token…" | You pasted something else (the old app password?). Tokens start `wst_`. |
 | "Couldn't reach …" | Check the App URL. If it's a new address, click **Save** again and allow access. |
 | "Allow access to the app's address to connect." | You declined Chrome's permission request. Click **Save** again and allow it. |
 | "That isn't a URL." | The App URL couldn't be read as an address. |
 
-The password is kept on this computer only and is sent only to your app.
+The token is kept on this computer only and is sent only to your app. It opens only the extension's endpoints, not the app's pages or other data. Since extension 0.9.0 the app password isn't used (and is removed from the computer when you save); see [Signing in](/help/pages/sign-in).
 
 ## Try it
 

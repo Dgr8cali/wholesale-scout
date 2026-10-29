@@ -204,6 +204,8 @@ function PageCrumbs() {
 
 /** Collapsible grouped sidebar (a drawer on phones), the top bar, the breadcrumb and the page. */
 export function AppShell({ defaultOpen, qogita, children }: { defaultOpen: boolean; qogita: boolean; children: ReactNode }) {
+  // The sign-in page stands alone: no sidebar, and none of the shell's data (it needs a session).
+  if (usePathname() === "/login") return <main className="flex min-h-dvh items-center justify-center px-4 py-10">{children}</main>;
   return (
     <ShellDataProvider>
     <QogitaCartProvider enabled={qogita}>

@@ -40,7 +40,10 @@ The status dots in the top bar show **Supabase**, **SP-API**, **Gating** and **K
 |---|---|
 | `SUPABASE_URL` | Your Supabase project's URL. Without it and the key, every page that loads data fails with "SUPABASE_URL and SUPABASE_SERVICE_KEY must be set". |
 | `SUPABASE_SERVICE_KEY` | Supabase's service-role key, used by the server only. |
-| `APP_PASSWORD` | The password the browser asks for (any username). The extension and scripts send it as a bearer token. In production, without it every page says "Set APP_PASSWORD in the server's .env to open Wholesale Scout."; locally the app runs open. |
+| `AUTH_ALLOWED_EMAILS` | Who can sign in (comma-separated; `akin@dgr8cali.co.uk`). There's no sign-up. Empty: nobody can, and the sign-in page says so; locally (not production) the app then runs open. See [Signing in](/help/pages/sign-in). |
+| `APP_PASSWORD` | The emergency password. The sign-in page offers it only until your first passkey exists, or with `AUTH_PASSWORD_FALLBACK=1`. |
+| `AUTH_PASSWORD_FALLBACK` | `1` turns the app password back on everywhere (the sign-in page, and `Authorization: Bearer`/Basic for scripts). Off by default; for when you're locked out. The browser checks (`npm run test:a11y`) start their local server with it on. |
+| `AUTH_EMAIL_FROM` | Optional. The sender of sign-in links, e.g. `Wholesale Scout <login@dgr8cali.co.uk>` (a domain verified in Resend). Else `ALERT_EMAIL_FROM`, else Resend's test sender, which only delivers to your Resend account's own address. Sign-in links need `RESEND_API_KEY`. |
 
 ### Amazon SP-API
 
@@ -71,7 +74,7 @@ The status dots in the top bar show **Supabase**, **SP-API**, **Gating** and **K
 
 | Variable | What it's for |
 |---|---|
-| `CRON_SECRET` | Lets the server's crontab call `/api/cron/…` without the app password (it reads the secret from `~/wholesale-scout/.cron.env`, single-quoted, with `$$` written as `$`). Needed for the nightly Qogita pull (03:00) and the weekly watchlist check (Sunday 06:00); without it those calls are refused. |
+| `CRON_SECRET` | Lets the server's crontab call `/api/cron/…` without signing in, and carries the app's calls to its own API (a run's next step); it never opens pages or sign-in (it reads the secret from `~/wholesale-scout/.cron.env`, single-quoted, with `$$` written as `$`). Needed for the nightly Qogita pull (03:00) and the weekly watchlist check (Sunday 06:00); without it those calls are refused. |
 | `WATCHDOG_SECRET` | Optional. The bearer secret Supabase's watchdog job uses to call `/api/cron/watchdog`, which restarts runs that have stalled. The same value goes in Supabase Vault as `watchdog_secret`, with the app's watchdog address as `watchdog_url`. `CRON_SECRET` is accepted there too. |
 
 ### Email alerts

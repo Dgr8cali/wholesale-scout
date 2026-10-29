@@ -1,9 +1,10 @@
 // Wholesale Scout: the only part of the extension that talks to the app. Content scripts ask
-// it by message; it adds the password (Bearer APP_PASSWORD) and calls the app you configured.
+// it by message; it adds this browser's API token (Bearer wst_…, from the app's Settings → Security)
+// and calls the app you configured.
 
 const DEFAULTS = {
   appUrl: "https://ws.dgr8cali.co.uk",
-  password: "",
+  token: "",
   // Seller Central page to open for a DG look-up; {asin} is replaced.
   dgUrl: "https://sellercentral.amazon.co.uk/product-search/search?q={asin}",
   // Check a product page as soon as it opens (a new ASIN is a check run: a few Keepa tokens).
@@ -42,7 +43,7 @@ chrome.runtime.onInstalled.addListener(() => { syncPoeMarkets(); });
 chrome.runtime.onStartup.addListener(() => { syncPoeMarkets(); });
 
 // The app moved off Vercel (17 Oct 2026); the old address only redirects, and a redirect drops the
-// password. A saved old address is moved to the new one.
+// token. A saved old address is moved to the new one.
 const OLD_APP_URL = /^https?:\/\/wholesale-scout\.vercel\.app\/*$/i;
 
 async function settings() {
@@ -56,15 +57,15 @@ async function settings() {
 
 async function api(method, path, body) {
   const s = await settings();
-  if (!s.password) return { ok: false, status: 0, error: "Set the app URL and password in the extension's popup first." };
+  if (!s.token) return { ok: false, status: 0, error: "Paste an API token (the app's Settings → Security) into the extension's popup first." };
   try {
     const res = await fetch(`${s.appUrl}${path}`, {
       method,
-      headers: { authorization: `Bearer ${s.password}`, ...(body ? { "content-type": "application/json" } : {}) },
+      headers: { authorization: `Bearer ${s.token}`, ...(body ? { "content-type": "application/json" } : {}) },
       body: body ? JSON.stringify(body) : undefined,
     });
     const data = await res.json().catch(() => null);
-    if (!res.ok) return { ok: false, status: res.status, error: data?.error || (res.status === 401 ? "Wrong password" : `The app answered ${res.status}`) };
+    if (!res.ok) return { ok: false, status: res.status, error: data?.error || (res.status === 401 ? "The app refused the token: create a new one in Settings → Security" : `The app answered ${res.status}`) };
     return { ok: true, status: res.status, data };
   } catch (e) {
     return { ok: false, status: 0, error: `Couldn't reach ${s.appUrl}: ${e.message}. If it's a new address, save it again in the popup to allow access.` };
@@ -84,7 +85,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     if (msg.type === "api") return reply(await api(msg.method || "GET", msg.path, msg.body));
     if (msg.type === "settings") {
       const s = await settings();
-      return reply({ appUrl: s.appUrl, dgUrl: s.dgUrl, configured: !!s.password, autoCheck: s.autoCheck !== false, showDebug: !!s.showDebug });
+      return reply({ appUrl: s.appUrl, dgUrl: s.dgUrl, configured: !!s.token, autoCheck: s.autoCheck !== false, showDebug: !!s.showDebug });
     }
     if (msg.type === "poeMarkets") {
       await syncPoeMarkets();
