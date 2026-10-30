@@ -3,10 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "node scripts/dev-cache-cap.mjs",
     "dev": "next dev",
     "prebuild": "vitest run src/lib/help",
     "build": "next build",
     "start": "next start",
+    "clean": "rm -rf .next test-results playwright-report",
     "lint": "eslint",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",

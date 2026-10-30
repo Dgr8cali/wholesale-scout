@@ -43,10 +43,9 @@ next-env.d.ts
 /screenshots
 scripts/.b.mjs
 
-# UI redesign after-screenshots (local only)
-docs/ui-audit/after/
+# UI audit and redesign screenshots (local only; the 19 Oct audit set is in git history at 422f20c)
+docs/ui-audit/
 
-# Playwright (npm run test:a11y) and the final UI screenshots (local only)
+# Playwright (npm run test:a11y)
 /test-results/
 /playwright-report/
-docs/ui-audit/final/

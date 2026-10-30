@@ -2,7 +2,7 @@
 
 A read-only audit of every page as it is today, made before redesigning the UI. No app code was changed.
 
-**How it was made.** `npm run dev`, signed in with the app's own Basic-auth password (`APP_PASSWORD` from `.env.local`), against the self-hosted database through the SSH tunnel (never Supabase Cloud). Playwright (Chromium) visited every route in `src/app` at 1440×900 and 390×844 and saved a full-page screenshot of each to [`docs/ui-audit/screens/`](ui-audit/screens/) as `<route>-desktop.png` / `<route>-mobile.png`. Screenshots are clipped at 7,000 px tall; the real heights are in the table. The browser could only read: every POST/PATCH/DELETE to the app was aborted, except three read-only calls the pages need to render (`/api/sparks`, `/api/ads/rules/dry-run`, `/api/pl/hunt/estimate`). Detail pages use one real record each:
+**How it was made.** `npm run dev`, signed in with the app's own Basic-auth password (`APP_PASSWORD` from `.env.local`), against the self-hosted database through the SSH tunnel (never Supabase Cloud). Playwright (Chromium) visited every route in `src/app` at 1440×900 and 390×844 and saved a full-page screenshot of each to `docs/ui-audit/screens/` (removed from the repo on 30 Oct; restore with `git checkout 422f20c -- docs/ui-audit/screens`) as `<route>-desktop.png` / `<route>-mobile.png`. Screenshots are clipped at 7,000 px tall; the real heights are in the table. The browser could only read: every POST/PATCH/DELETE to the app was aborted, except three read-only calls the pages need to render (`/api/sparks`, `/api/ads/rules/dry-run`, `/api/pl/hunt/estimate`). Detail pages use one real record each:
 
 | Detail page | Record used |
 |---|---|

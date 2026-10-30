@@ -609,3 +609,4 @@ The HTTP Basic `APP_PASSWORD` gate is gone. `src/proxy.ts` is the one gate on ev
 - **A select returns at most 1,000 rows** (Supabase's max-rows), whatever `.range()` or `.limit()` asks. Any query that could pass 1,000 rows reads through `selectAll(table, cols, order, where)` / `allRows()` (`src/lib/server/db.ts`: a page at a time, ordered by a unique key) or is paged for the user. The FakeDb applies the same cap (`maxRows`, 1,000; lower it in a test to prove paging).
 - **Every top-level page has a Help article** (the coverage test enforces it); new data tables sort through `useSortable`/`SortTh` (`src/components/SortableTable.tsx`).
 - **Don't touch `scripts/.b.mjs`** (the user's).
+- **Disk**: `npm run clean` removes `.next`, `test-results` and `playwright-report`; `predev` clears `.next/dev` past 3 GB (Turbopack's dev cache has no limit). Screenshots in `docs/ui-audit/` stay local (gitignored).
