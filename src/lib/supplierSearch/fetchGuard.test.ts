@@ -89,3 +89,14 @@ describe("safeFetch page encodings", () => {
     expect(r.status === "ok" && r.html).toBe("é");
   });
 });
+
+describe("safeFetch for plain files", () => {
+  const send: RawSend = async () => ({ status: 200, headers: { "content-type": "text/plain" }, body: Buffer.from("User-agent: *"), truncated: false });
+  it("reads a plain text file when asked to, for robots.txt", async () => {
+    const r = await safeFetch("https://example.com/robots.txt", { send, anyType: true });
+    expect(r.status === "ok" && r.html).toBe("User-agent: *");
+  });
+  it("still refuses plain text by default", async () => {
+    expect((await safeFetch("https://example.com/robots.txt", { send })).status).toBe("not_html");
+  });
+});

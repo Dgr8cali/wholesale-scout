@@ -122,7 +122,7 @@ function decodeBody(body: Buffer, contentType: string): string {
   catch { return new TextDecoder("utf-8").decode(body); }
 }
 
-export async function safeFetch(url: string, opts: { maxBytes?: number; timeoutMs?: number; maxRedirects?: number; send?: RawSend; resolve?: Resolve } = {}): Promise<SafeFetchResult> {
+export async function safeFetch(url: string, opts: { maxBytes?: number; timeoutMs?: number; maxRedirects?: number; send?: RawSend; resolve?: Resolve; anyType?: boolean } = {}): Promise<SafeFetchResult> {
   const { maxBytes = 2_000_000, timeoutMs = 15_000, maxRedirects = 3, resolve = systemResolve } = opts;
   const send = opts.send ?? nodeSend(maxBytes, timeoutMs);
   const lookup = guardedLookup(resolve);
@@ -144,7 +144,7 @@ export async function safeFetch(url: string, opts: { maxBytes?: number; timeoutM
     }
     if (res.status < 200 || res.status >= 300) return { status: "http_error", reason: `status ${res.status}` };
     const type = res.headers["content-type"] ?? "";
-    if (!/text\/html|application\/xhtml\+xml/i.test(type)) return { status: "not_html", reason: type || "no content type" };
+    if (!opts.anyType && !/text\/html|application\/xhtml\+xml/i.test(type)) return { status: "not_html", reason: type || "no content type" };
     return { status: "ok", finalUrl: checked.url.href, html: decodeBody(res.body, type), truncated: res.truncated };
   }
 }

@@ -15,6 +15,7 @@
     "migrate": "node --env-file-if-exists=.env.local scripts/migrate.mjs",
     "schema:backup": "node --env-file-if-exists=.env.local scripts/schema-backup.mjs",
     "schema:restore": "node --env-file-if-exists=.env.local scripts/schema-restore.mjs",
+    "spike:suppliers": "node --env-file-if-exists=.env.local --import tsx scripts/supplier-spike.ts",
     "test:a11y": "node --env-file-if-exists=.env.local node_modules/.bin/playwright test"
   },
   "dependencies": {
