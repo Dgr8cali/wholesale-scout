@@ -1,0 +1,22 @@
+[
+  { "id": "colgate", "query": "Colgate toothpaste 75ml", "kind": "branded", "note": "Also in the GSAi study" },
+  { "id": "biotene", "query": "Biotene dry mouth mouthwash", "kind": "branded", "note": "Own stock item" },
+  { "id": "effaclar", "query": "La Roche-Posay Effaclar cleanser", "kind": "branded" },
+  { "id": "dove-soap", "query": "Dove soap bars", "kind": "branded" },
+  { "id": "duracell-aa", "query": "Duracell AA batteries", "kind": "branded" },
+  { "id": "lifeproof", "query": "LifeProof phone case", "kind": "branded", "note": "Own stock item" },
+  { "id": "bin-bags", "query": "black bin bags by the case", "kind": "generic", "note": "Also in the GSAi study" },
+  { "id": "nitrile-gloves", "query": "nitrile gloves box of 100", "kind": "generic" },
+  { "id": "catering-foil", "query": "kitchen foil catering roll", "kind": "generic" },
+  { "id": "cable-ties", "query": "cable ties bulk", "kind": "generic" },
+  { "id": "sponges", "query": "washing-up sponges bulk", "kind": "generic" },
+  { "id": "shopping-bags", "query": "reusable shopping bags bulk", "kind": "generic" },
+  { "id": "insulated-bottles", "query": "stainless steel insulated water bottles", "kind": "manufacturer", "note": "Also in the GSAi study" },
+  { "id": "lens-wipes", "query": "lens cleaning wipes individually wrapped", "kind": "manufacturer", "note": "Private label candidate" },
+  { "id": "pill-box", "query": "weekly pill box organiser", "kind": "manufacturer", "note": "Own product" },
+  { "id": "electrolyte-sachets", "query": "electrolyte sachets private label", "kind": "manufacturer", "note": "Private label candidate" },
+  { "id": "probiotic", "query": "women's probiotic capsules private label", "kind": "manufacturer", "note": "Private label candidate" },
+  { "id": "dog-bowl", "query": "raised dog bowl", "kind": "manufacturer", "note": "Dropped candidate" },
+  { "id": "cat-fountain", "query": "cat water fountain", "kind": "manufacturer", "note": "Dropped candidate" },
+  { "id": "tackle-box", "query": "tackle box", "kind": "manufacturer", "note": "Dropped candidate" }
+]
