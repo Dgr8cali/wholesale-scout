@@ -88,6 +88,15 @@ describe("the sheet", () => {
 const items: TestItem[] = [{ id: "p", query: "p", kind: "manufacturer" }, { id: "q", query: "q", kind: "generic" }];
 
 describe("scoreGrades", () => {
+  it("reports how often a price was found, per kind, leaving out wrong products and pages not opened", () => {
+    const rows = [
+      row({ row_id: "1", product: "p", price: "2.5" }), row({ row_id: "2", product: "p" }),
+      row({ row_id: "3", product: "q", price: "1" }), row({ row_id: "4", product: "q", product_ok: "n" }),
+      row({ row_id: "5", product: "q", price_basis: "not opened" }),
+    ];
+    const s = scoreGrades(rows, items, { 1: ["serper"], 2: ["serper"], 3: ["serper"], 4: ["serper"], 5: ["serper"] }).providers[0];
+    expect(s.priceFoundByKind).toEqual({ manufacturer: { found: 1, total: 2 }, generic: { found: 1, total: 1 } });
+  });
   it("counts results per country, with no country shown as Unknown", () => {
     const rows = [row({ row_id: "1", model_country: "GB" }), row({ row_id: "2", model_country: "GB" }), row({ row_id: "3", model_country: "DE" }), row({ row_id: "4", model_country: "CN" }), row({ row_id: "5", model_country: "Unknown" })];
     const map = { 1: ["serper"], 2: ["serper"], 3: ["serper"], 4: ["serper"], 5: ["serper"] } as Record<string, ("serper" | "brave")[]>;
@@ -144,6 +153,7 @@ describe("scoreGrades", () => {
 });
 
 const score = (over: Partial<ProviderScore>): ProviderScore => ({
+  priceFoundByKind: {},
   provider: "serper", results: 100, graded: 100, makersWithThree: 8, makerProducts: 8, makerLabelled: 10, makerPrecision: 1, productPrecision: 1, pricePrecision: 1,
   countryPrecision: 1, unknownShare: 0, countryConfirmed: 10, tldRight: 0, notOpened: 0,
   makerRight: 10, productRight: 50, productTotal: 50, productByKind: {}, priceRight: 20, priceTotal: 20, countryRight: 50, countryTotal: 50,

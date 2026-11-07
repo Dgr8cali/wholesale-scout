@@ -231,3 +231,51 @@ describe("spendUsd", () => {
     expect(() => spendUsd({ input_tokens: 1, output_tokens: 1 }, "claude-unknown")).toThrow(/claude-unknown/);
   });
 });
+
+describe("checkExtraction: a real price the model quoted in pieces", () => {
+  const listing = "Betapro 20 Black Bin Bags 20x20 Rolls (0) £14.99 Add to basket. Each is supplied as pack of 20 rolls. Delivery over £ 18.00 free.";
+  const priced = (over: Partial<Extraction>): Extraction => ({ ...base, supplierType: "unknown", typeEvidence: null, country: null, countryEvidence: null, countrySource: "none", priceBasis: "per_case", unitsInPrice: null, currency: "GBP", ...over });
+
+  it("keeps the price and shows only the part it could confirm", () => {
+    const c = checkExtraction(priced({ price: 14.99, priceEvidence: "Betapro 20 Black Bin Bags (0) £14.99 ... supplied as pack of 20 rolls." }), listing, url);
+    expect(c.price).toBe(14.99);
+    expect(c.priceEvidence).toBe("£14.99");
+    expect(c.cleared).not.toContain("price");
+  });
+  it("matches a price the page writes with a space", () => {
+    expect(checkExtraction(priced({ price: 18, priceEvidence: "Bin Bags (10 rolls) £18.00" }), listing, url).price).toBe(18);
+  });
+  it("clears a price whose figure isn't on the page with its currency", () => {
+    const c = checkExtraction(priced({ price: 9.99, priceEvidence: "Bin bags now £9.99" }), listing, url);
+    expect(c.price).toBeNull();
+    expect(c.cleared).toContain("price");
+  });
+  it("clears a figure that's on the page but isn't a price there", () => {
+    const c = checkExtraction(priced({ price: 20, priceEvidence: "Bags £20" }), listing, url);
+    expect(c.price).toBeNull();
+  });
+  it("clears a price the quote doesn't contain, even when the figure is on the page", () => {
+    expect(checkExtraction(priced({ price: 14.99, priceEvidence: "Bin bags £20.00" }), listing, url).price).toBeNull();
+  });
+  it("records what it rejected, so a rejection can be looked into", () => {
+    const c = checkExtraction(priced({ price: 9.99, priceEvidence: "Bin bags now £9.99" }), listing, url);
+    expect(c.rejectedPrice).toEqual({ price: 9.99, evidence: "Bin bags now £9.99" });
+    expect(checkExtraction(priced({ price: 14.99, priceEvidence: "£14.99" }), listing, url).rejectedPrice).toBeUndefined();
+  });
+  it("keeps the lowest figure of a price range, without calling it a unit price", () => {
+    const c = checkExtraction(priced({ price: 0.41, priceBasis: "range", currency: "USD", priceEvidence: "$0.41–0.43" }), "Tablet Case $0.41–0.43 Product Features and more", url);
+    expect(c.price).toBe(0.41);
+    expect(c.unitPrice).toBeNull();
+  });
+});
+
+describe("extractPage: what it asks for on price", () => {
+  it("asks for one unbroken quote, the low end of a range, and the closest product on a listing", async () => {
+    const { client, calls } = fake(answer(base));
+    await extractPage({ client, model: "claude-sonnet-5-5", productQuery: "bottles", pageText: page, url });
+    const system = (calls[0] as unknown as { system: string }).system;
+    expect(system).toMatch(/unbroken/);
+    expect(system).toMatch(/range.*lowest/i);
+    expect(system).toMatch(/several products/i);
+  });
+});

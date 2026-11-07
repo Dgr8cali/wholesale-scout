@@ -169,6 +169,10 @@ async function processPage(hit: SearchHit, item: TestItem, deps: SpikeDeps): Pro
   return done({ ...base, status: "read", extraction: checked, countryFrom, costUsd: cost, truncated });
 }
 
+/** Whether a page failed to load for a passing reason, so another go could read it. */
+export const hasRetryableFetches = (run: ProductRun) =>
+  Object.values(run.results).some((rs) => rs?.some((r) => r.status === "fetch_failed" && r.temporary));
+
 async function searchProvider(provider: SearchProvider, item: TestItem, deps: SpikeDeps): Promise<{ hits: SearchHit[]; used: number; errors: string[] }> {
   const search = deps.search[provider]!;
   const hits: SearchHit[] = [], errors: string[] = [];

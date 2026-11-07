@@ -105,6 +105,8 @@ export interface ProviderScore {
   makersWithThree: number; makerProducts: number; makerLabelled: number; makerRight: number; makerPrecision: number | null;
   productPrecision: number | null; productRight: number; productTotal: number; productByKind: Record<string, { right: number; total: number }>;
   pricePrecision: number | null; priceRight: number; priceTotal: number;
+  /** Of opened pages about the right product, how many showed a price. Reported only: no pass mark has been set. */
+  priceFoundByKind: Record<string, { found: number; total: number }>;
   countryPrecision: number | null; countryRight: number; countryTotal: number; unknownShare: number | null; countryConfirmed: number; tldRight: number; notOpened: number;
   /** Share of each area's rows that have been graded. */
   makerCoverage: number; wholesaleCoverage: number; countryCoverage: number;
@@ -139,6 +141,13 @@ export function scoreGrades(rows: GradeRow[], items: TestItem[], map: ProviderMa
       productByKind[k] = { right, total };
     }
     const opened = mine.filter((r) => r.price_basis !== NOT_OPENED);
+    const priceFoundByKind: ProviderScore["priceFoundByKind"] = {};
+    for (const r of opened) {
+      if (r.product_ok === "n") continue;
+      const tally = (priceFoundByKind[kind.get(r.product) ?? "unknown"] ??= { found: 0, total: 0 });
+      tally.total++;
+      if (r.price) tally.found++;
+    }
     const shown = mine.filter((r) => r.model_country !== "Unknown");
     const country = precision(shown, "country_ok");
     const confirmed = shown.filter((r) => r.country_ok === "y");
@@ -148,7 +157,7 @@ export function scoreGrades(rows: GradeRow[], items: TestItem[], map: ProviderMa
       makerProducts: items.filter((i) => i.kind === "manufacturer").length,
       makerLabelled: maker.total, makerRight: maker.right, makerPrecision: maker.share,
       productPrecision: product.share, productRight: product.right, productTotal: product.total, productByKind,
-      pricePrecision: price.share, priceRight: price.right, priceTotal: price.total,
+      pricePrecision: price.share, priceRight: price.right, priceTotal: price.total, priceFoundByKind,
       countryPrecision: country.share, countryRight: country.right, countryTotal: country.total,
       makerCoverage: covered(mine.filter((r) => kind.get(r.product) === "manufacturer"), "type_ok"),
       wholesaleCoverage: covered(wholesale, "product_ok"), countryCoverage: covered(shown, "country_ok"),

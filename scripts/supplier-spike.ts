@@ -12,13 +12,15 @@ import { extractCountry, extractPage, spendUsd } from "../src/lib/supplierSearch
 import { safeFetch } from "../src/lib/supplierSearch/fetchGuard";
 import { compareModels, gate, gradeRows, hasGrades, parseGrades, providerMap, runWarnings, scoreGrades, toCsv, type ProviderMap } from "../src/lib/supplierSearch/grade";
 import { braveSearch, SearchError, serperSearch, type SearchProvider } from "../src/lib/supplierSearch/search";
-import { Budget, runProduct, supplierDomain, type PageStatus, type ProductRun, type SpikeDeps, type Store } from "../src/lib/supplierSearch/spikeRun";
+import { hasRetryableFetches, Budget, runProduct, supplierDomain, type PageStatus, type ProductRun, type SpikeDeps, type Store } from "../src/lib/supplierSearch/spikeRun";
 import { manufacturersFirst, parseTestSet, type TestItem } from "../src/lib/supplierSearch/testSet";
 
 const ROOT = "docs/ui-audit/supplier-spike";
 const DEFAULT_MODEL = "claude-sonnet-5-5";
 const CONCURRENCY = 3;
 const PER_DOMAIN_MS = 1_000;
+const RETRY_DOMAIN_MS = 5_000, RETRY_WAIT_MS = 30_000; // A slower second go at pages that said "too many requests".
+let pageGapMs = PER_DOMAIN_MS;
 const PER_PROVIDER_MS = 1_100; // Brave's entry plans allow about one search a second.
 
 const store: Store = {
@@ -50,7 +52,7 @@ function searchers(): SpikeDeps["search"] {
 
 /** One request a second per domain, however many pages are being read at once. */
 const nextSlot = new Map<string, number>();
-async function politely<T>(key: string, go: () => Promise<T>, gapMs = PER_DOMAIN_MS): Promise<T> {
+async function politely<T>(key: string, go: () => Promise<T>, gapMs = pageGapMs): Promise<T> {
   const domain = key.startsWith("search:") ? key : supplierDomain(key) ?? key, now = Date.now();
   const at = Math.max(now, nextSlot.get(domain) ?? 0);
   nextSlot.set(domain, at + gapMs);
@@ -107,12 +109,21 @@ async function run(args: string[]) {
   const spentBefore = (await store.get<{ spent: number }>("budget"))?.spent ?? 0;
   const budget = new Budget(maxUsd, spentBefore);
   const deps = realDeps(model, budget);
+  const firstGo: ProductRun[] = [];
   for (const item of manufacturersFirst(items).filter((i) => !only || only.includes(i.id))) {
     const r = await runProduct(item, deps);
+    firstGo.push(r);
     await store.put(`runs/${model}/${item.id}`, r);
     const pages = Object.values(r.results).flat().filter(Boolean);
     console.log(`${item.id}: ${pages.length} pages, $${budget.spent.toFixed(3)} spent so far${r.partial.length ? `, partial: ${r.partial.join(", ")}` : ""}${r.stoppedForBudget ? ", budget reached" : ""}`);
     if (r.stoppedForBudget) break;
+  }
+  const retry = firstGo.filter((r) => !r.stoppedForBudget && hasRetryableFetches(r));
+  if (retry.length) {
+    console.log(`Trying the pages that failed again, more slowly, for ${retry.length} products...`);
+    await new Promise((r) => setTimeout(r, RETRY_WAIT_MS));
+    pageGapMs = RETRY_DOMAIN_MS;
+    for (const { item } of retry) await store.put(`runs/${model}/${item.id}`, await runProduct(item, deps));
   }
   const runs = await savedRuns(items, model);
   const rows = gradeRows(runs);
@@ -143,7 +154,7 @@ function printStats(runs: ProductRun[]) {
     for (const p of pages) for (const c of p.extraction?.cleared ?? []) cleared[c] = (cleared[c] ?? 0) + 1;
     const queries = withProvider.reduce((a, r) => a + (r.queriesUsed[provider] ?? 0), 0);
     const hidden = withProvider.filter((r) => r.item.kind === "manufacturer").flatMap((r) => r.results[provider] ?? []).filter((p) => p.status === "snippet_only").length;
-    console.log(`${provider}: ${pages.length} pages ${JSON.stringify(counts)}, ${queries} queries, AI cost per search $${(cost / Math.max(1, complete.length)).toFixed(3)}, manufacturer hits on platforms not opened: ${hidden}, claims cleared for bad evidence: ${JSON.stringify(cleared)}`);
+    console.log(`${provider}: ${pages.length} pages ${JSON.stringify(counts)}, ${queries} queries, AI cost per search $${(cost / Math.max(1, complete.length)).toFixed(3)}, manufacturer hits on platforms not opened: ${hidden}, prices found on ${pages.filter((p) => p.extraction?.price != null).length} of ${pages.filter((p) => p.status === "read").length} pages read, claims cleared for bad evidence: ${JSON.stringify(cleared)}`);
   }
 }
 

@@ -533,3 +533,7 @@ git commit -m "Supplier search: spike results and recommendation"
 ```
 
 Then **stop.** Build step 3 needs its own plan and Akin's approval.
+
+## Changes after the 2-product test
+
+Prices are the priority, so three changes went in before the full run. A price stands if the whole quote is on the page, or else its figure with its currency: the model often joined separate parts of a listing, which lost real prices. Ranges keep their lowest figure and listings use the closest product. Failed pages get one slower second go. The score now reports how often a price was found, per kind of product, with no pass mark set.

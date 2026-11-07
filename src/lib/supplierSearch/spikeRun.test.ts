@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Usage } from "../ads/ai";
 import type { Extraction } from "./extract";
 import { SearchError, type SearchHit, type SearchProvider } from "./search";
-import { Budget, dedupeByDomain, runProduct, type SpikeDeps, type Store } from "./spikeRun";
+import { Budget, dedupeByDomain, hasRetryableFetches, runProduct, type SpikeDeps, type Store } from "./spikeRun";
 import type { TestItem } from "./testSet";
 
 const item: TestItem = { id: "pill-box", query: "pill box", kind: "manufacturer" };
@@ -307,5 +307,15 @@ describe("Budget", () => {
   });
   it("can start from what an earlier run spent", () => {
     expect(new Budget(1, 1).exhausted).toBe(true);
+  });
+});
+
+describe("hasRetryableFetches", () => {
+  const run = (results: { status: string; temporary?: boolean }[]) => ({ results: { serper: results } }) as unknown as Parameters<typeof hasRetryableFetches>[0];
+  it("is true when a page failed to load for a passing reason", () => {
+    expect(hasRetryableFetches(run([{ status: "read" }, { status: "fetch_failed", temporary: true }]))).toBe(true);
+  });
+  it("is false for lasting failures and other statuses", () => {
+    expect(hasRetryableFetches(run([{ status: "fetch_failed" }, { status: "model_error" }, { status: "read" }]))).toBe(false);
   });
 });
