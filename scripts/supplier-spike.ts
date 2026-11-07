@@ -2,6 +2,7 @@
  * The supplier search spike (no UI, no database). See docs/superpowers/plans/2026-11-06-supplier-search-spike.md.
  *   npm run spike:suppliers -- smoke
  *   npm run spike:suppliers -- run [--only a,b] [--max-usd 12] [--model claude-sonnet-5-5]
+ *   npm run spike:suppliers -- ai-grade [--limit 10] [--max-usd 12]
  *   npm run spike:suppliers -- score [--compare claude-haiku-5-5]
  * Output goes to docs/ui-audit/supplier-spike/ (gitignored).
  */
@@ -10,9 +11,10 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { extractCountry, extractPage, spendUsd } from "../src/lib/supplierSearch/extract";
 import { safeFetch } from "../src/lib/supplierSearch/fetchGuard";
-import { compareModels, gate, gradeRows, hasGrades, parseGrades, providerMap, runWarnings, scoreGrades, toCsv, type ProviderMap } from "../src/lib/supplierSearch/grade";
+import { applyAiGrade, gradeWithAi, type AiGrade } from "../src/lib/supplierSearch/aiGrade";
+import { compareModels, gate, gradeRows, hasGrades, parseGrades, providerMap, runWarnings, scoreGrades, toCsv, type GradeRow, type ProviderMap } from "../src/lib/supplierSearch/grade";
 import { braveSearch, SearchError, serperSearch, type SearchProvider } from "../src/lib/supplierSearch/search";
-import { hasRetryableFetches, Budget, runProduct, supplierDomain, type PageStatus, type ProductRun, type SpikeDeps, type Store } from "../src/lib/supplierSearch/spikeRun";
+import { hasRetryableFetches, hashOf, Budget, runProduct, supplierDomain, type PageStatus, type ProductRun, type SpikeDeps, type Store } from "../src/lib/supplierSearch/spikeRun";
 import { manufacturersFirst, parseTestSet, type TestItem } from "../src/lib/supplierSearch/testSet";
 
 const ROOT = "docs/ui-audit/supplier-spike";
@@ -158,6 +160,45 @@ function printStats(runs: ProductRun[]) {
   }
 }
 
+/** Grades the main sheet with a different model. Answers are saved, so a re-run only pays for what's missing. */
+async function aiGrade(args: string[]) {
+  const model = "claude-opus-5-5";
+  const maxUsd = Number(flag(args, "max-usd") ?? 12);
+  if (!Number.isFinite(maxUsd) || maxUsd <= 0) throw new Error(`--max-usd must be a positive number, not "${flag(args, "max-usd")}"`);
+  const limit = Number(flag(args, "limit") ?? Infinity);
+  const budget = new Budget(maxUsd, (await store.get<{ spent: number }>("budget"))?.spent ?? 0);
+  const startedAt = budget.spent;
+  const client = new Anthropic();
+  const rows = parseGrades(readFileSync(sheetFor(DEFAULT_MODEL), "utf8"));
+  const keyOf = (r: GradeRow) => `ai-grades/${hashOf(r.row_id)}`;
+  const textOf = (url: string) => store.get<{ text: string; contact?: string | null }>(`text/${hashOf(url)}`);
+  const answers = new Map<string, AiGrade>();
+  for (const r of rows) { const a = await store.get<AiGrade>(keyOf(r)); if (a) answers.set(r.row_id, a); }
+  // An even spread, so a --limit trial sees every kind of product.
+  const todo = rows.filter((r) => !answers.has(r.row_id));
+  const step = Math.max(1, Math.floor(todo.length / Math.min(limit, todo.length || 1)));
+  const queue = todo.filter((_, i) => i % step === 0).slice(0, limit);
+  let next = 0, failed = 0;
+  const worker = async () => {
+    while (next < queue.length && !budget.exhausted) {
+      const row = queue[next++];
+      const page = row.price_basis === "not opened" ? null : await textOf(row.url);
+      const contact = page?.contact ? await textOf(page.contact) : null;
+      try {
+        const { grade, usage } = await gradeWithAi({ client, model, row, pageText: page?.text ?? null, contactText: contact?.text ?? null });
+        budget.add(spendUsd(usage, model));
+        await store.put("budget", { spent: budget.spent });
+        if (grade) { answers.set(row.row_id, grade); await store.put(keyOf(row), grade); } else failed++;
+      } catch (e) { failed++; console.log(`Failed: ${(e as Error).message.slice(0, 160)}`); }
+    }
+  };
+  await Promise.all(Array.from({ length: 4 }, worker));
+  writeFileSync(sheetFor(DEFAULT_MODEL), toCsv(rows.map((r) => (answers.has(r.row_id) ? applyAiGrade(r, answers.get(r.row_id)!) : r))));
+  writeFileSync(join(ROOT, "ai-grade-reasons.json"), JSON.stringify(Object.fromEntries(answers), null, 1));
+  const spent = budget.spent - startedAt;
+  console.log(`${answers.size} of ${rows.length} rows graded by ${model}, ${failed} failed. $${spent.toFixed(3)} this run, $${(spent / Math.max(1, queue.length)).toFixed(4)} a row, $${budget.spent.toFixed(3)} in total (limit $${maxUsd}).`);
+}
+
 async function score(args: string[]) {
   const items = loadItems();
   const rows = parseGrades(readFileSync(sheetFor(DEFAULT_MODEL), "utf8"));
@@ -179,6 +220,7 @@ async function main() {
   const [command, ...args] = process.argv.slice(2);
   if (command === "smoke") return smoke();
   if (command === "run") return run(args);
+  if (command === "ai-grade") return aiGrade(args);
   if (command === "score") return score(args);
   throw new Error("Use: smoke | run [--only a,b] [--max-usd 12] [--model id] | score [--compare model]");
 }

@@ -559,6 +559,7 @@ The HTTP Basic `APP_PASSWORD` gate is gone. `src/proxy.ts` is the one gate on ev
 4. **General: move pg_net out of the public schema** (Supabase advisor: extension in public).
 5. **General: Resend email** configured on the server (sign-in links as well as alerts) (`RESEND_API_KEY`, `ALERT_EMAIL_TO` aren't set there yet) and extended beyond the Watchlist (stock low/out, reorder due, stock guard, hunt finished).
 6. **General: data backup workflow** (only the schema is backed up today, to `supabase/schema.sql`; data relies on Supabase's own backups).
+7. **Supplier search: decide the next step.** The spike is finished, with no UI yet: manufacturers and country passed, wholesale failed on price accuracy (85–86% against 90%), and it was AI-graded. See `docs/supplier-search-spike-results.md`. Delete the Brave data under `docs/ui-audit/supplier-spike/` once decided. Build step 3 needs a new plan and approval.
 
 ## Known rough edges
 

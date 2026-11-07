@@ -60,7 +60,7 @@ const PAGES_PER_PROVIDER = 20;
 /** Under this there's nothing to read (a page that only draws itself with scripts): don't pay to ask. */
 const MIN_TEXT = 200;
 
-const hashOf = (s: string) => createHash("sha256").update(s).digest("hex").slice(0, 24);
+export const hashOf = (s: string) => createHash("sha256").update(s).digest("hex").slice(0, 24);
 
 /** One supplier per registrable domain; on a platform, each shop's own subdomain is its own supplier. */
 export function supplierDomain(url: string): string | null {

@@ -28,6 +28,7 @@ export type MessagesClient = { messages: { create: (body: Anthropic.MessageCreat
 const PRICES: Record<string, { inUsd: number; outUsd: number }> = {
   "claude-sonnet-5-5": { inUsd: 2, outUsd: 10 },
   "claude-haiku-5-5": { inUsd: 0.1, outUsd: 0.5 },
+  "claude-opus-5-5": { inUsd: 4, outUsd: 20 },
 };
 
 export function spendUsd(usage: Usage, model: string): number {
@@ -184,9 +185,9 @@ price: exactly as written, with no conversion or estimate; currency as an ISO co
 const COUNTRY_SYSTEM = `You read a company's contact or about page to find where it is based.\n${RULES}`;
 
 /** A page can't end the data section early by writing the closing tag itself. */
-const asData = (text: string) => `<page>\n${text.replace(/<\/?page>/gi, " ")}\n</page>`;
+export const asData = (text: string) => `<page>\n${text.replace(/<\/?page>/gi, " ")}\n</page>`;
 
-async function ask<T>(x: { client: MessagesClient; model: string; system: string; schema: object; content: string }): Promise<{ answer: T | null; stop: string; usage: Usage }> {
+export async function ask<T>(x: { client: MessagesClient; model: string; system: string; schema: object; content: string }): Promise<{ answer: T | null; stop: string; usage: Usage }> {
   const lean = leanThinking(x.model);
   const msg = await x.client.messages.create({
     model: x.model, max_tokens: 1500, system: x.system,
