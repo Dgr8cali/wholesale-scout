@@ -159,7 +159,7 @@ async function processPage(hit: SearchHit, item: TestItem, deps: SpikeDeps): Pro
   await pay(cost, deps);
   if (!answer.extraction) return done({ ...base, status: "no_answer", reason: answer.stop, costUsd: cost, truncated });
 
-  let checked = checkExtraction(answer.extraction, text, hit.url);
+  let checked = checkExtraction(answer.extraction, text, hit.url, item.query);
   let countryFrom: PageResult["countryFrom"] = checked.country ? "page" : undefined;
   if (!checked.country && checked.productMatch !== "no" && contact && !deps.budget.exhausted && !pastDeadline(deps)) {
     const contactPage = await readPage(contact, deps);

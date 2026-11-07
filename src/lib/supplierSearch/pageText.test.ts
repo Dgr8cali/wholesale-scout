@@ -86,3 +86,12 @@ describe("pages built to stall the server", () => {
     expect(pageText(`<body>${"<p>word</p>".repeat(15_000)}</body>`).text).toContain("word");
   });
 });
+
+describe("classified-ad sites", () => {
+  it.each(["www.kleinanzeigen.de", "www.gumtree.com", "www.marktplaats.nl", "www.leboncoin.fr", "www.vinted.co.uk", "www.olx.pl", "www.preloved.co.uk"])("lists %s without opening it", (h) => {
+    expect(isPlatformHost(h)).toBe(true);
+  });
+  it("leaves a supplier whose name only contains one alone", () => {
+    expect(isPlatformHost("www.notgumtree-supplies.co.uk")).toBe(false);
+  });
+});

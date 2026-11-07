@@ -100,13 +100,38 @@ function isListPrice(price: number, evidence: string): boolean {
 const currencyIn = (evidence: string | null): string | null => {
   if (!evidence) return null;
   if (/£|\bgbp\b/i.test(evidence)) return "GBP";
-  if (/€|\beur\b/i.test(evidence)) return "EUR";
+  if (/€|\beur(?:os?)?\b/i.test(evidence)) return "EUR";
   if (/\$|\busd\b/i.test(evidence)) return "USD";
   return /元|\brmb\b|\bcny\b/i.test(evidence) ? "CNY" : null;
 };
 
-const CURRENCY_SIGNS: Record<string, RegExp> = { GBP: /£|\bgbp\b/i, EUR: /€|\beur\b/i, USD: /\$|\busd\b/i, CNY: /¥|￥|元|\brmb\b|\bcny\b/i };
+const CURRENCY_SIGNS: Record<string, RegExp> = { GBP: /£|\bgbp\b/i, EUR: /€|\beur(?:os?)?\b/i, USD: /\$|\busd\b/i, CNY: /¥|￥|元|\brmb\b|\bcny\b/i };
 const currencyOnPage = (code: string, page: string) => (CURRENCY_SIGNS[code.toUpperCase()] ?? new RegExp(`\\b${code.replace(/\W/g, "")}\\b`, "i")).test(page);
+
+/** Sizes by kind (volume, weight, length), in one unit each, so 0,4 l and 400ml are the same. */
+const SIZE_UNITS: Record<string, [string, number]> = {
+  ml: ["volume", 1], cl: ["volume", 10], l: ["volume", 1000], ltr: ["volume", 1000], litre: ["volume", 1000], litres: ["volume", 1000], liter: ["volume", 1000], liters: ["volume", 1000],
+  g: ["weight", 1], kg: ["weight", 1000], mm: ["length", 1], cm: ["length", 10], m: ["length", 1000],
+};
+function sizesIn(text: string | null | undefined): Map<string, number[]> {
+  const found = new Map<string, number[]>();
+  for (const m of (text ?? "").matchAll(/(\d+(?:[.,]\d+)?)\s?(ml|cl|ltr|litres?|liters?|l|kg|g|mm|cm|m)\b/gi)) {
+    // "1,000ml" is a thousand; "0,4 l" is a decimal comma.
+    const n = Number(/^[1-9]\d{0,2},\d{3}$/.test(m[1]) ? m[1].replace(",", "") : m[1].replace(",", "."));
+    const [kind, factor] = SIZE_UNITS[m[2].toLowerCase()];
+    found.set(kind, [...(found.get(kind) ?? []), n * factor]);
+  }
+  return found;
+}
+/** The price names a size of the same kind as the size wanted, and none of them match. */
+function otherSize(wanted: string | null | undefined, priced: string | null | undefined): boolean {
+  const a = sizesIn(wanted), b = sizesIn(priced);
+  for (const [kind, sizes] of a) {
+    const other = b.get(kind);
+    if (other && !other.some((x) => sizes.some((y) => Math.abs(x - y) < 1e-6))) return true;
+  }
+  return false;
+}
 
 /** Words that are a page talking to the model, not describing a business. */
 const INSTRUCTION = /ignore(your|all|any|previous|the)|(your|previous|these)instructions|classify(this|it|us|as)|systemprompt/;
@@ -134,7 +159,8 @@ function checkCountry<T extends CountryFields>(e: T, page: string): { fields: T;
   return { fields: { ...e, country: code }, cleared: false };
 }
 
-export function checkExtraction(e: Extraction, pageText: string, url: string): Checked {
+/** `productQuery` is what was searched for: a size in it is the size wanted, else the page's own product's size. */
+export function checkExtraction(e: Extraction, pageText: string, url: string, productQuery?: string): Checked {
   const cleared: string[] = [];
   const country = checkCountry(e, pageText);
   if (country.cleared) cleared.push("country");
@@ -146,7 +172,8 @@ export function checkExtraction(e: Extraction, pageText: string, url: string): C
   let rejectedPrice: Checked["rejectedPrice"];
   if (out.price != null) {
     const listed = out.priceEvidence != null && isListPrice(out.price, out.priceEvidence);
-    const confirmed = out.price > 0 && !listed ? confirmedPriceEvidence(out.price, out.priceEvidence, pageText) : null;
+    const wanted = sizesIn(productQuery).size ? productQuery : out.productName;
+    const confirmed = out.price > 0 && !listed && !otherSize(wanted, out.priceProduct) ? confirmedPriceEvidence(out.price, out.priceEvidence, pageText) : null;
     if (confirmed) out.priceEvidence = confirmed;
     else {
       rejectedPrice = { price: out.price, evidence: out.priceEvidence };
@@ -200,7 +227,7 @@ country: the ISO 3166 two-letter code of where the business is based (GB, DE, CN
 const PAGE_SYSTEM = `You read supplier web pages for an Amazon UK seller looking for stock.
 ${RULES}
 supplierType: manufacturer (makes the goods itself), wholesaler (sells other brands in trade quantities), distributor (authorised to supply brands in bulk), marketplace (lists many sellers), retailer (sells single items to the public). Use unknown if the page doesn't show which.
-price: exactly as written, with no conversion or estimate; currency as an ISO code. If the page gives a price range, price is the lowest figure and priceBasis is range. If the page lists several products, use the one closest to the product wanted, and name that product line in priceProduct as written. If the only prices are for a different size or model or a different kind of product, price is null. Use the price for the smallest quantity, never the lowest bulk tier. An RRP, UVP, "was" or list price is not a price. Nor is a placeholder or a figure that depends on options still to be chosen. priceBasis says what the price buys, and unitsInPrice how many units that is if the page states it. No price, or "price on application": price null and priceBasis on_request or none.`;
+price: exactly as written, with no conversion or estimate; currency as an ISO code. If the page gives a price range, price is the lowest figure and priceBasis is range. If the page lists several products, use the one closest to the product wanted, and name that product line in priceProduct as written. If the only prices are for a different size or model or a different kind of product, price is null. Use the price for the smallest quantity, never the lowest bulk tier. An RRP, UVP, "was" or list price is not a price. Nor is a placeholder or a figure that depends on options still to be chosen, nor a price on a brand's own site that doesn't sell and sends buyers to dealers or shops. priceBasis says what the price buys, and unitsInPrice how many units that is if the page states it. No price, or "price on application": price null and priceBasis on_request or none.`;
 const COUNTRY_SYSTEM = `You read a company's contact or about page to find where it is based.\n${RULES}`;
 
 /** A page can't end the data section early by writing the closing tag itself. */

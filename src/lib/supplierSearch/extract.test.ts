@@ -320,3 +320,40 @@ describe("checkExtraction: prices you can't buy at", () => {
     expect(b.system).toMatch(/RRP/);
   });
 });
+
+describe("checkExtraction: fixes from the price re-check", () => {
+  const priced = (over: Partial<Extraction>): Extraction => ({ ...base, supplierType: "unknown", typeEvidence: null, country: null, countryEvidence: null, countrySource: "none", priceBasis: "per_pack", unitsInPrice: null, currency: "EUR", ...over });
+  const soap = "Dove soap Product : 100g Price : 17,50 Euro / 48 pieces";
+  it("keeps EUR when the page writes Euro as a word", () => {
+    expect(checkExtraction(priced({ price: 17.5, priceEvidence: "Price : 17,50 Euro / 48 pieces" }), soap, url).currency).toBe("EUR");
+  });
+  it("fills a blank currency from the word Euro", () => {
+    expect(checkExtraction(priced({ price: 17.5, currency: null, priceEvidence: "Price : 17,50 Euro / 48 pieces" }), soap, url).currency).toBe("EUR");
+  });
+  const gel = "Effaclar Purifying Foaming Gel 400ml. You may also like: Cleanser for Oily Skin 200ml £13.20";
+  const effaclar = (over: Partial<Extraction>) => priced({ productName: "Effaclar Purifying Foaming Gel 400ml", price: 13.2, currency: "GBP", priceBasis: "per_unit", priceEvidence: "£13.20", priceProduct: "Cleanser for Oily Skin 200ml", ...over });
+  it("clears a price for another size of the page's product", () => {
+    const c = checkExtraction(effaclar({}), gel, url, "La Roche-Posay Effaclar cleanser");
+    expect(c.price).toBeNull();
+    expect(c.cleared).toContain("price");
+  });
+  it("judges size by the size searched for, when there is one", () => {
+    expect(checkExtraction(effaclar({ productName: "Effaclar range" }), gel, url, "Effaclar gel 400ml").price).toBeNull();
+    expect(checkExtraction(effaclar({}), gel, url, "Effaclar gel 200ml").price).toBe(13.2);
+  });
+  it("treats the same size in other units as the same", () => {
+    expect(checkExtraction(effaclar({ priceProduct: "Foaming Gel 0,4 l" }), `${gel} Foaming Gel 0,4 l`, url, "Effaclar cleanser").price).toBe(13.2);
+  });
+  it("keeps the price when either side names no size", () => {
+    expect(checkExtraction(effaclar({ priceProduct: "Cleanser for Oily Skin" }), gel, url, "Effaclar cleanser").price).toBe(13.2);
+    expect(checkExtraction(effaclar({ productName: "Effaclar range" }), gel, url, "Effaclar cleanser").price).toBe(13.2);
+  });
+  it("ignores sizes of a different kind, such as grams against millilitres", () => {
+    expect(checkExtraction(effaclar({ priceProduct: "Cleanser 150g" }), `${gel} Cleanser 150g`, url, "Effaclar cleanser").price).toBe(13.2);
+  });
+  it("tells the model a brand's own site that sends buyers to dealers gives no price", async () => {
+    const { client, calls } = fake(answer(base));
+    await extractPage({ client, model: "claude-sonnet-5-5", productQuery: "bottles", pageText: page, url });
+    expect((calls[0] as unknown as { system: string }).system).toMatch(/dealer/i);
+  });
+});

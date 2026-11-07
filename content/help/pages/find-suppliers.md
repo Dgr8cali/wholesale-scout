@@ -25,7 +25,7 @@ The type and country come from what the supplier says about itself, so a trader 
 
 - Pages about a different product, and price-comparison sites, are removed.
 - Retailers are hidden until you turn off **Hide retailers**.
-- Marketplaces such as Alibaba are listed but not opened, so they show only a link.
+- Marketplaces such as Alibaba, and classified-ad sites such as Gumtree, are listed but not opened, so they show only a link.
 - Some sites refuse to be read. The line above the table says how many.
 
 ## Limits

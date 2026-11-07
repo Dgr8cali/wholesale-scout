@@ -74,8 +74,11 @@ const PLATFORMS = ["alibaba.com", "aliexpress.com", "made-in-china.com", "global
 export const isComparisonHost = (host: string) =>
   /(^|\.)(idealo|pricerunner|pricespy|geizhals|billiger|kelkoo|skinflint|guenstiger|ladenzeile)\.[a-z]{2,3}(\.[a-z]{2})?$/.test(host.toLowerCase().replace(/\.$/, ""));
 
+/** Classified-ad sites: private sellers' one-off listings, not suppliers. */
+const CLASSIFIEDS = /(^|\.)(kleinanzeigen|gumtree|marktplaats|leboncoin|vinted|olx|wallapop|subito|preloved|shpock|craigslist)\.[a-z]{2,3}(\.[a-z]{2})?$/;
+
 /** Marketplaces the search never opens: results from them stay snippet-only. */
 export function isPlatformHost(host: string): boolean {
   const h = host.toLowerCase().replace(/\.$/, "");
-  return isComparisonHost(h) || PLATFORMS.some((p) => h === p || h.endsWith(`.${p}`)) || /(^|\.)(amazon|ebay)\.[a-z]{2,3}(\.[a-z]{2})?$/.test(h);
+  return isComparisonHost(h) || CLASSIFIEDS.test(h) || PLATFORMS.some((p) => h === p || h.endsWith(`.${p}`)) || /(^|\.)(amazon|ebay)\.[a-z]{2,3}(\.[a-z]{2})?$/.test(h);
 }
