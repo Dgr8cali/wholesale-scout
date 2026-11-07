@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { findContactLink, isPlatformHost, pageText } from "./pageText";
+import { findContactLink, isComparisonHost, isPlatformHost, pageText } from "./pageText";
 
 describe("pageText", () => {
   it("keeps the footer when a long page is cut", () => {
@@ -59,5 +59,30 @@ describe("badly built pages", () => {
   });
   it("normal nesting and unclosed paragraphs are fine", () => {
     expect(pageText(`${"<p>a".repeat(5000)}`).text).toContain("a");
+  });
+});
+
+describe("price-comparison sites", () => {
+  it.each(["www.idealo.de", "idealo.co.uk", "www.pricerunner.com", "geizhals.de", "www.billiger.de", "www.kelkoo.co.uk"])("treats %s as a comparison site, never opened", (h) => {
+    expect(isComparisonHost(h)).toBe(true);
+    expect(isPlatformHost(h)).toBe(true);
+  });
+  it("leaves ordinary suppliers alone", () => {
+    expect(isComparisonHost("www.bestway.co.uk")).toBe(false);
+  });
+});
+
+describe("pages built to stall the server", () => {
+  const within = (ms: number, go: () => unknown) => { const t = Date.now(); go(); expect(Date.now() - t).toBeLessThan(ms); };
+  it("isn't slowed by a tag that never ends", () => {
+    within(2_000, () => pageText(`<${"a".repeat(100_000)}`));
+  });
+  it("refuses a page with too many tags to parse", () => {
+    const flat = "<p>".repeat(60_000);
+    expect(() => pageText(flat)).toThrow(/too many tags/);
+    expect(() => findContactLink(flat, "https://x.example/")).toThrow(/too many tags/);
+  });
+  it("still reads a large ordinary page", () => {
+    expect(pageText(`<body>${"<p>word</p>".repeat(15_000)}</body>`).text).toContain("word");
   });
 });

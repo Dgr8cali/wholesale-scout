@@ -43,3 +43,14 @@ describe("robotsAllows on a hostile file", () => {
     expect(robotsAllows("User-agent: *\nDisallow: /a*ab$", "/aab", AGENT)).toBe(false);
   });
 });
+
+describe("robotsAllows on a line built to be slow", () => {
+  it("isn't slowed by a long run of spaces", () => {
+    const t = Date.now();
+    robotsAllows(`User-agent: *\nDisallow:x${" ".repeat(100_000)}y\n`, "/", "bot");
+    expect(Date.now() - t).toBeLessThan(2_000);
+  });
+  it("still trims a value", () => {
+    expect(robotsAllows("User-agent: *\n  Disallow :   /private   \n", "/private/a", "bot")).toBe(false);
+  });
+});

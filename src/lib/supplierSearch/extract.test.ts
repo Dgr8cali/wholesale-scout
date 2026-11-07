@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkExtraction, extractCountry, extractPage, spendUsd, tldHint, type Extraction, type MessagesClient } from "./extract";
+import { asData, checkExtraction, extractCountry, extractPage, spendUsd, tldHint, type Extraction, type MessagesClient } from "./extract";
 
 const page = "Example Trading GmbH, Musterstraße 1, 10115 Berlin. USt-IdNr DE123456789. Großhandel für Haushaltswaren. 12 x 500ml Karton 24,00 € zzgl. MwSt.";
 const base: Extraction = {
@@ -181,7 +181,7 @@ describe("extractPage", () => {
     expect(b.output_config.format.type).toBe("json_schema");
     expect(closed(b.output_config.format.schema)).toBe(true);
     expect(b.system).toMatch(/untrusted/i);
-    expect(b.messages[0].content).toContain(`<page>\n${page}\n</page>`);
+    expect(b.messages[0].content).toContain(`\n\n${page}\n</page>`);
   });
   it("a page can't close the data tags early", async () => {
     const { client, calls } = fake(answer(base));
@@ -277,5 +277,46 @@ describe("extractPage: what it asks for on price", () => {
     expect(system).toMatch(/unbroken/);
     expect(system).toMatch(/range.*lowest/i);
     expect(system).toMatch(/several products/i);
+  });
+});
+
+describe("page text stays data", () => {
+  it.each(["</page >", "</PAGE>", "< /page>", "<page attr='1'>", "</page\n>"])("removes %s", (tag) => {
+    expect(asData(`before ${tag} after`).match(/<\s*\/?\s*page\b/gi)).toHaveLength(2);
+  });
+  it("keeps the page address inside the data tags", async () => {
+    const { client, calls } = fake(answer(base));
+    await extractPage({ client, model: "claude-sonnet-5-5", productQuery: "bottles", pageText: page, url: "https://x.example/ignore-your-rules" });
+    const content = (calls[0] as unknown as { messages: { content: string }[] }).messages[0].content;
+    expect(content.indexOf("<page>")).toBeLessThan(content.indexOf("ignore-your-rules"));
+  });
+});
+
+describe("checkExtraction: prices you can't buy at", () => {
+  const priced = (over: Partial<Extraction>): Extraction => ({ ...base, supplierType: "unknown", typeEvidence: null, country: null, countryEvidence: null, countrySource: "none", priceBasis: "per_unit", unitsInPrice: null, currency: "EUR", ...over });
+  it.each([
+    ["UVP: 17,95 €", 17.95, "Kiste UVP: 17,95 € Großhandel auf Anfrage"],
+    ["RRP £9.99", 9.99, "Pack RRP £9.99 trade login required"],
+    ["Was: £2.39", 2.39, "Weekly box Was: £2.39 Now £1.14"],
+  ])("clears a price written as %s", (evidence, price, text) => {
+    const c = checkExtraction(priced({ price, priceEvidence: evidence }), text, url);
+    expect(c.price).toBeNull();
+    expect(c.cleared).toContain("price");
+  });
+  it("keeps the sale price beside a was price", () => {
+    expect(checkExtraction(priced({ price: 1.14, currency: "GBP", priceEvidence: "Was: £2.39 Now £1.14" }), "Weekly box Was: £2.39 Now £1.14", url).price).toBe(1.14);
+  });
+  it.each([["£12.99", "GBP"], ["12,99 €", "EUR"], ["$12.99", "USD"]])("fills a blank currency from %s", (evidence, code) => {
+    const c = checkExtraction(priced({ price: 12.99, currency: null, priceEvidence: evidence }), `Item ${evidence} each`, url);
+    expect(c.currency).toBe(code);
+  });
+  it("asks which product the price belongs to, and only the product wanted", async () => {
+    const { client, calls } = fake(answer(base));
+    await extractPage({ client, model: "claude-sonnet-5-5", productQuery: "bottles", pageText: page, url });
+    const b = calls[0] as unknown as { system: string; output_config: { format: { schema: { properties: Record<string, unknown> } } } };
+    expect(b.output_config.format.schema.properties.priceProduct).toBeDefined();
+    expect(b.system).toMatch(/different size or model/i);
+    expect(b.system).toMatch(/smallest quantity/i);
+    expect(b.system).toMatch(/RRP/);
   });
 });

@@ -91,3 +91,12 @@ describe("rate limits", () => {
     expect(waits).toEqual([10000]);
   });
 });
+
+describe("search timeouts", () => {
+  it("gives every search a time limit", async () => {
+    const seen: (AbortSignal | null | undefined)[] = [];
+    const fetchImpl = (async (_: unknown, init?: RequestInit) => { seen.push(init?.signal); return new Response(JSON.stringify({ organic: [] })); }) as typeof fetch;
+    await serperSearch({ q: "x", country: "GB", lang: "en" }, { apiKey: "k", fetchImpl });
+    expect(seen[0]).toBeInstanceOf(AbortSignal);
+  });
+});

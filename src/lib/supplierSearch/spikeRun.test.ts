@@ -319,3 +319,43 @@ describe("hasRetryableFetches", () => {
     expect(hasRetryableFetches(run([{ status: "fetch_failed" }, { status: "model_error" }, { status: "read" }]))).toBe(false);
   });
 });
+
+describe("readablePerProvider", () => {
+  it("reads further when asked to", async () => {
+    const hits = Array.from({ length: 20 }, (_, i) => hit(`https://s${i}.example/`, i + 1));
+    const { d } = deps({ search: { serper: async () => hits }, readablePerProvider: 15, concurrency: 1 });
+    const run = await runProduct(item, d);
+    expect(run.results.serper!.filter((r) => r.status === "read")).toHaveLength(15);
+  });
+});
+
+describe("marketplace listings and the page limit", () => {
+  it("doesn't let them use up the pages to read", async () => {
+    const hits = [hit("https://a.alibaba.com/1", 1), hit("https://b.alibaba.com/2", 2), hit("https://c.alibaba.com/3", 3), hit("https://real1.example/", 4), hit("https://real2.example/", 5)];
+    const { d } = deps({ search: { serper: async () => hits }, readablePerProvider: 2 });
+    const run = await runProduct(item, d);
+    expect(run.results.serper!.filter((r) => r.status === "read").map((r) => r.url)).toEqual(["https://real1.example/", "https://real2.example/"]);
+  });
+});
+
+describe("deadlineAt", () => {
+  it("starts no page after the deadline, and says it stopped", async () => {
+    const { d, calls } = deps({ deadlineAt: Date.now() - 1 });
+    const run = await runProduct(item, d);
+    expect(calls.fetch).toEqual([]);
+    expect(run.stoppedForTime).toBe(true);
+  });
+  it("skips the contact page once the deadline has passed", async () => {
+    const { d, calls } = deps({ deadlineAt: Date.now() + 60_000 });
+    d.extract = async () => { d.deadlineAt = 0; return { extraction: { ...good, country: null, countryEvidence: null, countrySource: "none" }, stop: "end_turn", usage }; };
+    d.fetchPage = async (url) => ({ status: "ok", finalUrl: url, html: `<body><a href="/contact">Contact</a><p>${page}</p></body>`, truncated: false });
+    const run = await runProduct(item, d);
+    expect(run.results.serper![0].status).toBe("read");
+    expect(calls.country).toEqual([]);
+    expect(run.stoppedForTime).toBe(true);
+  });
+  it("doesn't say so when it finished in time", async () => {
+    const { d } = deps({ deadlineAt: Date.now() + 60_000 });
+    expect((await runProduct(item, d)).stoppedForTime).toBeFalsy();
+  });
+});

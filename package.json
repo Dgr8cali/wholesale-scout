@@ -19,6 +19,7 @@
     "test:a11y": "node --env-file-if-exists=.env.local node_modules/.bin/playwright test"
   },
   "dependencies": {
+    "jsdom": "25.0.1",
     "@anthropic-ai/sdk": "0.131.0",
     "@simplewebauthn/browser": "14.0.0",
     "@simplewebauthn/server": "14.0.3",
@@ -54,7 +55,6 @@
     "@types/react-dom": "19.3.0",
     "eslint": "9.39.5",
     "eslint-config-next": "16.3.6",
-    "jsdom": "25.0.1",
     "tailwindcss": "4.3.3",
     "tsx": "4.23.15",
     "typescript": "5.9.3",

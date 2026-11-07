@@ -13,7 +13,8 @@ The reference product is [gsai.uk](https://www.gsai.uk). Study how it behaves, t
 | GSAi study | Done | 4 searches and the public pages, 6 Nov, through a logged-in browser. Free plan, so half of each answer was locked |
 | Repo review | Partial | Read `docs/STATUS.md` (sections below), the Qogita client, the `askModel` signature, the lead schema. Did not read the screening or run pipeline |
 | Design | Proposal only | Nothing agreed with Akin |
-| Spike (build steps 1 and 2) | Done, decision pending | [Results](supplier-search-spike-results.md). `src/lib/supplierSearch/` and `scripts/supplier-spike.ts`, with no UI, database or deploy |
+| Spike (build steps 1 and 2) | Done | [Results](supplier-search-spike-results.md). `src/lib/supplierSearch/` and `scripts/supplier-spike.ts`, with no UI, database or deploy |
+| Find suppliers page (build steps 3 and 4) | Built, see `docs/STATUS.md` | [Plan](superpowers/plans/2026-11-07-find-suppliers-page.md) |
 | Supplier data costs | Measured | See the results file. The estimates under Cost came before the spike |
 
 ## What already exists here

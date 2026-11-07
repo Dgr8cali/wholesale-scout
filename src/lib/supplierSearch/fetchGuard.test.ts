@@ -110,3 +110,15 @@ describe("safeFetch allowUrl", () => {
     expect(r).toEqual({ status: "blocked", reason: "a platform" });
   });
 });
+
+describe("addresses a live search must never reach", () => {
+  it.each(["64:ff9b:1::1", "100::1", "192.88.99.1", "2a03:4000:65:b22:9812:d1ff:fe60:6ca6"])("blocks %s", (ip) => {
+    expect(isBlockedAddress(ip)).toBe(true);
+  });
+  it.each(["https://db.dgr8cali.co.uk/", "https://ws.dgr8cali.co.uk/api", "https://dgr8cali.co.uk/", "https://DB.DGR8CALI.CO.UK./"])("refuses this server's own site %s", (u) => {
+    expect(checkUrl(u).ok).toBe(false);
+  });
+  it("allows an ordinary supplier", () => {
+    expect(checkUrl("https://notdgr8cali.co.uk/").ok).toBe(true);
+  });
+});

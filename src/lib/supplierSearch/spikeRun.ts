@@ -36,6 +36,8 @@ export interface ProductRun {
   partial: SearchProvider[];
   searchErrors: string[];
   stoppedForBudget: boolean;
+  /** The deadline passed, so pages may be left unread. */
+  stoppedForTime?: boolean;
   queriesUsed: Partial<Record<SearchProvider, number>>;
 }
 export interface SpikeDeps {
@@ -52,11 +54,14 @@ export interface SpikeDeps {
   budget: Budget;
   /** Pages read at once. The budget can overrun by this many calls less one. */
   concurrency?: number;
+  /** Readable pages to stop at, per search provider. Failed pages let it try up to twice as many. */
+  readablePerProvider?: number;
+  /** Epoch ms after which no new page or contact page is started. Pages under way finish. */
+  deadlineAt?: number;
 }
 
-/** Only the top 10 readable pages reach the grading sheet, so stop paying there. Failed pages let it look further, up to 20. */
+/** Only the top 10 readable pages reach the grading sheet, so stop paying there. */
 const READABLE_PER_PROVIDER = 10;
-const PAGES_PER_PROVIDER = 20;
 /** Under this there's nothing to read (a page that only draws itself with scripts): don't pay to ask. */
 const MIN_TEXT = 200;
 
@@ -127,6 +132,8 @@ async function pay(usd: number, deps: SpikeDeps) {
   await deps.store.put("budget", { spent: deps.budget.spent }); // Saved every time, so a crash can't lose it from the cap.
 }
 
+const pastDeadline = (deps: SpikeDeps) => deps.deadlineAt != null && Date.now() >= deps.deadlineAt;
+
 async function processPage(hit: SearchHit, item: TestItem, deps: SpikeDeps): Promise<PageResult> {
   const base = { url: hit.url, title: hit.title, snippet: hit.snippet, extraction: null, costUsd: 0 };
   if (isPlatformHost(new URL(hit.url).hostname)) return { ...base, status: "snippet_only" };
@@ -154,7 +161,7 @@ async function processPage(hit: SearchHit, item: TestItem, deps: SpikeDeps): Pro
 
   let checked = checkExtraction(answer.extraction, text, hit.url);
   let countryFrom: PageResult["countryFrom"] = checked.country ? "page" : undefined;
-  if (!checked.country && checked.productMatch !== "no" && contact && !deps.budget.exhausted) {
+  if (!checked.country && checked.productMatch !== "no" && contact && !deps.budget.exhausted && !pastDeadline(deps)) {
     const contactPage = await readPage(contact, deps);
     if (contactPage.ok && contactPage.read.text.length >= 3) {
       try {
@@ -204,22 +211,25 @@ export async function runProduct(item: TestItem, deps: SpikeDeps): Promise<Produ
     if (errors.length) run.partial.push(provider);
     run.searchErrors.push(...errors);
     run.queriesUsed[provider] = used;
-    const chosen = dedupeByDomain(hits).slice(0, PAGES_PER_PROVIDER);
+    let attempts = (deps.readablePerProvider ?? READABLE_PER_PROVIDER) * 2;
+    const chosen = dedupeByDomain(hits).filter((h) => isPlatformHost(new URL(h.url).hostname) || attempts-- > 0);
     const results: PageResult[] = [];
     let next = 0, readable = 0;
     const worker = async () => {
-      while (next < chosen.length && readable < READABLE_PER_PROVIDER) {
+      while (next < chosen.length && readable < (deps.readablePerProvider ?? READABLE_PER_PROVIDER) && !pastDeadline(deps)) {
         const i = next++;
         const h = chosen[i];
         let p = inFlight.get(h.url);
         if (!p) { p = processPage(h, item, deps); inFlight.set(h.url, p); }
         results[i] = await p;
-        if (results[i].status === "read" || results[i].status === "snippet_only") readable++;
+        // Marketplace listings cost nothing and aren't read, so they don't use up the limit.
+        if (results[i].status === "read") readable++;
       }
     };
     await Promise.all(Array.from({ length: Math.max(1, deps.concurrency ?? 1) }, worker));
     run.results[provider] = results.filter(Boolean);
   }
+  run.stoppedForTime = pastDeadline(deps);
   run.stoppedForBudget = Object.values(run.results).some((rs) => rs?.some((r) => r.status === "budget_stop"));
   return run;
 }

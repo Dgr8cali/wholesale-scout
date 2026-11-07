@@ -18,7 +18,10 @@ export interface Extraction {
   supplierType: SupplierType; typeEvidence: string | null; typeConfidence: Confidence;
   country: string | null; countryEvidence: string | null; countrySource: CountrySource; countryConfidence: Confidence;
   price: number | null; priceBasis: PriceBasis; unitsInPrice: number | null;
-  currency: string | null; priceEvidence: string | null; moq: number | null; moqUnit: string | null; vat: "ex" | "inc" | "unknown";
+  currency: string | null; priceEvidence: string | null;
+  /** The product line the price belongs to, as written on the page. */
+  priceProduct?: string | null;
+  moq: number | null; moqUnit: string | null; vat: "ex" | "inc" | "unknown";
 }
 export interface Checked extends Extraction { unitPrice: number | null; tldHint: string | null; cleared: string[]; rejectedPrice?: { price: number; evidence: string | null } }
 export type CountryFields = Pick<Extraction, "country" | "countryEvidence" | "countrySource" | "countryConfidence">;
@@ -88,6 +91,20 @@ function confirmedPriceEvidence(price: number, evidence: string | null, page: st
   return null;
 }
 
+/** The figure only appears as an RRP, UVP or "was" price: nobody can buy at it. */
+function isListPrice(price: number, evidence: string): boolean {
+  const places = [...evidence.matchAll(/\d[\d.,']*/g)].filter((m) => numberValues(m[0]).some((v) => Math.abs(v - price) < 1e-9));
+  return places.length > 0 && places.every((m) => /(?:\b(?:rrp|uvp|msrp|srp|was|statt)|\blist price)\W*$/i.test(evidence.slice(0, m.index)));
+}
+
+const currencyIn = (evidence: string | null): string | null => {
+  if (!evidence) return null;
+  if (/£|\bgbp\b/i.test(evidence)) return "GBP";
+  if (/€|\beur\b/i.test(evidence)) return "EUR";
+  if (/\$|\busd\b/i.test(evidence)) return "USD";
+  return /元|\brmb\b|\bcny\b/i.test(evidence) ? "CNY" : null;
+};
+
 const CURRENCY_SIGNS: Record<string, RegExp> = { GBP: /£|\bgbp\b/i, EUR: /€|\beur\b/i, USD: /\$|\busd\b/i, CNY: /¥|￥|元|\brmb\b|\bcny\b/i };
 const currencyOnPage = (code: string, page: string) => (CURRENCY_SIGNS[code.toUpperCase()] ?? new RegExp(`\\b${code.replace(/\W/g, "")}\\b`, "i")).test(page);
 
@@ -128,7 +145,8 @@ export function checkExtraction(e: Extraction, pageText: string, url: string): C
   }
   let rejectedPrice: Checked["rejectedPrice"];
   if (out.price != null) {
-    const confirmed = out.price > 0 ? confirmedPriceEvidence(out.price, out.priceEvidence, pageText) : null;
+    const listed = out.priceEvidence != null && isListPrice(out.price, out.priceEvidence);
+    const confirmed = out.price > 0 && !listed ? confirmedPriceEvidence(out.price, out.priceEvidence, pageText) : null;
     if (confirmed) out.priceEvidence = confirmed;
     else {
       rejectedPrice = { price: out.price, evidence: out.priceEvidence };
@@ -138,8 +156,9 @@ export function checkExtraction(e: Extraction, pageText: string, url: string): C
   }
   if (out.price == null) {
     // "POA" isn't a price: nothing else about a price can stand without one.
-    out.priceEvidence = null; out.unitsInPrice = null; out.currency = null;
+    out.priceEvidence = null; out.unitsInPrice = null; out.currency = null; out.priceProduct = null;
   } else {
+    out.currency ??= currencyIn(out.priceEvidence);
     if (out.unitsInPrice != null && !hasNumber(pageText, out.unitsInPrice)) { out.unitsInPrice = null; cleared.push("unitsInPrice"); }
     if (out.currency != null && !currencyOnPage(out.currency, pageText)) { out.currency = null; cleared.push("currency"); }
   }
@@ -171,7 +190,7 @@ const PAGE_SCHEMA = closed({
   supplierType: enumOf("manufacturer", "wholesaler", "distributor", "marketplace", "retailer", "unknown"), typeEvidence: str, typeConfidence: CONFIDENCE,
   ...COUNTRY_PROPS,
   price: num, priceBasis: enumOf("per_unit", "per_pack", "per_case", "range", "on_request", "none"), unitsInPrice: num,
-  currency: str, priceEvidence: str, moq: num, moqUnit: str, vat: enumOf("ex", "inc", "unknown"),
+  currency: str, priceEvidence: str, priceProduct: str, moq: num, moqUnit: str, vat: enumOf("ex", "inc", "unknown"),
 });
 const COUNTRY_SCHEMA = closed(COUNTRY_PROPS);
 
@@ -181,11 +200,11 @@ country: the ISO 3166 two-letter code of where the business is based (GB, DE, CN
 const PAGE_SYSTEM = `You read supplier web pages for an Amazon UK seller looking for stock.
 ${RULES}
 supplierType: manufacturer (makes the goods itself), wholesaler (sells other brands in trade quantities), distributor (authorised to supply brands in bulk), marketplace (lists many sellers), retailer (sells single items to the public). Use unknown if the page doesn't show which.
-price: exactly as written, with no conversion or estimate; currency as an ISO code. If the page gives a price range, price is the lowest figure and priceBasis is range. If the page lists several products, use the one closest to the product wanted. priceBasis says what the price buys, and unitsInPrice how many units that is if the page states it. No price, or "price on application": price null and priceBasis on_request or none.`;
+price: exactly as written, with no conversion or estimate; currency as an ISO code. If the page gives a price range, price is the lowest figure and priceBasis is range. If the page lists several products, use the one closest to the product wanted, and name that product line in priceProduct as written. If the only prices are for a different size or model or a different kind of product, price is null. Use the price for the smallest quantity, never the lowest bulk tier. An RRP, UVP, "was" or list price is not a price. Nor is a placeholder or a figure that depends on options still to be chosen. priceBasis says what the price buys, and unitsInPrice how many units that is if the page states it. No price, or "price on application": price null and priceBasis on_request or none.`;
 const COUNTRY_SYSTEM = `You read a company's contact or about page to find where it is based.\n${RULES}`;
 
 /** A page can't end the data section early by writing the closing tag itself. */
-export const asData = (text: string) => `<page>\n${text.replace(/<\/?page>/gi, " ")}\n</page>`;
+export const asData = (text: string) => `<page>\n${text.replace(/<\s*\/?\s*page\b[^>]*>/gi, " ")}\n</page>`;
 
 export async function ask<T>(x: { client: MessagesClient; model: string; system: string; schema: object; content: string }): Promise<{ answer: T | null; stop: string; usage: Usage }> {
   const lean = leanThinking(x.model);
@@ -205,7 +224,7 @@ export async function ask<T>(x: { client: MessagesClient; model: string; system:
 export async function extractPage(x: { client: MessagesClient; model: string; productQuery: string; pageText: string; url: string }): Promise<{ extraction: Extraction | null; stop: string; usage: Usage }> {
   const { answer, stop, usage } = await ask<Extraction>({
     client: x.client, model: x.model, system: PAGE_SYSTEM, schema: PAGE_SCHEMA,
-    content: `Product wanted: ${x.productQuery}\nPage address: ${x.url}\n\n${asData(x.pageText)}`,
+    content: `Product wanted: ${x.productQuery}\n\n${asData(`Page address: ${x.url}\n\n${x.pageText}`)}`,
   });
   return { extraction: answer, stop, usage };
 }
@@ -213,7 +232,7 @@ export async function extractPage(x: { client: MessagesClient; model: string; pr
 export async function extractCountry(x: { client: MessagesClient; model: string; pageText: string; url: string }): Promise<CountryFields & { usage: Usage }> {
   const { answer, usage } = await ask<CountryFields>({
     client: x.client, model: x.model, system: COUNTRY_SYSTEM, schema: COUNTRY_SCHEMA,
-    content: `Page address: ${x.url}\n\n${asData(x.pageText)}`,
+    content: asData(`Page address: ${x.url}\n\n${x.pageText}`),
   });
   const none: CountryFields = { country: null, countryEvidence: null, countrySource: "none", countryConfidence: "low" };
   return { ...checkCountry(answer ?? none, x.pageText).fields, usage };

@@ -9,12 +9,12 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { extractCountry, extractPage, spendUsd } from "../src/lib/supplierSearch/extract";
-import { safeFetch } from "../src/lib/supplierSearch/fetchGuard";
+import { spendUsd } from "../src/lib/supplierSearch/extract";
+import { liveDeps, politely } from "../src/lib/supplierSearch/liveDeps";
 import { applyAiGrade, gradeWithAi, type AiGrade } from "../src/lib/supplierSearch/aiGrade";
 import { compareModels, gate, gradeRows, hasGrades, parseGrades, providerMap, runWarnings, scoreGrades, toCsv, type GradeRow, type ProviderMap } from "../src/lib/supplierSearch/grade";
 import { braveSearch, SearchError, serperSearch, type SearchProvider } from "../src/lib/supplierSearch/search";
-import { hasRetryableFetches, hashOf, Budget, runProduct, supplierDomain, type PageStatus, type ProductRun, type SpikeDeps, type Store } from "../src/lib/supplierSearch/spikeRun";
+import { hasRetryableFetches, hashOf, Budget, runProduct, type PageStatus, type ProductRun, type SpikeDeps, type Store } from "../src/lib/supplierSearch/spikeRun";
 import { manufacturersFirst, parseTestSet, type TestItem } from "../src/lib/supplierSearch/testSet";
 
 const ROOT = "docs/ui-audit/supplier-spike";
@@ -52,33 +52,8 @@ function searchers(): SpikeDeps["search"] {
   };
 }
 
-/** One request a second per domain, however many pages are being read at once. */
-const nextSlot = new Map<string, number>();
-async function politely<T>(key: string, go: () => Promise<T>, gapMs = pageGapMs): Promise<T> {
-  const domain = key.startsWith("search:") ? key : supplierDomain(key) ?? key, now = Date.now();
-  const at = Math.max(now, nextSlot.get(domain) ?? 0);
-  nextSlot.set(domain, at + gapMs);
-  if (at > now) await new Promise((r) => setTimeout(r, at - now));
-  return go();
-}
-
 function realDeps(model: string, budget: Budget): SpikeDeps {
-  const client = new Anthropic();
-  return {
-    model, budget, store, concurrency: CONCURRENCY, search: searchers(),
-    fetchPage: (url, allowUrl) => politely(url, () => safeFetch(url, { allowUrl })),
-    fetchRobots: async (origin) => {
-      const url = `${origin}/robots.txt`;
-      const r = await politely(url, () => safeFetch(url, { anyType: true, maxBytes: 500_000 }));
-      if (r.status === "ok") return r.html;
-      // A missing or refused file means no rules; anything else means "don't crawl for now", and is asked again next run.
-      if (r.status === "error" || (r.status === "http_error" && /status (429|5\d\d)/.test(r.reason))) throw new Error(`robots.txt: ${r.reason}`);
-      return null;
-    },
-    extract: (productQuery, pageText, url) => extractPage({ client, model, productQuery, pageText, url }),
-    extractCountry: (pageText, url) => extractCountry({ client, model, pageText, url }),
-    spend: (usage) => spendUsd(usage, model),
-  };
+  return liveDeps({ model, budget, store, concurrency: CONCURRENCY, search: searchers(), pageGapMs: () => pageGapMs });
 }
 
 function loadItems(): TestItem[] {

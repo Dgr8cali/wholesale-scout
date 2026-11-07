@@ -6,8 +6,10 @@ function parse(txt: string): Group[] {
   const groups: Group[] = [];
   let current: Group | null = null, inAgents = false;
   for (const line of txt.split(/\r?\n/)) {
-    const m = line.replace(/#.*$/, "").match(/^\s*([a-z-]+)\s*:\s*(.*?)\s*$/i);
+    // Trimmed first: a pattern that trims takes time in the square of a long run of spaces.
+    const m = line.replace(/#.*$/, "").trim().match(/^([a-z-]+)\s*:(.*)$/i);
     if (!m) continue;
+    m[2] = m[2].trim();
     const field = m[1].toLowerCase();
     if (field === "user-agent") {
       if (!inAgents || !current) { current = { agents: [], rules: [] }; groups.push(current); }

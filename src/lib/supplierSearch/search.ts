@@ -6,6 +6,7 @@ export interface SearchHit { url: string; title: string; snippet: string; rank: 
 interface SearchOpts { apiKey: string; fetchImpl?: typeof fetch; sleep?: (ms: number) => Promise<void> }
 
 const MAX_WAIT_MS = 10_000;
+const SEARCH_TIMEOUT_MS = 20_000;
 const realSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 /** Says only which provider and status: never a key or a header. */
@@ -36,7 +37,7 @@ async function call<T>(provider: SearchProvider, doFetch: () => Promise<Response
 export async function serperSearch(q: PlannedQuery, opts: SearchOpts): Promise<SearchHit[]> {
   const doFetch = opts.fetchImpl ?? fetch;
   const body = await call<{ organic?: { link: string; title?: string; snippet?: string }[] }>("serper", () => doFetch("https://google.serper.dev/search", {
-    method: "POST",
+    method: "POST", signal: AbortSignal.timeout(SEARCH_TIMEOUT_MS),
     headers: { "X-API-KEY": opts.apiKey, "content-type": "application/json" },
     body: JSON.stringify({ q: q.q, gl: q.country.toLowerCase(), hl: q.lang, num: 10 }),
   }), opts.sleep);
@@ -47,6 +48,7 @@ export async function braveSearch(q: PlannedQuery, opts: SearchOpts): Promise<Se
   const doFetch = opts.fetchImpl ?? fetch;
   const params = new URLSearchParams({ q: q.q, country: q.country, search_lang: q.lang, count: "10" });
   const body = await call<{ web?: { results?: { url: string; title?: string; description?: string }[] } }>("brave", () => doFetch(`https://api.search.brave.com/res/v1/web/search?${params}`, {
+    signal: AbortSignal.timeout(SEARCH_TIMEOUT_MS),
     headers: { "X-Subscription-Token": opts.apiKey, accept: "application/json" },
   }), opts.sleep);
   return (body.web?.results ?? []).map((r, i) => ({ url: r.url, title: r.title ?? "", snippet: r.description ?? "", rank: i + 1, provider: "brave", query: q.q }));
