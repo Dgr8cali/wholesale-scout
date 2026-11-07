@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { Checked } from "./extract";
-import { compareModels, gate, gradeRows, hasGrades, parseGrades, providerMap, scoreGrades, toCsv, type GradeRow, type SpikeReport, type ProviderScore } from "./grade";
+import { compareModels, gate, gradeRows, hasGrades, parseGrades, providerMap, runWarnings, scoreGrades, toCsv, type GradeRow, type SpikeReport, type ProviderScore } from "./grade";
 import type { PageResult, ProductRun } from "./spikeRun";
 import type { TestItem } from "./testSet";
 
 const row = (over: Partial<GradeRow> = {}): GradeRow => ({
   row_id: "p:a.com", product: "p", supplier: "A", url: "https://a.com/", model_type: "manufacturer", type_evidence: "", model_country: "CN", country_evidence: "", tld_hint: "",
-  price_as_written: "", price_basis: "none", unit_price: "", moq: "", product_ok: "", type_ok: "", country_ok: "", price_ok: "", ...over,
+  price_as_written: "", price: "", currency: "", price_basis: "none", unit_price: "", moq: "", product_ok: "", type_ok: "", country_ok: "", price_ok: "", ...over,
 });
 const extraction = (over: Partial<Checked> = {}): Checked => ({
   productMatch: "yes", productName: "x", supplierName: "Acme", supplierType: "manufacturer", typeEvidence: "factory", typeConfidence: "high",
@@ -16,14 +16,22 @@ const extraction = (over: Partial<Checked> = {}): Checked => ({
 });
 const page = (url: string, over: Partial<PageResult> = {}): PageResult => ({ url, title: "Title", snippet: "s", status: "read", extraction: extraction(), costUsd: 0.01, ...over });
 const run = (id: string, kind: TestItem["kind"], serper: PageResult[], brave: PageResult[] = []): ProductRun => ({
-  item: { id, query: id, kind }, results: { serper, brave }, partial: [], stoppedForBudget: false, queriesUsed: { serper: 5, brave: 5 },
+  item: { id, query: id, kind }, results: { serper, brave }, partial: [], searchErrors: [], stoppedForBudget: false, queriesUsed: { serper: 5, brave: 5 },
 });
 
 describe("gradeRows", () => {
-  it("merges a domain found by both providers into one row", () => {
-    const rows = gradeRows([run("p", "manufacturer", [page("https://a.com/1")], [page("https://www.a.com/2")])]);
+  it("merges the same page found by both providers into one row", () => {
+    const rows = gradeRows([run("p", "manufacturer", [page("https://a.com/1")], [page("https://a.com/1")])]);
     expect(rows).toHaveLength(1);
-    expect(rows[0].row_id).toBe("p:a.com");
+    expect(rows[0].row_id).toBe("p:https://a.com/1");
+  });
+  it("different pages on one site get their own rows, so a provider is only graded on what it found", () => {
+    const rows = gradeRows([run("p", "manufacturer", [page("https://a.com/bags")], [page("https://a.com/about")])]);
+    expect(rows.map((r) => r.url)).toEqual(["https://a.com/bags", "https://a.com/about"]);
+  });
+  it("shows the number and currency read, so a misread price can be spotted", () => {
+    const [r] = gradeRows([run("p", "generic", [page("https://a.com/", { extraction: extraction({ price: 2400, currency: "EUR", priceEvidence: "24,00 €", priceBasis: "per_case", unitPrice: null }) })])]);
+    expect(r).toMatchObject({ price: "2400", currency: "EUR", price_as_written: "24,00 €" });
   });
   it("puts manufacturer products first", () => {
     const rows = gradeRows([run("g", "generic", [page("https://a.com/")]), run("m", "manufacturer", [page("https://b.com/")])]);
@@ -47,7 +55,7 @@ describe("gradeRows", () => {
   });
   it("records which providers found each row, away from the sheet", () => {
     const runs = [run("p", "manufacturer", [page("https://a.com/1")], [page("https://a.com/2"), page("https://b.com/")])];
-    expect(providerMap(runs)).toEqual({ "p:a.com": ["serper", "brave"], "p:b.com": ["brave"] });
+    expect(providerMap(runs)).toEqual({ "p:https://a.com/1": ["serper"], "p:https://a.com/2": ["brave"], "p:https://b.com/": ["brave"] });
   });
 });
 
@@ -63,6 +71,13 @@ describe("the sheet", () => {
     expect(csv).not.toContain(`,${bad},`);
     expect(csv).toContain(`'${bad}`);
     expect(parseGrades(csv)[0].supplier).toBe(bad);
+  });
+  it("reads grades however they were typed", () => {
+    const rows = parseGrades(toCsv([row({ type_ok: "Y", product_ok: " n ", country_ok: "Yes", price_ok: "NO" })]));
+    expect(rows[0]).toMatchObject({ type_ok: "y", product_ok: "n", country_ok: "y", price_ok: "n" });
+  });
+  it("refuses a grade it can't read, naming the row, rather than ignoring it", () => {
+    expect(() => parseGrades(toCsv([row({ row_id: "p:bad", type_ok: "maybe" })]))).toThrow(/p:bad/);
   });
   it("hasGrades spots a sheet that has been filled in", () => {
     expect(hasGrades([row()])).toBe(false);
@@ -98,10 +113,20 @@ describe("scoreGrades", () => {
     expect(scoreGrades(rows.slice(0, 2), items, map).providers[0].makersWithThree).toBe(0);
   });
   it("wholesale scores read only branded and generic products", () => {
-    const rows = [row({ row_id: "1", product: "q", product_ok: "y", price_as_written: "£1", price_ok: "n" }), row({ row_id: "2", product: "p", product_ok: "n", price_as_written: "£2", price_ok: "y" })];
+    const rows = [row({ row_id: "1", product: "q", product_ok: "y", price: "1", price_as_written: "£1", price_ok: "n" }), row({ row_id: "2", product: "p", product_ok: "n", price: "2", price_as_written: "£2", price_ok: "y" })];
     const s = scoreGrades(rows, items, { 1: ["serper"], 2: ["serper"] }).providers[0];
     expect(s.productPrecision).toBe(1);
     expect(s.pricePrecision).toBe(0);
+  });
+  it("a row with no real price doesn't count toward the price score", () => {
+    const rows = [row({ row_id: "1", product: "q", price_as_written: "Price on application", price: "", price_ok: "y" })];
+    expect(scoreGrades(rows, items, { 1: ["serper"] }).providers[0].priceTotal).toBe(0);
+  });
+  it("gives the raw counts behind each percentage, and product accuracy by kind", () => {
+    const rows = [row({ row_id: "1", product: "q", product_ok: "y" }), row({ row_id: "2", product: "q", product_ok: "n" }), row({ row_id: "3", product: "p", product_ok: "y" })];
+    const s = scoreGrades(rows, items, { 1: ["serper"], 2: ["serper"], 3: ["serper"] }).providers[0];
+    expect(s).toMatchObject({ productRight: 1, productTotal: 2 });
+    expect(s.productByKind).toEqual({ generic: { right: 1, total: 2 }, manufacturer: { right: 1, total: 1 } });
   });
   it("a page never opened isn't counted against the country score", () => {
     const rows = [row({ row_id: "1", model_country: "CN", country_ok: "y" }), row({ row_id: "2", model_country: "Unknown", price_basis: "not opened" })];
@@ -120,7 +145,9 @@ describe("scoreGrades", () => {
 
 const score = (over: Partial<ProviderScore>): ProviderScore => ({
   provider: "serper", results: 100, graded: 100, makersWithThree: 8, makerProducts: 8, makerLabelled: 10, makerPrecision: 1, productPrecision: 1, pricePrecision: 1,
-  countryPrecision: 1, unknownShare: 0, countryConfirmed: 10, tldRight: 0, notOpened: 0, ...over,
+  countryPrecision: 1, unknownShare: 0, countryConfirmed: 10, tldRight: 0, notOpened: 0,
+  makerRight: 10, productRight: 50, productTotal: 50, productByKind: {}, priceRight: 20, priceTotal: 20, countryRight: 50, countryTotal: 50,
+  makerCoverage: 1, wholesaleCoverage: 1, countryCoverage: 1, ...over,
 });
 const reportWith = (over: Partial<ProviderScore>): SpikeReport => ({ providers: [score(over)], byCountry: {} });
 
@@ -144,6 +171,23 @@ describe("gate", () => {
     const g = gate(reportWith({ makerPrecision: null, productPrecision: null, pricePrecision: null, countryPrecision: null, unknownShare: null }))[0];
     expect([g.manufacturers, g.wholesale, g.country]).toEqual(["stop", "stop", "stop"]);
   });
+  it("one graded row in a hundred is never a go", () => {
+    const rows = [row({ row_id: "1", product: "q", product_ok: "y", country_ok: "y", price: "1", price_ok: "y" }), ...Array.from({ length: 99 }, (_, i) => row({ row_id: `x${i}`, product: "q" }))];
+    const map = Object.fromEntries(rows.map((r) => [r.row_id, ["serper"]])) as Record<string, ("serper" | "brave")[]>;
+    const g = gate(scoreGrades(rows, items, map))[0];
+    expect(g.wholesale).toBe("not enough graded");
+    expect(g.country).toBe("not enough graded");
+  });
+  it("wants most of an area graded and at least 30 answers", () => {
+    expect(gate(reportWith({ wholesaleCoverage: 0.79 }))[0].wholesale).toBe("not enough graded");
+    expect(gate(reportWith({ productTotal: 29 }))[0].wholesale).toBe("not enough graded");
+    expect(gate(reportWith({ priceTotal: 9 }))[0].wholesale).toBe("not enough graded");
+    expect(gate(reportWith({ countryTotal: 29 }))[0].country).toBe("not enough graded");
+    expect(gate(reportWith({ makerCoverage: 0.5 }))[0].manufacturers).toBe("not enough graded");
+  });
+  it("fully graded with no factories found is a stop, not a shortage of grades", () => {
+    expect(gate(reportWith({ makersWithThree: 0, makerLabelled: 0, makerPrecision: null, makerRight: 0 }))[0].manufacturers).toBe("stop");
+  });
   it("gives its reasons", () => {
     expect(gate(reportWith({ makersWithThree: 5 }))[0].reasons.join(" ")).toMatch(/5 of 8/);
   });
@@ -162,5 +206,19 @@ describe("compareModels", () => {
       row({ row_id: "3", model_type: "retailer" }),
     ];
     expect(compareModels(graded, other)).toEqual({ type: { same: 1, total: 2 }, country: { same: 1, total: 1 }, price: { same: 1, total: 1 } });
+  });
+});
+
+describe("runWarnings", () => {
+  it("says which products were incomplete and why, for each provider", () => {
+    const partial = { ...run("p", "generic", []), partial: ["brave" as const], searchErrors: ["brave search failed (status 429)"] };
+    const stopped = { ...run("q", "generic", []), stoppedForBudget: true };
+    expect(runWarnings([partial, stopped, run("r", "generic", [])])).toEqual({
+      partial: { brave: ["p"] }, searchErrors: ["p: brave search failed (status 429)"], stoppedForBudget: ["q"], temporaryFailures: 0,
+    });
+  });
+  it("counts pages that failed for a passing reason, because a re-run will retry them", () => {
+    const r = run("p", "generic", [page("https://a.com/", { status: "fetch_failed", extraction: null, temporary: true }), page("https://b.com/", { status: "model_error", extraction: null })]);
+    expect(runWarnings([r]).temporaryFailures).toBe(2);
   });
 });

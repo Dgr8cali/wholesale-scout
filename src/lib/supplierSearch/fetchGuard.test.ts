@@ -100,3 +100,13 @@ describe("safeFetch for plain files", () => {
     expect((await safeFetch("https://example.com/robots.txt", { send })).status).toBe("not_html");
   });
 });
+
+describe("safeFetch allowUrl", () => {
+  it("is asked about every hop, so a redirect can't reach a refused page", async () => {
+    const send: RawSend = async () => ({ status: 302, headers: { location: "https://www.alibaba.com/p" }, body: Buffer.alloc(0), truncated: false });
+    const asked: string[] = [];
+    const r = await safeFetch("https://a.com/", { send, allowUrl: async (u) => { asked.push(u.href); return u.hostname.includes("alibaba") ? "a platform" : null; } });
+    expect(asked).toEqual(["https://a.com/", "https://www.alibaba.com/p"]);
+    expect(r).toEqual({ status: "blocked", reason: "a platform" });
+  });
+});

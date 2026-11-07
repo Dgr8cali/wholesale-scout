@@ -5,6 +5,9 @@ export interface TestItem { id: string; query: string; kind: ProductKind; note?:
 
 const KINDS: ProductKind[] = ["branded", "generic", "manufacturer"];
 
+/** The main risk goes first, so a budget stop can't leave it untested. */
+export const manufacturersFirst = (items: TestItem[]) => [...items.filter((i) => i.kind === "manufacturer"), ...items.filter((i) => i.kind !== "manufacturer")];
+
 export function parseTestSet(raw: unknown): TestItem[] {
   if (!Array.isArray(raw)) throw new Error("The test set must be a list");
   const seen = new Set<string>();

@@ -388,23 +388,23 @@ git commit -m "Supplier search: schema-bound extraction with country, evidence c
 
 ```bash
 npm run spike:suppliers -- smoke
-npm run spike:suppliers -- run --only pill-box,bin-bags --max-usd 1
+npm run spike:suppliers -- run --only pill-box,bin-bags --max-usd 2
 npm run spike:suppliers -- run --max-usd 12
 npm run spike:suppliers -- score
 ```
 
 The script: `"spike:suppliers": "node --env-file-if-exists=.env.local --import tsx scripts/supplier-spike.ts"`. `smoke` runs one query per provider and prints only the hit count and status.
 
-**The web path for one product:** build 5 queries, search with each provider, dedupe by domain, and take up to 20 URLs per provider. For each URL:
+**The web path for one product:** build 5 queries, search with each provider, dedupe by domain, and read pages in rank order until 10 are readable, trying at most 20 per provider (changed after review: only those 10 reach the sheet). For each URL:
 - Platform hosts are never opened: mark `snippet_only`, type `marketplace`, country `null`.
 - Otherwise check robots, then `safeFetch`, then `pageText`, `extractPage`, `checkExtraction`.
 - If the country is still `null` and the page isn't `productMatch: "no"`, follow `findContactLink` once and run `extractCountry`.
 
 Pages found by both providers are read and paid for once. Save each stage to `docs/ui-audit/supplier-spike/`, so a re-run resumes without new charges.
 
-**Grading sheet:** `grades.csv`, one row per supplier domain in each product's top 10 for either provider, merged, with **no provider column** so grading stays blind (the mapping is in a separate `provider-map.json`). Manufacturer products come first, so if time runs short the riskiest part is already graded.
+**Grading sheet:** `grades.csv`, one row per page in each product's top 10 for either provider, merged only when both found the same page (changed after review, so a provider is only graded on what it found), with **no provider column** so grading stays blind (the mapping is in a separate `provider-map.json`). Manufacturer products come first, so if time runs short the riskiest part is already graded.
 
-Columns: `row_id, product, supplier, url, model_type, type_evidence, model_country, country_evidence, tld_hint, price_as_written, price_basis, unit_price, moq, product_ok, type_ok, country_ok, price_ok`. Akin fills the last four with `y`, `n` or `?` (can't tell). Expect up to about 300 rows, roughly 60 to 90 minutes.
+Columns: `row_id, product, supplier, url, model_type, type_evidence, model_country, country_evidence, tld_hint, price_as_written, price, currency, price_basis, unit_price, moq, product_ok, type_ok, country_ok, price_ok`. Akin fills the last four with `y`, `n` or `?` (can't tell). Expect up to about 300 rows, roughly 60 to 90 minutes.
 
 **Stop/go marks (proposed; Akin to confirm).** With only 20 products these are a guide, so `score` also prints the raw counts.
 
@@ -490,7 +490,7 @@ Expected: a status of 200 and a non-zero hit count per provider. If a shape is w
 
 - [ ] **Step 3: Calibrate on two products**
 
-Run: `npm run spike:suppliers -- run --only pill-box,bin-bags --max-usd 1`
+Run: `npm run spike:suppliers -- run --only pill-box,bin-bags --max-usd 2`
 Expected: cost, pages read and pages refused are printed. **Report the measured cost per search and the projected total to Akin, and wait for Akin's OK.** The estimate is about $0.25 to $0.30 per product and provider on Sonnet 5.5, above the handover's $0.03 to $0.12. If the projection exceeds $12, stop and ask.
 
 - [ ] **Step 4: Run the full set**

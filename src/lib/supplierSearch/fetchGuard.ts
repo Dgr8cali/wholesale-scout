@@ -122,7 +122,7 @@ function decodeBody(body: Buffer, contentType: string): string {
   catch { return new TextDecoder("utf-8").decode(body); }
 }
 
-export async function safeFetch(url: string, opts: { maxBytes?: number; timeoutMs?: number; maxRedirects?: number; send?: RawSend; resolve?: Resolve; anyType?: boolean } = {}): Promise<SafeFetchResult> {
+export async function safeFetch(url: string, opts: { maxBytes?: number; timeoutMs?: number; maxRedirects?: number; send?: RawSend; resolve?: Resolve; anyType?: boolean; allowUrl?: (url: URL) => Promise<string | null> } = {}): Promise<SafeFetchResult> {
   const { maxBytes = 2_000_000, timeoutMs = 15_000, maxRedirects = 3, resolve = systemResolve } = opts;
   const send = opts.send ?? nodeSend(maxBytes, timeoutMs);
   const lookup = guardedLookup(resolve);
@@ -131,8 +131,12 @@ export async function safeFetch(url: string, opts: { maxBytes?: number; timeoutM
     const checked = checkUrl(current);
     if (!checked.ok) return { status: "blocked", reason: checked.reason };
     let res: Awaited<ReturnType<RawSend>>;
-    try { res = await send(checked.url, lookup); }
-    catch (e) {
+    try {
+      // The caller's own rules (robots, platforms) apply to every hop, not just the first address.
+      const refused = await opts.allowUrl?.(checked.url);
+      if (refused) return { status: "blocked", reason: refused };
+      res = await send(checked.url, lookup);
+    } catch (e) {
       if (e instanceof BlockedAddressError) return { status: "blocked", reason: e.message };
       return { status: "error", reason: (e as Error).message };
     }

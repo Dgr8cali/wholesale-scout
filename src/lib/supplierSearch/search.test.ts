@@ -47,7 +47,7 @@ describe("braveSearch", () => {
 describe("failures", () => {
   it.each([[401, false], [402, true], [429, false], [500, false]])("status %i raises SearchError (outOfCredit %s)", async (status, outOfCredit) => {
     for (const search of [serperSearch, braveSearch]) {
-      const err = await search(q, { apiKey: "secret-key", fetchImpl: (async () => json({ error: "x" }, status)) as typeof fetch }).catch((e) => e);
+      const err = await search(q, { apiKey: "secret-key", sleep: async () => {}, fetchImpl: (async () => json({ error: "x" }, status)) as typeof fetch }).catch((e) => e);
       expect(err).toBeInstanceOf(SearchError);
       expect(err.status).toBe(status);
       expect(err.outOfCredit).toBe(outOfCredit);
@@ -62,5 +62,32 @@ describe("failures", () => {
     const err = await braveSearch(q, { apiKey: "k", fetchImpl: (async () => { throw new Error("ECONNRESET"); }) as typeof fetch }).catch((e) => e);
     expect(err).toBeInstanceOf(SearchError);
     expect(err.status).toBe(0);
+  });
+});
+
+describe("rate limits", () => {
+  const limited = (status: number, then?: Response) => {
+    let calls = 0;
+    const fetchImpl = (async () => (++calls === 1 ? new Response("", { status, headers: { "retry-after": "2" } }) : then ?? json({ organic: [] }))) as typeof fetch;
+    return { fetchImpl, count: () => calls };
+  };
+  it("waits as told and retries a 429 once", async () => {
+    const { fetchImpl, count } = limited(429);
+    const waits: number[] = [];
+    await serperSearch(q, { apiKey: "k", fetchImpl, sleep: async (ms) => { waits.push(ms); } });
+    expect(count()).toBe(2);
+    expect(waits).toEqual([2000]);
+  });
+  it("gives up after the second 429", async () => {
+    const { fetchImpl, count } = limited(429, new Response("", { status: 429 }));
+    const err = await braveSearch(q, { apiKey: "k", fetchImpl, sleep: async () => {} }).catch((e) => e);
+    expect(err.status).toBe(429);
+    expect(count()).toBe(2);
+  });
+  it("doesn't wait longer than 10 s, whatever it's told", async () => {
+    const fetchImpl = (async () => new Response("", { status: 429, headers: { "retry-after": "3600" } })) as typeof fetch;
+    const waits: number[] = [];
+    await serperSearch(q, { apiKey: "k", fetchImpl, sleep: async (ms) => { waits.push(ms); } }).catch(() => {});
+    expect(waits).toEqual([10000]);
   });
 });

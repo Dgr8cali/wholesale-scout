@@ -21,10 +21,22 @@ function parse(txt: string): Group[] {
   return groups;
 }
 
+/** Wildcards matched piece by piece, never with a regular expression: a hostile file can't make this slow. */
 function matches(pattern: string, path: string): boolean {
   const anchored = pattern.endsWith("$");
-  const body = (anchored ? pattern.slice(0, -1) : pattern).split("*").map((s) => s.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join(".*");
-  return new RegExp(`^${body}${anchored ? "$" : ""}`).test(path);
+  const pieces = (anchored ? pattern.slice(0, -1) : pattern).split("*");
+  const first = pieces[0];
+  if (!path.startsWith(first)) return false;
+  if (pieces.length === 1) return !anchored || path === first;
+  let at = first.length;
+  const last = pieces[pieces.length - 1];
+  for (const piece of pieces.slice(1, -1)) {
+    const found = path.indexOf(piece, at);
+    if (found < 0) return false;
+    at = found + piece.length;
+  }
+  if (anchored) return path.endsWith(last) && path.length - last.length >= at;
+  return path.indexOf(last, at) >= 0;
 }
 
 export function robotsAllows(robotsTxt: string | null, path: string, agent: string): boolean {

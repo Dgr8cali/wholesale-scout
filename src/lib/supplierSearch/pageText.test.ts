@@ -48,3 +48,16 @@ describe("isPlatformHost", () => {
     expect(isPlatformHost(h)).toBe(false);
   });
 });
+
+describe("badly built pages", () => {
+  it("refuses very deep nesting before it can stall or crash the parser", () => {
+    const deep = `${"<div>".repeat(12000)}x`;
+    const started = Date.now();
+    expect(() => pageText(deep)).toThrow(/nested/);
+    expect(() => findContactLink(deep, "https://x.com/")).toThrow(/nested/);
+    expect(Date.now() - started).toBeLessThan(500);
+  });
+  it("normal nesting and unclosed paragraphs are fine", () => {
+    expect(pageText(`${"<p>a".repeat(5000)}`).text).toContain("a");
+  });
+});

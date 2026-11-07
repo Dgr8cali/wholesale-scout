@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { parseTestSet } from "./testSet";
+import { manufacturersFirst, parseTestSet } from "./testSet";
 
 describe("parseTestSet", () => {
   it("the committed set has 20 products: 6 branded, 6 generic, 8 manufacturer", () => {
@@ -18,5 +18,12 @@ describe("parseTestSet", () => {
 
   it("rejects a repeated id", () => {
     expect(() => parseTestSet([{ id: "x", query: "y", kind: "generic" }, { id: "x", query: "z", kind: "generic" }])).toThrow(/x/);
+  });
+});
+
+describe("manufacturersFirst", () => {
+  it("runs the riskiest products first and keeps the order otherwise", () => {
+    const items = parseTestSet([{ id: "g", query: "g", kind: "generic" }, { id: "m", query: "m", kind: "manufacturer" }, { id: "b", query: "b", kind: "branded" }]);
+    expect(manufacturersFirst(items).map((i) => i.id)).toEqual(["m", "g", "b"]);
   });
 });

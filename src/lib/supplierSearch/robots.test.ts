@@ -27,3 +27,19 @@ describe("robotsAllows", () => {
     expect(robotsAllows("User-agent: a\nUser-agent: *  # all\nDisallow: /x # no", "/x/1", AGENT)).toBe(false);
   });
 });
+
+describe("robotsAllows on a hostile file", () => {
+  it("many wildcards can't freeze the run", () => {
+    const started = Date.now();
+    expect(robotsAllows(`User-agent: *\nDisallow: /${"*a".repeat(40)}*b$`, `/${"a".repeat(5000)}`, AGENT)).toBe(true);
+    expect(Date.now() - started).toBeLessThan(200);
+  });
+  it("wildcards still match in order", () => {
+    expect(robotsAllows("User-agent: *\nDisallow: /a*b*c", "/axxbxxc/d", AGENT)).toBe(false);
+    expect(robotsAllows("User-agent: *\nDisallow: /a*b*c", "/axxcxxb", AGENT)).toBe(true);
+  });
+  it("a repeated piece can't satisfy two wildcards at once", () => {
+    expect(robotsAllows("User-agent: *\nDisallow: /a*ab$", "/ab", AGENT)).toBe(true);
+    expect(robotsAllows("User-agent: *\nDisallow: /a*ab$", "/aab", AGENT)).toBe(false);
+  });
+});

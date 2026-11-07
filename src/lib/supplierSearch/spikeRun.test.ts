@@ -84,11 +84,93 @@ describe("runProduct", () => {
     expect(run.results.serper![0]).toMatchObject({ status: "fetch_failed", reason: "status 403", costUsd: 0 });
     expect(calls.extract).toEqual([]);
   });
+  it("a lasting failure isn't tried again on a re-run", async () => {
+    let fetches = 0;
+    const { d } = deps({ fetchPage: async () => { fetches++; return { status: "http_error", reason: "status 404" }; } });
+    await runProduct(item, d);
+    await runProduct(item, d);
+    expect(fetches).toBe(1);
+  });
+  it.each([[{ status: "error", reason: "timed out" }], [{ status: "http_error", reason: "status 503" }], [{ status: "http_error", reason: "status 429" }]] as const)("a temporary failure (%j) is tried again on a re-run", async (failure) => {
+    let down = true;
+    const { d, calls } = deps({ fetchPage: async (url) => (down ? failure : { status: "ok", finalUrl: url, html: `<body><p>${page}</p></body>`, truncated: false }) });
+    expect((await runProduct(item, d)).results.serper![0].status).toBe("fetch_failed");
+    down = false;
+    expect((await runProduct(item, d)).results.serper![0].status).toBe("read");
+    expect(calls.extract).toHaveLength(1);
+  });
+  it("robots.txt that can't be reached means don't crawl for now, and is checked again next time", async () => {
+    let down = true;
+    const { d, calls } = deps({ fetchRobots: async () => { if (down) throw new Error("timed out"); return null; } });
+    const first = (await runProduct(item, d)).results.serper![0];
+    expect(first.status).toBe("fetch_failed");
+    expect(calls.fetch).toEqual([]);
+    down = false;
+    expect((await runProduct(item, d)).results.serper![0].status).toBe("read");
+  });
+  it("a redirect to a platform or a robots-blocked page is refused on the way", async () => {
+    const answers: (string | null)[] = [];
+    const { d, calls } = deps({
+      fetchRobots: async () => "User-agent: *\nDisallow: /secret",
+      fetchPage: async (url, allow) => {
+        answers.push(await allow!(new URL("https://www.alibaba.com/p")), await allow!(new URL("https://b.com/secret")), await allow!(new URL("https://b.com/fine")));
+        return { status: "blocked", reason: answers[0]! };
+      },
+    });
+    await runProduct(item, d);
+    expect(answers[0]).toMatch(/platform/);
+    expect(answers[1]).toMatch(/robots/);
+    expect(answers[2]).toBeNull();
+    expect(calls.extract).toEqual([]);
+  });
+  it("one badly built page is recorded and the run carries on", async () => {
+    const { d, calls } = deps({
+      search: { serper: async () => [hit("https://deep.com/", 1), hit("https://b.com/", 2)] },
+      fetchPage: async (url) => ({ status: "ok", finalUrl: url, truncated: false, html: url.includes("deep") ? "<div>".repeat(12000) : `<body><p>${page}</p></body>` }),
+    });
+    const run = await runProduct(item, d);
+    expect(run.results.serper!.map((p) => p.status)).toEqual(["fetch_failed", "read"]);
+    expect(run.results.serper![0].reason).toMatch(/nested/);
+    expect(calls.extract).toEqual(["https://b.com/"]);
+  });
+  it("the same page for two products is judged for each one", async () => {
+    const budget = new Budget(100);
+    const { d, calls } = deps({ budget, extract: async (q, _t, url) => { calls.extract.push(url); return { extraction: { ...good, productName: q }, stop: "end_turn", usage }; } });
+    const a = await runProduct({ id: "bags", query: "bags", kind: "generic" }, d);
+    const b = await runProduct({ id: "foil", query: "foil", kind: "generic" }, d);
+    expect(a.results.serper![0].extraction?.productName).toBe("bags");
+    expect(b.results.serper![0].extraction?.productName).toBe("foil");
+    expect(calls.fetch).toHaveLength(1);
+    expect(budget.spent).toBeCloseTo(0.02);
+  });
+  it("the budget is saved after every paid call, so a crash can't lose it", async () => {
+    const { d } = deps({
+      search: { serper: async () => [hit("https://a.com/", 1), hit("https://b.com/", 2)] },
+      extract: async (_q, _t, url) => { if (url.includes("b.com")) { expect(await d.store.get("budget")).toEqual({ spent: 0.01 }); } return { extraction: good, stop: "end_turn", usage }; },
+    });
+    await runProduct(item, d);
+    expect(await d.store.get("budget")).toEqual({ spent: 0.02 });
+  });
   it("a page with almost no text isn't sent to the model", async () => {
     const { d, calls } = deps({ fetchPage: async (url) => ({ status: "ok", finalUrl: url, html: "<body>Loading</body>", truncated: false }) });
     const run = await runProduct(item, d);
     expect(run.results.serper![0].status).toBe("no_text");
     expect(calls.extract).toEqual([]);
+  });
+  it("a rate limit on one query doesn't lose the others, and says why", async () => {
+    let n = 0;
+    const { d } = deps({ search: { serper: async () => { n++; if (n === 1) throw new SearchError("serper", 429, false); return [hit(`https://s${n}.com/`)]; } } });
+    const run = await runProduct(item, d);
+    expect(n).toBe(5);
+    expect(run.queriesUsed.serper).toBe(4);
+    expect(run.partial).toEqual(["serper"]);
+    expect(run.searchErrors).toEqual(["serper search failed (status 429)"]);
+  });
+  it.each([[401], [402]])("status %i stops that provider's searches for this product", async (status) => {
+    let n = 0;
+    const { d } = deps({ search: { serper: async () => { n++; throw new SearchError("serper", status, status === 402); } } });
+    await runProduct(item, d);
+    expect(n).toBe(1);
   });
   it("one provider failing leaves the other's results and marks the run partial", async () => {
     const { d } = deps({ search: {
@@ -201,11 +283,17 @@ describe("runProduct", () => {
       expect(calls.country).toEqual([]);
     });
   });
-  it("takes at most 20 pages for a provider", async () => {
+  it("pays only for the 10 readable pages that can reach the sheet", async () => {
     const many = Array.from({ length: 30 }, (_, i) => hit(`https://s${i}.com/`, i + 1));
     const { d, calls } = deps({ search: { serper: async () => many } });
     await runProduct(item, d);
-    expect(calls.extract).toHaveLength(20);
+    expect(calls.extract).toHaveLength(10);
+  });
+  it("tries further down the list when pages fail, up to 20", async () => {
+    const many = Array.from({ length: 30 }, (_, i) => hit(`https://s${i}.com/`, i + 1));
+    const { d, calls } = deps({ search: { serper: async () => many }, fetchPage: async (url) => { calls.fetch.push(url); return { status: "http_error", reason: "status 403" }; } });
+    await runProduct(item, d);
+    expect(calls.fetch).toHaveLength(20);
   });
 });
 

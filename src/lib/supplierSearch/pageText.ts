@@ -1,8 +1,25 @@
 /** Turn a fetched page into plain text for the model, and find its contact page. Scripts never run. */
 import { JSDOM, VirtualConsole } from "jsdom";
 
+const MAX_DEPTH = 1500;
+/** Closed by the parser on their own, or never opened: they don't add depth. */
+const NO_DEPTH = new Set(["p", "li", "td", "th", "tr", "tbody", "thead", "tfoot", "dt", "dd", "option", "optgroup", "colgroup", "caption", "rp", "rt", "br", "hr", "img", "input", "meta", "link", "area", "base", "col", "embed", "source", "track", "wbr", "html", "head", "body"]);
+
+/** Thousands of nested tags stall or crash the parser, so count them first with a plain scan. */
+function refuseDeepNesting(html: string) {
+  let depth = 0;
+  for (const m of html.matchAll(/<(\/?)([a-zA-Z][\w-]*)[^<>]*?(\/?)>/g)) {
+    if (NO_DEPTH.has(m[2].toLowerCase()) || m[3]) continue;
+    depth = m[1] ? Math.max(0, depth - 1) : depth + 1;
+    if (depth > MAX_DEPTH) throw new Error("page too deeply nested to read");
+  }
+}
+
 /** jsdom without a console: a page's broken CSS shouldn't fill the spike's output. */
-const parse = (html: string, url?: string) => new JSDOM(html, { url, virtualConsole: new VirtualConsole() });
+function parse(html: string, url?: string) {
+  refuseDeepNesting(html);
+  return new JSDOM(html, { url, virtualConsole: new VirtualConsole() });
+}
 
 /** Keeps the start and the end: addresses and company details sit in footers. */
 export function pageText(html: string, maxChars = 12_000): { text: string; truncated: boolean } {

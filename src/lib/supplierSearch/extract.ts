@@ -38,11 +38,45 @@ export function spendUsd(usage: Usage, model: string): number {
 
 /* ===================== checks after the call ===================== */
 
-const fold = (s: string) => s.replace(/\s+/g, " ").trim().toLowerCase();
-const onPage = (evidence: string | null, page: string) => {
+// All whitespace goes: pages split text across elements, so "£12.99" can read as "£ 12 .99".
+const fold = (s: string) => s.replace(/\s+/g, "").toLowerCase();
+const onPage = (evidence: string | null, page: string, minLength = 3) => {
   const e = evidence ? fold(evidence) : "";
-  return e.length >= 3 && fold(page).includes(e);
+  return e.length >= minLength && fold(page).includes(e);
 };
+
+/** Every value a written number could mean: "1,250" may be 1250 or 1.25. */
+function numberValues(token: string): number[] {
+  const t = token.replace(/[.,']+$/, "");
+  const lastDot = t.lastIndexOf("."), lastComma = t.lastIndexOf(",");
+  const digits = (s: string) => s.replace(/[.,']/g, "");
+  if (lastDot >= 0 && lastComma >= 0) {
+    const cut = Math.max(lastDot, lastComma);
+    return [Number(`${digits(t.slice(0, cut))}.${digits(t.slice(cut + 1))}`)];
+  }
+  const sep = lastDot >= 0 ? "." : lastComma >= 0 ? "," : null;
+  if (!sep) return [Number(digits(t))];
+  const parts = t.split(sep);
+  if (parts.length > 2) return [Number(digits(t))];
+  const decimal = Number(`${parts[0]}.${parts[1]}`);
+  return parts[1].length === 3 ? [Number(digits(t)), decimal] : [decimal];
+}
+function hasNumber(text: string, n: number): boolean {
+  for (const source of [text, text.replace(/\s+/g, "")]) {
+    for (const m of source.matchAll(/\d[\d.,']*/g)) if (numberValues(m[0]).some((v) => Math.abs(v - n) < 1e-9)) return true;
+  }
+  return false;
+}
+
+const CURRENCY_SIGNS: Record<string, RegExp> = { GBP: /£|\bgbp\b/i, EUR: /€|\beur\b/i, USD: /\$|\busd\b/i, CNY: /¥|￥|元|\brmb\b|\bcny\b/i };
+const currencyOnPage = (code: string, page: string) => (CURRENCY_SIGNS[code.toUpperCase()] ?? new RegExp(`\\b${code.replace(/\W/g, "")}\\b`, "i")).test(page);
+
+/** Words that are a page talking to the model, not describing a business. */
+const INSTRUCTION = /ignore(your|all|any|previous|the)|(your|previous|these)instructions|classify(this|it|us|as)|systemprompt/;
+function nearInstruction(evidence: string, page: string): boolean {
+  const p = fold(page), e = fold(evidence), at = p.indexOf(e);
+  return at >= 0 && INSTRUCTION.test(p.slice(Math.max(0, at - 60), at + e.length + 60));
+}
 
 /** A weak signal from the web address alone. It never fills `country`. */
 export function tldHint(host: string): string | null {
@@ -68,14 +102,22 @@ export function checkExtraction(e: Extraction, pageText: string, url: string): C
   const country = checkCountry(e, pageText);
   if (country.cleared) cleared.push("country");
   const out: Extraction = { ...country.fields };
-  if (out.supplierType !== "unknown" && !onPage(out.typeEvidence, pageText)) {
+  if (out.supplierType !== "unknown" && (!onPage(out.typeEvidence, pageText, 5) || nearInstruction(out.typeEvidence!, pageText))) {
     out.supplierType = "unknown"; out.typeEvidence = null; out.typeConfidence = "low";
     cleared.push("supplierType");
   }
-  if (out.price != null && (!(out.price > 0) || !onPage(out.priceEvidence, pageText))) {
-    out.price = null; out.priceEvidence = null; out.priceBasis = "none"; out.unitsInPrice = null;
+  if (out.price != null && (!(out.price > 0) || !onPage(out.priceEvidence, pageText) || !hasNumber(out.priceEvidence!, out.price))) {
+    out.price = null; out.priceBasis = "none";
     cleared.push("price");
   }
+  if (out.price == null) {
+    // "POA" isn't a price: nothing else about a price can stand without one.
+    out.priceEvidence = null; out.unitsInPrice = null; out.currency = null;
+  } else {
+    if (out.unitsInPrice != null && !hasNumber(pageText, out.unitsInPrice)) { out.unitsInPrice = null; cleared.push("unitsInPrice"); }
+    if (out.currency != null && !currencyOnPage(out.currency, pageText)) { out.currency = null; cleared.push("currency"); }
+  }
+  if (out.moq != null && !hasNumber(pageText, out.moq)) { out.moq = null; out.moqUnit = null; cleared.push("moq"); }
   let unitPrice: number | null = null;
   if (out.price != null) {
     if (out.priceBasis === "per_unit") unitPrice = out.price;
