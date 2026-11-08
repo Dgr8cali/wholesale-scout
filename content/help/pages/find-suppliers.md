@@ -1,11 +1,11 @@
 ---
-title: Find suppliers
+title: Sourcing
 summary: Search the web for wholesalers or manufacturers of a product, with each supplier's type, country and price read from its own page.
-synonyms: [supplier search, find a supplier, wholesaler search, manufacturer search, factory, sourcing, country, moq]
+synonyms: [find suppliers, supplier search, find a supplier, wholesaler search, manufacturer search, factory, sourcing, country, moq]
 route: /find-suppliers
 order: 9
 ---
-Find suppliers searches the web for a product and reads the supplier pages it finds. Type a product, choose **Wholesalers** or **Manufacturers**, and press **Search**. A search takes a minute or two and costs about 20 cents. You can leave the page while it runs, and earlier searches stay in the list.
+Sourcing searches the web for a product and reads the supplier pages it finds. Type a product, choose **Wholesalers** or **Manufacturers**, and press **Search**. A search takes a minute or two and costs about 20 cents. You can leave the page while it runs, and earlier searches stay in the list.
 
 ## What each row shows
 

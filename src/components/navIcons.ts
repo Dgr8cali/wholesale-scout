@@ -2,13 +2,13 @@ import {
   ArrowLeftRightIcon, AwardIcon, BanknoteIcon, CalendarCheckIcon, ChartPieIcon, CircleHelpIcon, CirclePlusIcon, ClipboardListIcon,
   FactoryIcon, FileSpreadsheetIcon, FlaskConicalIcon, HouseIcon, KanbanIcon, LayoutDashboardIcon,
   LightbulbIcon, ListChecksIcon, ListFilterIcon, PackagePlusIcon, PackageSearchIcon, RepeatIcon, RocketIcon,
-  SettingsIcon, StarIcon, StoreIcon, TextSearchIcon, TruckIcon, WarehouseIcon, type LucideIcon,
+  SettingsIcon, StarIcon, StoreIcon, TelescopeIcon, TextSearchIcon, TruckIcon, WarehouseIcon, type LucideIcon,
 } from "lucide-react";
 
 /** Each page's own icon. "?" is Help's alone. */
 export const NAV_ICON: Record<string, LucideIcon> = {
   "/": HouseIcon, "/settings": SettingsIcon, "/help": CircleHelpIcon,
-  "/runs": ListChecksIcon, "/products": PackageSearchIcon, "/suppliers": TruckIcon, "/shortlist": StarIcon,
+  "/runs": ListChecksIcon, "/products": PackageSearchIcon, "/suppliers": TruckIcon, "/find-suppliers": TelescopeIcon, "/shortlist": StarIcon,
   "/new-run": CirclePlusIcon, "/sellers": StoreIcon, "/brands": AwardIcon,
   "/plan": ClipboardListIcon,
   "/pl": KanbanIcon, "/pl/candidates": FlaskConicalIcon, "/pl/niches": ChartPieIcon, "/pl/suppliers": FactoryIcon,

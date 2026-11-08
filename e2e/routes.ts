@@ -13,7 +13,7 @@ const STATIC: Route[] = [
   ...["upload", "check", "qogita", "hunt", "seller"].map((t) => ({ name: `New run · ${t}`, path: `/new-run?tab=${t}` })),
   { name: "Products", path: "/products" },
   { name: "Suppliers", path: "/suppliers" },
-  { name: "Find suppliers", path: "/find-suppliers" },
+  { name: "Sourcing", path: "/find-suppliers" },
   ...["products", "watching"].map((t) => ({ name: `Shortlist · ${t}`, path: `/shortlist?tab=${t}` })),
   { name: "Sellers", path: "/sellers" },
   { name: "Brands", path: "/brands" },

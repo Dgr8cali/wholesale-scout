@@ -28,7 +28,7 @@ describe("workspaces", () => {
     ]);
     const main = (id: Parameters<typeof workspace>[0]) => workspace(id).nav.filter((n) => !n.more).map((n) => n.label);
     const more = (id: Parameters<typeof workspace>[0]) => workspace(id).nav.filter((n) => n.more).map((n) => n.label);
-    expect(main("wholesale")).toEqual(["Runs", "New run", "Products", "Suppliers", "Find suppliers", "Shortlist"]);
+    expect(main("wholesale")).toEqual(["Runs", "New run", "Products", "Suppliers", "Sourcing", "Shortlist"]);
     expect(more("wholesale")).toEqual(["Sellers", "Brands", "Plan"]);
     expect(main("pl")).toEqual(["Pipeline", "Candidates", "Niches", "Suppliers & quotes"]);
     expect(more("pl")).toEqual([]);

@@ -521,9 +521,9 @@ delete and archive, red "negative" chips where a bucket goes below 0, and an aud
 (`stock_audit`, Movements → Audit log). The pill box account's
 StockPilot data is imported (3 items). Ads days of cover and the stock guard count every bucket.
 
-## Find suppliers (7 Nov 2026)
+## Sourcing (7 Nov 2026; called Find suppliers until 8 Nov)
 
-Wholesale → **Find suppliers** (`src/app/find-suppliers`, migration 20261107000100): type a product, choose Wholesalers or Manufacturers, and get suppliers with type, country, price and a link, each with the page's own words. Filters: type, country, has a price, hide retailers (on by default). `POST /api/supplier-searches` records the search and runs it in `after()`; the page polls `GET /api/supplier-searches/[id]`. A search still running after 10 minutes reads as failed. Results are JSON on `supplier_searches`.
+Wholesale → **Sourcing** (`src/app/find-suppliers`, migration 20261107000100): type a product, choose Wholesalers or Manufacturers, and get suppliers with type, country, price and a link, each with the page's own words. Filters: type, country, has a price, hide retailers (on by default). `POST /api/supplier-searches` records the search and runs it in `after()`; the page polls `GET /api/supplier-searches/[id]`. A search still running after 10 minutes reads as failed. Results are JSON on `supplier_searches`.
 
 Search uses Serper only (5 queries) and Sonnet 5.5, reading up to 15 pages, about $0.19. Limits: $0.50 and about 4 minutes a search, and $5 a day (a running search counts at its full $0.50; cost is written to the row as it's spent, so a restart can't lose it). Pages with over 50,000 tags are refused before parsing. Needs `SERPER_API_KEY` on the server. Code is in `src/lib/supplierSearch/` (`src/lib/server/supplierSearch.ts` for the database). Prices are labelled "Check on page": the spike measured 85–86% right against a 90% mark (`docs/supplier-search-spike-results.md`). Re-check on the spike's saved pages (7 Nov, $0.54): 14 of the 16 rejected prices now right, 1 better, 1 still wrong (a brand site's shop price); of 20 prices the spike got right, none became wrong, 2 changed to another real price on the page, 2 were left blank. Classified-ad sites (Gumtree, Kleinanzeigen…) are listed but not opened, and a price for another size of the product is cleared. Next (step 5): contact details, quote requests, Qogita offers, add to Suppliers, screening.
 
@@ -565,7 +565,7 @@ The HTTP Basic `APP_PASSWORD` gate is gone. `src/proxy.ts` is the one gate on ev
 4. **General: move pg_net out of the public schema** (Supabase advisor: extension in public).
 5. **General: Resend email** configured on the server (sign-in links as well as alerts) (`RESEND_API_KEY`, `ALERT_EMAIL_TO` aren't set there yet) and extended beyond the Watchlist (stock low/out, reorder due, stock guard, hunt finished).
 6. **General: data backup workflow** (only the schema is backed up today, to `supabase/schema.sql`; data relies on Supabase's own backups).
-7. **Find suppliers, step 5:** contact details and quote requests (most factories publish no price), Qogita offers, add to Suppliers, screening. Re-measure prices on real searches. Delete the spike's Brave data under `docs/ui-audit/supplier-spike/`.
+7. **Sourcing, step 5:** contact details and quote requests (most factories publish no price), Qogita offers, add to Suppliers, screening. Re-measure prices on real searches. Delete the spike's Brave data under `docs/ui-audit/supplier-spike/`.
 
 ## Known rough edges
 

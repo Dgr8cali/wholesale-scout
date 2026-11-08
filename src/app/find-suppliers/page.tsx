@@ -50,13 +50,14 @@ const columns: DataColumn<SupplierResult>[] = [
     id: "price", header: "Price", mobile: 3, numeric: true, sortValue: priceSortValue,
     cell: (r) => {
       const line = priceLine(r);
-      if (!line) return <span className="text-muted-foreground">{r.opened ? "On request or not shown" : "Open the page"}</span>;
-      return <>
+      // Numeric for the sort only: words here read better in the normal font.
+      if (!line) return <span className="font-sans text-muted-foreground">{r.opened ? "On request or not shown" : "Open the page"}</span>;
+      return <div className="font-sans">
         {line.main}
         {line.unit && <p className="text-xs font-normal text-muted-foreground">{line.unit}</p>}
         {r.priceProduct && <p className="max-w-56 text-xs font-normal text-muted-foreground">For {r.priceProduct}</p>}
         <p className="text-xs font-normal text-warn-ink">Check on page</p>
-      </>;
+      </div>;
     },
   },
   { id: "moq", header: "Minimum order", sortValue: (r) => r.moq, cell: (r) => (r.moq != null ? `${r.moq}${r.moqUnit ? ` ${r.moqUnit}` : ""}` : "—") },
@@ -129,8 +130,8 @@ export default function FindSuppliersPage() {
 
   return <>
     <PageHeader
-      title="Find suppliers"
-      crumbs={[{ label: "Wholesale", href: "/runs" }, { label: "Find suppliers" }]}
+      title="Sourcing"
+      crumbs={[{ label: "Wholesale", href: "/runs" }, { label: "Sourcing" }]}
       subtitle="Search the web for wholesalers or manufacturers of a product. Each search takes a minute or two and costs about 20 cents."
       info={<>
         <p>Every type, country and price is read from the supplier&apos;s own page. Check a price on the page before relying on it.</p>
