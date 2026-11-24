@@ -1,3 +1,4 @@
+import { preferApi } from "../ads/source";
 import "server-only";
 import { brandsToChase, type BrandSummary } from "../brandMap";
 import { getKeepa } from "../keepa/client";
@@ -397,7 +398,7 @@ type CampaignRow = { asin: string | null; state: string | null; archived: boolea
 async function adsFacts(): Promise<TodayFacts["ads"]> {
   const d = db();
   const [bulk, camps, prods, plans, props] = await Promise.all([
-    d.from("ads_imports").select("imported_at").eq("report_type", "bulk").order("imported_at", { ascending: false }).limit(1),
+    d.from("ads_imports").select("imported_at").in("report_type", ["bulk", "api_targeting"]).order("imported_at", { ascending: false }).limit(1),
     d.from("ads_campaigns").select("asin, state, archived"),
     d.from("ads_products").select("asin, title"),
     d.from("ads_launch_plans").select("asin, start_date, plan"),
@@ -516,7 +517,7 @@ export interface TodayNumbers {
 
 async function adSpendWeek(now: Date): Promise<TodayNumbers["adSpend"]> {
   const from = new Date(now.getTime() - 7 * DAY).toISOString().slice(0, 10);
-  const rows = await selectAll<{ date: string; cost: number; sales: number }>("ads_campaign_daily", "date, cost, sales", ["campaign", "date"], (q) => q.gte("date", from));
+  const rows = preferApi(await selectAll<{ campaign: string; date: string; cost: number; sales: number; source: string }>("ads_campaign_daily", "campaign, date, cost, sales, source", ["campaign", "date", "source"], (q) => q.gte("date", from)));
   const ranges = must(await db().from("ads_campaign_ranges").select("date_to").order("date_to", { ascending: false }).limit(1), "ranges") as { date_to: string | null }[];
   const lastData = [rows.map((r) => r.date).sort().at(-1), ranges[0]?.date_to].filter(Boolean).sort().at(-1) ?? null;
   return { cost: rows.reduce((a, r) => a + Number(r.cost), 0), sales: rows.reduce((a, r) => a + Number(r.sales), 0), days: new Set(rows.map((r) => r.date)).size, lastData };

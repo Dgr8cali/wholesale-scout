@@ -4,10 +4,17 @@ import { decryptToken, encryptToken } from "../adsapi/crypto";
 import type { ImportedDay } from "../adsapi/compare";
 import { db, must, schemaMissing, selectAll } from "./db";
 
-export interface AdsConnection { connected: boolean; profileId: string | null; profileName: string | null; profileCountry: string | null; connectedAt: string | null }
-export const NOT_CONNECTED: AdsConnection = { connected: false, profileId: null, profileName: null, profileCountry: null, connectedAt: null };
+export interface AdsConnection {
+  connected: boolean; profileId: string | null; profileName: string | null; profileCountry: string | null; connectedAt: string | null;
+  /** Amazon rejected the token: the schedule is stopped until you connect again. */
+  needsReconnect: boolean; reconnectReason: string | null; lastError: string | null; nextDailyAttemptAt: string | null;
+}
+export const NOT_CONNECTED: AdsConnection = { connected: false, profileId: null, profileName: null, profileCountry: null, connectedAt: null, needsReconnect: false, reconnectReason: null, lastError: null, nextDailyAttemptAt: null };
 
-interface Row { refresh_token_enc: string; profile_id: string | null; profile_name: string | null; profile_country: string | null; connected_at: string }
+interface Row {
+  refresh_token_enc: string; profile_id: string | null; profile_name: string | null; profile_country: string | null; connected_at: string;
+  needs_reconnect: boolean | null; reconnect_reason: string | null; last_error: string | null; next_daily_attempt_at: string | null;
+}
 
 async function row(): Promise<Row | null> {
   const res = await db().from("ads_connection").select("*").eq("id", 1).maybeSingle();
@@ -18,17 +25,30 @@ async function row(): Promise<Row | null> {
 /** Connected or not, and which profile: never the token. */
 export async function connectionStatus(): Promise<AdsConnection> {
   const r = await row();
-  return r ? { connected: true, profileId: r.profile_id, profileName: r.profile_name, profileCountry: r.profile_country, connectedAt: r.connected_at } : NOT_CONNECTED;
+  return r ? {
+    connected: true, profileId: r.profile_id, profileName: r.profile_name, profileCountry: r.profile_country, connectedAt: r.connected_at,
+    needsReconnect: !!r.needs_reconnect, reconnectReason: r.reconnect_reason, lastError: r.last_error, nextDailyAttemptAt: r.next_daily_attempt_at,
+  } : NOT_CONNECTED;
 }
 
 /** Store (or replace) the refresh token, encrypted. A new connection forgets the chosen profile. */
 export async function saveRefreshToken(refreshToken: string): Promise<void> {
   const now = new Date().toISOString();
-  must(await db().from("ads_connection").upsert({ id: 1, refresh_token_enc: encryptToken(refreshToken), profile_id: null, profile_name: null, profile_country: null, connected_at: now, updated_at: now }, { onConflict: "id" }), "save ads connection");
+  must(await db().from("ads_connection").upsert({ id: 1, refresh_token_enc: encryptToken(refreshToken), profile_id: null, profile_name: null, profile_country: null, connected_at: now, updated_at: now, needs_reconnect: false, reconnect_reason: null, last_error: null, next_daily_attempt_at: null }, { onConflict: "id" }), "save ads connection");
 }
 
 export async function saveProfile(p: { profileId: string; name: string; country: string }): Promise<void> {
   must(await db().from("ads_connection").update({ profile_id: p.profileId, profile_name: p.name, profile_country: p.country, updated_at: new Date().toISOString() }).eq("id", 1), "save ads profile");
+}
+
+/** Amazon rejected the token (revoked or expired): the schedule stops until you reconnect. Reasons carry no token. */
+export async function markNeedsReconnect(reason: string): Promise<void> {
+  must(await db().from("ads_connection").update({ needs_reconnect: true, reconnect_reason: reason.slice(0, 300), updated_at: new Date().toISOString() }).eq("id", 1), "mark ads reconnect");
+}
+
+/** When the daily pull may next be tried, and the last error that stopped it (null clears it). */
+export async function setDailyAttempt(nextAt: string | null, lastError: string | null): Promise<void> {
+  must(await db().from("ads_connection").update({ next_daily_attempt_at: nextAt, last_error: lastError?.slice(0, 300) ?? null }).eq("id", 1), "save ads attempt");
 }
 
 export async function disconnect(): Promise<void> {
@@ -36,20 +56,23 @@ export async function disconnect(): Promise<void> {
 }
 
 /** What a call to the Ads API needs: the app's credentials, a fresh access token and the chosen profile. */
-export async function adsSession(): Promise<{ env: AdsEnv; token: string; profileId: string | null }> {
+export async function adsSession(f: typeof fetch = fetch): Promise<{ env: AdsEnv; token: string; profileId: string | null }> {
   const env = adsEnv();
   if (!env) throw new Error("Amazon Ads isn't set up on the server: ADS_CLIENT_ID and ADS_CLIENT_SECRET");
   const r = await row();
   if (!r) throw new Error("Amazon Ads isn't connected: press Connect in Settings → Amazon Ads");
-  return { env, token: await accessToken(env, decryptToken(r.refresh_token_enc)), profileId: r.profile_id };
+  if (r.needs_reconnect) throw new Error(`Amazon Ads needs reconnecting: ${r.reconnect_reason ?? "Amazon rejected the token"}`);
+  return { env, token: await accessToken(env, decryptToken(r.refresh_token_enc), f), profileId: r.profile_id };
 }
 
-/** The daily campaign rows already imported from report files, for the days of a pull. */
-export async function importedDays(from: string, to: string): Promise<ImportedDay[]> {
+/** The stored daily campaign rows of one source ('import': report files; 'api': Amazon's API), for a range of days. */
+export async function dailyRowsBySource(from: string, to: string, source: "import" | "api"): Promise<ImportedDay[]> {
   const rows = await selectAll<{ date: string; impressions: number | null; clicks: number; cost: number; orders: number; sales: number; ads_campaigns: { campaign_id: string | null; name: string } | { campaign_id: string | null; name: string }[] | null }>(
-    "ads_campaign_daily", "date, impressions, clicks, cost, orders, sales, ads_campaigns(campaign_id, name)", ["date", "campaign"], (q) => q.gte("date", from).lte("date", to));
+    "ads_campaign_daily", "date, impressions, clicks, cost, orders, sales, ads_campaigns(campaign_id, name)", ["date", "campaign"], (q) => q.gte("date", from).lte("date", to).eq("source", source));
   return rows.map((r) => {
     const c = Array.isArray(r.ads_campaigns) ? r.ads_campaigns[0] : r.ads_campaigns;
     return { date: r.date, campaignId: c?.campaign_id ?? null, campaignName: c?.name ?? "", impressions: Number(r.impressions ?? 0), clicks: Number(r.clicks), cost: Number(r.cost), orders: Number(r.orders), sales: Number(r.sales) };
   });
 }
+
+export const importedDays = (from: string, to: string) => dailyRowsBySource(from, to, "import");

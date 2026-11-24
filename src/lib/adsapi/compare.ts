@@ -1,5 +1,3 @@
-import type { CampaignDay } from "./client";
-
 export interface Totals { impressions: number; clicks: number; cost: number; orders: number; sales: number }
 export interface ImportedDay extends Totals { date: string; campaignId: string | null; campaignName: string }
 export interface CompareRow { key: string; label: string; api: Totals | null; imported: Totals | null }
@@ -13,7 +11,7 @@ const round = (t: Totals): Totals => ({ ...t, cost: Math.round(t.cost * 100) / 1
  * The API's last-7-days campaign rows next to the daily rows already imported from reports, by
  * day and by campaign. An imported side is null where nothing was imported for that day or campaign.
  */
-export function compareWeek(api: CampaignDay[], imported: ImportedDay[], from: string, to: string): Comparison {
+export function compareWeek(api: ImportedDay[], imported: ImportedDay[], from: string, to: string): Comparison {
   const dates: string[] = [];
   for (let d = new Date(`${from}T00:00:00Z`); d <= new Date(`${to}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + 1)) dates.push(d.toISOString().slice(0, 10));
 
@@ -23,8 +21,9 @@ export function compareWeek(api: CampaignDay[], imported: ImportedDay[], from: s
 
   // Campaigns match by Amazon's numeric id, else by name (case-insensitive).
   const apiCamp = new Map<string, { label: string; t: Totals }>(), impCamp = new Map<string, { label: string; t: Totals }>();
-  const idByName = new Map(api.map((r) => [r.campaignName.toLowerCase(), r.campaignId]));
-  for (const r of api) addTo((apiCamp.get(r.campaignId) ?? apiCamp.set(r.campaignId, { label: r.campaignName, t: zero() }).get(r.campaignId)!).t, r);
+  const apiKey = (r: ImportedDay) => r.campaignId ?? `name:${r.campaignName.toLowerCase()}`;
+  const idByName = new Map(api.map((r) => [r.campaignName.toLowerCase(), apiKey(r)]));
+  for (const r of api) addTo((apiCamp.get(apiKey(r)) ?? apiCamp.set(apiKey(r), { label: r.campaignName, t: zero() }).get(apiKey(r))!).t, r);
   for (const r of imported) {
     const k = r.campaignId && apiCamp.has(r.campaignId) ? r.campaignId : idByName.get(r.campaignName.toLowerCase()) ?? r.campaignId ?? `name:${r.campaignName.toLowerCase()}`;
     addTo((impCamp.get(k) ?? impCamp.set(k, { label: r.campaignName, t: zero() }).get(k)!).t, r);

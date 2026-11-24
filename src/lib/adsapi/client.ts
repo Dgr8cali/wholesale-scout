@@ -45,7 +45,16 @@ export function checkState(cookie: string | undefined | null, query: string | nu
 }
 
 export class AdsApiError extends Error {
-  constructor(message: string, readonly status: number) { super(message); }
+  constructor(message: string, readonly status: number, readonly retryAfterS?: number) { super(message); }
+}
+
+/** Amazon refused the token itself (revoked, expired, app removed): stop and reconnect, don't retry. */
+export function isTokenRejected(e: unknown): boolean {
+  return e instanceof AdsApiError && (e.status === 401 || /invalid_grant|invalid_client|unauthorized_client|invalid_token/i.test(e.message));
+}
+/** Worth trying again later: too many requests, or Amazon's own trouble. */
+export function isTransient(e: unknown): boolean {
+  return e instanceof AdsApiError && (e.status === 429 || e.status >= 500);
 }
 
 type Fetch = typeof fetch;
@@ -90,8 +99,9 @@ async function adsFetch(e: AdsEnv, token: string, path: string, init: { method?:
 }
 
 async function failure(res: Response, what: string): Promise<AdsApiError> {
-  const j = (await res.json().catch(() => ({}))) as { message?: string; details?: string; code?: string };
-  return new AdsApiError(`${what} failed (${res.status}): ${j.message ?? j.details ?? j.code ?? "no detail"}`, res.status);
+  const j = (await res.json().catch(() => ({}))) as { message?: string; details?: string; detail?: string; code?: string };
+  const ra = Number(res.headers.get("retry-after"));
+  return new AdsApiError(`${what} failed (${res.status}): ${j.message ?? j.detail ?? j.details ?? j.code ?? "no detail"}`, res.status, Number.isFinite(ra) && ra > 0 ? ra : undefined);
 }
 
 export interface AdsProfile { profileId: string; country: string; currency: string; timezone: string; name: string; type: string; marketplaceId: string | null }
@@ -109,64 +119,46 @@ export async function listProfiles(e: AdsEnv, token: string, f: Fetch = fetch): 
 /** The UK profile among them (Amazon's country code for the UK is "UK"). */
 export const isUk = (p: AdsProfile) => p.country === "UK" || p.country === "GB" || p.marketplaceId === "A1F83G8C2ARO7P";
 
-export interface CampaignDay { date: string; campaignId: string; campaignName: string; impressions: number; clicks: number; cost: number; orders: number; sales: number }
-
-/** Last 7 complete days (yesterday back), as YYYY-MM-DD. */
-export function last7Days(now = new Date()): { from: string; to: string } {
-  const iso = (d: Date) => d.toISOString().slice(0, 10);
-  const end = new Date(now); end.setUTCDate(end.getUTCDate() - 1);
-  const start = new Date(now); start.setUTCDate(start.getUTCDate() - 7);
-  return { from: iso(start), to: iso(end) };
-}
-
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 
-/** Ask for the Sponsored Products campaign report, one row per campaign per day. */
-export async function createCampaignReport(e: AdsEnv, token: string, profileId: string, from: string, to: string, f: Fetch = fetch): Promise<string> {
-  const res = await adsFetch(e, token, "/reporting/reports", {
-    method: "POST", profileId, contentType: "application/vnd.createasyncreportrequest.v3+json",
-    body: {
-      name: `Wholesale Scout SP campaigns ${from} to ${to}`, startDate: from, endDate: to,
-      configuration: {
-        adProduct: "SPONSORED_PRODUCTS", groupBy: ["campaign"], timeUnit: "DAILY", format: "GZIP_JSON", reportTypeId: "spCampaigns",
-        columns: ["date", "campaignId", "campaignName", "impressions", "clicks", "cost", "purchases7d", "sales7d"],
-      },
-    },
-  }, f);
-  if (res.status === 425) { // the same report was already requested: Amazon names it in the message
+/** What Amazon's Reporting API v3 takes to create a report (read-only: it only builds a file for us to download). */
+export interface ReportRequest {
+  name: string; startDate: string; endDate: string;
+  configuration: { adProduct: "SPONSORED_PRODUCTS"; groupBy: string[]; columns: string[]; reportTypeId: string; timeUnit: "DAILY" | "SUMMARY"; format: "GZIP_JSON" };
+}
+
+/** Ask for a report. If Amazon says an identical one exists (425, the id is in the message) that id is used. */
+export async function requestReport(e: AdsEnv, token: string, profileId: string, body: ReportRequest, f: Fetch = fetch): Promise<string> {
+  const res = await adsFetch(e, token, "/reporting/reports", { method: "POST", profileId, contentType: "application/vnd.createasyncreportrequest.v3+json", body }, f);
+  if (res.status === 425) {
     const j = (await res.json().catch(() => ({}))) as { detail?: string; message?: string };
     const id = `${j.detail ?? ""} ${j.message ?? ""}`.match(UUID)?.[0];
     if (id) return id;
-    throw new AdsApiError("Amazon says this report was already requested, but not which: try again in a minute", 425);
+    throw new AdsApiError("Amazon says this report was already requested, but not which: it will be asked again", 425, 60);
   }
-  if (!res.ok) throw await failure(res, "Requesting the campaign report");
+  if (!res.ok) throw await failure(res, "Requesting the report");
   const j = (await res.json()) as { reportId?: string };
   if (!j.reportId) throw new AdsApiError("Amazon didn't return a report id", 502);
   return j.reportId;
 }
 
-export type ReportState = { status: "PENDING" | "PROCESSING" } | { status: "FAILURE"; reason: string } | { status: "COMPLETED"; rows: CampaignDay[] };
+export type ReportStatus = { status: "PENDING" | "PROCESSING" } | { status: "FAILURE"; reason: string } | { status: "COMPLETED"; url: string };
 
-/** Where the report is; once it's done, download and parse it. */
-export async function campaignReport(e: AdsEnv, token: string, profileId: string, reportId: string, f: Fetch = fetch): Promise<ReportState> {
+/** Where a report is. Cheap: nothing is downloaded until it's COMPLETED. */
+export async function reportStatus(e: AdsEnv, token: string, profileId: string, reportId: string, f: Fetch = fetch): Promise<ReportStatus> {
   const res = await adsFetch(e, token, `/reporting/reports/${encodeURIComponent(reportId)}`, { profileId, accept: "application/vnd.createasyncreportrequest.v3+json" }, f);
-  if (!res.ok) throw await failure(res, "Checking the campaign report");
+  if (!res.ok) throw await failure(res, "Checking the report");
   const j = (await res.json()) as { status?: string; url?: string; failureReason?: string };
   if (j.status === "FAILURE") return { status: "FAILURE", reason: j.failureReason ?? "Amazon gave no reason" };
-  if (j.status !== "COMPLETED" || !j.url) return { status: j.status === "PROCESSING" ? "PROCESSING" : "PENDING" };
-  // The download link is pre-signed: no auth headers on it.
-  const file = await f(j.url);
-  if (!file.ok) throw new AdsApiError(`Downloading the campaign report failed (${file.status})`, file.status);
-  let buf = Buffer.from(await file.arrayBuffer());
-  if (buf[0] === 0x1f && buf[1] === 0x8b) buf = gunzipSync(buf);
-  return { status: "COMPLETED", rows: parseCampaignRows(JSON.parse(buf.toString("utf8"))) };
+  if (j.status === "COMPLETED" && j.url) return { status: "COMPLETED", url: j.url };
+  return { status: j.status === "PROCESSING" ? "PROCESSING" : "PENDING" };
 }
 
-export function parseCampaignRows(json: unknown): CampaignDay[] {
-  if (!Array.isArray(json)) return [];
-  const n = (v: unknown) => (Number.isFinite(Number(v)) ? Number(v) : 0);
-  return json.map((r: Record<string, unknown>) => ({
-    date: String(r.date ?? ""), campaignId: String(r.campaignId ?? ""), campaignName: String(r.campaignName ?? ""),
-    impressions: n(r.impressions), clicks: n(r.clicks), cost: n(r.cost), orders: n(r.purchases7d), sales: n(r.sales7d),
-  })).filter((r) => r.date);
+/** The finished report's rows. The link is pre-signed: no auth headers go with it. */
+export async function downloadReport(url: string, f: Fetch = fetch): Promise<unknown> {
+  const file = await f(url);
+  if (!file.ok) throw new AdsApiError(`Downloading the report failed (${file.status})`, file.status);
+  let buf = Buffer.from(await file.arrayBuffer());
+  if (buf[0] === 0x1f && buf[1] === 0x8b) buf = gunzipSync(buf);
+  return JSON.parse(buf.toString("utf8"));
 }

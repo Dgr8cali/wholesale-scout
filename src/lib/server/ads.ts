@@ -7,6 +7,7 @@ import { computeFees, DEFAULT_FEE_ASSUMPTIONS, referralCategoryFor } from "../fe
 import { getKeepa } from "../keepa/client";
 import { activeRateCard, chunks, db, must, selectAll } from "./db";
 import { saveSnapshot } from "./process";
+import { preferApi } from "../ads/source";
 
 /* ===================== settings ===================== */
 
@@ -74,7 +75,7 @@ const isConsoleId = (id: string) => /[A-Za-z]/.test(id);
  * its exact name (the only link between the two kinds of ID). Settings from the Campaign Manager
  * export are kept; an ASIN in the name is taken unless you've set one.
  */
-async function resolveCampaigns(rows: AdsRow[]): Promise<Map<AdsRow, string>> {
+export async function resolveCampaigns(rows: AdsRow[]): Promise<Map<AdsRow, string>> {
   const d = db();
   const all = must(await d.from("ads_campaigns").select(CAMPAIGN_COLS), "campaigns") as CampaignRow[];
   const out = new Map<AdsRow, string>();
@@ -127,12 +128,12 @@ async function storeReport(p: ParsedReport, fileName: string): Promise<ImportSum
     // Within one file a key appears once; across files the newer import's figures replace the older's.
     const byKey = new Map<string, Record<string, unknown>>();
     for (const r of p.rows) {
-      const row = { campaign: camps.get(r)!, ad_group_id: r.adGroupId ?? "", ad_group_name: r.adGroupName, term: r.searchTerm!, date_from: r.dateFrom, date_to: r.dateTo, ...metrics(r), import_id: imp.id };
+      const row = { campaign: camps.get(r)!, ad_group_id: r.adGroupId ?? "", keyword_id: "", ad_group_name: r.adGroupName, term: r.searchTerm!, date_from: r.dateFrom, date_to: r.dateTo, ...metrics(r), source: "import", import_id: imp.id };
       byKey.set(`${row.campaign}|${row.ad_group_id}|${row.term}|${row.date_from}|${row.date_to}`, row);
     }
-    await upsert("ads_search_terms", [...byKey.values()], "campaign,ad_group_id,term,date_from,date_to");
+    await upsert("ads_search_terms", [...byKey.values()], "campaign,ad_group_id,keyword_id,term,date_from,date_to,source");
   } else if (p.type === "campaign_daily") {
-    await upsert("ads_campaign_daily", p.rows.map((r) => ({ campaign: camps.get(r)!, date: r.dateFrom, ...metrics(r), import_id: imp.id })), "campaign,date");
+    await upsert("ads_campaign_daily", p.rows.map((r) => ({ campaign: camps.get(r)!, date: r.dateFrom, ...metrics(r), source: "import", import_id: imp.id })), "campaign,date,source");
   } else if (p.type === "campaign" || p.type === "campaign_grid") {
     const grid = p.type === "campaign_grid";
     await upsert("ads_campaign_ranges", p.rows.map((r) => ({
@@ -209,22 +210,22 @@ export async function importBulk(data: Uint8Array, fileName: string, dateFrom?: 
   await upsert("ads_campaign_ranges", b.campaigns.map((c) => ({ campaign: camp(c.campaignId), source: "bulk", ...perfRow(c, from, to, imp.id) })), "campaign,source,date_from,date_to");
   await upsert("ads_placements", b.placements.map((p) => ({ campaign: camp(p.campaignId), placement: p.placement, percentage: p.percentage, bidding_strategy: p.biddingStrategy, ...perfRow(p, from, to, imp.id) })), "campaign,placement");
   await upsert("ads_ad_groups", b.adGroups.map((g) => ({ ad_group_id: g.adGroupId, campaign: camp(g.campaignId), name: g.name, default_bid: g.defaultBid, state: g.state, ...perfRow(g, from, to, imp.id) })), "ad_group_id");
-  await upsert("ads_product_ads", b.productAds.map((a) => ({ ad_id: a.adId, campaign: camp(a.campaignId), ad_group_id: a.adGroupId, sku: a.sku, asin: a.asin, state: a.state, eligibility: a.eligibility, ...perfRow(a, from, to, imp.id) })), "ad_id");
-  await upsert("ads_keywords", b.keywords.filter((k) => k.keywordId).map((k) => ({ keyword_id: k.keywordId, campaign: camp(k.campaignId), ad_group_id: k.adGroupId, keyword_text: k.text, match_type: k.matchType, bid: k.bid, state: k.state, ...perfRow(k, from, to, imp.id) })), "keyword_id");
+  await upsert("ads_product_ads", b.productAds.map((a) => ({ ad_id: a.adId, campaign: camp(a.campaignId), ad_group_id: a.adGroupId, sku: a.sku, asin: a.asin, state: a.state, eligibility: a.eligibility, ...perfRow(a, from, to, imp.id), source: "import" })), "ad_id");
+  await upsert("ads_keywords", b.keywords.filter((k) => k.keywordId).map((k) => ({ keyword_id: k.keywordId, campaign: camp(k.campaignId), ad_group_id: k.adGroupId, keyword_text: k.text, match_type: k.matchType, bid: k.bid, state: k.state, ...perfRow(k, from, to, imp.id), source: "import" })), "keyword_id");
   await upsert("ads_keyword_ranges", b.keywords.filter((k) => k.keywordId).map((k) => ({ keyword_id: k.keywordId, ...perfRow(k, from, to, imp.id) })), "keyword_id,date_from,date_to");
   await upsert("ads_negative_keywords", b.negatives.filter((k) => k.keywordId).map((k) => ({ keyword_id: k.keywordId, campaign: camp(k.campaignId), ad_group_id: k.adGroupId, keyword_text: k.text, match_type: k.matchType, state: k.state, level: k.level, import_id: imp.id })), "keyword_id");
-  await upsert("ads_product_targets", b.targets.filter((t) => t.targetId).map((t) => ({ target_id: t.targetId, campaign: camp(t.campaignId), ad_group_id: t.adGroupId, expression: t.expression, bid: t.bid, state: t.state, ...perfRow(t, from, to, imp.id) })), "target_id");
+  await upsert("ads_product_targets", b.targets.filter((t) => t.targetId).map((t) => ({ target_id: t.targetId, campaign: camp(t.campaignId), ad_group_id: t.adGroupId, expression: t.expression, bid: t.bid, state: t.state, ...perfRow(t, from, to, imp.id), source: "import" })), "target_id");
   const terms = new Map<string, Record<string, unknown>>();
   for (const t of b.searchTerms) {
-    const row = { campaign: camp(t.campaignId), ad_group_id: t.adGroupId, ad_group_name: t.adGroupName, keyword_id: t.keywordId ?? t.targetId ?? "", keyword_text: t.keywordText, match_type: t.matchType, term: t.term, ...perfRow(t, from, to, imp.id) };
+    const row = { campaign: camp(t.campaignId), ad_group_id: t.adGroupId, ad_group_name: t.adGroupName, keyword_id: t.keywordId ?? t.targetId ?? "", keyword_text: t.keywordText, match_type: t.matchType, term: t.term, ...perfRow(t, from, to, imp.id), source: "import" };
     terms.set(`${row.campaign}|${row.ad_group_id}|${row.keyword_id}|${row.term}`, row);
   }
-  await upsert("ads_search_terms", [...terms.values()], "campaign,ad_group_id,keyword_id,term,date_from,date_to");
+  await upsert("ads_search_terms", [...terms.values()], "campaign,ad_group_id,keyword_id,term,date_from,date_to,source");
   return { file: fileName, label: b.label, rows, dateFrom: from, dateTo: to, warnings: b.warnings, importId: imp.id, mapped };
 }
 
 /** After any import: drop superseded import records and follow the account's CPC (when auto). */
-async function afterImport(importIds: string[]): Promise<number | null> {
+export async function afterImport(importIds: string[]): Promise<number | null> {
   if (!importIds.length) return null;
   await dropSupersededImports(importIds);
   const s = await adsSettings();
@@ -259,13 +260,20 @@ export async function importReports(files: { name: string; text: string }[]): Pr
  */
 async function dropSupersededImports(keep: string[]) {
   const d = db();
+  // Every table's import ids, each read a page at a time in primary-key order. (A plain select stops at
+  // 1,000 rows, and an import whose rows all fall past that would look orphaned and be deleted, rows and all.)
+  const KEYS: Record<string, string[]> = {
+    ads_campaign_ranges: ["id"], ads_campaign_daily: ["campaign", "date", "source"], ads_search_terms: ["id"], ads_placements: ["campaign", "placement"],
+    ads_ad_groups: ["ad_group_id"], ads_product_ads: ["ad_id"], ads_keywords: ["keyword_id"], ads_negative_keywords: ["keyword_id"],
+    ads_product_targets: ["target_id"], ads_keyword_ranges: ["keyword_id", "date_from", "date_to"], ads_placement_daily: ["campaign", "placement", "date_from", "date_to"],
+  };
   const owned = new Set<string>();
-  for (const t of ["ads_campaign_ranges", "ads_campaign_daily", "ads_search_terms", "ads_placements", "ads_ad_groups", "ads_product_ads", "ads_keywords", "ads_negative_keywords", "ads_product_targets", "ads_keyword_ranges", "ads_placement_daily"]) {
-    const rows = must(await d.from(t).select("import_id"), t) as { import_id: string | null }[];
-    for (const r of rows) if (r.import_id) owned.add(r.import_id);
+  for (const [t, order] of Object.entries(KEYS)) {
+    for (const r of await selectAll<{ import_id: string | null }>(t, "import_id", order)) if (r.import_id) owned.add(r.import_id);
   }
   const all = must(await d.from("ads_imports").select("id, report_type"), "imports") as { id: string; report_type: string }[];
-  const orphans = all.filter((i) => !owned.has(i.id) && !keep.includes(i.id) && !["keyword"].includes(i.report_type)).map((i) => i.id);
+  // API pulls' records stay: they're listed so they can be undone, and there are a few a day.
+  const orphans = all.filter((i) => !owned.has(i.id) && !keep.includes(i.id) && !["keyword"].includes(i.report_type) && !i.report_type.startsWith("api_")).map((i) => i.id);
   for (const c of chunks(orphans)) must(await d.from("ads_imports").delete().in("id", c), "drop superseded imports");
 }
 
@@ -291,7 +299,7 @@ export async function loadAll() {
     d.from("ads_campaigns").select(CAMPAIGN_COLS),
     d.from("ads_imports").select("id, imported_at"),
     selectAll<Record<string, unknown>>("ads_campaign_ranges", "campaign, source, date_from, date_to, impressions, clicks, cost, orders, sales, units, import_id", ["id"]),
-    selectAll<Record<string, unknown>>("ads_campaign_daily", "campaign, date, impressions, clicks, cost, orders, sales, units", ["campaign", "date"]),
+    selectAll<Record<string, unknown>>("ads_campaign_daily", "campaign, date, impressions, clicks, cost, orders, sales, units, source", ["campaign", "date", "source"]),
     selectAll<Record<string, unknown>>("ads_search_terms", "campaign, ad_group_id, ad_group_name, keyword_id, keyword_text, match_type, term, date_from, date_to, impressions, clicks, cost, orders, sales, units, import_id", ["id"]),
   ]);
   // Archived campaigns (old tests you don't care about) are left out of everything that reads this.
@@ -303,7 +311,7 @@ export async function loadAll() {
   return {
     campaigns: active,
     ranges: mine(ranges),
-    daily: mine(daily),
+    daily: preferApi(mine(daily) as { campaign: string; date: string; source?: string }[]) as Record<string, unknown>[],
     terms: countedTerms(mine(terms)),
   };
 }

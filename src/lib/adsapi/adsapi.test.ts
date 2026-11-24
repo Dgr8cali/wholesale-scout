@@ -1,6 +1,5 @@
-import { gzipSync } from "node:zlib";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { accessToken, adsEnv, authorizeUrl, campaignReport, createCampaignReport, exchangeCode, forgetAccessTokens, last7Days, listProfiles, parseCampaignRows } from "./client";
+import { accessToken, adsEnv, authorizeUrl, exchangeCode, forgetAccessTokens, listProfiles } from "./client";
 import { compareWeek } from "./compare";
 import { decryptToken, encryptToken } from "./crypto";
 
@@ -73,27 +72,6 @@ describe("API calls", () => {
     expect(url).toBe("https://advertising-api-eu.amazon.com/v2/profiles");
     expect(init.headers["Amazon-Advertising-API-ClientId"]).toBe(env.clientId);
   });
-  it("requests a daily SP campaign report scoped to the profile", async () => {
-    const f = vi.fn(async () => json({ reportId: "rep-1" }));
-    expect(await createCampaignReport(env, "tok", "123", "2026-11-17", "2026-11-23", f as unknown as typeof fetch)).toBe("rep-1");
-    const [, init] = f.mock.calls[0] as unknown as [string, { headers: Record<string, string>; body: string }];
-    expect(init.headers["Amazon-Advertising-API-Scope"]).toBe("123");
-    expect(JSON.parse(init.body).configuration).toMatchObject({ adProduct: "SPONSORED_PRODUCTS", reportTypeId: "spCampaigns", timeUnit: "DAILY" });
-  });
-  it("reuses the report Amazon says is a duplicate", async () => {
-    const f = async () => json({ detail: "The Request is a duplicate of : 0f1e2d3c-1111-4222-8333-444455556666" }, 425);
-    expect(await createCampaignReport(env, "t", "1", "a", "b", f as unknown as typeof fetch)).toBe("0f1e2d3c-1111-4222-8333-444455556666");
-  });
-  it("reports progress, and downloads the gzip file without auth headers when done", async () => {
-    expect(await campaignReport(env, "t", "1", "r", (async () => json({ status: "PROCESSING" })) as unknown as typeof fetch)).toEqual({ status: "PROCESSING" });
-    const rows = [{ date: "2026-11-20", campaignId: 9, campaignName: "C", impressions: 10, clicks: 2, cost: 1.5, purchases7d: 1, sales7d: 12.99 }];
-    const f = vi.fn(async (url: string) => url.includes("s3") ? new Response(gzipSync(JSON.stringify(rows))) : json({ status: "COMPLETED", url: "https://s3.example/report.gz" }));
-    const r = await campaignReport(env, "t", "1", "r", f as unknown as typeof fetch);
-    expect(r).toEqual({ status: "COMPLETED", rows: [{ date: "2026-11-20", campaignId: "9", campaignName: "C", impressions: 10, clicks: 2, cost: 1.5, orders: 1, sales: 12.99 }] });
-    expect((f.mock.calls[1] as unknown[]).length).toBe(1); // only the URL: no Authorization on the download
-  });
-  it("tolerates junk rows", () => { expect(parseCampaignRows({})).toEqual([]); expect(parseCampaignRows([{ clicks: "x" }])).toEqual([]); });
-  it("takes the last 7 full days", () => { expect(last7Days(new Date("2026-11-24T10:00:00Z"))).toEqual({ from: "2026-11-17", to: "2026-11-23" }); });
 });
 
 describe("compareWeek", () => {

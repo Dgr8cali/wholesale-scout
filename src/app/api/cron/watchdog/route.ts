@@ -5,6 +5,7 @@ import { scheduleCall, scheduleNext } from "@/lib/server/kick";
 import { stalledHunts } from "@/lib/server/plHunt";
 import { stalledRuns } from "@/lib/server/watchdog";
 import { advanceSync } from "@/lib/server/amazonSync";
+import { advanceAdsPulls } from "@/lib/server/adsApiPulls";
 
 /**
  * Restart processing chains that have died (Supabase pg_cron calls this every minute; see
@@ -19,5 +20,7 @@ export const GET = handle(async (req: NextRequest) => {
   for (const id of hunts) scheduleCall(req.nextUrl.origin, `/api/pl/hunt/${id}/process`);
   // The nightly Amazon sync for the tracker moves one step a minute (it does nothing until due).
   const sync = await advanceSync().catch((e: Error) => ({ error: e.message }));
-  return Response.json({ restarted: stalled, hunts, sync });
+  // Amazon Ads: the daily pull (from 06:30 UK) and the pending reports, one tick a minute (nothing when not connected).
+  const ads = await advanceAdsPulls().catch((e: Error) => ({ error: e.message.slice(0, 200) }));
+  return Response.json({ restarted: stalled, hunts, sync, ads });
 });

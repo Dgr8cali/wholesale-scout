@@ -1,3 +1,4 @@
+import { preferApi } from "../ads/source";
 import "server-only";
 import { describeChange, writeBulkFile, type BulkChange } from "../ads/bulk";
 import { ngramTable } from "../ads/ngrams";
@@ -42,10 +43,10 @@ async function rulesInput(): Promise<RulesInput> {
   const d = db();
   const [dash, all, lastBulk, ranges, daily, groups, kws, kwRanges, targets, placements, negatives, productAds] = await Promise.all([
     adsDashboard(), loadAll(),
-    d.from("ads_imports").select("date_from, date_to").eq("report_type", "bulk").order("imported_at", { ascending: false }).limit(1),
+    d.from("ads_imports").select("date_from, date_to").in("report_type", ["bulk", "api_targeting"]).order("imported_at", { ascending: false }).limit(1),
     // Every row, a page at a time (a select returns at most 1,000).
     selectAll("ads_campaign_ranges", "campaign, date_from, date_to, impressions, clicks, cost, orders, sales", ["id"], (q) => q.eq("source", "bulk")),
-    selectAll("ads_campaign_daily", "campaign, date, impressions, clicks, cost, orders, sales", ["campaign", "date"]),
+    selectAll("ads_campaign_daily", "campaign, date, impressions, clicks, cost, orders, sales, source", ["campaign", "date", "source"]),
     selectAll("ads_ad_groups", "ad_group_id, campaign, default_bid, state", ["ad_group_id"]),
     selectAll("ads_keywords", "keyword_id, campaign, ad_group_id, keyword_text, match_type, bid, state, impressions, clicks, cost, orders, sales", ["keyword_id"]),
     selectAll("ads_keyword_ranges", "keyword_id, date_from, date_to, impressions, orders", ["keyword_id", "date_from", "date_to"]),
@@ -57,7 +58,7 @@ async function rulesInput(): Promise<RulesInput> {
   const last = (must(lastBulk, "imports") as { date_from: string | null; date_to: string | null }[])[0];
   const range = last?.date_from && last.date_to ? { from: last.date_from, to: last.date_to } : null;
   const bulkRanges = ranges as Record<string, unknown>[];
-  const dailyRows = daily as Record<string, unknown>[];
+  const dailyRows = preferApi(daily as { campaign: string; date: string; source?: string }[]) as Record<string, unknown>[];
   const ads = productAds as { asin: string | null; sku: string | null; state: string | null }[];
   const history = new Map<string, { from: string; to: string; impressions: number | null; orders: number }[]>();
   for (const r of kwRanges as Record<string, unknown>[]) {
