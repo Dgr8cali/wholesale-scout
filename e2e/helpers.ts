@@ -11,5 +11,6 @@ export async function open(page: Page, path: string, theme: "light" | "dark") {
   await page.addInitScript((t) => { try { localStorage.setItem("theme", t); } catch { /* none */ } }, theme);
   await page.emulateMedia({ colorScheme: theme, reducedMotion: "reduce" });
   await page.goto(path, { waitUntil: "networkidle", timeout: 60_000 });
-  await page.waitForTimeout(300);
+  // Gentle on the live database the local app reads: a pause after every page (E2E_PAUSE_MS, default 1.5 s).
+  await page.waitForTimeout(300 + Number(process.env.E2E_PAUSE_MS ?? 1500));
 }

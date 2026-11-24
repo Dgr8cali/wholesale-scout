@@ -13,8 +13,10 @@ export default defineConfig({
   testDir: "e2e",
   testMatch: process.env.E2E_PASSKEY ? "passkey.ts" : process.env.E2E_AUDIT ? "audit.ts" : process.env.E2E_SCREENS ? "screens.ts" : "*.spec.ts",
   timeout: 120_000,
-  fullyParallel: true,
-  workers: 4,
+  // One page at a time, with a pause after each (helpers.open): the local app reads the live database
+  // over HTTPS, and four workers loading ~70 routes three times over tripped a block on port 443.
+  fullyParallel: false,
+  workers: 1,
   reporter: [["list"]],
   use: {
     baseURL: process.env.E2E_BASE || `http://localhost:${PORT}`,
