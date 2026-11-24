@@ -22,6 +22,28 @@ export function adsEnv(env: NodeJS.ProcessEnv = process.env): AdsEnv | null {
   return { clientId, clientSecret, redirectUri: env.ADS_REDIRECT_URI || DEFAULT_REDIRECT };
 }
 
+/**
+ * The site's public origin (https://ws.dgr8cali.co.uk), from ADS_REDIRECT_URI. Redirects are built
+ * on this, never on the request URL or Host: inside the container the server listens on
+ * HOSTNAME=0.0.0.0:3000, and Next builds a route handler's request URL from that.
+ */
+export function publicOrigin(env: NodeJS.ProcessEnv = process.env): string {
+  try { return new URL(env.ADS_REDIRECT_URI || DEFAULT_REDIRECT).origin; } catch { return new URL(DEFAULT_REDIRECT).origin; }
+}
+
+/** A page on the public origin, for sending the browser back to Settings → Amazon Ads. */
+export function settingsUrl(query: string, env: NodeJS.ProcessEnv = process.env): string {
+  return `${publicOrigin(env)}/settings?tab=amazon-ads${query ? `&${query}` : ""}`;
+}
+
+/** Why a returning authorisation is refused (or "ok"). Strict: no trimming or decoding beyond what the URL parser did. */
+export type StateCheck = "ok" | "no_cookie" | "no_state" | "mismatch";
+export function checkState(cookie: string | undefined | null, query: string | null, equal: (a: string, b: string) => boolean): StateCheck {
+  if (!cookie) return "no_cookie";
+  if (!query) return "no_state";
+  return equal(cookie, query) ? "ok" : "mismatch";
+}
+
 export class AdsApiError extends Error {
   constructor(message: string, readonly status: number) { super(message); }
 }

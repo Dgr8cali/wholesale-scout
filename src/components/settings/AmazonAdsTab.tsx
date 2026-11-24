@@ -19,6 +19,7 @@ type Pull = { state: "idle" } | { state: "running"; note: string } | { state: "f
 
 const ERRORS: Record<string, string> = {
   not_configured: "ADS_CLIENT_ID and ADS_CLIENT_SECRET aren't set on the server yet.",
+  state_cookie_missing: "Your browser didn't send the sign-in check cookie back from Amazon (it expired after 10 minutes, was blocked, or the page was opened in a different tab or browser). Press Connect again and finish in the same tab.",
   state_mismatch: "The sign-in couldn't be verified (it took too long, or the page was opened twice). Press Connect again.",
   access_denied: "Amazon sign-in was cancelled.",
 };

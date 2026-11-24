@@ -1,14 +1,18 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 import { randomBytes } from "node:crypto";
-import { adsEnv, authorizeUrl, STATE_COOKIE } from "@/lib/adsapi/client";
+import { adsEnv, authorizeUrl, publicOrigin, settingsUrl, STATE_COOKIE } from "@/lib/adsapi/client";
 
-/** Starts the Login with Amazon authorisation: a one-time state in a short cookie, then Amazon's Europe consent page. */
-export async function GET(req: NextRequest) {
+/**
+ * Starts the Login with Amazon authorisation: a one-time state in a short cookie, then Amazon's
+ * Europe consent page. The cookie is host-only, HttpOnly, SameSite=Lax (Amazon's return is a
+ * cross-site top-level GET, which Lax allows and Strict would block), Path=/api/ads (covers the
+ * callback), Secure whenever the public origin is https (not guessed from the Host header).
+ */
+export async function GET() {
   const env = adsEnv();
-  if (!env) return NextResponse.redirect(new URL("/settings?tab=amazon-ads&ads_error=not_configured", req.nextUrl));
+  if (!env) return NextResponse.redirect(settingsUrl("ads_error=not_configured"));
   const state = randomBytes(24).toString("hex");
   const res = NextResponse.redirect(authorizeUrl(env, state));
-  const local = /^(localhost|127\.0\.0\.1)(:\d+)?$/.test(req.headers.get("host") ?? "");
-  res.cookies.set({ name: STATE_COOKIE, value: state, httpOnly: true, sameSite: "lax", secure: !local, path: "/api/ads", maxAge: 600 });
+  res.cookies.set({ name: STATE_COOKIE, value: state, httpOnly: true, sameSite: "lax", secure: publicOrigin().startsWith("https:"), path: "/api/ads", maxAge: 600 });
   return res;
 }
