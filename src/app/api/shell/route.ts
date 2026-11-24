@@ -1,5 +1,6 @@
 import { getKeepa } from "@/lib/keepa/client";
 import type { KeepaTokens } from "@/lib/keepa/types";
+import { connectionStatus } from "@/lib/server/adsConnection";
 import { db } from "@/lib/server/db";
 import { spApiConfigFromEnv } from "@/lib/spapi/client";
 
@@ -31,6 +32,7 @@ export async function GET() {
     d.from("ads_proposals").select("id", { count: "exact", head: true }).eq("status", "open"),
   ]);
   const sp = spApiConfigFromEnv();
+  const ads = await connectionStatus().catch(() => ({ connected: false, profileName: null as string | null }));
   const t = keepa.available ? keepaCache?.tokens ?? null : null;
   const last = (pull.data as { started_at: string; error: string | null }[] | null)?.[0];
   const checks: ShellCheck[] = [
@@ -43,7 +45,7 @@ export async function GET() {
       : t
         ? { key: "keepa", label: "Keepa tokens", ok: t.tokensLeft >= 0, detail: `${t.tokensLeft.toLocaleString("en-GB")} left · refills ${t.refillRate}/min` }
         : { key: "keepa", label: "Keepa tokens", ok: false, detail: "Keepa didn't report a balance" },
-    { key: "ads", label: "Ads API", ok: null, detail: process.env.ADS_LWA_CLIENT_ID ? "Waiting for approval: reports come in as files" : "Not connected: reports come in as files", href: "/ads/dashboard?tab=imports" },
+    { key: "ads", label: "Ads API", ok: null, detail: ads.connected ? `Connected${ads.profileName ? `: ${ads.profileName}` : ", no profile chosen yet"}` : "Not connected: reports come in as files", href: "/settings?tab=amazon-ads" },
     !last
       ? { key: "cron", label: "Last cron run", ok: false, detail: "No nightly Qogita pull recorded yet" }
       : { key: "cron", label: "Last cron run", ok: !last.error && Date.now() - Date.parse(last.started_at) < CRON_STALE_MS, detail: `Qogita nightly ${ago(last.started_at)}${last.error ? `: ${last.error}` : ""}`, href: "/new-run?tab=qogita" },

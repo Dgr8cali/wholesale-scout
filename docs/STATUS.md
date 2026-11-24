@@ -29,7 +29,7 @@ localStorage, opened while you're on one of its pages); Settings and Help pinned
 (`NAV_ICON`, "?" only for Help); active = primary-soft + primary-ink; open proposals as a badge; collapses to a 64px icon rail
 with tooltips; a drawer on phones. Not in the menu because they aren't pages: Supplier Scout (the extension's Alibaba panel)
 and the Listing writer (a section of each candidate). Top bar: the page title, one status chip ("All systems OK" or "n issues")
-with a popover of Database, SP-API, Keepa tokens, Ads API (information only until it's approved) and the last nightly cron
+with a popover of Database, SP-API, Keepa tokens, Ads API (connected or not, and the chosen profile) and the last nightly cron
 (`/api/shell`, which also carries the sidebar counts), the cart, Help and a light/dark button. The breadcrumb sits above each
 page's title.
 ⌘K / Ctrl+K command palette (`CommandPalette.tsx`, cmdk via `ui/command.tsx`; "Search or jump to…" at the top of the sidebar):
@@ -470,7 +470,7 @@ a Seller Central flat-file row, and every generation/edit/restore kept as a vers
 first review) moving the status, a budget tracker against Gate 7, and a listing ASIN that links
 the candidate to its Ads product and stock item.
 
-**Ads: run and tune Sponsored Products.** Data comes from files until the Ads API is approved: the
+**Ads: run and tune Sponsored Products.** Data comes from files (the Ads API connection exists, Settings → Amazon Ads, but only a 7-day test pull uses it so far; see External dependencies): the
 bulk export (.xlsx, primary: campaigns, placements, ad groups, product ads, keywords, negatives,
 targets, search terms with the matching keyword) and CSV reports (search term, campaign, the
 Campaign Manager grid, daily Campaign and Placement reports). The dashboard is product-first
@@ -548,7 +548,7 @@ The HTTP Basic `APP_PASSWORD` gate is gone. `src/proxy.ts` is the one gate on ev
 |---|---|
 | **Keepa** | Live. About 21 tokens a minute refill; spend is logged per feature (Home's Keepa tile). Token-conscious: estimate before spending, report what was spent. |
 | **SP-API** | Live: orders report, FBA inventory (getInventorySummaries), catalog, fee estimates, listing restrictions, offers. Nightly sync plus on demand. The **Brand Analytics** and **Finance** roles are approved but the token still gets 403: no Buy Box %, no exact fees charged (the fee estimate stands in). Retry later. |
-| **Amazon Ads API** | **Pending approval.** LWA client credentials are in the env (`ADS_LWA_CLIENT_ID`, `ADS_LWA_CLIENT_SECRET`); no connector yet (backlog). Until then: bulk export in, bulk sheet out. When the connector is built its LWA return URL is `https://ws.dgr8cali.co.uk/api/ads/oauth/callback`, with allowed origin `https://ws.dgr8cali.co.uk` (register both on the LWA security profile). |
+| **Amazon Ads API** | **Approved; connector built (24 Nov 2026), connecting is a manual step.** LWA app "Wholesale Scout Ads", scope `advertising::campaign_management`, Europe: consent `eu.account.amazon.com`, token `api.amazon.co.uk`, API `advertising-api-eu.amazon.com`. Env on the server: `ADS_CLIENT_ID`, `ADS_CLIENT_SECRET` (the older `ADS_LWA_*` names still work), `ADS_REDIRECT_URI=https://ws.dgr8cali.co.uk/api/ads/callback` (must be registered as an allowed return URL on the LWA security profile, exactly). The refresh token is stored AES-256-GCM encrypted in `ads_connection` (key derived from `ADS_TOKEN_KEY`, else `ADS_CLIENT_SECRET`; changing it means connecting again). Settings → Amazon Ads (`/settings?tab=amazon-ads`; `tab=ads` is the old Ads-settings redirect): Connect, choose the UK profile, test pull. Bulk-sheet import is unchanged and stays the fallback. |
 | **Anthropic API** | Live (`@anthropic-ai/sdk`): Ads Explain, Recommend targets and the monthly review, Private label's review summary and Listing Writer, only on a click or the monthly schedule (off by default). Model and prices in Settings → Ads (Sonnet 5.5 default); cost per call logged in `ads_ai_calls`. Claude 5-family models think by default, hidden but billed as output (`ads_ai_calls.thinking_tokens` logs it): the Listing Writer's calls are `lean` (Sonnet 5.5 `thinking: between_tools`; Sonnet 5, Haiku 5.5, Opus 5 `disabled`; Opus 5.5, Fable, Mythos effort `low`), and their answer format caps every field (title 200, bullet 250, description 1,000, differentiation 400 characters, backend a list of ≤ 40 single words joined and trimmed to 249 bytes in code; the caps go in the descriptions, since structured outputs can't enforce lengths, and normaliseDraft enforces them). An answer cut off at max_tokens is retried once at double the limit (cap 16,000), both attempts logged; still cut off, it says "The answer was cut off (too long)" and nothing is cached. Limits: listing 8,000 (repair and per-field 4,000), Explain and Recommend targets 6,000, monthly review 8,000, Gate 4 summary 4,000; the AI routes allow 300 s. |
 | **Supabase** | Self-hosted on the server (https://db.dgr8cali.co.uk; nightly dumps to `~/backups`, 14 days). Postgres with RLS on every table; pg_cron + pg_net run the watchdog (restarts stalled runs and hunts). The old Supabase Cloud project is kept untouched as a rollback. |
 | **Netcup server** | Hosting (Docker; `make deploy`, `make migrate`, `make logs`). Crons in its crontab: Qogita nightly 03:00, Watchlist Sunday 06:00, Ads review 1st of the month 06:00 (does nothing unless turned on), secret from `~/wholesale-scout/.cron.env`, output in `cron.log`. Env vars in `~/wholesale-scout/.env`. |
@@ -559,7 +559,7 @@ The HTTP Basic `APP_PASSWORD` gate is gone. `src/proxy.ts` is the one gate on ev
 
 ## Backlog (priority order)
 
-1. **Ads: Phase 3, the Ads API connector**, once approved: pull reports and entities, apply approved proposals (rules in Auto mode), hourly data for budget timing, impression share, keyword-level days.
+1. **Ads: Phase 3, the Ads API connector**, continued (connection, profile choice and a 7-day campaign test pull are built; see Settings → Amazon Ads): pull reports and entities regularly (store the API's daily rows, not just show them), apply approved proposals (rules in Auto mode), hourly data for budget timing, impression share, keyword-level days.
 2. **Ads: keyword and competitor research** (the old Phase 4 idea: feeding the rules and the launcher; the AI layer now covers narrative, targets and the monthly review).
 3. **Stock: TikTok/eBay sales recording in use** (record real sales so demand, cover and reorder points mean something; a faster entry path or imports from TikTok Shop/eBay order exports).
 4. **General: move pg_net out of the public schema** (Supabase advisor: extension in public).
@@ -568,6 +568,8 @@ The HTTP Basic `APP_PASSWORD` gate is gone. `src/proxy.ts` is the one gate on ev
 7. **Sourcing, step 5:** contact details and quote requests (most factories publish no price), Qogita offers, add to Suppliers, screening. Re-measure prices on real searches. Delete the spike's Brave data under `docs/ui-audit/supplier-spike/`.
 
 ## Known rough edges
+
+- **Amazon Ads test pull is shown, not stored**: Settings → Amazon Ads pulls the last 7 full days of Sponsored Products campaign rows (Reports v3, `spCampaigns`, 7-day attribution) and compares them with `ads_campaign_daily`; nothing from the API is written to the Ads tables yet. Amazon builds reports in the background (minutes); the page polls for up to 10 minutes. Not yet run against the live account when written: first connect may need tweaks to report columns.
 
 - Next steps: Keepa's low-token step
   comes back each day it's still low (its condition has no change to wait for). Ad spend in the key numbers reads daily campaign

@@ -20,6 +20,7 @@ describe("merged pages", () => {
     expect(movedTo("/runs", "")).toBeNull();
     // A tab that moved on its own: only that ?tab= redirects.
     expect(movedTo("/settings", "?tab=ads")).toBe("/ads/rules?tab=settings");
+    expect(movedTo("/settings", "?tab=amazon-ads")).toBeNull(); // the Amazon Ads tab is its own page, not the old Ads settings
     expect(movedTo("/settings", "?tab=business")).toBeNull();
   });
 

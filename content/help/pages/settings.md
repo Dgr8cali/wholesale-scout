@@ -7,7 +7,11 @@ order: 12
 ---
 Settings is where you decide how products are screened: which gates run and how strict they are, how the 0–100 score is built, and how fees and landed cost are worked out. It also holds the lists shared by every profile: compliance rules, the rate card, your waivers and your IP-risk brands.
 
-The page's tabs: **Business**, **Gates**, **Score**, **Fees**, **Profiles**, **Waived**, **IP risk**, **Filter sets**, **Private label**, **Stock** and **Appearance**. The Ads settings moved to [Ads → Rules → Ad settings](/help/pages/ads) (the **Ads** link at the bottom of the tab list goes there). Settings is in every workspace. You can open a tab directly with `?tab=`, for example `/settings?tab=ip` (the Brands page links there).
+The page's tabs: **Business**, **Gates**, **Score**, **Fees**, **Profiles**, **Waived**, **IP risk**, **Filter sets**, **Private label**, **Stock**, **Amazon Ads**, **Security** and **Appearance**. The Ads settings moved to [Ads → Rules → Ad settings](/help/pages/ads) (the **Ads** link at the bottom of the tab list goes there). Settings is in every workspace. You can open a tab directly with `?tab=`, for example `/settings?tab=ip` (the Brands page links there).
+
+## Amazon Ads tab
+
+Connects the app to the Amazon Ads API (Europe, the UK advertiser account). **Connect Amazon Ads** sends you to Amazon to approve access (Login with Amazon, scope `advertising::campaign_management`); you come back here and the status line reads **Connected**. The token is stored encrypted. Then pick the UK profile under **Advertiser profile**. **Pull last 7 days** fetches the last 7 full days of Sponsored Products campaign data from the API and shows it next to the daily rows you already imported from report files, by day and by campaign, so you can check they agree. Amazon builds the report in the background, so it can take a few minutes. The bulk-sheet import keeps working whether or not the API is connected. **Disconnect** deletes the stored token.
 
 ## Business tab
 
